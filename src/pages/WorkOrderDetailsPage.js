@@ -86,12 +86,18 @@ function WorkOrderDetailsPage() {
   const handleSaveOrder = async () => {
     try {
       setSaving(true);
-      await updateWorkOrder(id, editData);
+      setError(null);
+      console.log('Saving editData:', editData);
+      const response = await updateWorkOrder(id, editData);
+      console.log('Save response:', response);
       await loadOrder();
       setIsEditing(false);
       showMessage('Work order updated');
     } catch (err) {
-      setError('Failed to save changes');
+      console.error('Save error:', err);
+      console.error('Response data:', err.response?.data);
+      const errorMsg = err.response?.data?.error?.message || err.response?.data?.message || err.message;
+      setError('Failed to save changes: ' + errorMsg);
     } finally {
       setSaving(false);
     }
@@ -577,8 +583,8 @@ function WorkOrderDetailsPage() {
               {order.jobNumber && <div className="detail-item"><div className="detail-item-label">Job#</div><div className="detail-item-value">{order.jobNumber}</div></div>}
               {order.storageLocation && <div className="detail-item"><div className="detail-item-label"><MapPin size={14} /> Location</div><div className="detail-item-value">{order.storageLocation}</div></div>}
               {order.contactName && <div className="detail-item"><div className="detail-item-label">Contact Name</div><div className="detail-item-value">{order.contactName}</div></div>}
-              {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Contact Phone</div><div className="detail-item-value"><a href={`tel:${order.contactPhone}`} style={{ color: '#1976d2' }}>{order.contactPhone}</a></div></div>}
-              {order.contactEmail && <div className="detail-item"><div className="detail-item-label">Contact Email</div><div className="detail-item-value"><a href={`mailto:${order.contactEmail}`} style={{ color: '#1976d2' }}>{order.contactEmail}</a></div></div>}
+              {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Contact Phone</div><div className="detail-item-value">{order.contactPhone}</div></div>}
+              {order.contactEmail && <div className="detail-item"><div className="detail-item-label">Contact Email</div><div className="detail-item-value">{order.contactEmail}</div></div>}
               {order.promisedDate && <div className="detail-item"><div className="detail-item-label"><Calendar size={14} /> Promised</div><div className="detail-item-value">{formatDate(order.promisedDate)}</div></div>}
               <div className="detail-item"><div className="detail-item-label"><Clock size={14} /> Created</div><div className="detail-item-value">{formatDate(order.createdAt)}</div></div>
             </div>
