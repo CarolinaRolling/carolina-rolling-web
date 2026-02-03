@@ -649,6 +649,7 @@ function EstimateDetailsPage() {
               <button className="modal-close" onClick={() => setShowPartModal(false)}>&times;</button>
             </div>
 
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
             <div className="grid grid-2">
               <div className="form-group">
                 <label className="form-label">Part Type *</label>
@@ -771,6 +772,7 @@ function EstimateDetailsPage() {
               <label className="form-label">Special Instructions</label>
               <textarea className="form-textarea" value={partData.specialInstructions || ''} rows={2}
                 onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} />
+            </div>
             </div>
 
             <div className="modal-footer">

@@ -31,7 +31,7 @@ function WorkOrderDetailsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [activeTab, setActiveTab] = useState('details');
+  const [showReceivingInfo, setShowReceivingInfo] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
   const [showPartModal, setShowPartModal] = useState(false);
@@ -71,7 +71,6 @@ function WorkOrderDetailsPage() {
         const shipmentResponse = await getShipmentByWorkOrderId(data.id);
         setShipment(shipmentResponse.data.data);
       } catch (shipErr) {
-        // No shipment linked - that's OK
         setShipment(null);
       }
     } catch (err) {
@@ -298,6 +297,9 @@ function WorkOrderDetailsPage() {
   if (!order) return <div className="empty-state"><div className="empty-state-title">Not found</div><button className="btn btn-primary" onClick={() => navigate('/inventory')}>Back</button></div>;
 
   const hasNoParts = !order.parts || order.parts.length === 0;
+  
+  // Get PO from shipment if not on work order
+  const clientPO = order.clientPurchaseOrderNumber || shipment?.clientPurchaseOrderNumber;
 
   return (
     <div>
@@ -354,262 +356,208 @@ function WorkOrderDetailsPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      {/* Tabs */}
-      <div className="tabs" style={{ marginBottom: 20 }}>
-        <button 
-          className={`tab ${activeTab === 'details' ? 'active' : ''}`}
-          onClick={() => setActiveTab('details')}
-        >
-          <FileText size={16} style={{ marginRight: 6 }} />
-          Order Details
-        </button>
-        <button 
-          className={`tab ${activeTab === 'parts' ? 'active' : ''}`}
-          onClick={() => setActiveTab('parts')}
-        >
-          <Package size={16} style={{ marginRight: 6 }} />
-          Parts ({order.parts?.length || 0})
-          {hasNoParts && <span style={{ background: '#9c27b0', color: 'white', borderRadius: 10, padding: '2px 8px', fontSize: '0.7rem', marginLeft: 6 }}>!</span>}
-        </button>
-        <button 
-          className={`tab ${activeTab === 'receiving' ? 'active' : ''}`}
-          onClick={() => setActiveTab('receiving')}
-        >
-          <Truck size={16} style={{ marginRight: 6 }} />
-          Receiving Info
-          {shipment && <span style={{ background: '#4caf50', color: 'white', borderRadius: 10, padding: '2px 8px', fontSize: '0.7rem', marginLeft: 6 }}>✓</span>}
-        </button>
-      </div>
-
-      {/* Order Details Tab */}
-      {activeTab === 'details' && (
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title">Order Details</h3>
-            {isEditing ? (
-              <div className="actions-row">
-                <button className="btn btn-primary btn-sm" onClick={handleSaveOrder} disabled={saving}><Save size={16} />{saving ? 'Saving...' : 'Save'}</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => setIsEditing(false)}><X size={16} />Cancel</button>
-              </div>
-            ) : (
-              <button className="btn btn-outline btn-sm" onClick={() => setIsEditing(true)}><Edit size={16} />Edit</button>
-            )}
-          </div>
-          {isEditing ? (
-            <div className="grid grid-2">
-              <div className="form-group"><label className="form-label">Client *</label><input className="form-input" value={editData.clientName} onChange={(e) => setEditData({ ...editData, clientName: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">Client PO#</label><input className="form-input" value={editData.clientPurchaseOrderNumber} onChange={(e) => setEditData({ ...editData, clientPurchaseOrderNumber: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">Job Number</label><input className="form-input" value={editData.jobNumber} onChange={(e) => setEditData({ ...editData, jobNumber: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">Storage Location</label><input className="form-input" value={editData.storageLocation} onChange={(e) => setEditData({ ...editData, storageLocation: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">Contact</label><input className="form-input" value={editData.contactName} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={editData.contactPhone} onChange={(e) => setEditData({ ...editData, contactPhone: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">Requested Due Date</label><input type="date" className="form-input" value={editData.requestedDueDate} onChange={(e) => setEditData({ ...editData, requestedDueDate: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">Promised Date</label><input type="date" className="form-input" value={editData.promisedDate} onChange={(e) => setEditData({ ...editData, promisedDate: e.target.value })} /></div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Notes</label><textarea className="form-textarea" value={editData.notes} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} /></div>
-            </div>
-          ) : (
-            <>
-              <div className="detail-grid">
-                <div className="detail-item"><div className="detail-item-label"><User size={14} /> Client</div><div className="detail-item-value">{order.clientName}</div></div>
-                {order.clientPurchaseOrderNumber && <div className="detail-item"><div className="detail-item-label"><FileText size={14} /> PO#</div><div className="detail-item-value" style={{ color: '#1976d2', fontWeight: 600 }}>{order.clientPurchaseOrderNumber}</div></div>}
-                {order.jobNumber && <div className="detail-item"><div className="detail-item-label">Job#</div><div className="detail-item-value">{order.jobNumber}</div></div>}
-                {order.storageLocation && <div className="detail-item"><div className="detail-item-label"><MapPin size={14} /> Location</div><div className="detail-item-value">{order.storageLocation}</div></div>}
-                {order.contactName && <div className="detail-item"><div className="detail-item-label">Contact</div><div className="detail-item-value">{order.contactName}</div></div>}
-                {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Phone</div><div className="detail-item-value">{order.contactPhone}</div></div>}
-                {order.promisedDate && <div className="detail-item"><div className="detail-item-label"><Calendar size={14} /> Promised</div><div className="detail-item-value">{formatDate(order.promisedDate)}</div></div>}
-                <div className="detail-item"><div className="detail-item-label"><Clock size={14} /> Created</div><div className="detail-item-value">{formatDate(order.createdAt)}</div></div>
-              </div>
-              {order.notes && <div style={{ marginTop: 16, padding: 12, background: '#f9f9f9', borderRadius: 8 }}><strong>Notes:</strong> {order.notes}</div>}
-            </>
-          )}
+      {/* Toggle for Receiving Info */}
+      {shipment && (
+        <div style={{ marginBottom: 16 }}>
+          <button 
+            className={`btn ${showReceivingInfo ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setShowReceivingInfo(!showReceivingInfo)}
+            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            <Truck size={18} />
+            {showReceivingInfo ? 'Hide Receiving Info' : 'Show Receiving Info'}
+          </button>
         </div>
       )}
 
-      {/* Parts Tab */}
-      {activeTab === 'parts' && (
-        <div className="card">
-          <div className="card-header">
-            <h3 className="card-title"><Package size={20} style={{ marginRight: 8 }} />Parts ({order.parts?.length || 0})</h3>
-            <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
-          </div>
-          {hasNoParts ? (
-            <div className="empty-state" style={{ padding: 40 }}>
-              <Package size={48} color="#9c27b0" />
-              <p style={{ marginTop: 12, color: '#9c27b0', fontWeight: 500 }}>Awaiting Instructions</p>
-              <p style={{ color: '#666', fontSize: '0.9rem' }}>Add parts when the client calls with rolling/bending instructions</p>
-              <button className="btn btn-primary" onClick={openAddPartModal} style={{ marginTop: 16 }}><Plus size={16} />Add First Part</button>
-            </div>
-          ) : (
-            <div>
-              {order.parts.sort((a, b) => a.partNumber - b.partNumber).map(part => (
-                <div key={part.id} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 16, marginBottom: 12, background: part.status === 'completed' ? '#f9fff9' : 'white' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontWeight: 600, fontSize: '1.1rem' }}>#{part.partNumber}</span>
-                        <span style={{ color: '#1976d2' }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
-                        <StatusBadge status={part.status} />
-                      </div>
-                      {part.clientPartNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Client Part#: {part.clientPartNumber}</div>}
-                      {part.heatNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Heat#: {part.heatNumber}</div>}
-                    </div>
-                    <div className="actions-row">
-                      <select className="form-select" value={part.status} onChange={(e) => handlePartStatusChange(part.id, e.target.value)} style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
-                        <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>
-                      </select>
-                      <button className="btn btn-sm btn-outline" onClick={() => printPartLabel(part)} title="Print Label"><Tag size={14} /></button>
-                      <button className="btn btn-sm btn-outline" onClick={() => openEditPartModal(part)}><Edit size={14} /></button>
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDeletePart(part.id)}><Trash2 size={14} /></button>
-                    </div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, fontSize: '0.875rem' }}>
-                    <div><strong>Qty:</strong> {part.quantity}</div>
-                    {part.material && <div><strong>Material:</strong> {part.material}</div>}
-                    {part.thickness && <div><strong>Thickness:</strong> {part.thickness}</div>}
-                    {part.width && <div><strong>Width:</strong> {part.width}</div>}
-                    {part.length && <div><strong>Length:</strong> {part.length}</div>}
-                    {part.sectionSize && <div><strong>Section:</strong> {part.sectionSize}</div>}
-                    {part.outerDiameter && <div><strong>OD:</strong> {part.outerDiameter}</div>}
-                    {part.wallThickness && <div><strong>Wall:</strong> {part.wallThickness}</div>}
-                    {part.rollType && <div><strong>Roll:</strong> {part.rollType === 'easy_way' ? 'Easy Way' : 'Hard Way'}</div>}
-                    {part.radius && <div><strong>Radius:</strong> {part.radius}</div>}
-                    {part.diameter && <div><strong>Diameter:</strong> {part.diameter}</div>}
-                    {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
-                  </div>
-                  {part.specialInstructions && <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: '0.875rem' }}><strong>Instructions:</strong> {part.specialInstructions}</div>}
-                  
-                  {/* Files */}
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <span style={{ fontSize: '0.8rem', color: '#666' }}>Files ({part.files?.length || 0})</span>
-                      <button className="btn btn-sm btn-outline" onClick={() => fileInputRefs.current[part.id]?.click()} disabled={uploadingFiles === part.id}>
-                        <Upload size={12} />{uploadingFiles === part.id ? 'Uploading...' : 'Upload'}
-                      </button>
-                      <input type="file" multiple ref={el => fileInputRefs.current[part.id] = el} style={{ display: 'none' }} onChange={(e) => handleFileUpload(part.id, Array.from(e.target.files))} />
-                    </div>
-                    {part.files?.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {part.files.map(file => (
-                          <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f5f5f5', padding: '4px 8px', borderRadius: 4, fontSize: '0.75rem' }}>
-                            <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.originalName}</span>
-                            <button onClick={() => handleViewFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}><Eye size={12} /></button>
-                            <button onClick={() => handleDeleteFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d32f2f' }}><X size={12} /></button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Receiving Info Tab */}
-      {activeTab === 'receiving' && (
-        <div className="card">
+      {/* Receiving Info Panel (collapsible) */}
+      {showReceivingInfo && shipment && (
+        <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid #4caf50' }}>
           <div className="card-header">
             <h3 className="card-title"><Truck size={20} style={{ marginRight: 8 }} />Receiving Info</h3>
           </div>
-          {shipment ? (
-            <>
-              <div style={{ 
-                background: '#e8f5e9', 
-                padding: 12, 
-                borderRadius: 8, 
-                marginBottom: 16,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8
-              }}>
-                <Check size={18} style={{ color: '#388e3c' }} />
-                <span style={{ color: '#2e7d32', fontWeight: 500 }}>Material received and logged</span>
+          
+          <div className="detail-grid">
+            <div className="detail-item">
+              <div className="detail-item-label"><Clock size={14} /> Received</div>
+              <div className="detail-item-value">{formatDateTime(shipment.receivedAt)}</div>
+            </div>
+            {shipment.receivedBy && (
+              <div className="detail-item">
+                <div className="detail-item-label"><User size={14} /> Received By</div>
+                <div className="detail-item-value">{shipment.receivedBy}</div>
               </div>
-
-              <div className="detail-grid">
-                <div className="detail-item">
-                  <div className="detail-item-label"><Clock size={14} /> Received</div>
-                  <div className="detail-item-value">{formatDateTime(shipment.receivedAt)}</div>
-                </div>
-                {shipment.receivedBy && (
-                  <div className="detail-item">
-                    <div className="detail-item-label"><User size={14} /> Received By</div>
-                    <div className="detail-item-value">{shipment.receivedBy}</div>
-                  </div>
-                )}
-                <div className="detail-item">
-                  <div className="detail-item-label">Quantity</div>
-                  <div className="detail-item-value">{shipment.quantity} piece{shipment.quantity !== 1 ? 's' : ''}</div>
-                </div>
-                {shipment.location && (
-                  <div className="detail-item">
-                    <div className="detail-item-label"><MapPin size={14} /> Storage Location</div>
-                    <div className="detail-item-value">{shipment.location}</div>
-                  </div>
-                )}
-                <div className="detail-item">
-                  <div className="detail-item-label">QR Code</div>
-                  <div className="detail-item-value" style={{ fontFamily: 'monospace' }}>{shipment.qrCode}</div>
-                </div>
+            )}
+            <div className="detail-item">
+              <div className="detail-item-label">Quantity</div>
+              <div className="detail-item-value">{shipment.quantity} piece{shipment.quantity !== 1 ? 's' : ''}</div>
+            </div>
+            {shipment.location && (
+              <div className="detail-item">
+                <div className="detail-item-label"><MapPin size={14} /> Storage Location</div>
+                <div className="detail-item-value">{shipment.location}</div>
               </div>
+            )}
+            <div className="detail-item">
+              <div className="detail-item-label">QR Code</div>
+              <div className="detail-item-value" style={{ fontFamily: 'monospace' }}>{shipment.qrCode}</div>
+            </div>
+          </div>
 
-              {/* Material Description */}
-              {shipment.description && (
-                <div style={{ 
-                  marginTop: 16, 
-                  padding: 16, 
-                  background: '#e3f2fd', 
-                  borderRadius: 8,
-                  borderLeft: '4px solid #1976d2'
-                }}>
-                  <div style={{ fontWeight: 600, color: '#1565c0', marginBottom: 8 }}>Material Description</div>
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{shipment.description}</div>
-                </div>
-              )}
+          {shipment.description && (
+            <div style={{ marginTop: 16, padding: 16, background: '#e3f2fd', borderRadius: 8, borderLeft: '4px solid #1976d2' }}>
+              <div style={{ fontWeight: 600, color: '#1565c0', marginBottom: 8 }}>Material Description</div>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{shipment.description}</div>
+            </div>
+          )}
 
-              {/* Receiving Notes */}
-              {shipment.notes && (
-                <div style={{ 
-                  marginTop: 16, 
-                  padding: 16, 
-                  background: '#fff3e0', 
-                  borderRadius: 8,
-                  borderLeft: '4px solid #ff9800'
-                }}>
-                  <div style={{ fontWeight: 600, color: '#e65100', marginBottom: 8 }}>Receiving Notes</div>
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{shipment.notes}</div>
-                </div>
-              )}
+          {shipment.notes && (
+            <div style={{ marginTop: 16, padding: 16, background: '#fff3e0', borderRadius: 8, borderLeft: '4px solid #ff9800' }}>
+              <div style={{ fontWeight: 600, color: '#e65100', marginBottom: 8 }}>Receiving Notes</div>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{shipment.notes}</div>
+            </div>
+          )}
 
-              {/* Photos */}
-              {shipment.photos?.length > 0 && (
-                <div style={{ marginTop: 16 }}>
-                  <div style={{ fontWeight: 600, marginBottom: 8 }}>Photos ({shipment.photos.length})</div>
-                  <div className="photo-grid">
-                    {shipment.photos.map(photo => (
-                      <div key={photo.id} className="photo-item">
-                        <img 
-                          src={photo.thumbnailUrl || photo.url} 
-                          alt="Shipment" 
-                          onClick={() => window.open(photo.url, '_blank')}
-                          style={{ cursor: 'pointer' }}
-                        />
-                      </div>
-                    ))}
+          {shipment.photos?.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Photos ({shipment.photos.length})</div>
+              <div className="photo-grid">
+                {shipment.photos.map(photo => (
+                  <div key={photo.id} className="photo-item">
+                    <img 
+                      src={photo.thumbnailUrl || photo.url} 
+                      alt="Shipment" 
+                      onClick={() => window.open(photo.url, '_blank')}
+                      style={{ cursor: 'pointer' }}
+                    />
                   </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="empty-state" style={{ padding: 40 }}>
-              <Truck size={48} color="#ccc" />
-              <p style={{ marginTop: 12 }}>No receiving record linked</p>
-              <p style={{ color: '#666', fontSize: '0.85rem' }}>This work order was not created through the receiving process</p>
+                ))}
+              </div>
             </div>
           )}
         </div>
       )}
+
+      {/* Order Details Card */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">Order Details</h3>
+          {isEditing ? (
+            <div className="actions-row">
+              <button className="btn btn-primary btn-sm" onClick={handleSaveOrder} disabled={saving}><Save size={16} />{saving ? 'Saving...' : 'Save'}</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setIsEditing(false)}><X size={16} />Cancel</button>
+            </div>
+          ) : (
+            <button className="btn btn-outline btn-sm" onClick={() => setIsEditing(true)}><Edit size={16} />Edit</button>
+          )}
+        </div>
+        {isEditing ? (
+          <div className="grid grid-2">
+            <div className="form-group"><label className="form-label">Client *</label><input className="form-input" value={editData.clientName} onChange={(e) => setEditData({ ...editData, clientName: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label">Client PO#</label><input className="form-input" value={editData.clientPurchaseOrderNumber} onChange={(e) => setEditData({ ...editData, clientPurchaseOrderNumber: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label">Job Number</label><input className="form-input" value={editData.jobNumber} onChange={(e) => setEditData({ ...editData, jobNumber: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label">Storage Location</label><input className="form-input" value={editData.storageLocation} onChange={(e) => setEditData({ ...editData, storageLocation: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label">Contact</label><input className="form-input" value={editData.contactName} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={editData.contactPhone} onChange={(e) => setEditData({ ...editData, contactPhone: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label">Requested Due Date</label><input type="date" className="form-input" value={editData.requestedDueDate} onChange={(e) => setEditData({ ...editData, requestedDueDate: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label">Promised Date</label><input type="date" className="form-input" value={editData.promisedDate} onChange={(e) => setEditData({ ...editData, promisedDate: e.target.value })} /></div>
+            <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Notes</label><textarea className="form-textarea" value={editData.notes} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} /></div>
+          </div>
+        ) : (
+          <>
+            <div className="detail-grid">
+              <div className="detail-item"><div className="detail-item-label"><User size={14} /> Client</div><div className="detail-item-value">{order.clientName}</div></div>
+              {clientPO && <div className="detail-item"><div className="detail-item-label"><FileText size={14} /> Client PO#</div><div className="detail-item-value" style={{ color: '#1976d2', fontWeight: 600 }}>{clientPO}</div></div>}
+              {order.jobNumber && <div className="detail-item"><div className="detail-item-label">Job#</div><div className="detail-item-value">{order.jobNumber}</div></div>}
+              {order.storageLocation && <div className="detail-item"><div className="detail-item-label"><MapPin size={14} /> Location</div><div className="detail-item-value">{order.storageLocation}</div></div>}
+              {order.contactName && <div className="detail-item"><div className="detail-item-label">Contact</div><div className="detail-item-value">{order.contactName}</div></div>}
+              {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Phone</div><div className="detail-item-value">{order.contactPhone}</div></div>}
+              {order.promisedDate && <div className="detail-item"><div className="detail-item-label"><Calendar size={14} /> Promised</div><div className="detail-item-value">{formatDate(order.promisedDate)}</div></div>}
+              <div className="detail-item"><div className="detail-item-label"><Clock size={14} /> Created</div><div className="detail-item-value">{formatDate(order.createdAt)}</div></div>
+            </div>
+            {order.notes && <div style={{ marginTop: 16, padding: 12, background: '#f9f9f9', borderRadius: 8 }}><strong>Notes:</strong> {order.notes}</div>}
+          </>
+        )}
+      </div>
+
+      {/* Parts Section (directly below Order Details) */}
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-header">
+          <h3 className="card-title"><Package size={20} style={{ marginRight: 8 }} />Parts ({order.parts?.length || 0})</h3>
+          <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
+        </div>
+        {hasNoParts ? (
+          <div className="empty-state" style={{ padding: 40 }}>
+            <Package size={48} color="#9c27b0" />
+            <p style={{ marginTop: 12, color: '#9c27b0', fontWeight: 500 }}>Awaiting Instructions</p>
+            <p style={{ color: '#666', fontSize: '0.9rem' }}>Add parts when the client calls with rolling/bending instructions</p>
+            <button className="btn btn-primary" onClick={openAddPartModal} style={{ marginTop: 16 }}><Plus size={16} />Add First Part</button>
+          </div>
+        ) : (
+          <div>
+            {order.parts.sort((a, b) => a.partNumber - b.partNumber).map(part => (
+              <div key={part.id} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 16, marginBottom: 12, background: part.status === 'completed' ? '#f9fff9' : 'white' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontWeight: 600, fontSize: '1.1rem' }}>#{part.partNumber}</span>
+                      <span style={{ color: '#1976d2' }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
+                      <StatusBadge status={part.status} />
+                    </div>
+                    {part.clientPartNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Client Part#: {part.clientPartNumber}</div>}
+                    {part.heatNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Heat#: {part.heatNumber}</div>}
+                  </div>
+                  <div className="actions-row">
+                    <select className="form-select" value={part.status} onChange={(e) => handlePartStatusChange(part.id, e.target.value)} style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
+                      <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>
+                    </select>
+                    <button className="btn btn-sm btn-outline" onClick={() => printPartLabel(part)} title="Print Label"><Tag size={14} /></button>
+                    <button className="btn btn-sm btn-outline" onClick={() => openEditPartModal(part)}><Edit size={14} /></button>
+                    <button className="btn btn-sm btn-danger" onClick={() => handleDeletePart(part.id)}><Trash2 size={14} /></button>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, fontSize: '0.875rem' }}>
+                  <div><strong>Qty:</strong> {part.quantity}</div>
+                  {part.material && <div><strong>Material:</strong> {part.material}</div>}
+                  {part.thickness && <div><strong>Thickness:</strong> {part.thickness}</div>}
+                  {part.width && <div><strong>Width:</strong> {part.width}</div>}
+                  {part.length && <div><strong>Length:</strong> {part.length}</div>}
+                  {part.sectionSize && <div><strong>Section:</strong> {part.sectionSize}</div>}
+                  {part.outerDiameter && <div><strong>OD:</strong> {part.outerDiameter}</div>}
+                  {part.wallThickness && <div><strong>Wall:</strong> {part.wallThickness}</div>}
+                  {part.rollType && <div><strong>Roll:</strong> {part.rollType === 'easy_way' ? 'Easy Way' : 'Hard Way'}</div>}
+                  {part.radius && <div><strong>Radius:</strong> {part.radius}</div>}
+                  {part.diameter && <div><strong>Diameter:</strong> {part.diameter}</div>}
+                  {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
+                </div>
+                {part.specialInstructions && <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: '0.875rem' }}><strong>Instructions:</strong> {part.specialInstructions}</div>}
+                
+                {/* Files */}
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: '0.8rem', color: '#666' }}>Files ({part.files?.length || 0})</span>
+                    <button className="btn btn-sm btn-outline" onClick={() => fileInputRefs.current[part.id]?.click()} disabled={uploadingFiles === part.id}>
+                      <Upload size={12} />{uploadingFiles === part.id ? 'Uploading...' : 'Upload'}
+                    </button>
+                    <input type="file" multiple ref={el => fileInputRefs.current[part.id] = el} style={{ display: 'none' }} onChange={(e) => handleFileUpload(part.id, Array.from(e.target.files))} />
+                  </div>
+                  {part.files?.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {part.files.map(file => (
+                        <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f5f5f5', padding: '4px 8px', borderRadius: 4, fontSize: '0.75rem' }}>
+                          <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.originalName}</span>
+                          <button onClick={() => handleViewFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}><Eye size={12} /></button>
+                          <button onClick={() => handleDeleteFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d32f2f' }}><X size={12} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Part Modal */}
       {showPartModal && (
@@ -619,7 +567,7 @@ function WorkOrderDetailsPage() {
               <h3>{editingPart ? 'Edit Part' : 'Add Part'}</h3>
               <button className="btn btn-icon" onClick={() => setShowPartModal(false)}><X size={20} /></button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
               <div className="form-group">
                 <label className="form-label">Part Type *</label>
                 <select className="form-select" value={selectedPartType} onChange={(e) => setSelectedPartType(e.target.value)}>
