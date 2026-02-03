@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
-  Calendar, Printer, Check, Upload, Eye, Tag
+  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock
 } from 'lucide-react';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
-  uploadPartFiles, getPartFileSignedUrl, deletePartFile
+  uploadPartFiles, getPartFileSignedUrl, deletePartFile,
+  getShipmentByWorkOrderId
 } from '../services/api';
 
 const PART_TYPES = {
@@ -25,10 +26,12 @@ function WorkOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const [shipment, setShipment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [activeTab, setActiveTab] = useState('details');
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
   const [showPartModal, setShowPartModal] = useState(false);
@@ -56,13 +59,21 @@ function WorkOrderDetailsPage() {
         contactName: data.contactName || '',
         contactPhone: data.contactPhone || '',
         contactEmail: data.contactEmail || '',
-        projectDescription: data.projectDescription || '',
         storageLocation: data.storageLocation || '',
         notes: data.notes || '',
         receivedBy: data.receivedBy || '',
         requestedDueDate: data.requestedDueDate || '',
         promisedDate: data.promisedDate || '',
       });
+
+      // Load linked shipment
+      try {
+        const shipmentResponse = await getShipmentByWorkOrderId(data.id);
+        setShipment(shipmentResponse.data.data);
+      } catch (shipErr) {
+        // No shipment linked - that's OK
+        setShipment(null);
+      }
     } catch (err) {
       setError('Failed to load work order');
     } finally {
@@ -88,7 +99,7 @@ function WorkOrderDetailsPage() {
     if (!window.confirm('Delete this work order?')) return;
     try {
       await deleteWorkOrder(id);
-      navigate('/workorders');
+      navigate('/inventory');
     } catch (err) {
       setError('Failed to delete');
     }
@@ -156,32 +167,32 @@ function WorkOrderDetailsPage() {
     }
   };
 
-  const handlePartStatusChange = async (partId, newStatus) => {
+  const handlePartStatusChange = async (partId, status) => {
     try {
-      await updateWorkOrderPart(id, partId, { status: newStatus });
+      await updateWorkOrderPart(id, partId, { status });
       await loadOrder();
     } catch (err) {
-      setError('Failed to update part');
+      setError('Failed to update part status');
     }
   };
 
   const handleFileUpload = async (partId, files) => {
     try {
       setUploadingFiles(partId);
-      await uploadPartFiles(id, partId, Array.from(files));
+      await uploadPartFiles(id, partId, files);
       await loadOrder();
       showMessage('Files uploaded');
     } catch (err) {
-      setError('Failed to upload');
+      setError('Failed to upload files');
     } finally {
       setUploadingFiles(null);
     }
   };
 
-  const handleViewFile = async (partId, file) => {
+  const handleViewFile = async (partId, fileId) => {
     try {
-      const data = await getPartFileSignedUrl(id, partId, file.id);
-      window.open(data.url, '_blank');
+      const response = await getPartFileSignedUrl(id, partId, fileId);
+      window.open(response.data.url, '_blank');
     } catch (err) {
       setError('Failed to open file');
     }
@@ -200,55 +211,42 @@ function WorkOrderDetailsPage() {
 
   const handlePickup = async () => {
     try {
-      setSaving(true);
-      await updateWorkOrder(id, { status: 'picked_up', pickedUpBy: pickupData.pickedUpBy });
+      await updateWorkOrder(id, { status: 'picked_up', pickedUpBy: pickupData.pickedUpBy, pickedUpAt: new Date().toISOString() });
       await loadOrder();
       setShowPickupModal(false);
       showMessage('Marked as picked up');
     } catch (err) {
-      setError('Failed to complete pickup');
-    } finally {
-      setSaving(false);
+      setError('Failed to update');
     }
   };
 
-  // Print functions
   const printWorkOrder = (type) => {
     const printWindow = window.open('', '_blank');
-    const title = type === 'customer' ? 'Customer Copy' : type === 'operator' ? 'Operator Copy' : 'Office Copy';
-    let partsHtml = (order.parts || []).map(part => {
-      const typeConfig = PART_TYPES[part.partType] || PART_TYPES.other;
-      return `<div style="border:1px solid #ddd;padding:15px;margin:10px 0;page-break-inside:avoid;">
-        <h3 style="margin:0 0 10px;border-bottom:2px solid #1976d2;padding-bottom:5px;">Part #${part.partNumber}: ${typeConfig.label}</h3>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:14px;">
-          ${part.clientPartNumber ? `<div><strong>Client Part#:</strong> ${part.clientPartNumber}</div>` : ''}
-          ${part.heatNumber ? `<div><strong>Heat#:</strong> ${part.heatNumber}</div>` : ''}
-          <div><strong>Qty:</strong> ${part.quantity}</div>
-          ${part.material ? `<div><strong>Material:</strong> ${part.material}</div>` : ''}
-          ${part.thickness ? `<div><strong>Thickness:</strong> ${part.thickness}</div>` : ''}
-          ${part.width ? `<div><strong>Width:</strong> ${part.width}</div>` : ''}
-          ${part.length ? `<div><strong>Length:</strong> ${part.length}</div>` : ''}
-          ${part.sectionSize ? `<div><strong>Section:</strong> ${part.sectionSize}</div>` : ''}
-          ${part.outerDiameter ? `<div><strong>OD:</strong> ${part.outerDiameter}</div>` : ''}
-          ${part.wallThickness ? `<div><strong>Wall:</strong> ${part.wallThickness}</div>` : ''}
-          ${part.rollType ? `<div><strong>Roll:</strong> ${part.rollType === 'easy_way' ? 'Easy Way' : 'Hard Way'}</div>` : ''}
-          ${part.radius ? `<div><strong>Radius:</strong> ${part.radius}</div>` : ''}
-          ${part.diameter ? `<div><strong>Diameter:</strong> ${part.diameter}</div>` : ''}
-          ${part.diameter && parseFloat(part.diameter) > 100 ? `<div><strong>Chord:</strong> 60" <strong>Height:</strong> ${(parseFloat(part.diameter)/2 - Math.sqrt(Math.pow(parseFloat(part.diameter)/2, 2) - 900)).toFixed(3)}"</div>` : ''}
-          ${part.arcDegrees ? `<div><strong>Arc:</strong> ${part.arcDegrees}°</div>` : ''}
-          ${part.flangeOut ? `<div><strong>Flange Out:</strong> Yes</div>` : ''}
+    const partsHtml = order.parts?.map(p => `
+      <div style="border:1px solid #ddd;padding:12px;margin-bottom:10px;border-radius:4px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <strong>#${p.partNumber} - ${PART_TYPES[p.partType]?.label || p.partType}</strong>
+          <span style="background:#e3f2fd;padding:2px 8px;border-radius:4px;font-size:0.8em">${p.status}</span>
         </div>
-        ${part.specialInstructions ? `<div style="margin-top:10px;padding:10px;background:#fff3e0;border-radius:4px;"><strong>Instructions:</strong> ${part.specialInstructions}</div>` : ''}
-      </div>`;
-    }).join('');
-    
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>${order.orderNumber} - ${title}</title>
-      <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}h1{color:#1976d2}
-      .sig-box{border:1px solid #333;padding:20px;margin-top:30px}.sig-line{border-top:1px solid #333;margin-top:50px;padding-top:5px}</style></head>
-      <body><div style="display:flex;justify-content:space-between"><div><h1>Carolina Rolling</h1><p style="color:#666">Metal Forming & Rolling</p></div>
-      <div style="text-align:right"><div style="font-size:1.3em;font-weight:bold;color:#1976d2">${order.orderNumber}</div><div style="color:#666">${title}</div></div></div>
-      <h2 style="border-bottom:2px solid #1976d2;padding-bottom:5px">Order Information</h2>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:15px 0">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:0.9em">
+          <div><strong>Qty:</strong> ${p.quantity}</div>
+          ${p.material ? `<div><strong>Material:</strong> ${p.material}</div>` : ''}
+          ${p.thickness ? `<div><strong>Thickness:</strong> ${p.thickness}</div>` : ''}
+          ${p.width ? `<div><strong>Width:</strong> ${p.width}</div>` : ''}
+          ${p.length ? `<div><strong>Length:</strong> ${p.length}</div>` : ''}
+          ${p.sectionSize ? `<div><strong>Section:</strong> ${p.sectionSize}</div>` : ''}
+          ${p.radius ? `<div><strong>Radius:</strong> ${p.radius}</div>` : ''}
+          ${p.diameter ? `<div><strong>Diameter:</strong> ${p.diameter}</div>` : ''}
+        </div>
+        ${p.specialInstructions ? `<div style="margin-top:8px;padding:8px;background:#f5f5f5;border-radius:4px"><strong>Instructions:</strong> ${p.specialInstructions}</div>` : ''}
+      </div>
+    `).join('');
+
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>${type === 'customer' ? 'Delivery Receipt' : 'Work Order'} - ${order.drNumber ? `DR-${order.drNumber}` : order.orderNumber}</title>
+      <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}h1{color:#1976d2;border-bottom:2px solid #1976d2;padding-bottom:10px}
+      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}.sig-box{border:1px solid #ddd;padding:20px;margin-top:30px}.sig-line{border-bottom:1px solid #333;height:40px;margin-top:10px}</style></head>
+      <body><h1>${type === 'customer' ? 'Delivery Receipt' : 'Work Order'} - ${order.drNumber ? `DR-${order.drNumber}` : order.orderNumber}</h1>
+      <div class="info-grid">
         <div style="padding:8px;background:#f5f5f5;border-radius:4px"><strong>Client:</strong> ${order.clientName}</div>
         ${order.clientPurchaseOrderNumber ? `<div style="padding:8px;background:#f5f5f5;border-radius:4px"><strong>PO#:</strong> ${order.clientPurchaseOrderNumber}</div>` : ''}
         ${order.contactName ? `<div style="padding:8px;background:#f5f5f5;border-radius:4px"><strong>Contact:</strong> ${order.contactName}</div>` : ''}
@@ -282,6 +280,7 @@ function WorkOrderDetailsPage() {
   };
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+  const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'N/A';
   
   const StatusBadge = ({ status }) => {
     const styles = {
@@ -296,17 +295,35 @@ function WorkOrderDetailsPage() {
   };
 
   if (loading) return <div className="loading"><div className="spinner"></div></div>;
-  if (!order) return <div className="empty-state"><div className="empty-state-title">Not found</div><button className="btn btn-primary" onClick={() => navigate('/workorders')}>Back</button></div>;
+  if (!order) return <div className="empty-state"><div className="empty-state-title">Not found</div><button className="btn btn-primary" onClick={() => navigate('/inventory')}>Back</button></div>;
+
+  const hasNoParts = !order.parts || order.parts.length === 0;
 
   return (
     <div>
       <div className="detail-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button className="btn btn-icon btn-secondary" onClick={() => navigate('/workorders')}><ArrowLeft size={20} /></button>
+          <button className="btn btn-icon btn-secondary" onClick={() => navigate('/inventory')}><ArrowLeft size={20} /></button>
           <div>
-            <h1 className="detail-title">{order.orderNumber}</h1>
+            {order.drNumber ? (
+              <h1 className="detail-title" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ 
+                  fontFamily: 'Courier New, monospace', 
+                  background: '#e3f2fd', 
+                  padding: '4px 12px', 
+                  borderRadius: 6,
+                  color: '#1976d2'
+                }}>
+                  DR-{order.drNumber}
+                </span>
+              </h1>
+            ) : (
+              <h1 className="detail-title">{order.orderNumber}</h1>
+            )}
             <div style={{ color: '#666', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span>{order.clientName}</span><StatusBadge status={order.status} />
+              <span>{order.clientName}</span>
+              <StatusBadge status={hasNoParts ? 'pending' : order.status} />
+              {hasNoParts && <span style={{ color: '#9c27b0', fontSize: '0.8rem' }}>(Awaiting Instructions)</span>}
             </div>
           </div>
         </div>
@@ -330,7 +347,6 @@ function WorkOrderDetailsPage() {
               </div>
             )}
           </div>
-          {!isEditing && <button className="btn btn-outline" onClick={() => setIsEditing(true)}><Edit size={18} />Edit</button>}
           <button className="btn btn-danger" onClick={handleDelete}><Trash2 size={18} /></button>
         </div>
       </div>
@@ -338,212 +354,313 @@ function WorkOrderDetailsPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      <div className="grid grid-2" style={{ gridTemplateColumns: '2fr 1fr' }}>
-        <div>
-          {/* Order Details */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title">Order Details</h3>
-              {isEditing && (
-                <div className="actions-row">
-                  <button className="btn btn-primary btn-sm" onClick={handleSaveOrder} disabled={saving}><Save size={16} />{saving ? 'Saving...' : 'Save'}</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setIsEditing(false)}><X size={16} />Cancel</button>
-                </div>
-              )}
-            </div>
+      {/* Tabs */}
+      <div className="tabs" style={{ marginBottom: 20 }}>
+        <button 
+          className={`tab ${activeTab === 'details' ? 'active' : ''}`}
+          onClick={() => setActiveTab('details')}
+        >
+          <FileText size={16} style={{ marginRight: 6 }} />
+          Order Details
+        </button>
+        <button 
+          className={`tab ${activeTab === 'parts' ? 'active' : ''}`}
+          onClick={() => setActiveTab('parts')}
+        >
+          <Package size={16} style={{ marginRight: 6 }} />
+          Parts ({order.parts?.length || 0})
+          {hasNoParts && <span style={{ background: '#9c27b0', color: 'white', borderRadius: 10, padding: '2px 8px', fontSize: '0.7rem', marginLeft: 6 }}>!</span>}
+        </button>
+        <button 
+          className={`tab ${activeTab === 'receiving' ? 'active' : ''}`}
+          onClick={() => setActiveTab('receiving')}
+        >
+          <Truck size={16} style={{ marginRight: 6 }} />
+          Receiving Info
+          {shipment && <span style={{ background: '#4caf50', color: 'white', borderRadius: 10, padding: '2px 8px', fontSize: '0.7rem', marginLeft: 6 }}>✓</span>}
+        </button>
+      </div>
+
+      {/* Order Details Tab */}
+      {activeTab === 'details' && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">Order Details</h3>
             {isEditing ? (
-              <div className="grid grid-2">
-                <div className="form-group"><label className="form-label">Client *</label><input className="form-input" value={editData.clientName} onChange={(e) => setEditData({ ...editData, clientName: e.target.value })} /></div>
-                <div className="form-group"><label className="form-label">Client PO#</label><input className="form-input" value={editData.clientPurchaseOrderNumber} onChange={(e) => setEditData({ ...editData, clientPurchaseOrderNumber: e.target.value })} /></div>
-                <div className="form-group"><label className="form-label">Job Number</label><input className="form-input" value={editData.jobNumber} onChange={(e) => setEditData({ ...editData, jobNumber: e.target.value })} /></div>
-                <div className="form-group"><label className="form-label">Storage Location</label><input className="form-input" value={editData.storageLocation} onChange={(e) => setEditData({ ...editData, storageLocation: e.target.value })} /></div>
-                <div className="form-group"><label className="form-label">Contact</label><input className="form-input" value={editData.contactName} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} /></div>
-                <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={editData.contactPhone} onChange={(e) => setEditData({ ...editData, contactPhone: e.target.value })} /></div>
-                <div className="form-group"><label className="form-label">Due Date</label><input type="date" className="form-input" value={editData.requestedDueDate} onChange={(e) => setEditData({ ...editData, requestedDueDate: e.target.value })} /></div>
-                <div className="form-group"><label className="form-label">Promised</label><input type="date" className="form-input" value={editData.promisedDate} onChange={(e) => setEditData({ ...editData, promisedDate: e.target.value })} /></div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Material Description</label><textarea className="form-textarea" value={editData.projectDescription} onChange={(e) => setEditData({ ...editData, projectDescription: e.target.value })} placeholder="Description of material received (e.g., 4x4x1/4 angle, 20' lengths, pallet damage noted)" /></div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Notes</label><textarea className="form-textarea" value={editData.notes} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} /></div>
+              <div className="actions-row">
+                <button className="btn btn-primary btn-sm" onClick={handleSaveOrder} disabled={saving}><Save size={16} />{saving ? 'Saving...' : 'Save'}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setIsEditing(false)}><X size={16} />Cancel</button>
               </div>
             ) : (
+              <button className="btn btn-outline btn-sm" onClick={() => setIsEditing(true)}><Edit size={16} />Edit</button>
+            )}
+          </div>
+          {isEditing ? (
+            <div className="grid grid-2">
+              <div className="form-group"><label className="form-label">Client *</label><input className="form-input" value={editData.clientName} onChange={(e) => setEditData({ ...editData, clientName: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label">Client PO#</label><input className="form-input" value={editData.clientPurchaseOrderNumber} onChange={(e) => setEditData({ ...editData, clientPurchaseOrderNumber: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label">Job Number</label><input className="form-input" value={editData.jobNumber} onChange={(e) => setEditData({ ...editData, jobNumber: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label">Storage Location</label><input className="form-input" value={editData.storageLocation} onChange={(e) => setEditData({ ...editData, storageLocation: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label">Contact</label><input className="form-input" value={editData.contactName} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={editData.contactPhone} onChange={(e) => setEditData({ ...editData, contactPhone: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label">Requested Due Date</label><input type="date" className="form-input" value={editData.requestedDueDate} onChange={(e) => setEditData({ ...editData, requestedDueDate: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label">Promised Date</label><input type="date" className="form-input" value={editData.promisedDate} onChange={(e) => setEditData({ ...editData, promisedDate: e.target.value })} /></div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Notes</label><textarea className="form-textarea" value={editData.notes} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} /></div>
+            </div>
+          ) : (
+            <>
               <div className="detail-grid">
                 <div className="detail-item"><div className="detail-item-label"><User size={14} /> Client</div><div className="detail-item-value">{order.clientName}</div></div>
                 {order.clientPurchaseOrderNumber && <div className="detail-item"><div className="detail-item-label"><FileText size={14} /> PO#</div><div className="detail-item-value" style={{ color: '#1976d2', fontWeight: 600 }}>{order.clientPurchaseOrderNumber}</div></div>}
                 {order.jobNumber && <div className="detail-item"><div className="detail-item-label">Job#</div><div className="detail-item-value">{order.jobNumber}</div></div>}
-                {order.storageLocation && <div className="detail-item"><div className="detail-item-label">Location</div><div className="detail-item-value">{order.storageLocation}</div></div>}
+                {order.storageLocation && <div className="detail-item"><div className="detail-item-label"><MapPin size={14} /> Location</div><div className="detail-item-value">{order.storageLocation}</div></div>}
                 {order.contactName && <div className="detail-item"><div className="detail-item-label">Contact</div><div className="detail-item-value">{order.contactName}</div></div>}
                 {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Phone</div><div className="detail-item-value">{order.contactPhone}</div></div>}
                 {order.promisedDate && <div className="detail-item"><div className="detail-item-label"><Calendar size={14} /> Promised</div><div className="detail-item-value">{formatDate(order.promisedDate)}</div></div>}
-                <div className="detail-item"><div className="detail-item-label">Created</div><div className="detail-item-value">{formatDate(order.createdAt)}</div></div>
+                <div className="detail-item"><div className="detail-item-label"><Clock size={14} /> Created</div><div className="detail-item-value">{formatDate(order.createdAt)}</div></div>
               </div>
-            )}
-            {!isEditing && order.projectDescription && (
-              <div style={{ marginTop: 16, padding: 12, background: '#e3f2fd', borderRadius: 8, borderLeft: '4px solid #1976d2' }}>
-                <strong style={{ color: '#1565c0' }}>Material Description:</strong>
-                <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{order.projectDescription}</div>
-              </div>
-            )}
-            {!isEditing && order.notes && <div style={{ marginTop: 16, padding: 12, background: '#f9f9f9', borderRadius: 8 }}><strong>Notes:</strong> {order.notes}</div>}
-          </div>
+              {order.notes && <div style={{ marginTop: 16, padding: 12, background: '#f9f9f9', borderRadius: 8 }}><strong>Notes:</strong> {order.notes}</div>}
+            </>
+          )}
+        </div>
+      )}
 
-          {/* Parts */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title"><Package size={20} style={{ marginRight: 8 }} />Parts ({order.parts?.length || 0})</h3>
-              <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
+      {/* Parts Tab */}
+      {activeTab === 'parts' && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title"><Package size={20} style={{ marginRight: 8 }} />Parts ({order.parts?.length || 0})</h3>
+            <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
+          </div>
+          {hasNoParts ? (
+            <div className="empty-state" style={{ padding: 40 }}>
+              <Package size={48} color="#9c27b0" />
+              <p style={{ marginTop: 12, color: '#9c27b0', fontWeight: 500 }}>Awaiting Instructions</p>
+              <p style={{ color: '#666', fontSize: '0.9rem' }}>Add parts when the client calls with rolling/bending instructions</p>
+              <button className="btn btn-primary" onClick={openAddPartModal} style={{ marginTop: 16 }}><Plus size={16} />Add First Part</button>
             </div>
-            {(!order.parts || order.parts.length === 0) ? (
-              <div className="empty-state" style={{ padding: 40 }}>
-                <Package size={48} color="#ccc" />
-                <p style={{ marginTop: 12 }}>No parts added yet</p>
-                <button className="btn btn-outline" onClick={openAddPartModal} style={{ marginTop: 12 }}><Plus size={16} />Add First Part</button>
-              </div>
-            ) : (
-              <div>
-                {order.parts.sort((a, b) => a.partNumber - b.partNumber).map(part => (
-                  <div key={part.id} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 16, marginBottom: 12, background: part.status === 'completed' ? '#f9fff9' : 'white' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontWeight: 600, fontSize: '1.1rem' }}>#{part.partNumber}</span>
-                          <span style={{ color: '#1976d2' }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
-                          <StatusBadge status={part.status} />
-                        </div>
-                        {part.clientPartNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Client Part#: {part.clientPartNumber}</div>}
-                        {part.heatNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Heat#: {part.heatNumber}</div>}
+          ) : (
+            <div>
+              {order.parts.sort((a, b) => a.partNumber - b.partNumber).map(part => (
+                <div key={part.id} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 16, marginBottom: 12, background: part.status === 'completed' ? '#f9fff9' : 'white' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 600, fontSize: '1.1rem' }}>#{part.partNumber}</span>
+                        <span style={{ color: '#1976d2' }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
+                        <StatusBadge status={part.status} />
                       </div>
-                      <div className="actions-row">
-                        <select className="form-select" value={part.status} onChange={(e) => handlePartStatusChange(part.id, e.target.value)} style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
-                          <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>
-                        </select>
-                        <button className="btn btn-sm btn-outline" onClick={() => printPartLabel(part)} title="Print Label"><Tag size={14} /></button>
-                        <button className="btn btn-sm btn-outline" onClick={() => openEditPartModal(part)}><Edit size={14} /></button>
-                        <button className="btn btn-sm btn-danger" onClick={() => handleDeletePart(part.id)}><Trash2 size={14} /></button>
-                      </div>
+                      {part.clientPartNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Client Part#: {part.clientPartNumber}</div>}
+                      {part.heatNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Heat#: {part.heatNumber}</div>}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, fontSize: '0.875rem' }}>
-                      <div><strong>Qty:</strong> {part.quantity}</div>
-                      {part.material && <div><strong>Material:</strong> {part.material}</div>}
-                      {part.thickness && <div><strong>Thickness:</strong> {part.thickness}</div>}
-                      {part.width && <div><strong>Width:</strong> {part.width}</div>}
-                      {part.length && <div><strong>Length:</strong> {part.length}</div>}
-                      {part.sectionSize && <div><strong>Section:</strong> {part.sectionSize}</div>}
-                      {part.outerDiameter && <div><strong>OD:</strong> {part.outerDiameter}</div>}
-                      {part.wallThickness && <div><strong>Wall:</strong> {part.wallThickness}</div>}
-                      {part.rollType && <div><strong>Roll:</strong> {part.rollType === 'easy_way' ? 'Easy Way' : 'Hard Way'}</div>}
-                      {part.radius && <div><strong>Radius:</strong> {part.radius}</div>}
-                      {part.diameter && <div><strong>Diameter:</strong> {part.diameter}</div>}
-                      {part.diameter && (() => {
-                        const diamNum = parseFloat(part.diameter);
-                        if (diamNum > 100) {
-                          const radius = diamNum / 2;
-                          const chord = 60;
-                          const height = radius - Math.sqrt(radius * radius - (chord / 2) * (chord / 2));
-                          return <div><strong>Chord:</strong> 60" <strong>Height:</strong> {height.toFixed(3)}"</div>;
-                        }
-                        return null;
-                      })()}
-                      {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
-                      {part.flangeOut && <div><strong>Flange Out:</strong> Yes</div>}
-                    </div>
-                    {part.specialInstructions && <div style={{ marginTop: 8, padding: 8, background: '#fff3e0', borderRadius: 4, fontSize: '0.875rem' }}><strong>Instructions:</strong> {part.specialInstructions}</div>}
-                    
-                    {/* Files */}
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                        <FileText size={14} /><strong style={{ fontSize: '0.875rem' }}>Files</strong>
-                        <input type="file" multiple accept=".pdf,.stp,.step" style={{ display: 'none' }} ref={el => fileInputRefs.current[part.id] = el} onChange={(e) => handleFileUpload(part.id, e.target.files)} />
-                        <button className="btn btn-sm btn-outline" onClick={() => fileInputRefs.current[part.id]?.click()} disabled={uploadingFiles === part.id}>
-                          <Upload size={12} />{uploadingFiles === part.id ? 'Uploading...' : 'Upload'}
-                        </button>
-                      </div>
-                      {part.files?.length > 0 ? (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          {part.files.map(file => (
-                            <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: '#f5f5f5', borderRadius: 4, fontSize: '0.8rem' }}>
-                              <span>{file.originalName || file.filename}</span>
-                              <button onClick={() => handleViewFile(part.id, file)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}><Eye size={12} /></button>
-                              <button onClick={() => handleDeleteFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d32f2f' }}><X size={12} /></button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : <div style={{ color: '#999', fontSize: '0.8rem' }}>No files uploaded</div>}
+                    <div className="actions-row">
+                      <select className="form-select" value={part.status} onChange={(e) => handlePartStatusChange(part.id, e.target.value)} style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
+                        <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>
+                      </select>
+                      <button className="btn btn-sm btn-outline" onClick={() => printPartLabel(part)} title="Print Label"><Tag size={14} /></button>
+                      <button className="btn btn-sm btn-outline" onClick={() => openEditPartModal(part)}><Edit size={14} /></button>
+                      <button className="btn btn-sm btn-danger" onClick={() => handleDeletePart(part.id)}><Trash2 size={14} /></button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Sidebar */}
-        <div>
-          <div className="card" style={{ position: 'sticky', top: 24 }}>
-            <h3 className="card-title">Summary</h3>
-            <div style={{ marginTop: 16 }}>
-              <div style={{ marginBottom: 12 }}><div style={{ fontSize: '0.875rem', color: '#666' }}>Total Parts</div><div style={{ fontSize: '1.5rem', fontWeight: 600 }}>{order.parts?.length || 0}</div></div>
-              <div style={{ marginBottom: 12 }}><div style={{ fontSize: '0.875rem', color: '#666' }}>Completed</div><div style={{ fontSize: '1.5rem', fontWeight: 600, color: '#388e3c' }}>{order.parts?.filter(p => p.status === 'completed').length || 0}</div></div>
-              {order.promisedDate && <div style={{ marginBottom: 12 }}><div style={{ fontSize: '0.875rem', color: '#666' }}>Due Date</div><div style={{ fontWeight: 500 }}>{formatDate(order.promisedDate)}</div></div>}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, fontSize: '0.875rem' }}>
+                    <div><strong>Qty:</strong> {part.quantity}</div>
+                    {part.material && <div><strong>Material:</strong> {part.material}</div>}
+                    {part.thickness && <div><strong>Thickness:</strong> {part.thickness}</div>}
+                    {part.width && <div><strong>Width:</strong> {part.width}</div>}
+                    {part.length && <div><strong>Length:</strong> {part.length}</div>}
+                    {part.sectionSize && <div><strong>Section:</strong> {part.sectionSize}</div>}
+                    {part.outerDiameter && <div><strong>OD:</strong> {part.outerDiameter}</div>}
+                    {part.wallThickness && <div><strong>Wall:</strong> {part.wallThickness}</div>}
+                    {part.rollType && <div><strong>Roll:</strong> {part.rollType === 'easy_way' ? 'Easy Way' : 'Hard Way'}</div>}
+                    {part.radius && <div><strong>Radius:</strong> {part.radius}</div>}
+                    {part.diameter && <div><strong>Diameter:</strong> {part.diameter}</div>}
+                    {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
+                  </div>
+                  {part.specialInstructions && <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: '0.875rem' }}><strong>Instructions:</strong> {part.specialInstructions}</div>}
+                  
+                  {/* Files */}
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: '0.8rem', color: '#666' }}>Files ({part.files?.length || 0})</span>
+                      <button className="btn btn-sm btn-outline" onClick={() => fileInputRefs.current[part.id]?.click()} disabled={uploadingFiles === part.id}>
+                        <Upload size={12} />{uploadingFiles === part.id ? 'Uploading...' : 'Upload'}
+                      </button>
+                      <input type="file" multiple ref={el => fileInputRefs.current[part.id] = el} style={{ display: 'none' }} onChange={(e) => handleFileUpload(part.id, Array.from(e.target.files))} />
+                    </div>
+                    {part.files?.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {part.files.map(file => (
+                          <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f5f5f5', padding: '4px 8px', borderRadius: 4, fontSize: '0.75rem' }}>
+                            <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.originalName}</span>
+                            <button onClick={() => handleViewFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}><Eye size={12} /></button>
+                            <button onClick={() => handleDeleteFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d32f2f' }}><X size={12} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-            {order.status === 'completed' && (
-              <button className="btn btn-success" style={{ width: '100%', marginTop: 16 }} onClick={() => setShowPickupModal(true)}><Check size={18} />Mark as Picked Up</button>
-            )}
-          </div>
+          )}
         </div>
-      </div>
+      )}
+
+      {/* Receiving Info Tab */}
+      {activeTab === 'receiving' && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title"><Truck size={20} style={{ marginRight: 8 }} />Receiving Info</h3>
+          </div>
+          {shipment ? (
+            <>
+              <div style={{ 
+                background: '#e8f5e9', 
+                padding: 12, 
+                borderRadius: 8, 
+                marginBottom: 16,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <Check size={18} style={{ color: '#388e3c' }} />
+                <span style={{ color: '#2e7d32', fontWeight: 500 }}>Material received and logged</span>
+              </div>
+
+              <div className="detail-grid">
+                <div className="detail-item">
+                  <div className="detail-item-label"><Clock size={14} /> Received</div>
+                  <div className="detail-item-value">{formatDateTime(shipment.receivedAt)}</div>
+                </div>
+                {shipment.receivedBy && (
+                  <div className="detail-item">
+                    <div className="detail-item-label"><User size={14} /> Received By</div>
+                    <div className="detail-item-value">{shipment.receivedBy}</div>
+                  </div>
+                )}
+                <div className="detail-item">
+                  <div className="detail-item-label">Quantity</div>
+                  <div className="detail-item-value">{shipment.quantity} piece{shipment.quantity !== 1 ? 's' : ''}</div>
+                </div>
+                {shipment.location && (
+                  <div className="detail-item">
+                    <div className="detail-item-label"><MapPin size={14} /> Storage Location</div>
+                    <div className="detail-item-value">{shipment.location}</div>
+                  </div>
+                )}
+                <div className="detail-item">
+                  <div className="detail-item-label">QR Code</div>
+                  <div className="detail-item-value" style={{ fontFamily: 'monospace' }}>{shipment.qrCode}</div>
+                </div>
+              </div>
+
+              {/* Material Description */}
+              {shipment.description && (
+                <div style={{ 
+                  marginTop: 16, 
+                  padding: 16, 
+                  background: '#e3f2fd', 
+                  borderRadius: 8,
+                  borderLeft: '4px solid #1976d2'
+                }}>
+                  <div style={{ fontWeight: 600, color: '#1565c0', marginBottom: 8 }}>Material Description</div>
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{shipment.description}</div>
+                </div>
+              )}
+
+              {/* Receiving Notes */}
+              {shipment.notes && (
+                <div style={{ 
+                  marginTop: 16, 
+                  padding: 16, 
+                  background: '#fff3e0', 
+                  borderRadius: 8,
+                  borderLeft: '4px solid #ff9800'
+                }}>
+                  <div style={{ fontWeight: 600, color: '#e65100', marginBottom: 8 }}>Receiving Notes</div>
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{shipment.notes}</div>
+                </div>
+              )}
+
+              {/* Photos */}
+              {shipment.photos?.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 8 }}>Photos ({shipment.photos.length})</div>
+                  <div className="photo-grid">
+                    {shipment.photos.map(photo => (
+                      <div key={photo.id} className="photo-item">
+                        <img 
+                          src={photo.thumbnailUrl || photo.url} 
+                          alt="Shipment" 
+                          onClick={() => window.open(photo.url, '_blank')}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="empty-state" style={{ padding: 40 }}>
+              <Truck size={48} color="#ccc" />
+              <p style={{ marginTop: 12 }}>No receiving record linked</p>
+              <p style={{ color: '#666', fontSize: '0.85rem' }}>This work order was not created through the receiving process</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Part Modal */}
       {showPartModal && (
         <div className="modal-overlay" onClick={() => setShowPartModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 700, maxHeight: '90vh', overflow: 'auto' }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
             <div className="modal-header">
-              <h3 className="modal-title">{editingPart ? `Edit Part #${editingPart.partNumber}` : 'Add New Part'}</h3>
-              <button className="modal-close" onClick={() => setShowPartModal(false)}>&times;</button>
+              <h3>{editingPart ? 'Edit Part' : 'Add Part'}</h3>
+              <button className="btn btn-icon" onClick={() => setShowPartModal(false)}><X size={20} /></button>
             </div>
-            
-            <div className="form-group">
-              <label className="form-label">Part Type *</label>
-              <select className="form-select" value={selectedPartType} onChange={(e) => setSelectedPartType(e.target.value)}>
-                <option value="">Select type...</option>
-                {Object.entries(PART_TYPES).map(([key, val]) => <option key={key} value={key}>{val.label}</option>)}
-              </select>
-            </div>
-
-            {selectedPartType && (
-              <div className="grid grid-2" style={{ marginTop: 16 }}>
-                <div className="form-group"><label className="form-label">Client Part#</label><input className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} /></div>
-                <div className="form-group"><label className="form-label">Heat#</label><input className="form-input" value={partData.heatNumber || ''} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} /></div>
-                <div className="form-group"><label className="form-label">Quantity</label><input type="number" className="form-input" value={partData.quantity || 1} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} min="1" /></div>
-                
-                {PART_TYPES[selectedPartType]?.fields.includes('material') && <div className="form-group"><label className="form-label">Material</label><input className="form-input" value={partData.material || ''} onChange={(e) => setPartData({ ...partData, material: e.target.value })} placeholder="e.g., A36, 304 SS" /></div>}
-                {PART_TYPES[selectedPartType]?.fields.includes('thickness') && <div className="form-group"><label className="form-label">Thickness</label><input className="form-input" value={partData.thickness || ''} onChange={(e) => setPartData({ ...partData, thickness: e.target.value })} placeholder='e.g., 1/2"' /></div>}
-                {PART_TYPES[selectedPartType]?.fields.includes('width') && <div className="form-group"><label className="form-label">Width</label><input className="form-input" value={partData.width || ''} onChange={(e) => setPartData({ ...partData, width: e.target.value })} placeholder='e.g., 48"' /></div>}
-                {PART_TYPES[selectedPartType]?.fields.includes('length') && <div className="form-group"><label className="form-label">Length</label><input className="form-input" value={partData.length || ''} onChange={(e) => setPartData({ ...partData, length: e.target.value })} placeholder='e.g., 120"' /></div>}
-                {PART_TYPES[selectedPartType]?.fields.includes('sectionSize') && <div className="form-group"><label className="form-label">Section Size</label><input className="form-input" value={partData.sectionSize || ''} onChange={(e) => setPartData({ ...partData, sectionSize: e.target.value })} placeholder='e.g., L4x4x1/2' /></div>}
-                {PART_TYPES[selectedPartType]?.fields.includes('outerDiameter') && <div className="form-group"><label className="form-label">Outer Diameter</label><input className="form-input" value={partData.outerDiameter || ''} onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} placeholder='e.g., 6"' /></div>}
-                {PART_TYPES[selectedPartType]?.fields.includes('wallThickness') && <div className="form-group"><label className="form-label">Wall Thickness</label><input className="form-input" value={partData.wallThickness || ''} onChange={(e) => setPartData({ ...partData, wallThickness: e.target.value })} placeholder='e.g., Sch 40' /></div>}
-                {PART_TYPES[selectedPartType]?.fields.includes('rollType') && (
-                  <div className="form-group"><label className="form-label">Roll Direction</label>
-                    <select className="form-select" value={partData.rollType || ''} onChange={(e) => setPartData({ ...partData, rollType: e.target.value })}>
-                      <option value="">Select...</option><option value="easy_way">Easy Way</option><option value="hard_way">Hard Way</option>
-                    </select>
-                  </div>
-                )}
-                {PART_TYPES[selectedPartType]?.fields.includes('radius') && <div className="form-group"><label className="form-label">Radius</label><input className="form-input" value={partData.radius || ''} onChange={(e) => setPartData({ ...partData, radius: e.target.value })} placeholder='e.g., 48" radius' /></div>}
-                {PART_TYPES[selectedPartType]?.fields.includes('diameter') && <div className="form-group"><label className="form-label">Diameter</label><input className="form-input" value={partData.diameter || ''} onChange={(e) => setPartData({ ...partData, diameter: e.target.value })} placeholder='e.g., 96" dia' /></div>}
-                {PART_TYPES[selectedPartType]?.fields.includes('arcDegrees') && <div className="form-group"><label className="form-label">Arc Degrees</label><input className="form-input" value={partData.arcDegrees || ''} onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} placeholder='e.g., 90, 180, 360' /></div>}
-                {PART_TYPES[selectedPartType]?.fields.includes('flangeOut') && (
-                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input type="checkbox" id="flangeOut" checked={partData.flangeOut || false} onChange={(e) => setPartData({ ...partData, flangeOut: e.target.checked })} />
-                    <label htmlFor="flangeOut" className="form-label" style={{ marginBottom: 0 }}>Flange Out</label>
-                  </div>
-                )}
-                <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Special Instructions</label><textarea className="form-textarea" value={partData.specialInstructions || ''} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} placeholder="Any special instructions for the operator..." /></div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Part Type *</label>
+                <select className="form-select" value={selectedPartType} onChange={(e) => setSelectedPartType(e.target.value)}>
+                  <option value="">Select type...</option>
+                  {Object.entries(PART_TYPES).map(([key, val]) => <option key={key} value={key}>{val.label}</option>)}
+                </select>
               </div>
-            )}
-
+              {selectedPartType && (
+                <div className="grid grid-2">
+                  <div className="form-group"><label className="form-label">Client Part#</label><input className="form-input" value={partData.clientPartNumber} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} /></div>
+                  <div className="form-group"><label className="form-label">Heat#</label><input className="form-input" value={partData.heatNumber} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} /></div>
+                  <div className="form-group"><label className="form-label">Quantity *</label><input type="number" className="form-input" value={partData.quantity} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} min="1" /></div>
+                  {PART_TYPES[selectedPartType]?.fields.includes('material') && <div className="form-group"><label className="form-label">Material</label><input className="form-input" value={partData.material} onChange={(e) => setPartData({ ...partData, material: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('thickness') && <div className="form-group"><label className="form-label">Thickness</label><input className="form-input" value={partData.thickness} onChange={(e) => setPartData({ ...partData, thickness: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('width') && <div className="form-group"><label className="form-label">Width</label><input className="form-input" value={partData.width} onChange={(e) => setPartData({ ...partData, width: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('length') && <div className="form-group"><label className="form-label">Length</label><input className="form-input" value={partData.length} onChange={(e) => setPartData({ ...partData, length: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('sectionSize') && <div className="form-group"><label className="form-label">Section Size</label><input className="form-input" value={partData.sectionSize} onChange={(e) => setPartData({ ...partData, sectionSize: e.target.value })} placeholder="e.g. W8x31" /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('outerDiameter') && <div className="form-group"><label className="form-label">Outer Diameter</label><input className="form-input" value={partData.outerDiameter} onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('wallThickness') && <div className="form-group"><label className="form-label">Wall Thickness</label><input className="form-input" value={partData.wallThickness} onChange={(e) => setPartData({ ...partData, wallThickness: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('rollType') && (
+                    <div className="form-group"><label className="form-label">Roll Type</label>
+                      <select className="form-select" value={partData.rollType} onChange={(e) => setPartData({ ...partData, rollType: e.target.value })}>
+                        <option value="">Select...</option><option value="easy_way">Easy Way</option><option value="hard_way">Hard Way</option>
+                      </select>
+                    </div>
+                  )}
+                  {PART_TYPES[selectedPartType]?.fields.includes('radius') && <div className="form-group"><label className="form-label">Radius</label><input className="form-input" value={partData.radius} onChange={(e) => setPartData({ ...partData, radius: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('diameter') && <div className="form-group"><label className="form-label">Diameter</label><input className="form-input" value={partData.diameter} onChange={(e) => setPartData({ ...partData, diameter: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('arcDegrees') && <div className="form-group"><label className="form-label">Arc (degrees)</label><input className="form-input" value={partData.arcDegrees} onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('flangeOut') && (
+                    <div className="form-group"><label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" checked={partData.flangeOut} onChange={(e) => setPartData({ ...partData, flangeOut: e.target.checked })} /> Flange Out
+                    </label></div>
+                  )}
+                  <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Special Instructions</label><textarea className="form-textarea" value={partData.specialInstructions} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} /></div>
+                </div>
+              )}
+            </div>
             <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setShowPartModal(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={handleSavePart} disabled={saving || !selectedPartType}>{saving ? 'Saving...' : editingPart ? 'Update Part' : 'Add Part'}</button>
+              <button className="btn btn-secondary" onClick={() => setShowPartModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSavePart} disabled={saving || !selectedPartType}>{saving ? 'Saving...' : editingPart ? 'Update Part' : 'Add Part'}</button>
             </div>
           </div>
         </div>
@@ -552,18 +669,14 @@ function WorkOrderDetailsPage() {
       {/* Pickup Modal */}
       {showPickupModal && (
         <div className="modal-overlay" onClick={() => setShowPickupModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Mark as Picked Up</h3>
-              <button className="modal-close" onClick={() => setShowPickupModal(false)}>&times;</button>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Picked Up By</label>
-              <input type="text" className="form-input" value={pickupData.pickedUpBy} onChange={(e) => setPickupData({ ...pickupData, pickedUpBy: e.target.value })} placeholder="Name of person picking up" />
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header"><h3>Confirm Pickup</h3><button className="btn btn-icon" onClick={() => setShowPickupModal(false)}><X size={20} /></button></div>
+            <div className="modal-body">
+              <div className="form-group"><label className="form-label">Picked Up By</label><input className="form-input" value={pickupData.pickedUpBy} onChange={(e) => setPickupData({ pickedUpBy: e.target.value })} placeholder="Name of person picking up" /></div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowPickupModal(false)}>Cancel</button>
-              <button className="btn btn-success" onClick={handlePickup} disabled={saving}>{saving ? 'Saving...' : 'Complete Pickup'}</button>
+              <button className="btn btn-success" onClick={handlePickup}><Check size={18} />Confirm Pickup</button>
             </div>
           </div>
         </div>

@@ -2,26 +2,25 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, X, Save, Package } from 'lucide-react';
 import QRCode from 'qrcode';
-import { createWorkOrder, getLocations } from '../services/api';
+import { createShipment, uploadPhotos, getLocations } from '../services/api';
 
 function NewShipmentPage() {
   const navigate = useNavigate();
   const photoInputRef = useRef(null);
-  const docInputRef = useRef(null);
 
   const [locations, setLocations] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [createdWorkOrder, setCreatedWorkOrder] = useState(null);
+  const [createdData, setCreatedData] = useState(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
 
   const [formData, setFormData] = useState({
     clientName: '',
     jobNumber: '',
-    clientPO: '',
-    projectDescription: '',
+    clientPurchaseOrderNumber: '',
+    description: '',
     quantity: 1,
-    storageLocation: '',
+    location: '',
     notes: '',
     receivedBy: '',
     requestedDueDate: '',
@@ -29,17 +28,16 @@ function NewShipmentPage() {
   });
 
   const [photos, setPhotos] = useState([]);
-  const [documents, setDocuments] = useState([]);
 
   useEffect(() => {
     loadLocations();
   }, []);
 
   useEffect(() => {
-    if (createdWorkOrder?.drNumber) {
-      generateQRCode(`DR-${createdWorkOrder.drNumber}`);
+    if (createdData?.drNumber) {
+      generateQRCode(`DR-${createdData.drNumber}`);
     }
-  }, [createdWorkOrder?.drNumber]);
+  }, [createdData?.drNumber]);
 
   const loadLocations = async () => {
     try {
@@ -69,26 +67,11 @@ function NewShipmentPage() {
     setPhotos([...photos, ...newPhotos]);
   };
 
-  const handleDocSelect = (e) => {
-    const files = Array.from(e.target.files);
-    const newDocs = files.map(file => ({
-      file,
-      name: file.name
-    }));
-    setDocuments([...documents, ...newDocs]);
-  };
-
   const removePhoto = (index) => {
     const newPhotos = [...photos];
     URL.revokeObjectURL(newPhotos[index].preview);
     newPhotos.splice(index, 1);
     setPhotos(newPhotos);
-  };
-
-  const removeDocument = (index) => {
-    const newDocs = [...documents];
-    newDocs.splice(index, 1);
-    setDocuments(newDocs);
   };
 
   const handleSubmit = async (e) => {
@@ -103,22 +86,28 @@ function NewShipmentPage() {
       setSaving(true);
       setError(null);
 
-      // Create work order with DR# assigned
-      const workOrderData = {
+      // Create shipment with work order (backend will create both)
+      const shipmentData = {
         ...formData,
-        assignDRNumber: true,
-        status: 'received'
+        createWorkOrder: true, // Flag to create linked work order
+        assignDRNumber: true,  // Assign DR# to work order
       };
 
-      const response = await createWorkOrder(workOrderData);
-      const newWorkOrder = response.data.data;
+      const response = await createShipment(shipmentData);
+      const result = response.data.data;
 
-      // TODO: Upload photos/documents to work order if needed
-      // For now, we skip this as work orders use a different file structure
+      // Upload photos if any
+      if (photos.length > 0 && result.shipment?.id) {
+        await uploadPhotos(result.shipment.id, photos.map(p => p.file));
+      }
 
-      setCreatedWorkOrder(newWorkOrder);
+      setCreatedData({
+        shipment: result.shipment,
+        workOrder: result.workOrder,
+        drNumber: result.workOrder?.drNumber
+      });
     } catch (err) {
-      setError('Failed to create work order');
+      setError('Failed to create shipment');
       console.error(err);
     } finally {
       setSaving(false);
@@ -126,13 +115,13 @@ function NewShipmentPage() {
   };
 
   // Show success screen with DR# and QR code
-  if (createdWorkOrder) {
+  if (createdData) {
     return (
       <div>
         <div className="card" style={{ maxWidth: 500, margin: '0 auto', textAlign: 'center' }}>
           <div style={{ fontSize: '3rem', marginBottom: 16 }}>✅</div>
           <h2 style={{ marginBottom: 8 }}>Material Received!</h2>
-          <p style={{ color: '#666', marginBottom: 16 }}>{createdWorkOrder.clientName}</p>
+          <p style={{ color: '#666', marginBottom: 16 }}>{createdData.shipment?.clientName}</p>
           
           <div style={{ 
             background: '#e3f2fd', 
@@ -148,7 +137,7 @@ function NewShipmentPage() {
               fontWeight: 700, 
               color: '#1976d2' 
             }}>
-              DR-{createdWorkOrder.drNumber}
+              DR-{createdData.drNumber}
             </div>
           </div>
           
@@ -175,7 +164,7 @@ function NewShipmentPage() {
               className="btn btn-outline"
               onClick={() => {
                 const link = document.createElement('a');
-                link.download = `DR-${createdWorkOrder.drNumber}.png`;
+                link.download = `DR-${createdData.drNumber}.png`;
                 link.href = qrCodeUrl;
                 link.click();
               }}
@@ -184,7 +173,7 @@ function NewShipmentPage() {
             </button>
             <button 
               className="btn btn-primary"
-              onClick={() => navigate(`/workorder/${createdWorkOrder.id}`)}
+              onClick={() => navigate(`/workorder/${createdData.workOrder?.id}`)}
             >
               View Work Order
             </button>
@@ -194,21 +183,20 @@ function NewShipmentPage() {
             className="btn btn-secondary" 
             style={{ marginTop: 16, width: '100%' }}
             onClick={() => {
-              setCreatedWorkOrder(null);
+              setCreatedData(null);
               setFormData({
                 clientName: '',
                 jobNumber: '',
-                clientPO: '',
-                projectDescription: '',
+                clientPurchaseOrderNumber: '',
+                description: '',
                 quantity: 1,
-                storageLocation: '',
+                location: '',
                 notes: '',
                 receivedBy: '',
                 requestedDueDate: '',
                 promisedDate: '',
               });
               setPhotos([]);
-              setDocuments([]);
             }}
           >
             Receive Another Shipment
@@ -228,7 +216,7 @@ function NewShipmentPage() {
           <div>
             <h1 className="page-title">Receive Material</h1>
             <p style={{ color: '#666', fontSize: '0.9rem', marginTop: 4 }}>
-              Creates a work order with DR# assigned automatically
+              Creates a receiving record and work order with DR# assigned
             </p>
           </div>
         </div>
@@ -241,7 +229,7 @@ function NewShipmentPage() {
           {/* Main Form */}
           <div>
             <div className="card">
-              <h3 className="card-title" style={{ marginBottom: 16 }}>Client & Material Information</h3>
+              <h3 className="card-title" style={{ marginBottom: 16 }}>Client Information</h3>
               
               <div className="grid grid-2">
                 <div className="form-group">
@@ -255,6 +243,15 @@ function NewShipmentPage() {
                   />
                 </div>
                 <div className="form-group">
+                  <label className="form-label">Client PO Number</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={formData.clientPurchaseOrderNumber}
+                    onChange={(e) => setFormData({ ...formData, clientPurchaseOrderNumber: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
                   <label className="form-label">Job Number</label>
                   <input
                     type="text"
@@ -264,16 +261,23 @@ function NewShipmentPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Client PO Number</label>
+                  <label className="form-label">Received By</label>
                   <input
                     type="text"
                     className="form-input"
-                    value={formData.clientPO}
-                    onChange={(e) => setFormData({ ...formData, clientPO: e.target.value })}
+                    value={formData.receivedBy}
+                    onChange={(e) => setFormData({ ...formData, receivedBy: e.target.value })}
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <h3 className="card-title" style={{ marginBottom: 16 }}>Material Received</h3>
+              
+              <div className="grid grid-2">
                 <div className="form-group">
-                  <label className="form-label">Quantity (pieces)</label>
+                  <label className="form-label">Quantity (pieces/bundles)</label>
                   <input
                     type="number"
                     className="form-input"
@@ -282,21 +286,12 @@ function NewShipmentPage() {
                     min="1"
                   />
                 </div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Material Description</label>
-                  <textarea
-                    className="form-textarea"
-                    value={formData.projectDescription}
-                    onChange={(e) => setFormData({ ...formData, projectDescription: e.target.value })}
-                    placeholder="e.g., 4x4x1/4 angle, 20' lengths"
-                  />
-                </div>
                 <div className="form-group">
                   <label className="form-label">Storage Location</label>
                   <select
                     className="form-select"
-                    value={formData.storageLocation}
-                    onChange={(e) => setFormData({ ...formData, storageLocation: e.target.value })}
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                   >
                     <option value="">Select location</option>
                     {locations.map((loc) => (
@@ -304,13 +299,24 @@ function NewShipmentPage() {
                     ))}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Received By</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formData.receivedBy}
-                    onChange={(e) => setFormData({ ...formData, receivedBy: e.target.value })}
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Material Description</label>
+                  <textarea
+                    className="form-textarea"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="e.g., (4) 4x4x1/4 angle, 20' lengths&#10;(2) 6x6x3/8 tube, 24' lengths"
+                    rows={3}
+                  />
+                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Receiving Notes</label>
+                  <textarea
+                    className="form-textarea"
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="e.g., Pallet damaged on corner, material appears OK&#10;Client dropped off, no BOL"
+                    rows={2}
                   />
                 </div>
                 <div className="form-group">
@@ -331,22 +337,13 @@ function NewShipmentPage() {
                     onChange={(e) => setFormData({ ...formData, promisedDate: e.target.value })}
                   />
                 </div>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Notes</label>
-                  <textarea
-                    className="form-textarea"
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="Any additional notes about the material"
-                  />
-                </div>
               </div>
             </div>
 
             {/* Photos */}
             <div className="card">
               <div className="card-header">
-                <h3 className="card-title">Photos (Optional)</h3>
+                <h3 className="card-title">Photos</h3>
               </div>
               
               <div 
@@ -354,14 +351,15 @@ function NewShipmentPage() {
                 onClick={() => photoInputRef.current?.click()}
               >
                 <Upload size={32} className="file-upload-icon" />
-                <p>Click to select photos of material</p>
-                <p style={{ fontSize: '0.75rem', color: '#999' }}>JPG, PNG, GIF up to 10MB</p>
+                <p>Click to take or select photos of material</p>
+                <p style={{ fontSize: '0.75rem', color: '#999' }}>Document condition, labels, damage, etc.</p>
               </div>
               <input
                 ref={photoInputRef}
                 type="file"
                 multiple
                 accept="image/*"
+                capture="environment"
                 style={{ display: 'none' }}
                 onChange={handlePhotoSelect}
               />
@@ -377,48 +375,6 @@ function NewShipmentPage() {
                         onClick={() => removePhoto(index)}
                       >
                         <X size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Documents */}
-            <div className="card">
-              <div className="card-header">
-                <h3 className="card-title">Documents (Optional)</h3>
-              </div>
-              
-              <div 
-                className="file-upload"
-                onClick={() => docInputRef.current?.click()}
-              >
-                <Upload size={32} className="file-upload-icon" />
-                <p>Click to select packing slips, BOLs, etc.</p>
-                <p style={{ fontSize: '0.75rem', color: '#999' }}>PDF files up to 20MB</p>
-              </div>
-              <input
-                ref={docInputRef}
-                type="file"
-                multiple
-                accept=".pdf"
-                style={{ display: 'none' }}
-                onChange={handleDocSelect}
-              />
-
-              {documents.length > 0 && (
-                <div style={{ marginTop: 16 }}>
-                  {documents.map((doc, index) => (
-                    <div key={index} className="document-item">
-                      <Package size={20} style={{ color: '#d32f2f' }} />
-                      <span className="document-item-name">{doc.name}</span>
-                      <button 
-                        type="button"
-                        className="btn btn-sm btn-danger"
-                        onClick={() => removeDocument(index)}
-                      >
-                        <X size={14} />
                       </button>
                     </div>
                   ))}
@@ -447,10 +403,17 @@ function NewShipmentPage() {
                 <div style={{ fontWeight: 500 }}>{formData.clientName || '—'}</div>
               </div>
 
-              {formData.clientPO && (
+              {formData.clientPurchaseOrderNumber && (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: 4 }}>PO Number</div>
-                  <div style={{ fontWeight: 500 }}>{formData.clientPO}</div>
+                  <div style={{ fontWeight: 500 }}>{formData.clientPurchaseOrderNumber}</div>
+                </div>
+              )}
+
+              {formData.quantity > 1 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: 4 }}>Quantity</div>
+                  <div style={{ fontWeight: 500 }}>{formData.quantity} pieces</div>
                 </div>
               )}
               
@@ -458,21 +421,20 @@ function NewShipmentPage() {
                 <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: 4 }}>Photos</div>
                 <div style={{ fontWeight: 500 }}>{photos.length} selected</div>
               </div>
-              
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: 4 }}>Documents</div>
-                <div style={{ fontWeight: 500 }}>{documents.length} selected</div>
-              </div>
 
               <div style={{ 
-                background: '#fff3e0', 
+                background: '#e3f2fd', 
                 padding: 12, 
                 borderRadius: 8, 
                 marginBottom: 16,
                 fontSize: '0.8rem',
-                color: '#e65100'
+                color: '#1565c0'
               }}>
-                <strong>Note:</strong> Parts/instructions can be added later when the client calls
+                <strong>This creates:</strong>
+                <ul style={{ margin: '8px 0 0 16px', padding: 0 }}>
+                  <li>Receiving record (shipment)</li>
+                  <li>Work order with DR#</li>
+                </ul>
               </div>
 
               <button 
@@ -482,7 +444,7 @@ function NewShipmentPage() {
                 disabled={saving}
               >
                 <Save size={18} />
-                {saving ? 'Creating...' : 'Receive Material & Assign DR#'}
+                {saving ? 'Creating...' : 'Receive Material'}
               </button>
             </div>
           </div>
