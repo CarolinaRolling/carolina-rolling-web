@@ -128,6 +128,19 @@ export const getPartFileSignedUrl = async (workOrderId, partId, fileId) => {
 export const deletePartFile = (workOrderId, partId, fileId) => 
   api.delete(`/workorders/${workOrderId}/parts/${partId}/files/${fileId}`);
 
+// Work Order Documents (for order-level attachments like POs, supplier docs)
+export const uploadWorkOrderDocuments = (workOrderId, files) => {
+  const formData = new FormData();
+  files.forEach((file) => formData.append('documents', file));
+  return api.post(`/workorders/${workOrderId}/documents`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+export const getWorkOrderDocumentSignedUrl = (workOrderId, documentId) => 
+  api.get(`/workorders/${workOrderId}/documents/${documentId}/signed-url`);
+export const deleteWorkOrderDocument = (workOrderId, documentId) => 
+  api.delete(`/workorders/${workOrderId}/documents/${documentId}`);
+
 // Estimates
 export const getEstimates = (params) => api.get('/estimates', { params });
 export const getEstimateById = (id) => api.get(`/estimates/${id}`);

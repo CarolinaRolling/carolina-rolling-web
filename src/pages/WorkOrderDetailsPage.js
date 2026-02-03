@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
-  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock
+  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File
 } from 'lucide-react';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
   uploadPartFiles, getPartFileSignedUrl, deletePartFile,
+  uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument,
   getShipmentByWorkOrderId
 } from '../services/api';
 
@@ -39,10 +40,12 @@ function WorkOrderDetailsPage() {
   const [partData, setPartData] = useState({});
   const [selectedPartType, setSelectedPartType] = useState('');
   const [uploadingFiles, setUploadingFiles] = useState(null);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
   const [showPickupModal, setShowPickupModal] = useState(false);
   const [pickupData, setPickupData] = useState({ pickedUpBy: '' });
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const fileInputRefs = useRef({});
+  const docInputRef = useRef(null);
 
   useEffect(() => { loadOrder(); }, [id]);
 
@@ -119,6 +122,40 @@ function WorkOrderDetailsPage() {
     setTimeout(() => setSuccess(null), 3000);
   };
 
+  // Document upload for order
+  const handleDocumentUpload = async (files) => {
+    try {
+      setUploadingDocs(true);
+      await uploadWorkOrderDocuments(id, files);
+      await loadOrder();
+      showMessage('Documents uploaded');
+    } catch (err) {
+      setError('Failed to upload documents');
+    } finally {
+      setUploadingDocs(false);
+    }
+  };
+
+  const handleViewDocument = async (documentId) => {
+    try {
+      const response = await getWorkOrderDocumentSignedUrl(id, documentId);
+      window.open(response.data.data.url, '_blank');
+    } catch (err) {
+      setError('Failed to open document');
+    }
+  };
+
+  const handleDeleteDocument = async (documentId) => {
+    if (!window.confirm('Delete this document?')) return;
+    try {
+      await deleteWorkOrderDocument(id, documentId);
+      await loadOrder();
+      showMessage('Document deleted');
+    } catch (err) {
+      setError('Failed to delete document');
+    }
+  };
+
   // Part functions
   const openAddPartModal = () => {
     setEditingPart(null);
@@ -191,7 +228,7 @@ function WorkOrderDetailsPage() {
   const handleViewFile = async (partId, fileId) => {
     try {
       const response = await getPartFileSignedUrl(id, partId, fileId);
-      window.open(response.data.url, '_blank');
+      window.open(response.url, '_blank');
     } catch (err) {
       setError('Failed to open file');
     }
@@ -219,59 +256,130 @@ function WorkOrderDetailsPage() {
     }
   };
 
-  const printWorkOrder = (type) => {
+  // Comprehensive print function
+  const printFullWorkOrder = async () => {
     const printWindow = window.open('', '_blank');
-    const partsHtml = order.parts?.map(p => `
-      <div style="border:1px solid #ddd;padding:12px;margin-bottom:10px;border-radius:4px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-          <strong>#${p.partNumber} - ${PART_TYPES[p.partType]?.label || p.partType}</strong>
-          <span style="background:#e3f2fd;padding:2px 8px;border-radius:4px;font-size:0.8em">${p.status}</span>
+    const clientPO = order.clientPurchaseOrderNumber || shipment?.clientPurchaseOrderNumber;
+    
+    // Build parts HTML with detailed instructions
+    const partsHtml = order.parts?.sort((a, b) => a.partNumber - b.partNumber).map(p => {
+      const pdfFiles = p.files?.filter(f => f.mimeType === 'application/pdf' || f.originalName?.toLowerCase().endsWith('.pdf')) || [];
+      
+      return `
+        <div style="border:2px solid #1976d2;padding:16px;margin-bottom:16px;border-radius:8px;page-break-inside:avoid">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #1976d2">
+            <div style="font-size:1.2rem;font-weight:bold;color:#1976d2">Part #${p.partNumber} - ${PART_TYPES[p.partType]?.label || p.partType}</div>
+            <div style="background:#e3f2fd;padding:4px 12px;border-radius:4px;font-weight:bold">Qty: ${p.quantity}</div>
+          </div>
+          
+          ${p.clientPartNumber ? `<div style="margin-bottom:8px"><strong>Client Part#:</strong> ${p.clientPartNumber}</div>` : ''}
+          ${p.heatNumber ? `<div style="margin-bottom:8px"><strong>Heat#:</strong> ${p.heatNumber}</div>` : ''}
+          
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;background:#f5f5f5;padding:12px;border-radius:4px">
+            ${p.material ? `<div><strong>Material:</strong><br/>${p.material}</div>` : ''}
+            ${p.thickness ? `<div><strong>Thickness:</strong><br/>${p.thickness}</div>` : ''}
+            ${p.width ? `<div><strong>Width:</strong><br/>${p.width}</div>` : ''}
+            ${p.length ? `<div><strong>Length:</strong><br/>${p.length}</div>` : ''}
+            ${p.sectionSize ? `<div><strong>Section:</strong><br/>${p.sectionSize}</div>` : ''}
+            ${p.outerDiameter ? `<div><strong>OD:</strong><br/>${p.outerDiameter}</div>` : ''}
+            ${p.wallThickness ? `<div><strong>Wall:</strong><br/>${p.wallThickness}</div>` : ''}
+            ${p.rollType ? `<div><strong>Roll Type:</strong><br/>${p.rollType === 'easy_way' ? 'Easy Way' : 'Hard Way'}</div>` : ''}
+            ${p.radius ? `<div><strong>Radius:</strong><br/>${p.radius}</div>` : ''}
+            ${p.diameter ? `<div><strong>Diameter:</strong><br/>${p.diameter}</div>` : ''}
+            ${p.arcDegrees ? `<div><strong>Arc:</strong><br/>${p.arcDegrees}°</div>` : ''}
+            ${p.flangeOut ? `<div><strong>Flange Out:</strong><br/>Yes</div>` : ''}
+          </div>
+          
+          ${p.specialInstructions ? `
+            <div style="background:#fff3e0;padding:12px;border-radius:4px;border-left:4px solid #ff9800">
+              <strong style="color:#e65100">Special Instructions:</strong><br/>
+              <div style="white-space:pre-wrap;margin-top:4px">${p.specialInstructions}</div>
+            </div>
+          ` : ''}
+          
+          ${pdfFiles.length > 0 ? `
+            <div style="margin-top:12px;padding:8px;background:#e3f2fd;border-radius:4px">
+              <strong>📎 Attached Documents:</strong> ${pdfFiles.map(f => f.originalName).join(', ')}
+              <div style="font-size:0.8em;color:#666;margin-top:4px">See attached PDF pages for Part #${p.partNumber}</div>
+            </div>
+          ` : ''}
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:0.9em">
-          <div><strong>Qty:</strong> ${p.quantity}</div>
-          ${p.material ? `<div><strong>Material:</strong> ${p.material}</div>` : ''}
-          ${p.thickness ? `<div><strong>Thickness:</strong> ${p.thickness}</div>` : ''}
-          ${p.width ? `<div><strong>Width:</strong> ${p.width}</div>` : ''}
-          ${p.length ? `<div><strong>Length:</strong> ${p.length}</div>` : ''}
-          ${p.sectionSize ? `<div><strong>Section:</strong> ${p.sectionSize}</div>` : ''}
-          ${p.radius ? `<div><strong>Radius:</strong> ${p.radius}</div>` : ''}
-          ${p.diameter ? `<div><strong>Diameter:</strong> ${p.diameter}</div>` : ''}
-        </div>
-        ${p.specialInstructions ? `<div style="margin-top:8px;padding:8px;background:#f5f5f5;border-radius:4px"><strong>Instructions:</strong> ${p.specialInstructions}</div>` : ''}
-      </div>
-    `).join('');
+      `;
+    }).join('') || '<p style="color:#666">No parts added yet</p>';
 
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>${type === 'customer' ? 'Delivery Receipt' : 'Work Order'} - ${order.drNumber ? `DR-${order.drNumber}` : order.orderNumber}</title>
-      <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}h1{color:#1976d2;border-bottom:2px solid #1976d2;padding-bottom:10px}
-      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}.sig-box{border:1px solid #ddd;padding:20px;margin-top:30px}.sig-line{border-bottom:1px solid #333;height:40px;margin-top:10px}</style></head>
-      <body><h1>${type === 'customer' ? 'Delivery Receipt' : 'Work Order'} - ${order.drNumber ? `DR-${order.drNumber}` : order.orderNumber}</h1>
-      <div class="info-grid">
-        <div style="padding:8px;background:#f5f5f5;border-radius:4px"><strong>Client:</strong> ${order.clientName}</div>
-        ${order.clientPurchaseOrderNumber ? `<div style="padding:8px;background:#f5f5f5;border-radius:4px"><strong>PO#:</strong> ${order.clientPurchaseOrderNumber}</div>` : ''}
-        ${order.contactName ? `<div style="padding:8px;background:#f5f5f5;border-radius:4px"><strong>Contact:</strong> ${order.contactName}</div>` : ''}
-        ${order.contactPhone ? `<div style="padding:8px;background:#f5f5f5;border-radius:4px"><strong>Phone:</strong> ${order.contactPhone}</div>` : ''}
-        ${order.promisedDate ? `<div style="padding:8px;background:#f5f5f5;border-radius:4px"><strong>Due:</strong> ${new Date(order.promisedDate).toLocaleDateString()}</div>` : ''}
+    // Build order documents HTML
+    const orderDocsHtml = order.documents?.length > 0 ? `
+      <div style="margin-top:20px;padding:12px;background:#f5f5f5;border-radius:4px">
+        <strong>📁 Order Documents:</strong>
+        <ul style="margin:8px 0 0 20px">
+          ${order.documents.map(d => `<li>${d.originalName}</li>`).join('')}
+        </ul>
       </div>
-      ${order.notes ? `<div style="padding:10px;background:#f5f5f5;border-radius:4px;margin-bottom:20px"><strong>Notes:</strong> ${order.notes}</div>` : ''}
-      <h2 style="border-bottom:2px solid #1976d2;padding-bottom:5px">Parts (${order.parts?.length || 0})</h2>
-      ${partsHtml || '<p>No parts</p>'}
-      ${type === 'customer' ? `<div class="sig-box"><h3 style="margin-top:0">Customer Acceptance</h3><p>I acknowledge receipt of the above items.</p>
-        <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-top:30px"><div><div class="sig-line">Signature</div></div><div><div class="sig-line">Date</div></div></div>
-        <div style="margin-top:20px"><div class="sig-line">Print Name</div></div></div>` : ''}
-      <div style="margin-top:30px;font-size:0.8em;color:#999;text-align:center">Printed ${new Date().toLocaleString()}</div></body></html>`);
+    ` : '';
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <title>Work Order - ${order.drNumber ? `DR-${order.drNumber}` : order.orderNumber}</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+    h1 { color: #1976d2; border-bottom: 3px solid #1976d2; padding-bottom: 10px; }
+    .header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .header-item { padding: 10px; background: #f5f5f5; border-radius: 4px; }
+    .header-item strong { color: #333; }
+    @media print { 
+      body { padding: 10px; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>📋 Work Order: ${order.drNumber ? `DR-${order.drNumber}` : order.orderNumber}</h1>
+  
+  <div class="header-grid">
+    <div class="header-item"><strong>Client:</strong><br/>${order.clientName}</div>
+    ${clientPO ? `<div class="header-item"><strong>Client PO#:</strong><br/>${clientPO}</div>` : '<div></div>'}
+    ${order.contactName ? `<div class="header-item"><strong>Contact:</strong><br/>${order.contactName}${order.contactPhone ? ` - ${order.contactPhone}` : ''}</div>` : '<div></div>'}
+    ${order.promisedDate ? `<div class="header-item"><strong>Promised Date:</strong><br/>${new Date(order.promisedDate).toLocaleDateString()}</div>` : '<div></div>'}
+    ${order.storageLocation ? `<div class="header-item"><strong>Storage Location:</strong><br/>${order.storageLocation}</div>` : '<div></div>'}
+    <div class="header-item"><strong>Status:</strong><br/>${order.status?.replace('_', ' ').toUpperCase()}</div>
+  </div>
+
+  ${order.notes ? `
+    <div style="padding:12px;background:#e3f2fd;border-radius:4px;margin-bottom:20px;border-left:4px solid #1976d2">
+      <strong>Notes:</strong><br/>${order.notes}
+    </div>
+  ` : ''}
+
+  ${orderDocsHtml}
+
+  <h2 style="color:#1976d2;border-bottom:2px solid #1976d2;padding-bottom:8px;margin-top:30px">
+    Parts List (${order.parts?.length || 0} parts)
+  </h2>
+  
+  ${partsHtml}
+
+  <div style="margin-top:40px;padding-top:20px;border-top:2px solid #ddd;color:#666;font-size:0.85em">
+    Printed: ${new Date().toLocaleString()}<br/>
+    Work Order: ${order.orderNumber}
+  </div>
+</body>
+</html>`);
+    
     printWindow.document.close();
-    printWindow.print();
+    setTimeout(() => printWindow.print(), 500);
     setShowPrintMenu(false);
   };
 
   const printPartLabel = (part) => {
     const printWindow = window.open('', '_blank');
+    const clientPO = order.clientPurchaseOrderNumber || shipment?.clientPurchaseOrderNumber;
     printWindow.document.write(`<!DOCTYPE html><html><head><title>Label</title>
       <style>@page{size:62mm 29mm;margin:0}body{font-family:Arial;width:62mm;height:29mm;padding:2mm;margin:0;box-sizing:border-box}
       .lg{font-size:14pt;font-weight:bold}.sm{font-size:9pt;color:#333}</style></head>
       <body><div class="lg">${part.clientPartNumber || `Part ${part.partNumber}`}</div>
-      <div class="sm">WO: ${order.orderNumber}</div>
-      ${order.clientPurchaseOrderNumber ? `<div class="sm">PO: ${order.clientPurchaseOrderNumber}</div>` : ''}
+      <div class="sm">${order.drNumber ? `DR-${order.drNumber}` : order.orderNumber}</div>
+      ${clientPO ? `<div class="sm">PO: ${clientPO}</div>` : ''}
       ${part.heatNumber ? `<div class="sm">Heat: ${part.heatNumber}</div>` : ''}
       <div class="sm">Qty: ${part.quantity}</div></body></html>`);
     printWindow.document.close();
@@ -297,8 +405,6 @@ function WorkOrderDetailsPage() {
   if (!order) return <div className="empty-state"><div className="empty-state-title">Not found</div><button className="btn btn-primary" onClick={() => navigate('/inventory')}>Back</button></div>;
 
   const hasNoParts = !order.parts || order.parts.length === 0;
-  
-  // Get PO from shipment if not on work order
   const clientPO = order.clientPurchaseOrderNumber || shipment?.clientPurchaseOrderNumber;
 
   return (
@@ -309,13 +415,7 @@ function WorkOrderDetailsPage() {
           <div>
             {order.drNumber ? (
               <h1 className="detail-title" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ 
-                  fontFamily: 'Courier New, monospace', 
-                  background: '#e3f2fd', 
-                  padding: '4px 12px', 
-                  borderRadius: 6,
-                  color: '#1976d2'
-                }}>
+                <span style={{ fontFamily: 'Courier New, monospace', background: '#e3f2fd', padding: '4px 12px', borderRadius: 6, color: '#1976d2' }}>
                   DR-{order.drNumber}
                 </span>
               </h1>
@@ -340,12 +440,14 @@ function WorkOrderDetailsPage() {
             </>
           )}
           <div style={{ position: 'relative' }}>
-            <button className="btn btn-outline" onClick={() => setShowPrintMenu(!showPrintMenu)}><Printer size={18} />Print</button>
+            <button className="btn btn-primary" onClick={() => setShowPrintMenu(!showPrintMenu)}><Printer size={18} />Print</button>
             {showPrintMenu && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, background: 'white', border: '1px solid #ddd', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 100, minWidth: 160 }}>
-                <button onClick={() => printWorkOrder('customer')} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer' }}>Customer Copy</button>
-                <button onClick={() => printWorkOrder('operator')} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer' }}>Operator Copy</button>
-                <button onClick={() => printWorkOrder('office')} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer' }}>Office Copy</button>
+              <div style={{ position: 'absolute', top: '100%', right: 0, background: 'white', border: '1px solid #ddd', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 100, minWidth: 200 }}>
+                <button onClick={printFullWorkOrder} style={{ display: 'block', width: '100%', padding: '12px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
+                  📋 Full Work Order
+                </button>
+                <div style={{ borderTop: '1px solid #eee' }}></div>
+                <button onClick={() => { setShowPrintMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', color: '#666', fontSize: '0.9rem' }}>Cancel</button>
               </div>
             )}
           </div>
@@ -366,11 +468,12 @@ function WorkOrderDetailsPage() {
           >
             <Truck size={18} />
             {showReceivingInfo ? 'Hide Receiving Info' : 'Show Receiving Info'}
+            {shipment.photos?.length > 0 && <span style={{ background: '#4caf50', color: 'white', borderRadius: 10, padding: '2px 6px', fontSize: '0.7rem' }}>{shipment.photos.length} 📷</span>}
           </button>
         </div>
       )}
 
-      {/* Receiving Info Panel (collapsible) */}
+      {/* Receiving Info Panel */}
       {showReceivingInfo && shipment && (
         <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid #4caf50' }}>
           <div className="card-header">
@@ -398,10 +501,6 @@ function WorkOrderDetailsPage() {
                 <div className="detail-item-value">{shipment.location}</div>
               </div>
             )}
-            <div className="detail-item">
-              <div className="detail-item-label">QR Code</div>
-              <div className="detail-item-value" style={{ fontFamily: 'monospace' }}>{shipment.qrCode}</div>
-            </div>
           </div>
 
           {shipment.description && (
@@ -418,17 +517,23 @@ function WorkOrderDetailsPage() {
             </div>
           )}
 
-          {shipment.photos?.length > 0 && (
+          {/* Photos */}
+          {shipment.photos && shipment.photos.length > 0 && (
             <div style={{ marginTop: 16 }}>
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Photos ({shipment.photos.length})</div>
-              <div className="photo-grid">
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>📷 Photos ({shipment.photos.length})</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 12 }}>
                 {shipment.photos.map(photo => (
-                  <div key={photo.id} className="photo-item">
+                  <div key={photo.id} style={{ 
+                    aspectRatio: '1', 
+                    borderRadius: 8, 
+                    overflow: 'hidden', 
+                    cursor: 'pointer',
+                    border: '2px solid #ddd'
+                  }} onClick={() => window.open(photo.url, '_blank')}>
                     <img 
                       src={photo.thumbnailUrl || photo.url} 
                       alt="Shipment" 
-                      onClick={() => window.open(photo.url, '_blank')}
-                      style={{ cursor: 'pointer' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
                   </div>
                 ))}
@@ -457,8 +562,9 @@ function WorkOrderDetailsPage() {
             <div className="form-group"><label className="form-label">Client PO#</label><input className="form-input" value={editData.clientPurchaseOrderNumber} onChange={(e) => setEditData({ ...editData, clientPurchaseOrderNumber: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Job Number</label><input className="form-input" value={editData.jobNumber} onChange={(e) => setEditData({ ...editData, jobNumber: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Storage Location</label><input className="form-input" value={editData.storageLocation} onChange={(e) => setEditData({ ...editData, storageLocation: e.target.value })} /></div>
-            <div className="form-group"><label className="form-label">Contact</label><input className="form-input" value={editData.contactName} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} /></div>
-            <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={editData.contactPhone} onChange={(e) => setEditData({ ...editData, contactPhone: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label">Contact Name</label><input className="form-input" value={editData.contactName} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} placeholder="John Smith" /></div>
+            <div className="form-group"><label className="form-label">Contact Phone</label><input className="form-input" value={editData.contactPhone} onChange={(e) => setEditData({ ...editData, contactPhone: e.target.value })} placeholder="(555) 123-4567" /></div>
+            <div className="form-group"><label className="form-label">Contact Email</label><input type="email" className="form-input" value={editData.contactEmail} onChange={(e) => setEditData({ ...editData, contactEmail: e.target.value })} placeholder="john@example.com" /></div>
             <div className="form-group"><label className="form-label">Requested Due Date</label><input type="date" className="form-input" value={editData.requestedDueDate} onChange={(e) => setEditData({ ...editData, requestedDueDate: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Promised Date</label><input type="date" className="form-input" value={editData.promisedDate} onChange={(e) => setEditData({ ...editData, promisedDate: e.target.value })} /></div>
             <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Notes</label><textarea className="form-textarea" value={editData.notes} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} /></div>
@@ -470,17 +576,45 @@ function WorkOrderDetailsPage() {
               {clientPO && <div className="detail-item"><div className="detail-item-label"><FileText size={14} /> Client PO#</div><div className="detail-item-value" style={{ color: '#1976d2', fontWeight: 600 }}>{clientPO}</div></div>}
               {order.jobNumber && <div className="detail-item"><div className="detail-item-label">Job#</div><div className="detail-item-value">{order.jobNumber}</div></div>}
               {order.storageLocation && <div className="detail-item"><div className="detail-item-label"><MapPin size={14} /> Location</div><div className="detail-item-value">{order.storageLocation}</div></div>}
-              {order.contactName && <div className="detail-item"><div className="detail-item-label">Contact</div><div className="detail-item-value">{order.contactName}</div></div>}
-              {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Phone</div><div className="detail-item-value">{order.contactPhone}</div></div>}
+              {order.contactName && <div className="detail-item"><div className="detail-item-label">Contact Name</div><div className="detail-item-value">{order.contactName}</div></div>}
+              {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Contact Phone</div><div className="detail-item-value"><a href={`tel:${order.contactPhone}`} style={{ color: '#1976d2' }}>{order.contactPhone}</a></div></div>}
+              {order.contactEmail && <div className="detail-item"><div className="detail-item-label">Contact Email</div><div className="detail-item-value"><a href={`mailto:${order.contactEmail}`} style={{ color: '#1976d2' }}>{order.contactEmail}</a></div></div>}
               {order.promisedDate && <div className="detail-item"><div className="detail-item-label"><Calendar size={14} /> Promised</div><div className="detail-item-value">{formatDate(order.promisedDate)}</div></div>}
               <div className="detail-item"><div className="detail-item-label"><Clock size={14} /> Created</div><div className="detail-item-value">{formatDate(order.createdAt)}</div></div>
             </div>
             {order.notes && <div style={{ marginTop: 16, padding: 12, background: '#f9f9f9', borderRadius: 8 }}><strong>Notes:</strong> {order.notes}</div>}
           </>
         )}
+
+        {/* Order Documents Section */}
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #eee' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <File size={18} /> Documents ({order.documents?.length || 0})
+            </div>
+            <button className="btn btn-sm btn-outline" onClick={() => docInputRef.current?.click()} disabled={uploadingDocs}>
+              <Upload size={14} />{uploadingDocs ? 'Uploading...' : 'Upload'}
+            </button>
+            <input type="file" multiple accept=".pdf,.doc,.docx,image/*" ref={docInputRef} style={{ display: 'none' }} 
+              onChange={(e) => handleDocumentUpload(Array.from(e.target.files))} />
+          </div>
+          <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Upload customer POs, supplier quotes, drawings, etc.</p>
+          {order.documents?.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {order.documents.map(doc => (
+                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f5f5f5', padding: '8px 12px', borderRadius: 6, fontSize: '0.85rem' }}>
+                  <File size={16} color="#1976d2" />
+                  <span style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
+                  <button onClick={() => handleViewDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><Eye size={14} /></button>
+                  <button onClick={() => handleDeleteDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}><X size={14} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Parts Section (directly below Order Details) */}
+      {/* Parts Section */}
       <div className="card" style={{ marginTop: 20 }}>
         <div className="card-header">
           <h3 className="card-title"><Package size={20} style={{ marginRight: 8 }} />Parts ({order.parts?.length || 0})</h3>
@@ -532,7 +666,7 @@ function WorkOrderDetailsPage() {
                 </div>
                 {part.specialInstructions && <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: '0.875rem' }}><strong>Instructions:</strong> {part.specialInstructions}</div>}
                 
-                {/* Files */}
+                {/* Part Files */}
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <span style={{ fontSize: '0.8rem', color: '#666' }}>Files ({part.files?.length || 0})</span>
