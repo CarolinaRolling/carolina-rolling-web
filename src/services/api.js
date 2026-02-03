@@ -153,6 +153,19 @@ export const addEstimatePart = (estimateId, data) => api.post(`/estimates/${esti
 export const updateEstimatePart = (estimateId, partId, data) => api.put(`/estimates/${estimateId}/parts/${partId}`, data);
 export const deleteEstimatePart = (estimateId, partId) => api.delete(`/estimates/${estimateId}/parts/${partId}`);
 
+// Estimate Part Files
+export const getEstimatePartFiles = (estimateId, partId) => api.get(`/estimates/${estimateId}/parts/${partId}/files`);
+export const uploadEstimatePartFile = (estimateId, partId, file, fileType = 'other') => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('fileType', fileType);
+  return api.post(`/estimates/${estimateId}/parts/${partId}/files`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+export const deleteEstimatePartFile = (estimateId, partId, fileId) => 
+  api.delete(`/estimates/${estimateId}/parts/${partId}/files/${fileId}`);
+
 // Order Material (creates inbound orders)
 export const orderMaterial = (estimateId, data) => api.post(`/estimates/${estimateId}/order-material`, data);
 
@@ -174,7 +187,7 @@ export const deleteEstimateFile = (estimateId, fileId) => api.delete(`/estimates
 export const downloadEstimatePDF = (estimateId) => api.get(`/estimates/${estimateId}/pdf`, { responseType: 'blob' });
 
 // Convert Estimate to Work Order
-export const convertEstimateToWorkOrder = (estimateId, data) => api.post(`/estimates/${estimateId}/convert`, data);
+export const convertEstimateToWorkOrder = (estimateId, data) => api.post(`/estimates/${estimateId}/convert-to-workorder`, data);
 
 // Duplicate Estimate (for repeat orders)
 export const duplicateEstimate = (estimateId, data) => api.post(`/estimates/${estimateId}/duplicate`, data);

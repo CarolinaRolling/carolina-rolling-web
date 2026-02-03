@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, Send, Upload, Eye, X, Printer, ShoppingCart, Check, FileDown } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Send, Upload, Eye, X, Printer, ShoppingCart, Check, FileDown, Package, FileText } from 'lucide-react';
 import {
   getEstimateById, createEstimate, updateEstimate,
   addEstimatePart, updateEstimatePart, deleteEstimatePart,
   uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
-  orderMaterial, downloadEstimatePDF
+  orderMaterial, downloadEstimatePDF, convertEstimateToWorkOrder,
+  uploadEstimatePartFile, deleteEstimatePartFile
 } from '../services/api';
 
 const PART_TYPES = {
@@ -49,6 +50,20 @@ function EstimateDetailsPage() {
   const [orderPONumber, setOrderPONumber] = useState('');
   const [selectedPartIds, setSelectedPartIds] = useState([]);
   const [ordering, setOrdering] = useState(false);
+  
+  // Convert to Work Order state
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [convertData, setConvertData] = useState({
+    clientPurchaseOrderNumber: '',
+    requestedDueDate: '',
+    promisedDate: '',
+    notes: ''
+  });
+  
+  // Part file upload state
+  const [uploadingPartFile, setUploadingPartFile] = useState(null);
+  const partFileInputRef = useRef(null);
 
   useEffect(() => { if (!isNew) loadEstimate(); }, [id]);
 
@@ -261,6 +276,64 @@ function EstimateDetailsPage() {
     } catch (err) { setError('Delete failed'); }
   };
 
+  // Part File Upload Handlers
+  const handlePartFileUpload = async (partId, file) => {
+    if (!file) return;
+    try {
+      setUploadingPartFile(partId);
+      await uploadEstimatePartFile(id, partId, file, 'drawing');
+      await loadEstimate();
+      showMessage('File uploaded to part');
+    } catch (err) { setError('Failed to upload file'); }
+    finally { setUploadingPartFile(null); }
+  };
+
+  const handleDeletePartFile = async (partId, fileId) => {
+    if (!window.confirm('Delete this file?')) return;
+    try {
+      await deleteEstimatePartFile(id, partId, fileId);
+      await loadEstimate();
+      showMessage('File deleted');
+    } catch (err) { setError('Failed to delete file'); }
+  };
+
+  // Convert to Work Order Handlers
+  const openConvertModal = () => {
+    if (parts.length === 0) {
+      setError('Add at least one part before converting to work order');
+      return;
+    }
+    setConvertData({
+      clientPurchaseOrderNumber: '',
+      requestedDueDate: '',
+      promisedDate: '',
+      notes: formData.notes
+    });
+    setShowConvertModal(true);
+  };
+
+  const handleConvertToWorkOrder = async () => {
+    try {
+      setConverting(true);
+      const response = await convertEstimateToWorkOrder(id, convertData);
+      const { workOrder, inboundOrders } = response.data.data;
+      setShowConvertModal(false);
+      
+      let message = `Work order DR-${workOrder.drNumber} created!`;
+      if (inboundOrders && inboundOrders.length > 0) {
+        message += ` ${inboundOrders.length} inbound order(s) created for material.`;
+      }
+      showMessage(message);
+      
+      // Navigate to the new work order
+      setTimeout(() => navigate(`/workorders/${workOrder.id}`), 1500);
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to convert to work order');
+    } finally {
+      setConverting(false);
+    }
+  };
+
   const formatCurrency = (amt) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amt || 0);
   
   const printEstimate = () => {
@@ -345,6 +418,17 @@ function EstimateDetailsPage() {
             <button className="btn btn-primary" onClick={() => handleSave(true)} disabled={saving}>
               <Send size={18} /> Send
             </button>
+          )}
+          {!isNew && estimate?.status !== 'converted' && (
+            <button className="btn" onClick={openConvertModal} disabled={converting}
+              style={{ background: '#2e7d32', color: 'white' }}>
+              <Package size={18} /> Convert to Work Order
+            </button>
+          )}
+          {estimate?.status === 'converted' && (
+            <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '8px 16px', borderRadius: 8, fontWeight: 600 }}>
+              ✓ Converted to Work Order
+            </span>
           )}
         </div>
       </div>
@@ -465,6 +549,55 @@ function EstimateDetailsPage() {
                       <strong>Part Total</strong>
                       <strong style={{ color: '#1976d2' }}>{formatCurrency(calc.partTotal)}</strong>
                     </div>
+                  </div>
+
+                  {/* Part Files Section */}
+                  <div style={{ marginTop: 12, padding: 12, background: '#f5f5f5', borderRadius: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <strong style={{ fontSize: '0.9rem' }}>📄 Part Documents</strong>
+                      <label style={{ cursor: 'pointer' }}>
+                        <input
+                          type="file"
+                          accept=".pdf,.png,.jpg,.jpeg,.gif,.dxf,.dwg"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            if (e.target.files[0]) {
+                              handlePartFileUpload(part.id, e.target.files[0]);
+                              e.target.value = '';
+                            }
+                          }}
+                          disabled={uploadingPartFile === part.id}
+                        />
+                        <span className="btn btn-sm btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Upload size={14} />
+                          {uploadingPartFile === part.id ? 'Uploading...' : 'Upload'}
+                        </span>
+                      </label>
+                    </div>
+                    {part.files && part.files.length > 0 ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {part.files.map(file => (
+                          <div key={file.id} style={{
+                            display: 'flex', alignItems: 'center', gap: 8, background: 'white',
+                            padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: '0.8rem'
+                          }}>
+                            <FileText size={14} style={{ color: '#1976d2' }} />
+                            <a href={file.url} target="_blank" rel="noopener noreferrer"
+                              style={{ color: '#1976d2', textDecoration: 'none', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {file.originalName || file.filename}
+                            </a>
+                            <button onClick={() => handleDeletePartFile(part.id, file.id)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d32f2f', padding: 2 }}>
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ color: '#999', fontSize: '0.8rem', textAlign: 'center', padding: 8 }}>
+                        No documents attached. Upload drawings, prints, or specs.
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -842,6 +975,103 @@ function EstimateDetailsPage() {
               <button className="btn btn-success" onClick={handleOrderMaterial}
                 disabled={ordering || !orderPONumber || selectedPartIds.length === 0}>
                 {ordering ? 'Creating...' : `Create ${Object.keys(getSupplierGroups()).length} Purchase Order(s)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Convert to Work Order Modal */}
+      {showConvertModal && (
+        <div className="modal-overlay" onClick={() => setShowConvertModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500 }}>
+            <div className="modal-header">
+              <h3>Convert to Work Order</h3>
+              <button className="btn btn-icon" onClick={() => setShowConvertModal(false)}><X size={20} /></button>
+            </div>
+
+            <div style={{ padding: 20 }}>
+              <div style={{ background: '#e3f2fd', padding: 16, borderRadius: 8, marginBottom: 20 }}>
+                <p style={{ margin: 0, fontWeight: 600 }}>📋 {estimate?.estimateNumber}</p>
+                <p style={{ margin: '8px 0 0', color: '#666' }}>
+                  Client: {formData.clientName} • {parts.length} part(s)
+                </p>
+                <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#1976d2' }}>
+                  Total: {formatCurrency(calculateTotals().grandTotal)}
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Client Purchase Order Number</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Enter client's PO number..."
+                  value={convertData.clientPurchaseOrderNumber}
+                  onChange={(e) => setConvertData({ ...convertData, clientPurchaseOrderNumber: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-2" style={{ gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">Requested Due Date</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={convertData.requestedDueDate}
+                    onChange={(e) => setConvertData({ ...convertData, requestedDueDate: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Promised Date</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={convertData.promisedDate}
+                    onChange={(e) => setConvertData({ ...convertData, promisedDate: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Notes</label>
+                <textarea
+                  className="form-textarea"
+                  value={convertData.notes}
+                  onChange={(e) => setConvertData({ ...convertData, notes: e.target.value })}
+                  rows={3}
+                />
+              </div>
+
+              {/* Material Orders Info */}
+              {parts.some(p => p.materialSource === 'we_order' && !p.materialOrdered) && (
+                <div style={{ background: '#fff3e0', padding: 12, borderRadius: 8, marginTop: 16 }}>
+                  <strong style={{ color: '#e65100' }}>📦 Material to Order:</strong>
+                  <p style={{ margin: '8px 0 0', fontSize: '0.85rem', color: '#666' }}>
+                    Inbound orders will be created for parts marked as "We Order" material:
+                  </p>
+                  <ul style={{ margin: '8px 0 0', paddingLeft: 20, fontSize: '0.85rem' }}>
+                    {parts.filter(p => p.materialSource === 'we_order' && !p.materialOrdered).map(p => (
+                      <li key={p.id}>
+                        Part #{p.partNumber}: {p.materialDescription || p.partType}
+                        {p.supplierName && <span style={{ color: '#388e3c' }}> (from {p.supplierName})</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowConvertModal(false)}>Cancel</button>
+              <button
+                className="btn"
+                onClick={handleConvertToWorkOrder}
+                disabled={converting}
+                style={{ background: '#2e7d32', color: 'white' }}
+              >
+                <Package size={18} />
+                {converting ? 'Converting...' : 'Create Work Order'}
               </button>
             </div>
           </div>
