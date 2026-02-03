@@ -52,9 +52,12 @@ function WorkOrderDetailsPage() {
       setEditData({
         clientName: data.clientName || '',
         clientPurchaseOrderNumber: data.clientPurchaseOrderNumber || '',
+        jobNumber: data.jobNumber || '',
         contactName: data.contactName || '',
         contactPhone: data.contactPhone || '',
         contactEmail: data.contactEmail || '',
+        projectDescription: data.projectDescription || '',
+        storageLocation: data.storageLocation || '',
         notes: data.notes || '',
         receivedBy: data.receivedBy || '',
         requestedDueDate: data.requestedDueDate || '',
@@ -352,20 +355,31 @@ function WorkOrderDetailsPage() {
               <div className="grid grid-2">
                 <div className="form-group"><label className="form-label">Client *</label><input className="form-input" value={editData.clientName} onChange={(e) => setEditData({ ...editData, clientName: e.target.value })} /></div>
                 <div className="form-group"><label className="form-label">Client PO#</label><input className="form-input" value={editData.clientPurchaseOrderNumber} onChange={(e) => setEditData({ ...editData, clientPurchaseOrderNumber: e.target.value })} /></div>
+                <div className="form-group"><label className="form-label">Job Number</label><input className="form-input" value={editData.jobNumber} onChange={(e) => setEditData({ ...editData, jobNumber: e.target.value })} /></div>
+                <div className="form-group"><label className="form-label">Storage Location</label><input className="form-input" value={editData.storageLocation} onChange={(e) => setEditData({ ...editData, storageLocation: e.target.value })} /></div>
                 <div className="form-group"><label className="form-label">Contact</label><input className="form-input" value={editData.contactName} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} /></div>
                 <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={editData.contactPhone} onChange={(e) => setEditData({ ...editData, contactPhone: e.target.value })} /></div>
                 <div className="form-group"><label className="form-label">Due Date</label><input type="date" className="form-input" value={editData.requestedDueDate} onChange={(e) => setEditData({ ...editData, requestedDueDate: e.target.value })} /></div>
                 <div className="form-group"><label className="form-label">Promised</label><input type="date" className="form-input" value={editData.promisedDate} onChange={(e) => setEditData({ ...editData, promisedDate: e.target.value })} /></div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Material Description</label><textarea className="form-textarea" value={editData.projectDescription} onChange={(e) => setEditData({ ...editData, projectDescription: e.target.value })} placeholder="Description of material received (e.g., 4x4x1/4 angle, 20' lengths, pallet damage noted)" /></div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Notes</label><textarea className="form-textarea" value={editData.notes} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} /></div>
               </div>
             ) : (
               <div className="detail-grid">
                 <div className="detail-item"><div className="detail-item-label"><User size={14} /> Client</div><div className="detail-item-value">{order.clientName}</div></div>
                 {order.clientPurchaseOrderNumber && <div className="detail-item"><div className="detail-item-label"><FileText size={14} /> PO#</div><div className="detail-item-value" style={{ color: '#1976d2', fontWeight: 600 }}>{order.clientPurchaseOrderNumber}</div></div>}
+                {order.jobNumber && <div className="detail-item"><div className="detail-item-label">Job#</div><div className="detail-item-value">{order.jobNumber}</div></div>}
+                {order.storageLocation && <div className="detail-item"><div className="detail-item-label">Location</div><div className="detail-item-value">{order.storageLocation}</div></div>}
                 {order.contactName && <div className="detail-item"><div className="detail-item-label">Contact</div><div className="detail-item-value">{order.contactName}</div></div>}
                 {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Phone</div><div className="detail-item-value">{order.contactPhone}</div></div>}
                 {order.promisedDate && <div className="detail-item"><div className="detail-item-label"><Calendar size={14} /> Promised</div><div className="detail-item-value">{formatDate(order.promisedDate)}</div></div>}
                 <div className="detail-item"><div className="detail-item-label">Created</div><div className="detail-item-value">{formatDate(order.createdAt)}</div></div>
+              </div>
+            )}
+            {!isEditing && order.projectDescription && (
+              <div style={{ marginTop: 16, padding: 12, background: '#e3f2fd', borderRadius: 8, borderLeft: '4px solid #1976d2' }}>
+                <strong style={{ color: '#1565c0' }}>Material Description:</strong>
+                <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{order.projectDescription}</div>
               </div>
             )}
             {!isEditing && order.notes && <div style={{ marginTop: 16, padding: 12, background: '#f9f9f9', borderRadius: 8 }}><strong>Notes:</strong> {order.notes}</div>}

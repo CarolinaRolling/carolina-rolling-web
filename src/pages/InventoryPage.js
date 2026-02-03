@@ -73,7 +73,7 @@ function InventoryPage() {
       filtered = filtered.filter(o =>
         o.clientName?.toLowerCase().includes(query) ||
         o.orderNumber?.toLowerCase().includes(query) ||
-        o.clientPO?.toLowerCase().includes(query) ||
+        o.clientPurchaseOrderNumber?.toLowerCase().includes(query) ||
         (o.drNumber && `DR-${o.drNumber}`.toLowerCase().includes(query)) ||
         (o.drNumber && o.drNumber.toString().includes(query)) ||
         o.projectDescription?.toLowerCase().includes(query)
@@ -346,7 +346,7 @@ function InventoryPage() {
               </div>
 
               {/* Client PO */}
-              {order.clientPO && (
+              {order.clientPurchaseOrderNumber && (
                 <div style={{ 
                   display: 'flex', 
                   alignItems: 'center', 
@@ -356,7 +356,7 @@ function InventoryPage() {
                   marginBottom: 8
                 }}>
                   <FileText size={14} />
-                  <span>PO: <strong>{order.clientPO}</strong></span>
+                  <span>PO: <strong>{order.clientPurchaseOrderNumber}</strong></span>
                 </div>
               )}
 
