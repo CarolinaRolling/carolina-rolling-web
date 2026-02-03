@@ -18,6 +18,7 @@ import LocationSettingsPage from './pages/LocationSettingsPage';
 import AdminPage from './pages/AdminPage';
 import SchedulingPage from './pages/SchedulingPage';
 import DRNumbersPage from './pages/DRNumbersPage';
+import PONumbersPage from './pages/PONumbersPage';
 import EmailSettingsPage from './pages/EmailSettingsPage';
 import './App.css';
 
@@ -159,6 +160,12 @@ function AppRoutes() {
       <Route path="/admin/dr-numbers" element={
         <AdminRoute>
           <Layout><DRNumbersPage /></Layout>
+        </AdminRoute>
+      } />
+      
+      <Route path="/admin/po-numbers" element={
+        <AdminRoute>
+          <Layout><PONumbersPage /></Layout>
         </AdminRoute>
       } />
       

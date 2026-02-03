@@ -96,6 +96,12 @@ function Layout({ children }) {
                   </NavLink>
                 </li>
                 <li>
+                  <NavLink to="/admin/po-numbers" className={({ isActive }) => isActive ? 'active' : ''}>
+                    <Hash size={20} />
+                    <span>PO Numbers</span>
+                  </NavLink>
+                </li>
+                <li>
                   <NavLink to="/admin/email" className={({ isActive }) => isActive ? 'active' : ''}>
                     <Mail size={20} />
                     <span>Daily Email</span>

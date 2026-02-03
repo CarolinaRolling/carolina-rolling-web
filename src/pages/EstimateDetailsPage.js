@@ -6,7 +6,7 @@ import {
   addEstimatePart, updateEstimatePart, deleteEstimatePart,
   uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
   orderMaterial, downloadEstimatePDF, convertEstimateToWorkOrder,
-  uploadEstimatePartFile, deleteEstimatePartFile
+  uploadEstimatePartFile, deleteEstimatePartFile, getNextPONumber
 } from '../services/api';
 
 const PART_TYPES = {
@@ -58,8 +58,10 @@ function EstimateDetailsPage() {
     clientPurchaseOrderNumber: '',
     requestedDueDate: '',
     promisedDate: '',
-    notes: ''
+    notes: '',
+    supplierPOs: {} // { supplierName: poNumber }
   });
+  const [nextPONumber, setNextPONumber] = useState(null);
   
   // Part file upload state
   const [uploadingPartFile, setUploadingPartFile] = useState(null);
@@ -298,17 +300,44 @@ function EstimateDetailsPage() {
   };
 
   // Convert to Work Order Handlers
-  const openConvertModal = () => {
+  const openConvertModal = async () => {
     if (parts.length === 0) {
       setError('Add at least one part before converting to work order');
       return;
     }
-    setConvertData({
-      clientPurchaseOrderNumber: '',
-      requestedDueDate: '',
-      promisedDate: '',
-      notes: formData.notes
-    });
+    
+    // Get next PO number
+    try {
+      const poRes = await getNextPONumber();
+      setNextPONumber(poRes.data.data.nextNumber);
+      
+      // Get unique suppliers for parts that need ordering
+      const partsNeedingMaterial = parts.filter(p => p.materialSource === 'we_order' && !p.materialOrdered);
+      const suppliers = [...new Set(partsNeedingMaterial.map(p => p.supplierName || 'Unknown Supplier'))];
+      
+      // Initialize PO numbers for each supplier
+      const supplierPOs = {};
+      suppliers.forEach((supplier, index) => {
+        supplierPOs[supplier] = poRes.data.data.nextNumber + index;
+      });
+      
+      setConvertData({
+        clientPurchaseOrderNumber: '',
+        requestedDueDate: '',
+        promisedDate: '',
+        notes: formData.notes,
+        supplierPOs
+      });
+    } catch (err) {
+      setConvertData({
+        clientPurchaseOrderNumber: '',
+        requestedDueDate: '',
+        promisedDate: '',
+        notes: formData.notes,
+        supplierPOs: {}
+      });
+    }
+    
     setShowConvertModal(true);
   };
 
@@ -1043,21 +1072,56 @@ function EstimateDetailsPage() {
                 />
               </div>
 
-              {/* Material Orders Info */}
+              {/* Material Orders with PO Numbers */}
               {parts.some(p => p.materialSource === 'we_order' && !p.materialOrdered) && (
-                <div style={{ background: '#fff3e0', padding: 12, borderRadius: 8, marginTop: 16 }}>
-                  <strong style={{ color: '#e65100' }}>📦 Material to Order:</strong>
-                  <p style={{ margin: '8px 0 0', fontSize: '0.85rem', color: '#666' }}>
-                    Inbound orders will be created for parts marked as "We Order" material:
+                <div style={{ background: '#fff3e0', padding: 16, borderRadius: 8, marginTop: 16 }}>
+                  <strong style={{ color: '#e65100', display: 'block', marginBottom: 12 }}>📦 Material to Order - Assign PO Numbers:</strong>
+                  
+                  {Object.entries(convertData.supplierPOs || {}).map(([supplier, poNum]) => {
+                    const supplierParts = parts.filter(p => 
+                      p.materialSource === 'we_order' && 
+                      !p.materialOrdered && 
+                      (p.supplierName || 'Unknown Supplier') === supplier
+                    );
+                    
+                    return (
+                      <div key={supplier} style={{ 
+                        background: 'white', 
+                        padding: 12, 
+                        borderRadius: 6, 
+                        marginBottom: 12,
+                        border: '1px solid #ffcc80'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <strong style={{ color: '#e65100' }}>🏭 {supplier}</strong>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: '0.85rem', color: '#666' }}>PO#</span>
+                            <input
+                              type="number"
+                              className="form-input"
+                              value={poNum}
+                              onChange={(e) => setConvertData({
+                                ...convertData,
+                                supplierPOs: { ...convertData.supplierPOs, [supplier]: parseInt(e.target.value) || '' }
+                              })}
+                              style={{ width: 100, padding: '4px 8px' }}
+                            />
+                          </div>
+                        </div>
+                        <ul style={{ margin: 0, paddingLeft: 20, fontSize: '0.85rem', color: '#666' }}>
+                          {supplierParts.map(p => (
+                            <li key={p.id}>
+                              Part #{p.partNumber}: {p.materialDescription || p.partType} (Qty: {p.quantity})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                  
+                  <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#666', fontStyle: 'italic' }}>
+                    PO numbers will be tracked in Admin → PO Numbers
                   </p>
-                  <ul style={{ margin: '8px 0 0', paddingLeft: 20, fontSize: '0.85rem' }}>
-                    {parts.filter(p => p.materialSource === 'we_order' && !p.materialOrdered).map(p => (
-                      <li key={p.id}>
-                        Part #{p.partNumber}: {p.materialDescription || p.partType}
-                        {p.supplierName && <span style={{ color: '#388e3c' }}> (from {p.supplierName})</span>}
-                      </li>
-                    ))}
-                  </ul>
                 </div>
               )}
             </div>

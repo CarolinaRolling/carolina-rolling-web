@@ -210,6 +210,15 @@ export const assignDRNumber = (data) => api.post('/dr-numbers/assign', data);
 export const voidDRNumber = (drNumber, reason, voidedBy) => api.post(`/dr-numbers/${drNumber}/void`, { reason, voidedBy });
 export const getVoidedDRNumbers = () => api.get('/dr-numbers/voided');
 
+// PO Numbers
+export const getPONumbers = (params) => api.get('/po-numbers', { params });
+export const getPONumberStats = () => api.get('/po-numbers/stats');
+export const getNextPONumber = () => api.get('/po-numbers/next');
+export const setNextPONumber = (nextNumber) => api.put('/po-numbers/next', { nextNumber });
+export const assignPONumber = (data) => api.post('/po-numbers/assign', data);
+export const voidPONumber = (poNumber, reason, voidedBy) => api.post(`/po-numbers/${poNumber}/void`, { reason, voidedBy });
+export const getVoidedPONumbers = () => api.get('/po-numbers/voided');
+
 // Daily Email Settings
 export const getDailyEmailSettings = () => api.get('/email/settings');
 export const updateDailyEmailSettings = (settings) => api.put('/email/settings', settings);
