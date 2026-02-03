@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Package, Filter, ArrowUpDown, Truck } from 'lucide-react';
-import { getShipments } from '../services/api';
+import { Search, MapPin, Calendar, Package, Truck, AlertCircle, CheckCircle, Clock, FileText } from 'lucide-react';
+import { getWorkOrders, getArchivedWorkOrders } from '../services/api';
 
 function InventoryPage() {
   const navigate = useNavigate();
-  const [shipments, setShipments] = useState([]);
-  const [filteredShipments, setFilteredShipments] = useState([]);
+  const [workOrders, setWorkOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Load saved preferences from localStorage
   const [statusFilter, setStatusFilter] = useState(() => {
     return localStorage.getItem('inventory_statusFilter') || 'active';
   });
@@ -19,7 +17,6 @@ function InventoryPage() {
     return localStorage.getItem('inventory_sortBy') || 'date_desc';
   });
 
-  // Save preferences to localStorage when they change
   useEffect(() => {
     localStorage.setItem('inventory_statusFilter', statusFilter);
   }, [statusFilter]);
@@ -29,44 +26,48 @@ function InventoryPage() {
   }, [sortBy]);
 
   useEffect(() => {
-    loadShipments();
-  }, []);
+    loadWorkOrders();
+  }, [statusFilter]);
 
-  useEffect(() => {
-    filterAndSortShipments();
-  }, [shipments, searchQuery, statusFilter, sortBy]);
-
-  const loadShipments = async () => {
+  const loadWorkOrders = async () => {
     try {
       setLoading(true);
-      const response = await getShipments();
-      setShipments(response.data.data || []);
+      let response;
+      if (statusFilter === 'archived') {
+        response = await getArchivedWorkOrders();
+      } else {
+        response = await getWorkOrders({ archived: 'false' });
+      }
+      setWorkOrders(response.data.data || []);
     } catch (err) {
-      setError('Failed to load shipments');
+      setError('Failed to load inventory');
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterAndSortShipments = () => {
-    let filtered = [...shipments];
+  const getFilteredOrders = () => {
+    let filtered = [...workOrders];
 
-    // Filter by status
-    if (statusFilter === 'active') {
-      filtered = filtered.filter(s => s.status !== 'shipped');
-    } else if (statusFilter === 'shipped') {
-      filtered = filtered.filter(s => s.status === 'shipped');
+    // Filter by status within active
+    if (statusFilter === 'awaiting') {
+      filtered = filtered.filter(o => !o.allMaterialReceived && o.pendingInboundCount > 0);
+    } else if (statusFilter === 'ready') {
+      filtered = filtered.filter(o => o.status === 'completed');
+    } else if (statusFilter !== 'archived' && statusFilter !== 'active') {
+      // active shows all non-archived
     }
 
     // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(s => 
-        s.clientName?.toLowerCase().includes(query) ||
-        s.jobNumber?.toLowerCase().includes(query) ||
-        s.qrCode?.toLowerCase().includes(query) ||
-        s.description?.toLowerCase().includes(query)
+      filtered = filtered.filter(o =>
+        o.clientName?.toLowerCase().includes(query) ||
+        o.orderNumber?.toLowerCase().includes(query) ||
+        o.clientPurchaseOrderNumber?.toLowerCase().includes(query) ||
+        (o.drNumber && `DR-${o.drNumber}`.toLowerCase().includes(query)) ||
+        (o.drNumber && o.drNumber.toString().includes(query))
       );
     }
 
@@ -74,9 +75,13 @@ function InventoryPage() {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'date_desc':
-          return new Date(b.receivedAt) - new Date(a.receivedAt);
+          return new Date(b.createdAt) - new Date(a.createdAt);
         case 'date_asc':
-          return new Date(a.receivedAt) - new Date(b.receivedAt);
+          return new Date(a.createdAt) - new Date(b.createdAt);
+        case 'dr_desc':
+          return (b.drNumber || 0) - (a.drNumber || 0);
+        case 'dr_asc':
+          return (a.drNumber || 0) - (b.drNumber || 0);
         case 'name_asc':
           return (a.clientName || '').localeCompare(b.clientName || '');
         case 'name_desc':
@@ -86,17 +91,32 @@ function InventoryPage() {
       }
     });
 
-    setFilteredShipments(filtered);
+    return filtered;
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
+  const filteredOrders = getFilteredOrders();
+
+  // Count items for tabs
+  const awaitingCount = workOrders.filter(o => !o.allMaterialReceived && o.pendingInboundCount > 0).length;
+  const readyCount = workOrders.filter(o => o.status === 'completed').length;
+
+  const getStatusColor = (order) => {
+    if (!order.allMaterialReceived && order.pendingInboundCount > 0) return 'status-pending';
+    switch (order.status) {
       case 'received': return 'status-received';
       case 'in_progress': return 'status-in_progress';
       case 'completed': return 'status-completed';
       case 'shipped': return 'status-shipped';
+      case 'archived': return 'status-shipped';
       default: return 'status-received';
     }
+  };
+
+  const getStatusLabel = (order) => {
+    if (!order.allMaterialReceived && order.pendingInboundCount > 0) {
+      return `Awaiting ${order.pendingInboundCount} shipment${order.pendingInboundCount > 1 ? 's' : ''}`;
+    }
+    return order.status?.replace('_', ' ');
   };
 
   const formatDate = (dateString) => {
@@ -120,12 +140,8 @@ function InventoryPage() {
     <div>
       <div className="page-header">
         <h1 className="page-title">
-          {statusFilter === 'shipped' ? 'Shipped Orders' : 'Inventory'}
+          {statusFilter === 'archived' ? '📁 Archived Orders' : '📦 Inventory'}
         </h1>
-        <button className="btn btn-primary" onClick={() => navigate('/new-shipment')}>
-          <Package size={18} />
-          New Shipment
-        </button>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -136,14 +152,55 @@ function InventoryPage() {
           className={`tab ${statusFilter === 'active' ? 'active' : ''}`}
           onClick={() => setStatusFilter('active')}
         >
-          Active Inventory
+          All Active
         </button>
         <button 
-          className={`tab ${statusFilter === 'shipped' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('shipped')}
+          className={`tab ${statusFilter === 'awaiting' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('awaiting')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
-          <Truck size={16} style={{ marginRight: 6 }} />
-          Shipped Orders
+          <Clock size={14} />
+          Awaiting Material
+          {awaitingCount > 0 && (
+            <span style={{ 
+              background: '#f57c00', 
+              color: 'white', 
+              borderRadius: 10, 
+              padding: '2px 8px', 
+              fontSize: '0.7rem',
+              marginLeft: 4
+            }}>
+              {awaitingCount}
+            </span>
+          )}
+        </button>
+        <button 
+          className={`tab ${statusFilter === 'ready' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('ready')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <CheckCircle size={14} />
+          Ready to Ship
+          {readyCount > 0 && (
+            <span style={{ 
+              background: '#388e3c', 
+              color: 'white', 
+              borderRadius: 10, 
+              padding: '2px 8px', 
+              fontSize: '0.7rem',
+              marginLeft: 4
+            }}>
+              {readyCount}
+            </span>
+          )}
+        </button>
+        <button 
+          className={`tab ${statusFilter === 'archived' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('archived')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <Truck size={14} />
+          Archived (Shipped)
         </button>
       </div>
 
@@ -154,7 +211,7 @@ function InventoryPage() {
             <Search size={18} className="search-box-icon" />
             <input
               type="text"
-              placeholder="Search by client, job number, or description..."
+              placeholder="Search by DR#, client, PO number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -165,93 +222,189 @@ function InventoryPage() {
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >
-            <option value="date_desc">Newest First</option>
-            <option value="date_asc">Oldest First</option>
-            <option value="name_asc">Name A-Z</option>
-            <option value="name_desc">Name Z-A</option>
+            <option value="dr_desc">DR# (Newest)</option>
+            <option value="dr_asc">DR# (Oldest)</option>
+            <option value="date_desc">Date (Newest)</option>
+            <option value="date_asc">Date (Oldest)</option>
+            <option value="name_asc">Client A-Z</option>
+            <option value="name_desc">Client Z-A</option>
           </select>
         </div>
       </div>
 
-      {/* Shipment Grid */}
-      {filteredShipments.length === 0 ? (
+      {/* Inventory Grid */}
+      {filteredOrders.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">📦</div>
-          <div className="empty-state-title">No shipments found</div>
+          <div className="empty-state-title">No items found</div>
           <p>
             {searchQuery 
               ? 'Try adjusting your search terms' 
-              : statusFilter === 'shipped' 
-                ? 'No shipped orders yet'
-                : 'Create a new shipment to get started'}
+              : statusFilter === 'archived' 
+                ? 'No archived orders yet'
+                : statusFilter === 'awaiting'
+                  ? 'No items awaiting material'
+                  : 'No items in inventory'}
           </p>
         </div>
       ) : (
         <div className="grid grid-3">
-          {filteredShipments.map((shipment) => (
+          {filteredOrders.map((order) => (
             <div 
-              key={shipment.id} 
-              className="card shipment-card"
-              onClick={() => navigate(`/shipment/${shipment.id}`)}
+              key={order.id} 
+              className="card"
+              onClick={() => navigate(`/workorder/${order.id}`)}
+              style={{ 
+                cursor: 'pointer',
+                borderLeft: !order.allMaterialReceived && order.pendingInboundCount > 0 
+                  ? '4px solid #f57c00' 
+                  : order.status === 'completed' 
+                    ? '4px solid #388e3c'
+                    : '4px solid #e0e0e0',
+                transition: 'transform 0.15s, box-shadow 0.15s'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = '';
+              }}
             >
-              <div className="shipment-card-header">
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                 <div>
-                  <div className="shipment-card-title">{shipment.clientName}</div>
-                  <div className="shipment-card-subtitle">
-                    {shipment.jobNumber || shipment.qrCode}
-                  </div>
-                </div>
-                <span className={`status-badge ${getStatusColor(shipment.status)}`}>
-                  {shipment.status?.replace('_', ' ')}
-                </span>
-              </div>
-              <div className="shipment-card-info">
-                {shipment.description && (
-                  <div className="shipment-card-info-row">
-                    <Package size={14} />
-                    <span>{shipment.description.substring(0, 50)}...</span>
-                  </div>
-                )}
-                <div className="shipment-card-info-row">
-                  <MapPin size={14} />
-                  <span>{shipment.location || 'No location'}</span>
-                </div>
-                <div className="shipment-card-info-row">
-                  <Calendar size={14} />
-                  <span>{formatDate(shipment.receivedAt)}</span>
-                </div>
-              </div>
-              {shipment.photos?.length > 0 && (
-                <div style={{ marginTop: 12, display: 'flex', gap: 4 }}>
-                  {shipment.photos.slice(0, 3).map((photo, idx) => (
-                    <img 
-                      key={idx}
-                      src={photo.url} 
-                      alt=""
-                      style={{ 
-                        width: 40, 
-                        height: 40, 
-                        borderRadius: 4, 
-                        objectFit: 'cover' 
-                      }}
-                    />
-                  ))}
-                  {shipment.photos.length > 3 && (
+                  {order.drNumber ? (
                     <div style={{ 
-                      width: 40, 
-                      height: 40, 
-                      borderRadius: 4, 
-                      background: '#e0e0e0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.75rem',
-                      color: '#666'
+                      fontFamily: 'Courier New, monospace', 
+                      fontWeight: 700, 
+                      fontSize: '1.2rem', 
+                      color: '#1976d2',
+                      background: '#e3f2fd',
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      display: 'inline-block'
                     }}>
-                      +{shipment.photos.length - 3}
+                      DR-{order.drNumber}
+                    </div>
+                  ) : (
+                    <div style={{ fontWeight: 600, color: '#666' }}>
+                      {order.orderNumber}
                     </div>
                   )}
+                  <div style={{ fontWeight: 600, fontSize: '1rem', marginTop: 6 }}>
+                    {order.clientName}
+                  </div>
                 </div>
+                <span className={`status-badge ${getStatusColor(order)}`}>
+                  {getStatusLabel(order)}
+                </span>
+              </div>
+
+              {/* Client PO */}
+              {order.clientPurchaseOrderNumber && (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 6, 
+                  fontSize: '0.85rem',
+                  color: '#666',
+                  marginBottom: 8
+                }}>
+                  <FileText size={14} />
+                  <span>PO: <strong>{order.clientPurchaseOrderNumber}</strong></span>
+                </div>
+              )}
+
+              {/* Parts info */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 6, 
+                fontSize: '0.85rem',
+                color: '#666',
+                marginBottom: 8
+              }}>
+                <Package size={14} />
+                <span>{order.parts?.length || 0} part{(order.parts?.length || 0) !== 1 ? 's' : ''}</span>
+              </div>
+
+              {/* Awaiting material warning */}
+              {!order.allMaterialReceived && order.pendingInboundCount > 0 && (
+                <div style={{
+                  background: '#fff3e0',
+                  border: '1px solid #ffb74d',
+                  borderRadius: 6,
+                  padding: 8,
+                  marginBottom: 8,
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  <AlertCircle size={14} style={{ color: '#f57c00' }} />
+                  <span>Awaiting {order.pendingInboundCount} inbound shipment{order.pendingInboundCount > 1 ? 's' : ''}</span>
+                </div>
+              )}
+
+              {/* Location */}
+              {order.storageLocation && (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 6, 
+                  fontSize: '0.85rem',
+                  color: '#666',
+                  marginBottom: 8
+                }}>
+                  <MapPin size={14} />
+                  <span>{order.storageLocation}</span>
+                </div>
+              )}
+
+              {/* Date */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 6, 
+                fontSize: '0.8rem',
+                color: '#999'
+              }}>
+                <Calendar size={14} />
+                <span>
+                  {statusFilter === 'archived' 
+                    ? `Shipped ${formatDate(order.shippedAt || order.archivedAt)}`
+                    : formatDate(order.createdAt)
+                  }
+                </span>
+              </div>
+
+              {/* Estimate link */}
+              {order.estimateNumber && (
+                <div style={{ 
+                  marginTop: 8, 
+                  paddingTop: 8, 
+                  borderTop: '1px solid #eee',
+                  fontSize: '0.75rem',
+                  color: '#7b1fa2'
+                }}>
+                  From: {order.estimateNumber}
+                </div>
+              )}
+
+              {/* Duplicate button for archived */}
+              {statusFilter === 'archived' && (
+                <button
+                  className="btn btn-outline btn-sm"
+                  style={{ marginTop: 10, width: '100%' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/workorder/${order.id}?duplicate=true`);
+                  }}
+                >
+                  📋 Duplicate to New Estimate
+                </button>
               )}
             </div>
           ))}

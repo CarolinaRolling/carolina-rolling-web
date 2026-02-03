@@ -183,10 +183,19 @@ function SchedulingPage() {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Stats - use unfiltered shipments for accurate totals
-  const overdueCount = shipments.filter(s => getDateStatus(s.promisedDate) === 'overdue').length;
-  const todayCount = shipments.filter(s => getDateStatus(s.promisedDate) === 'today').length;
-  const urgentCount = shipments.filter(s => getDateStatus(s.promisedDate) === 'urgent').length;
+  // Stats - check both promisedDate and requestedDueDate
+  const overdueCount = shipments.filter(s => 
+    getDateStatus(s.promisedDate) === 'overdue' || 
+    getDateStatus(s.requestedDueDate) === 'overdue'
+  ).length;
+  const todayCount = shipments.filter(s => 
+    getDateStatus(s.promisedDate) === 'today' || 
+    getDateStatus(s.requestedDueDate) === 'today'
+  ).length;
+  const urgentCount = shipments.filter(s => 
+    getDateStatus(s.promisedDate) === 'urgent' || 
+    getDateStatus(s.requestedDueDate) === 'urgent'
+  ).length;
 
   if (loading) {
     return (

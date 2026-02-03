@@ -100,9 +100,109 @@ export const createInboundOrder = (data) => api.post('/inbound', data);
 export const updateInboundOrder = (id, data) => api.put(`/inbound/${id}`, data);
 export const deleteInboundOrder = (id) => api.delete(`/inbound/${id}`);
 
+// Work Orders
+export const getWorkOrders = (params) => api.get('/workorders', { params });
+export const getWorkOrderById = (id) => api.get(`/workorders/${id}`);
+export const createWorkOrder = (data) => api.post('/workorders', data);
+export const updateWorkOrder = (id, data) => api.put(`/workorders/${id}`, data);
+export const deleteWorkOrder = (id) => api.delete(`/workorders/${id}`);
+
+// Work Order Parts
+export const addWorkOrderPart = (workOrderId, data) => api.post(`/workorders/${workOrderId}/parts`, data);
+export const updateWorkOrderPart = (workOrderId, partId, data) => api.put(`/workorders/${workOrderId}/parts/${partId}`, data);
+export const deleteWorkOrderPart = (workOrderId, partId) => api.delete(`/workorders/${workOrderId}/parts/${partId}`);
+
+// Work Order Part Files
+export const uploadPartFiles = (workOrderId, partId, files) => {
+  const formData = new FormData();
+  files.forEach((file) => formData.append('files', file));
+  return api.post(`/workorders/${workOrderId}/parts/${partId}/files`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+export const getPartFileSignedUrl = async (workOrderId, partId, fileId) => {
+  const response = await api.get(`/workorders/${workOrderId}/parts/${partId}/files/${fileId}/signed-url`);
+  return response.data.data;
+};
+export const deletePartFile = (workOrderId, partId, fileId) => 
+  api.delete(`/workorders/${workOrderId}/parts/${partId}/files/${fileId}`);
+
+// Estimates
+export const getEstimates = (params) => api.get('/estimates', { params });
+export const getEstimateById = (id) => api.get(`/estimates/${id}`);
+export const createEstimate = (data) => api.post('/estimates', data);
+export const updateEstimate = (id, data) => api.put(`/estimates/${id}`, data);
+export const deleteEstimate = (id) => api.delete(`/estimates/${id}`);
+
+// Estimate Parts
+export const addEstimatePart = (estimateId, data) => api.post(`/estimates/${estimateId}/parts`, data);
+export const updateEstimatePart = (estimateId, partId, data) => api.put(`/estimates/${estimateId}/parts/${partId}`, data);
+export const deleteEstimatePart = (estimateId, partId) => api.delete(`/estimates/${estimateId}/parts/${partId}`);
+
+// Order Material (creates inbound orders)
+export const orderMaterial = (estimateId, data) => api.post(`/estimates/${estimateId}/order-material`, data);
+
+// Estimate Files
+export const uploadEstimateFiles = (estimateId, files) => {
+  const formData = new FormData();
+  files.forEach((file) => formData.append('files', file));
+  return api.post(`/estimates/${estimateId}/files`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+export const getEstimateFileSignedUrl = async (estimateId, fileId) => {
+  const response = await api.get(`/estimates/${estimateId}/files/${fileId}/signed-url`);
+  return response.data.data;
+};
+export const deleteEstimateFile = (estimateId, fileId) => api.delete(`/estimates/${estimateId}/files/${fileId}`);
+
+// Download Estimate PDF
+export const downloadEstimatePDF = (estimateId) => api.get(`/estimates/${estimateId}/pdf`, { responseType: 'blob' });
+
+// Convert Estimate to Work Order
+export const convertEstimateToWorkOrder = (estimateId, data) => api.post(`/estimates/${estimateId}/convert`, data);
+
+// Duplicate Estimate (for repeat orders)
+export const duplicateEstimate = (estimateId, data) => api.post(`/estimates/${estimateId}/duplicate`, data);
+
+// Archive old estimates
+export const archiveOldEstimates = () => api.post('/estimates/archive-old');
+
+// Work Order Shipping & Archiving
+export const shipWorkOrder = (id, data) => api.post(`/workorders/${id}/ship`, data);
+export const archiveWorkOrder = (id) => api.post(`/workorders/${id}/archive`);
+export const getArchivedWorkOrders = (params) => api.get('/workorders/archived', { params });
+export const duplicateWorkOrderToEstimate = (id) => api.post(`/workorders/${id}/duplicate-to-estimate`);
+
+// DR Numbers
+export const getDRNumbers = (params) => api.get('/dr-numbers', { params });
+export const getDRNumberStats = () => api.get('/dr-numbers/stats');
+export const getNextDRNumber = () => api.get('/dr-numbers/next');
+export const setNextDRNumber = (nextNumber) => api.put('/dr-numbers/next', { nextNumber });
+export const assignDRNumber = (data) => api.post('/dr-numbers/assign', data);
+export const voidDRNumber = (drNumber, reason, voidedBy) => api.post(`/dr-numbers/${drNumber}/void`, { reason, voidedBy });
+export const getVoidedDRNumbers = () => api.get('/dr-numbers/voided');
+
+// Daily Email Settings
+export const getDailyEmailSettings = () => api.get('/email/settings');
+export const updateDailyEmailSettings = (settings) => api.put('/email/settings', settings);
+export const getDailyEmailActivities = (params) => api.get('/email/activities', { params });
+export const sendDailyEmailNow = () => api.post('/email/send-daily');
+export const sendTestEmail = () => api.post('/email/test');
+export const getEmailLogs = () => api.get('/email/logs');
+
+// Backup
+export const getBackupInfo = () => api.get('/backup/info');
+export const downloadBackup = (params) => api.get('/backup', { params, responseType: 'blob' });
+export const restoreBackup = (data) => api.post('/backup/restore', data);
+
 // Email Settings
 export const getNotificationEmail = () => api.get('/settings/notification-email');
 export const updateNotificationEmail = (email) => api.put('/settings/notification-email', { email });
+
+// General Settings
+export const getSettings = (key) => api.get(`/settings/${key}`);
+export const updateSettings = (key, value) => api.put(`/settings/${key}`, { value });
 
 // Schedule Email Settings
 export const getScheduleEmailSettings = () => api.get('/settings/schedule-email');

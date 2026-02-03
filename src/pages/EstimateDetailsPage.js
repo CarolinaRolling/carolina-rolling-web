@@ -1,0 +1,852 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Plus, Trash2, Save, Send, Upload, Eye, X, Printer, ShoppingCart, Check, FileDown } from 'lucide-react';
+import {
+  getEstimateById, createEstimate, updateEstimate,
+  addEstimatePart, updateEstimatePart, deleteEstimatePart,
+  uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
+  orderMaterial, downloadEstimatePDF
+} from '../services/api';
+
+const PART_TYPES = {
+  plate_roll: { label: 'Plate Roll' },
+  pipe_roll: { label: 'Pipe/Tube Roll' },
+  angle_roll: { label: 'Angle Roll' },
+  beam_roll: { label: 'Beam Roll' },
+  section_roll: { label: 'Section Roll' },
+  channel_roll: { label: 'Channel Roll' },
+  flat_bar: { label: 'Flat Bar' },
+  other: { label: 'Other' }
+};
+
+function EstimateDetailsPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const fileInputRef = useRef(null);
+  const isNew = id === 'new';
+
+  const [estimate, setEstimate] = useState(null);
+  const [loading, setLoading] = useState(!isNew);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
+
+  const [formData, setFormData] = useState({
+    clientName: '', contactName: '', contactEmail: '', contactPhone: '',
+    projectDescription: '', notes: '', internalNotes: '', validUntil: '',
+    taxRate: 7.0, useCustomTax: false, customTaxReason: '',
+    taxExempt: false, taxExemptReason: '', taxExemptCertNumber: '',
+    truckingDescription: '', truckingCost: 0
+  });
+
+  const [parts, setParts] = useState([]);
+  const [files, setFiles] = useState([]);
+  const [showPartModal, setShowPartModal] = useState(false);
+  const [editingPart, setEditingPart] = useState(null);
+  const [partData, setPartData] = useState({});
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [orderPONumber, setOrderPONumber] = useState('');
+  const [selectedPartIds, setSelectedPartIds] = useState([]);
+  const [ordering, setOrdering] = useState(false);
+
+  useEffect(() => { if (!isNew) loadEstimate(); }, [id]);
+
+  const loadEstimate = async () => {
+    try {
+      setLoading(true);
+      const response = await getEstimateById(id);
+      const data = response.data.data;
+      setEstimate(data);
+      setFormData({
+        clientName: data.clientName || '', contactName: data.contactName || '',
+        contactEmail: data.contactEmail || '', contactPhone: data.contactPhone || '',
+        projectDescription: data.projectDescription || '', notes: data.notes || '',
+        internalNotes: data.internalNotes || '', validUntil: data.validUntil || '',
+        taxRate: parseFloat(data.taxRate) || 7.0, useCustomTax: data.useCustomTax || false,
+        customTaxReason: data.customTaxReason || '',
+        taxExempt: data.taxExempt || false, 
+        taxExemptReason: data.taxExemptReason || '',
+        taxExemptCertNumber: data.taxExemptCertNumber || '',
+        truckingDescription: data.truckingDescription || '',
+        truckingCost: parseFloat(data.truckingCost) || 0
+      });
+      setParts((data.parts || []).sort((a, b) => a.partNumber - b.partNumber));
+      setFiles(data.files || []);
+    } catch (err) {
+      setError('Failed to load estimate');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculatePartTotal = (part) => {
+    const qty = parseInt(part.quantity) || 1;
+    const materialCost = (parseFloat(part.materialUnitCost) || 0) * qty;
+    const materialMarkup = parseFloat(part.materialMarkupPercent) || 0;
+    const materialTotal = materialCost * (1 + materialMarkup / 100);
+    const rolling = parseFloat(part.rollingCost) || 0;
+    const otherCost = parseFloat(part.otherServicesCost) || 0;
+    const otherMarkup = parseFloat(part.otherServicesMarkupPercent) || 15;
+    const otherTotal = otherCost * (1 + otherMarkup / 100);
+    return { materialCost, materialTotal, otherTotal, partTotal: materialTotal + rolling + otherTotal };
+  };
+
+  const calculateTotals = () => {
+    let partsSubtotal = 0;
+    parts.forEach(part => {
+      const { partTotal } = calculatePartTotal(part);
+      partsSubtotal += partTotal;
+    });
+    const trucking = parseFloat(formData.truckingCost) || 0;
+    const taxAmount = formData.taxExempt ? 0 : partsSubtotal * (parseFloat(formData.taxRate) / 100);
+    const grandTotal = partsSubtotal + taxAmount + trucking;
+    
+    // Calculate credit card total (Square: 2.9% + $0.30)
+    const ccFeeRate = 2.9;
+    const ccFeeFixed = 0.30;
+    const ccFee = (grandTotal * ccFeeRate / 100) + ccFeeFixed;
+    const ccTotal = grandTotal + ccFee;
+    
+    return { partsSubtotal, trucking, taxAmount, grandTotal, ccFee, ccTotal };
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      setDownloadingPDF(true);
+      const response = await downloadEstimatePDF(id);
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Estimate-${estimate?.estimateNumber || id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showMessage('PDF downloaded');
+    } catch (err) {
+      setError('Failed to download PDF');
+      console.error(err);
+    } finally {
+      setDownloadingPDF(false);
+    }
+  };
+
+  const handleSave = async (sendToClient = false) => {
+    if (!formData.clientName.trim()) { setError('Client name is required'); return; }
+    try {
+      setSaving(true); setError(null);
+      const payload = { ...formData, status: sendToClient ? 'sent' : (estimate?.status || 'draft') };
+      if (isNew) {
+        const response = await createEstimate(payload);
+        navigate(`/estimates/${response.data.data.id}`, { replace: true });
+      } else {
+        await updateEstimate(id, payload);
+        await loadEstimate();
+      }
+      showMessage(sendToClient ? 'Estimate sent' : 'Estimate saved');
+    } catch (err) { setError('Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  const showMessage = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(null), 3000); };
+
+  const openAddPartModal = () => {
+    setEditingPart(null);
+    setPartData({
+      partType: '', clientPartNumber: '', heatNumber: '', quantity: 1,
+      materialDescription: '', supplierName: '', materialUnitCost: '', materialMarkupPercent: 20,
+      rollingCost: '', otherServicesCost: '', otherServicesMarkupPercent: 15,
+      material: '', thickness: '', width: '', length: '', sectionSize: '',
+      outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '',
+      arcDegrees: '', flangeOut: false, specialInstructions: ''
+    });
+    setShowPartModal(true);
+  };
+
+  const openEditPartModal = (part) => {
+    setEditingPart(part);
+    setPartData({
+      ...part,
+      materialUnitCost: part.materialUnitCost || '',
+      materialMarkupPercent: part.materialMarkupPercent || 20,
+      rollingCost: part.rollingCost || '',
+      otherServicesCost: part.otherServicesCost || '',
+      otherServicesMarkupPercent: part.otherServicesMarkupPercent || 15
+    });
+    setShowPartModal(true);
+  };
+
+  const handleSavePart = async () => {
+    if (!partData.partType) { setError('Part type is required'); return; }
+    if (isNew) { setError('Save the estimate first'); return; }
+    try {
+      setSaving(true);
+      if (editingPart?.id) {
+        await updateEstimatePart(id, editingPart.id, partData);
+      } else {
+        await addEstimatePart(id, partData);
+      }
+      await loadEstimate();
+      setShowPartModal(false);
+      showMessage(editingPart ? 'Part updated' : 'Part added');
+    } catch (err) { setError('Failed to save part'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDeletePart = async (partId) => {
+    if (!window.confirm('Delete this part?')) return;
+    try {
+      await deleteEstimatePart(id, partId);
+      await loadEstimate();
+      showMessage('Part deleted');
+    } catch (err) { setError('Failed to delete part'); }
+  };
+
+  const openOrderModal = () => {
+    const orderableParts = parts.filter(p => p.supplierName && !p.materialOrdered);
+    if (orderableParts.length === 0) { setError('No parts with suppliers to order'); return; }
+    setSelectedPartIds(orderableParts.map(p => p.id));
+    setOrderPONumber('');
+    setShowOrderModal(true);
+  };
+
+  const getSupplierGroups = () => {
+    const groups = {};
+    parts.filter(p => selectedPartIds.includes(p.id)).forEach(part => {
+      const supplier = part.supplierName || 'Unknown';
+      if (!groups[supplier]) groups[supplier] = [];
+      groups[supplier].push(part);
+    });
+    return groups;
+  };
+
+  const handleOrderMaterial = async () => {
+    if (!orderPONumber.trim()) { setError('PO number required'); return; }
+    if (selectedPartIds.length === 0) { setError('Select at least one part'); return; }
+    try {
+      setOrdering(true);
+      await orderMaterial(id, { purchaseOrderNumber: orderPONumber, partIds: selectedPartIds });
+      await loadEstimate();
+      setShowOrderModal(false);
+      showMessage('Purchase orders created!');
+    } catch (err) { setError('Failed to create orders'); }
+    finally { setOrdering(false); }
+  };
+
+  const handleFileUpload = async (uploadedFiles) => {
+    if (isNew) { setError('Save first'); return; }
+    try {
+      setSaving(true);
+      await uploadEstimateFiles(id, Array.from(uploadedFiles));
+      await loadEstimate();
+      showMessage('Files uploaded');
+    } catch (err) { setError('Upload failed'); }
+    finally { setSaving(false); }
+  };
+
+  const handleViewFile = async (file) => {
+    try {
+      const data = await getEstimateFileSignedUrl(id, file.id);
+      window.open(data.url, '_blank');
+    } catch (err) { setError('Failed to open'); }
+  };
+
+  const handleDeleteFile = async (file) => {
+    if (!window.confirm('Delete?')) return;
+    try {
+      await deleteEstimateFile(id, file.id);
+      await loadEstimate();
+    } catch (err) { setError('Delete failed'); }
+  };
+
+  const formatCurrency = (amt) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amt || 0);
+  
+  const printEstimate = () => {
+    const totals = calculateTotals();
+    const partsHtml = parts.map(part => {
+      const calc = calculatePartTotal(part);
+      return `<div style="border:1px solid #ddd;border-radius:8px;padding:16px;margin-bottom:12px;">
+        <h4 style="margin:0 0 8px;color:#1976d2;">Part #${part.partNumber} - ${PART_TYPES[part.partType]?.label || part.partType}</h4>
+        <p style="margin:0 0 8px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''}</p>
+        <p><strong>Qty:</strong> ${part.quantity} | <strong>Material:</strong> ${part.materialDescription || 'N/A'}</p>
+        ${part.supplierName ? `<p style="color:#388e3c;">Supplier: ${part.supplierName}</p>` : ''}
+        <table style="width:100%;margin-top:8px;"><tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialTotal)}</td></tr>
+        <tr><td>Rolling:</td><td style="text-align:right;">${formatCurrency(part.rollingCost)}</td></tr>
+        <tr><td>Other Services:</td><td style="text-align:right;">${formatCurrency(calc.otherTotal)}</td></tr>
+        <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Part Total:</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>
+      </div>`;
+    }).join('');
+    
+    const taxLine = formData.taxExempt 
+      ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Tax</span><span style="color:#c62828;font-weight:bold;">EXEMPT${formData.taxExemptCertNumber ? ` (Cert#: ${formData.taxExemptCertNumber})` : ''}</span></div>`
+      : `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Tax (${formData.taxRate}%)</span><span>${formatCurrency(totals.taxAmount)}</span></div>`;
+    
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html><head><title>Estimate ${estimate?.estimateNumber}</title>
+      <style>body{font-family:Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto}</style></head><body>
+      <h1 style="color:#1976d2;">Carolina Rolling</h1><p>Estimate: <strong>${estimate?.estimateNumber}</strong></p>
+      <h2>Client: ${formData.clientName}</h2>
+      ${formData.contactName ? `<p>Contact: ${formData.contactName}</p>` : ''}
+      ${formData.projectDescription ? `<p>Project: ${formData.projectDescription}</p>` : ''}
+      <h3>Parts</h3>${partsHtml}
+      ${formData.truckingCost > 0 ? `<div style="background:#fff3e0;padding:12px;border-radius:8px;margin:12px 0;"><strong>🚚 Trucking:</strong> ${formData.truckingDescription || ''} - ${formatCurrency(formData.truckingCost)} (Not Taxed)</div>` : ''}
+      <div style="background:#f0f7ff;padding:16px;border-radius:8px;margin-top:20px;">
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Parts Subtotal</span><span>${formatCurrency(totals.partsSubtotal)}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Trucking</span><span>${formatCurrency(totals.trucking)}</span></div>
+        ${taxLine}
+        <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:1.3em;font-weight:bold;color:#1976d2;"><span>Grand Total</span><span>${formatCurrency(totals.grandTotal)}</span></div>
+      </div>
+      <div style="background:#e8f5e9;padding:12px;border-radius:8px;margin-top:12px;">
+        <div style="font-size:0.85em;color:#666;margin-bottom:4px;">Payment by Credit Card (Square 2.9% + $0.30)</div>
+        <div style="display:flex;justify-content:space-between;"><span>Processing Fee:</span><span>${formatCurrency(totals.ccFee)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-weight:bold;color:#388e3c;"><span>Credit Card Total:</span><span>${formatCurrency(totals.ccTotal)}</span></div>
+      </div>
+      ${formData.notes ? `<div style="margin-top:20px;padding:12px;background:#f9f9f9;border-radius:8px;"><strong>Terms:</strong> ${formData.notes}</div>` : ''}
+      </body></html>`);
+    w.document.close();
+    w.print();
+  };
+
+  const totals = calculateTotals();
+  const hasOrderableParts = parts.some(p => p.supplierName && !p.materialOrdered);
+
+  if (loading) return <div className="loading"><div className="spinner"></div></div>;
+
+  return (
+    <div>
+      <div className="page-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button className="btn btn-secondary" onClick={() => navigate('/estimates')} style={{ borderRadius: '50%', padding: 8 }}>
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 className="page-title">{isNew ? 'New Estimate' : estimate?.estimateNumber}</h1>
+            {!isNew && <div style={{ color: '#666', fontSize: '0.875rem' }}>{formData.clientName}</div>}
+          </div>
+        </div>
+        <div className="actions-row">
+          {!isNew && hasOrderableParts && (
+            <button className="btn btn-success" onClick={openOrderModal} style={{ background: 'linear-gradient(135deg, #43a047, #2e7d32)' }}>
+              <ShoppingCart size={18} /> Order Material
+            </button>
+          )}
+          {!isNew && (
+            <button className="btn btn-outline" onClick={handleDownloadPDF} disabled={downloadingPDF}>
+              <FileDown size={18} /> {downloadingPDF ? 'Generating...' : 'Download PDF'}
+            </button>
+          )}
+          {!isNew && <button className="btn btn-outline" onClick={printEstimate}><Printer size={18} /> Print</button>}
+          <button className="btn btn-secondary" onClick={() => handleSave(false)} disabled={saving}>
+            <Save size={18} /> {saving ? 'Saving...' : 'Save'}
+          </button>
+          {(isNew || estimate?.status === 'draft') && (
+            <button className="btn btn-primary" onClick={() => handleSave(true)} disabled={saving}>
+              <Send size={18} /> Send
+            </button>
+          )}
+        </div>
+      </div>
+
+      {error && <div className="alert alert-error">{error}</div>}
+      {success && <div className="alert alert-success">{success}</div>}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+        <div>
+          {/* Client Info */}
+          <div className="card">
+            <h3 className="card-title" style={{ marginBottom: 16 }}>Client Information</h3>
+            <div className="grid grid-2">
+              <div className="form-group">
+                <label className="form-label">Client Name *</label>
+                <input type="text" className="form-input" value={formData.clientName}
+                  onChange={(e) => setFormData({ ...formData, clientName: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Contact Name</label>
+                <input type="text" className="form-input" value={formData.contactName}
+                  onChange={(e) => setFormData({ ...formData, contactName: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Email</label>
+                <input type="email" className="form-input" value={formData.contactEmail}
+                  onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Phone</label>
+                <input type="tel" className="form-input" value={formData.contactPhone}
+                  onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })} />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label className="form-label">Project Description</label>
+                <textarea className="form-textarea" value={formData.projectDescription}
+                  onChange={(e) => setFormData({ ...formData, projectDescription: e.target.value })} />
+              </div>
+            </div>
+          </div>
+
+          {/* Parts */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">📦 Parts ({parts.length})</h3>
+              <button className="btn btn-primary btn-sm" onClick={openAddPartModal} disabled={isNew}>
+                <Plus size={16} /> Add Part
+              </button>
+            </div>
+
+            {isNew && <p style={{ color: '#666', padding: 20, textAlign: 'center' }}>Save the estimate first to add parts</p>}
+
+            {parts.map(part => {
+              const calc = calculatePartTotal(part);
+              return (
+                <div key={part.id} style={{ border: '2px solid #e0e0e0', borderRadius: 12, padding: 16, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
+                    <div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1976d2' }}>
+                        Part #{part.partNumber} - {PART_TYPES[part.partType]?.label || part.partType}
+                      </div>
+                      <div style={{ color: '#666', fontSize: '0.85rem' }}>
+                        {part.clientPartNumber && `Client Part#: ${part.clientPartNumber}`}
+                        {part.heatNumber && ` • Heat#: ${part.heatNumber}`}
+                      </div>
+                    </div>
+                    <div className="actions-row">
+                      {part.materialOrdered && (
+                        <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '4px 8px', borderRadius: 4, fontSize: '0.75rem' }}>
+                          <Check size={12} /> PO: {part.materialPurchaseOrderNumber}
+                        </span>
+                      )}
+                      <button className="btn btn-sm btn-outline" onClick={() => openEditPartModal(part)}>✏️</button>
+                      <button className="btn btn-sm btn-danger" onClick={() => handleDeletePart(part.id)}><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, fontSize: '0.875rem', marginBottom: 12 }}>
+                    <div><strong>Qty:</strong> {part.quantity}</div>
+                    {part.material && <div><strong>Material:</strong> {part.material}</div>}
+                    {part.diameter && <div><strong>Diameter:</strong> {part.diameter}"</div>}
+                    {part.radius && <div><strong>Radius:</strong> {part.radius}"</div>}
+                    {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
+                  </div>
+
+                  {/* Material Section */}
+                  {part.materialDescription && (
+                    <div style={{ background: '#e8f5e9', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <strong>📦 Material</strong>
+                        {part.supplierName && (
+                          <span style={{ background: '#c8e6c9', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', color: '#2e7d32' }}>
+                            🏭 {part.supplierName}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '0.875rem' }}>{part.materialDescription} (Qty: {part.quantity})</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: '0.85rem' }}>
+                        <span>Cost: {formatCurrency(calc.materialCost)} + {part.materialMarkupPercent}% markup</span>
+                        <strong style={{ color: '#2e7d32' }}>{formatCurrency(calc.materialTotal)}</strong>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Costs Section */}
+                  <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                      <span>🔄 Rolling Cost</span>
+                      <strong>{formatCurrency(part.rollingCost)}</strong>
+                    </div>
+                    {(parseFloat(part.otherServicesCost) > 0) && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                        <span>🔧 Other Services (+{part.otherServicesMarkupPercent}%)</span>
+                        <strong>{formatCurrency(calc.otherTotal)}</strong>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '1.05rem' }}>
+                      <strong>Part Total</strong>
+                      <strong style={{ color: '#1976d2' }}>{formatCurrency(calc.partTotal)}</strong>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Trucking */}
+            <div style={{ background: '#fff3e0', border: '1px solid #ffb74d', borderRadius: 8, padding: 16, marginTop: 16 }}>
+              <h4 style={{ margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                🚚 Trucking <span style={{ fontSize: '0.75rem', color: '#e65100' }}>(Not Taxed)</span>
+              </h4>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <input type="text" className="form-input" placeholder="Description..."
+                  value={formData.truckingDescription}
+                  onChange={(e) => setFormData({ ...formData, truckingDescription: e.target.value })}
+                  style={{ flex: 1 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span>$</span>
+                  <input type="number" className="form-input" value={formData.truckingCost}
+                    onChange={(e) => setFormData({ ...formData, truckingCost: parseFloat(e.target.value) || 0 })}
+                    style={{ width: 100 }} step="0.01" />
+                </div>
+              </div>
+            </div>
+
+            {/* Files */}
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                <strong>📎 Files (DXF, STEP, PDF)</strong>
+                <input type="file" multiple accept=".pdf,.dxf,.step,.stp" style={{ display: 'none' }}
+                  ref={fileInputRef} onChange={(e) => handleFileUpload(e.target.files)} />
+                <button className="btn btn-sm btn-outline" onClick={() => fileInputRef.current?.click()} disabled={isNew}>
+                  <Upload size={14} /> Upload
+                </button>
+              </div>
+              {files.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {files.map(file => (
+                    <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#e3f2fd', borderRadius: 4, fontSize: '0.85rem' }}>
+                      <span>{file.originalName || file.filename}</span>
+                      <button onClick={() => handleViewFile(file)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><Eye size={14} /></button>
+                      <button onClick={() => handleDeleteFile(file)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d32f2f' }}><X size={14} /></button>
+                    </div>
+                  ))}
+                </div>
+              ) : <div style={{ color: '#999', fontSize: '0.85rem' }}>{isNew ? 'Save first to upload' : 'No files'}</div>}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="card">
+            <h3 className="card-title" style={{ marginBottom: 16 }}>Notes & Terms</h3>
+            <div className="form-group">
+              <label className="form-label">Estimate Notes (visible to customer)</label>
+              <textarea className="form-textarea" value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Internal Notes (not visible)</label>
+              <textarea className="form-textarea" value={formData.internalNotes}
+                onChange={(e) => setFormData({ ...formData, internalNotes: e.target.value })} />
+            </div>
+          </div>
+        </div>
+
+        {/* Summary Sidebar */}
+        <div>
+          <div className="card" style={{ position: 'sticky', top: 24 }}>
+            <h3 className="card-title" style={{ marginBottom: 16 }}>Estimate Summary</h3>
+
+            {parts.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: 8 }}>Parts Breakdown</div>
+                <div style={{ fontSize: '0.8rem', padding: 8, background: '#f9f9f9', borderRadius: 8 }}>
+                  {parts.map(part => {
+                    const calc = calculatePartTotal(part);
+                    return (
+                      <div key={part.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                        <span>Part #{part.partNumber}</span>
+                        <span>{formatCurrency(calc.partTotal)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={{ background: '#f0f7ff', borderRadius: 8, padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #ddd' }}>
+                <span>Parts Subtotal</span><span>{formatCurrency(totals.partsSubtotal)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #ddd' }}>
+                <span>Trucking</span><span>{formatCurrency(totals.trucking)}</span>
+              </div>
+              
+              {/* Tax Section */}
+              <div style={{ padding: '8px 0', borderBottom: '1px solid #ddd' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={formData.taxExempt}
+                      onChange={(e) => setFormData({ ...formData, taxExempt: e.target.checked })} />
+                    <span style={{ fontWeight: formData.taxExempt ? 600 : 400, color: formData.taxExempt ? '#c62828' : 'inherit' }}>
+                      Tax Exempt
+                    </span>
+                  </label>
+                  {!formData.taxExempt ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <input type="number" className="form-input" value={formData.taxRate}
+                        onChange={(e) => setFormData({ ...formData, taxRate: parseFloat(e.target.value) || 0 })}
+                        style={{ width: 50, textAlign: 'center', padding: '4px' }} step="0.1" />%
+                      <span style={{ marginLeft: 8 }}>{formatCurrency(totals.taxAmount)}</span>
+                    </div>
+                  ) : (
+                    <span style={{ color: '#c62828', fontWeight: 600 }}>$0.00</span>
+                  )}
+                </div>
+                
+                {/* Tax Exempt Details */}
+                {formData.taxExempt && (
+                  <div style={{ marginTop: 8, padding: 8, background: '#fff3e0', borderRadius: 4, fontSize: '0.8rem' }}>
+                    <div className="form-group" style={{ marginBottom: 8 }}>
+                      <input type="text" className="form-input" placeholder="Resale Certificate #" 
+                        value={formData.taxExemptCertNumber}
+                        onChange={(e) => setFormData({ ...formData, taxExemptCertNumber: e.target.value })}
+                        style={{ fontSize: '0.8rem', padding: '4px 8px' }} />
+                    </div>
+                    <input type="text" className="form-input" placeholder="Reason (e.g., Resale, Non-profit)" 
+                      value={formData.taxExemptReason}
+                      onChange={(e) => setFormData({ ...formData, taxExemptReason: e.target.value })}
+                      style={{ fontSize: '0.8rem', padding: '4px 8px' }} />
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontSize: '1.25rem', fontWeight: 700, color: '#1976d2' }}>
+                <span>Grand Total</span><span>{formatCurrency(totals.grandTotal)}</span>
+              </div>
+              
+              {/* Credit Card Total */}
+              <div style={{ background: '#e8f5e9', borderRadius: 6, padding: 10, marginTop: 8 }}>
+                <div style={{ fontSize: '0.75rem', color: '#666', marginBottom: 4 }}>
+                  Credit Card (Square 2.9% + $0.30)
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.85rem', color: '#388e3c' }}>CC Total</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 600, color: '#388e3c' }}>{formatCurrency(totals.ccTotal)}</span>
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>
+                  Fee: {formatCurrency(totals.ccFee)}
+                </div>
+              </div>
+            </div>
+
+            {/* Material by Supplier */}
+            {parts.some(p => p.supplierName) && (
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>
+                <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: 8 }}>Material by Supplier</div>
+                <div style={{ fontSize: '0.8rem' }}>
+                  {Object.entries(parts.reduce((acc, p) => {
+                    if (p.supplierName) {
+                      const calc = calculatePartTotal(p);
+                      acc[p.supplierName] = (acc[p.supplierName] || 0) + calc.materialTotal;
+                    }
+                    return acc;
+                  }, {})).map(([supplier, total]) => (
+                    <div key={supplier} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                      <span>{supplier}</span><span>{formatCurrency(total)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Add/Edit Part Modal */}
+      {showPartModal && (
+        <div className="modal-overlay" onClick={() => setShowPartModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">{editingPart ? 'Edit Part' : 'Add Part'}</h3>
+              <button className="modal-close" onClick={() => setShowPartModal(false)}>&times;</button>
+            </div>
+
+            <div className="grid grid-2">
+              <div className="form-group">
+                <label className="form-label">Part Type *</label>
+                <select className="form-select" value={partData.partType}
+                  onChange={(e) => setPartData({ ...partData, partType: e.target.value })}>
+                  <option value="">Select...</option>
+                  {Object.entries(PART_TYPES).map(([val, { label }]) => (
+                    <option key={val} value={val}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Quantity *</label>
+                <input type="number" className="form-input" value={partData.quantity}
+                  onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })} min="1" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Client Part Number</label>
+                <input type="text" className="form-input" value={partData.clientPartNumber || ''}
+                  onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Heat Number</label>
+                <input type="text" className="form-input" value={partData.heatNumber || ''}
+                  onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} />
+              </div>
+            </div>
+
+            <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>📦 Material Information</h4>
+            <div className="grid grid-2">
+              <div className="form-group">
+                <label className="form-label">Material Description</label>
+                <input type="text" className="form-input" value={partData.materialDescription || ''}
+                  onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })}
+                  placeholder='e.g., A36 Plate 1/2" x 48" x 96"' />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Supplier</label>
+                <input type="text" className="form-input" value={partData.supplierName || ''}
+                  onChange={(e) => setPartData({ ...partData, supplierName: e.target.value })}
+                  placeholder="e.g., Metro Steel Supply" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Unit Cost ($)</label>
+                <input type="number" className="form-input" value={partData.materialUnitCost || ''}
+                  onChange={(e) => setPartData({ ...partData, materialUnitCost: e.target.value })}
+                  step="0.01" placeholder="0.00" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Markup (%)</label>
+                <input type="number" className="form-input" value={partData.materialMarkupPercent}
+                  onChange={(e) => setPartData({ ...partData, materialMarkupPercent: parseFloat(e.target.value) || 0 })} />
+              </div>
+            </div>
+
+            <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>💰 Service Costs</h4>
+            <div className="grid grid-2">
+              <div className="form-group">
+                <label className="form-label">🔄 Rolling Cost *</label>
+                <input type="number" className="form-input" value={partData.rollingCost || ''}
+                  onChange={(e) => setPartData({ ...partData, rollingCost: e.target.value })}
+                  step="0.01" placeholder="0.00" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">🔧 Other Services Cost</label>
+                <input type="number" className="form-input" value={partData.otherServicesCost || ''}
+                  onChange={(e) => setPartData({ ...partData, otherServicesCost: e.target.value })}
+                  step="0.01" placeholder="0.00" />
+                <p style={{ fontSize: '0.75rem', color: '#666', marginTop: 4 }}>
+                  {partData.otherServicesMarkupPercent}% markup applied
+                </p>
+              </div>
+            </div>
+
+            <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>📐 Specifications</h4>
+            <div className="grid grid-3">
+              <div className="form-group">
+                <label className="form-label">Material Type</label>
+                <input type="text" className="form-input" value={partData.material || ''}
+                  onChange={(e) => setPartData({ ...partData, material: e.target.value })}
+                  placeholder="e.g., A36, 304 SS" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Diameter</label>
+                <input type="text" className="form-input" value={partData.diameter || ''}
+                  onChange={(e) => setPartData({ ...partData, diameter: e.target.value })}
+                  placeholder='e.g., 72"' />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Radius</label>
+                <input type="text" className="form-input" value={partData.radius || ''}
+                  onChange={(e) => setPartData({ ...partData, radius: e.target.value })}
+                  placeholder='e.g., 36"' />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Arc Degrees</label>
+                <input type="text" className="form-input" value={partData.arcDegrees || ''}
+                  onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })}
+                  placeholder="e.g., 90, 180, 360" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Roll Direction</label>
+                <select className="form-select" value={partData.rollType || ''}
+                  onChange={(e) => setPartData({ ...partData, rollType: e.target.value })}>
+                  <option value="">Select...</option>
+                  <option value="easy_way">Easy Way</option>
+                  <option value="hard_way">Hard Way</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', paddingTop: 24 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={partData.flangeOut || false}
+                    onChange={(e) => setPartData({ ...partData, flangeOut: e.target.checked })} />
+                  Flange Out
+                </label>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Special Instructions</label>
+              <textarea className="form-textarea" value={partData.specialInstructions || ''} rows={2}
+                onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} />
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowPartModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSavePart} disabled={!partData.partType || saving}>
+                {saving ? 'Saving...' : editingPart ? 'Update Part' : 'Add Part'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order Material Modal */}
+      {showOrderModal && (
+        <div className="modal-overlay" onClick={() => setShowOrderModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">🛒 Order Material</h3>
+              <button className="modal-close" onClick={() => setShowOrderModal(false)}>&times;</button>
+            </div>
+
+            <p style={{ color: '#666', marginBottom: 16 }}>
+              Select materials to order. Different suppliers will create separate purchase orders with letter suffixes.
+            </p>
+
+            <div className="form-group">
+              <label className="form-label">Purchase Order Number *</label>
+              <input type="text" className="form-input" value={orderPONumber}
+                onChange={(e) => setOrderPONumber(e.target.value)}
+                placeholder="e.g., 4455" style={{ maxWidth: 200 }} />
+              {Object.keys(getSupplierGroups()).length > 1 && (
+                <p style={{ fontSize: '0.8rem', color: '#666', marginTop: 4 }}>
+                  Will create: {Object.keys(getSupplierGroups()).map((s, i) => `${orderPONumber}${'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i]}`).join(', ')}
+                </p>
+              )}
+            </div>
+
+            <h4 style={{ marginTop: 20, marginBottom: 12 }}>Select Materials:</h4>
+            {Object.entries(getSupplierGroups()).map(([supplier, supplierParts], idx) => (
+              <div key={supplier} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 16, marginBottom: 12, background: '#f9f9f9' }}>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>🏭 {supplier}</div>
+                {supplierParts.map(part => (
+                  <label key={part.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 8, cursor: 'pointer', background: 'white', borderRadius: 4, marginBottom: 4 }}>
+                    <input type="checkbox" checked={selectedPartIds.includes(part.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedPartIds([...selectedPartIds, part.id]);
+                        else setSelectedPartIds(selectedPartIds.filter(id => id !== part.id));
+                      }}
+                      style={{ marginTop: 4 }} />
+                    <div style={{ flex: 1 }}>
+                      <div><strong>Part #{part.partNumber}:</strong> {part.materialDescription}</div>
+                      <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                        Qty: {part.quantity} • {formatCurrency((parseFloat(part.materialUnitCost) || 0) * (parseInt(part.quantity) || 1))}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+                <div style={{ background: '#fff3e0', borderRadius: 4, padding: 8, marginTop: 8 }}>
+                  <strong style={{ color: '#e65100' }}>PO# {orderPONumber}{'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[idx]}</strong>
+                  <span style={{ marginLeft: 12, fontSize: '0.8rem', color: '#388e3c' }}>→ Creates Inbound shipment</span>
+                </div>
+              </div>
+            ))}
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowOrderModal(false)}>Cancel</button>
+              <button className="btn btn-success" onClick={handleOrderMaterial}
+                disabled={ordering || !orderPONumber || selectedPartIds.length === 0}>
+                {ordering ? 'Creating...' : `Create ${Object.keys(getSupplierGroups()).length} Purchase Order(s)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default EstimateDetailsPage;

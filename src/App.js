@@ -8,10 +8,17 @@ import ShipmentDetailsPage from './pages/ShipmentDetailsPage';
 import NewShipmentPage from './pages/NewShipmentPage';
 import InboundPage from './pages/InboundPage';
 import InboundDetailsPage from './pages/InboundDetailsPage';
+import WorkOrdersPage from './pages/WorkOrdersPage';
+import WorkOrderDetailsPage from './pages/WorkOrderDetailsPage';
+import EstimatesPage from './pages/EstimatesPage';
+import EstimateDetailsPage from './pages/EstimateDetailsPage';
+import BackupPage from './pages/BackupPage';
 import SettingsPage from './pages/SettingsPage';
 import LocationSettingsPage from './pages/LocationSettingsPage';
 import AdminPage from './pages/AdminPage';
 import SchedulingPage from './pages/SchedulingPage';
+import DRNumbersPage from './pages/DRNumbersPage';
+import EmailSettingsPage from './pages/EmailSettingsPage';
 import './App.css';
 
 // Protected Route Component
@@ -95,6 +102,36 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      <Route path="/workorders" element={
+        <ProtectedRoute>
+          <Layout><WorkOrdersPage /></Layout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/workorders/:id" element={
+        <ProtectedRoute>
+          <Layout><WorkOrderDetailsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/estimates" element={
+        <ProtectedRoute>
+          <Layout><EstimatesPage /></Layout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/estimates/:id" element={
+        <ProtectedRoute>
+          <Layout><EstimateDetailsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/backup" element={
+        <ProtectedRoute>
+          <Layout><BackupPage /></Layout>
+        </ProtectedRoute>
+      } />
+      
       <Route path="/settings" element={
         <ProtectedRoute>
           <Layout><SettingsPage /></Layout>
@@ -117,6 +154,25 @@ function AppRoutes() {
         <AdminRoute>
           <Layout><AdminPage /></Layout>
         </AdminRoute>
+      } />
+      
+      <Route path="/admin/dr-numbers" element={
+        <AdminRoute>
+          <Layout><DRNumbersPage /></Layout>
+        </AdminRoute>
+      } />
+      
+      <Route path="/admin/email" element={
+        <AdminRoute>
+          <Layout><EmailSettingsPage /></Layout>
+        </AdminRoute>
+      } />
+      
+      {/* Alternate route for workorder (singular) */}
+      <Route path="/workorder/:id" element={
+        <ProtectedRoute>
+          <Layout><WorkOrderDetailsPage /></Layout>
+        </ProtectedRoute>
       } />
     </Routes>
   );

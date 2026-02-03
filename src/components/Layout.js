@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock } from 'lucide-react';
+import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, ClipboardList, DollarSign, Database, Hash, Mail } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 function Layout({ children }) {
@@ -46,18 +46,62 @@ function Layout({ children }) {
               </NavLink>
             </li>
             <li>
+              <NavLink to="/workorders" className={({ isActive }) => isActive ? 'active' : ''}>
+                <ClipboardList size={20} />
+                <span>Work Orders</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/estimates" className={({ isActive }) => isActive ? 'active' : ''}>
+                <DollarSign size={20} />
+                <span>Estimates</span>
+              </NavLink>
+            </li>
+            <li>
               <NavLink to="/settings" className={({ isActive }) => isActive ? 'active' : ''}>
                 <Settings size={20} />
                 <span>Settings</span>
               </NavLink>
             </li>
+            <li>
+              <NavLink to="/backup" className={({ isActive }) => isActive ? 'active' : ''}>
+                <Database size={20} />
+                <span>Backup</span>
+              </NavLink>
+            </li>
             {isAdmin() && (
-              <li>
-                <NavLink to="/admin" className={({ isActive }) => isActive ? 'active' : ''}>
-                  <Shield size={20} />
-                  <span>Admin</span>
-                </NavLink>
-              </li>
+              <>
+                <li style={{ 
+                  marginTop: 16, 
+                  paddingTop: 16, 
+                  borderTop: '1px solid rgba(255,255,255,0.1)',
+                  fontSize: '0.7rem',
+                  color: 'rgba(255,255,255,0.5)',
+                  paddingLeft: 20,
+                  textTransform: 'uppercase',
+                  letterSpacing: 1
+                }}>
+                  Admin
+                </li>
+                <li>
+                  <NavLink to="/admin" className={({ isActive }) => isActive ? 'active' : ''}>
+                    <Shield size={20} />
+                    <span>Users & Logs</span>
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/admin/dr-numbers" className={({ isActive }) => isActive ? 'active' : ''}>
+                    <Hash size={20} />
+                    <span>DR Numbers</span>
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/admin/email" className={({ isActive }) => isActive ? 'active' : ''}>
+                    <Mail size={20} />
+                    <span>Daily Email</span>
+                  </NavLink>
+                </li>
+              </>
             )}
           </ul>
         </nav>
