@@ -170,6 +170,10 @@ export const uploadEstimatePartFile = (estimateId, partId, file, fileType = 'oth
 export const deleteEstimatePartFile = (estimateId, partId, fileId) => 
   api.delete(`/estimates/${estimateId}/parts/${partId}/files/${fileId}`);
 
+// Reset estimate conversion (if work order is missing)
+export const resetEstimateConversion = (estimateId) => api.post(`/estimates/${estimateId}/reset-conversion`);
+export const checkOrphanedEstimates = () => api.get('/estimates/check-orphaned');
+
 // Order Material (creates inbound orders)
 export const orderMaterial = (estimateId, data) => api.post(`/estimates/${estimateId}/order-material`, data);
 

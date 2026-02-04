@@ -266,12 +266,19 @@ function WorkOrderDetailsPage() {
 
   const handlePickup = async () => {
     try {
-      await updateWorkOrder(id, { status: 'picked_up', pickedUpBy: pickupData.pickedUpBy, pickedUpAt: new Date().toISOString() });
+      setError(null);
+      const response = await updateWorkOrder(id, { 
+        status: 'picked_up', 
+        pickedUpBy: pickupData.pickedUpBy, 
+        pickedUpAt: new Date().toISOString() 
+      });
+      console.log('Pickup response:', response);
       await loadOrder();
       setShowPickupModal(false);
       showMessage('Marked as picked up');
     } catch (err) {
-      setError('Failed to update');
+      console.error('Pickup error:', err.response?.data || err);
+      setError(err.response?.data?.error?.message || 'Failed to update - check console for details');
     }
   };
 

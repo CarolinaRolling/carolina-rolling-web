@@ -7,7 +7,7 @@ import {
   uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
   downloadEstimatePDF, convertEstimateToWorkOrder,
   uploadEstimatePartFile, deleteEstimatePartFile,
-  searchClients, searchVendors, getSettings
+  searchClients, searchVendors, getSettings, resetEstimateConversion
 } from '../services/api';
 
 const PART_TYPES = {
@@ -477,9 +477,32 @@ function EstimateDetailsPage() {
             </button>
           )}
           {estimate?.workOrderId && (
-            <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '8px 16px', borderRadius: 8, fontWeight: 600 }}>
-              ✓ Converted to Work Order
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button 
+                className="btn"
+                onClick={() => navigate(`/workorders/${estimate.workOrderId}`)}
+                style={{ background: '#e8f5e9', color: '#2e7d32' }}
+              >
+                ✓ View Work Order
+              </button>
+              <button 
+                className="btn btn-sm"
+                onClick={async () => {
+                  if (!window.confirm('Reset conversion? This will allow you to convert again. Use only if the work order is missing.')) return;
+                  try {
+                    await resetEstimateConversion(id);
+                    await loadEstimate();
+                    showMessage('Conversion reset. You can convert again.');
+                  } catch (err) {
+                    setError(err.response?.data?.error?.message || 'Cannot reset - work order exists');
+                  }
+                }}
+                style={{ background: '#fff3e0', color: '#e65100' }}
+                title="Reset if work order is missing"
+              >
+                Reset
+              </button>
+            </div>
           )}
         </div>
       </div>
