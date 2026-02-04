@@ -19,6 +19,7 @@ import AdminPage from './pages/AdminPage';
 import SchedulingPage from './pages/SchedulingPage';
 import DRNumbersPage from './pages/DRNumbersPage';
 import PONumbersPage from './pages/PONumbersPage';
+import PurchaseOrdersPage from './pages/PurchaseOrdersPage';
 import EmailSettingsPage from './pages/EmailSettingsPage';
 import './App.css';
 
@@ -124,6 +125,12 @@ function AppRoutes() {
       <Route path="/estimates/:id" element={
         <ProtectedRoute>
           <Layout><EstimateDetailsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/purchase-orders" element={
+        <ProtectedRoute>
+          <Layout><PurchaseOrdersPage /></Layout>
         </ProtectedRoute>
       } />
       

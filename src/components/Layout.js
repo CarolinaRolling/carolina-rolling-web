@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, ClipboardList, DollarSign, Database, Hash, Mail } from 'lucide-react';
+import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, ClipboardList, DollarSign, Database, Hash, Mail, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 function Layout({ children }) {
@@ -55,6 +55,12 @@ function Layout({ children }) {
               <NavLink to="/estimates" className={({ isActive }) => isActive ? 'active' : ''}>
                 <DollarSign size={20} />
                 <span>Estimates</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/purchase-orders" className={({ isActive }) => isActive ? 'active' : ''}>
+                <ShoppingCart size={20} />
+                <span>Purchase Orders</span>
               </NavLink>
             </li>
             <li>
