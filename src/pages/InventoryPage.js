@@ -1,7 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Package, Truck, AlertCircle, CheckCircle, Clock, FileText, Inbox } from 'lucide-react';
+import { Search, MapPin, Calendar, Package, Truck, CheckCircle, Clock, FileText, Inbox, Image } from 'lucide-react';
 import { getWorkOrders, getArchivedWorkOrders } from '../services/api';
+
+// Status configuration
+const STATUSES = {
+  quoted: { label: 'Quoted', color: '#9e9e9e', bg: '#f5f5f5' },
+  work_order_generated: { label: 'Work Order Generated', color: '#7b1fa2', bg: '#f3e5f5' },
+  waiting_for_materials: { label: 'Waiting for Materials', color: '#f57c00', bg: '#fff3e0' },
+  received: { label: 'Received', color: '#1976d2', bg: '#e3f2fd' },
+  processing: { label: 'Processing', color: '#0288d1', bg: '#e1f5fe' },
+  stored: { label: 'Stored', color: '#388e3c', bg: '#e8f5e9' },
+  shipped: { label: 'Shipped', color: '#7b1fa2', bg: '#f3e5f5' },
+  archived: { label: 'Archived', color: '#616161', bg: '#eeeeee' },
+  // Legacy status mappings
+  draft: { label: 'Received', color: '#1976d2', bg: '#e3f2fd' },
+  in_progress: { label: 'Processing', color: '#0288d1', bg: '#e1f5fe' },
+  completed: { label: 'Stored', color: '#388e3c', bg: '#e8f5e9' }
+};
 
 function InventoryPage() {
   const navigate = useNavigate();
@@ -51,20 +67,17 @@ function InventoryPage() {
     let filtered = [...workOrders];
 
     // Filter by status
-    if (statusFilter === 'awaiting_instructions') {
-      // Work orders with 0 parts = awaiting instructions
-      filtered = filtered.filter(o => !o.parts || o.parts.length === 0);
-    } else if (statusFilter === 'in_progress') {
-      // Work orders with parts but not completed
-      filtered = filtered.filter(o => 
-        o.parts && o.parts.length > 0 && 
-        o.status !== 'completed' && o.status !== 'shipped' && o.status !== 'archived'
-      );
-    } else if (statusFilter === 'ready') {
-      filtered = filtered.filter(o => o.status === 'completed');
+    if (statusFilter === 'waiting_for_materials') {
+      filtered = filtered.filter(o => o.status === 'waiting_for_materials');
+    } else if (statusFilter === 'received') {
+      filtered = filtered.filter(o => o.status === 'received' || o.status === 'draft');
+    } else if (statusFilter === 'processing') {
+      filtered = filtered.filter(o => o.status === 'processing' || o.status === 'in_progress');
+    } else if (statusFilter === 'stored') {
+      filtered = filtered.filter(o => o.status === 'stored' || o.status === 'completed');
     } else if (statusFilter === 'active') {
-      // All non-archived
-      filtered = filtered.filter(o => o.status !== 'archived');
+      // All non-archived, non-shipped
+      filtered = filtered.filter(o => o.status !== 'archived' && o.status !== 'shipped');
     }
 
     // Filter by search query
@@ -76,27 +89,25 @@ function InventoryPage() {
         o.clientPurchaseOrderNumber?.toLowerCase().includes(query) ||
         (o.drNumber && `DR-${o.drNumber}`.toLowerCase().includes(query)) ||
         (o.drNumber && o.drNumber.toString().includes(query)) ||
-        o.projectDescription?.toLowerCase().includes(query)
+        o.storageLocation?.toLowerCase().includes(query)
       );
     }
 
     // Sort
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'date_desc':
-          return new Date(b.createdAt) - new Date(a.createdAt);
-        case 'date_asc':
-          return new Date(a.createdAt) - new Date(b.createdAt);
         case 'dr_desc':
           return (b.drNumber || 0) - (a.drNumber || 0);
         case 'dr_asc':
           return (a.drNumber || 0) - (b.drNumber || 0);
-        case 'name_asc':
+        case 'client':
           return (a.clientName || '').localeCompare(b.clientName || '');
-        case 'name_desc':
-          return (b.clientName || '').localeCompare(a.clientName || '');
+        case 'date':
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        case 'location':
+          return (a.storageLocation || '').localeCompare(b.storageLocation || '');
         default:
-          return 0;
+          return (b.drNumber || 0) - (a.drNumber || 0);
       }
     });
 
@@ -105,31 +116,32 @@ function InventoryPage() {
 
   const filteredOrders = getFilteredOrders();
 
-  // Count items for tabs
-  const awaitingInstructionsCount = workOrders.filter(o => !o.parts || o.parts.length === 0).length;
-  const inProgressCount = workOrders.filter(o => 
-    o.parts && o.parts.length > 0 && 
-    o.status !== 'completed' && o.status !== 'shipped' && o.status !== 'archived'
-  ).length;
-  const readyCount = workOrders.filter(o => o.status === 'completed').length;
+  // Count for badges
+  const waitingCount = workOrders.filter(o => o.status === 'waiting_for_materials').length;
+  const receivedCount = workOrders.filter(o => o.status === 'received' || o.status === 'draft').length;
+  const processingCount = workOrders.filter(o => o.status === 'processing' || o.status === 'in_progress').length;
+  const storedCount = workOrders.filter(o => o.status === 'stored' || o.status === 'completed').length;
 
-  const getStatusColor = (order) => {
-    if (!order.parts || order.parts.length === 0) return 'status-pending';
-    switch (order.status) {
-      case 'received': return 'status-received';
-      case 'in_progress': return 'status-in_progress';
-      case 'completed': return 'status-completed';
-      case 'shipped': return 'status-shipped';
-      case 'archived': return 'status-shipped';
-      default: return 'status-received';
-    }
+  const getStatusBadge = (status) => {
+    const config = STATUSES[status] || STATUSES.received;
+    return (
+      <span style={{
+        background: config.bg,
+        color: config.color,
+        padding: '4px 10px',
+        borderRadius: 12,
+        fontSize: '0.75rem',
+        fontWeight: 600,
+        whiteSpace: 'nowrap'
+      }}>
+        {config.label}
+      </span>
+    );
   };
 
-  const getStatusLabel = (order) => {
-    if (!order.parts || order.parts.length === 0) {
-      return 'Awaiting Instructions';
-    }
-    return order.status?.replace('_', ' ');
+  const getStatusColor = (status) => {
+    const config = STATUSES[status] || STATUSES.received;
+    return config.color;
   };
 
   const formatDate = (dateString) => {
@@ -139,6 +151,18 @@ function InventoryPage() {
       day: 'numeric',
       year: 'numeric',
     });
+  };
+
+  // Get first image from parts
+  const getOrderImage = (order) => {
+    if (!order.parts) return null;
+    for (const part of order.parts) {
+      if (part.files && part.files.length > 0) {
+        const imageFile = part.files.find(f => f.mimeType?.startsWith('image/'));
+        if (imageFile) return imageFile.url;
+      }
+    }
+    return null;
   };
 
   if (loading) {
@@ -153,10 +177,11 @@ function InventoryPage() {
     <div>
       <div className="page-header">
         <h1 className="page-title">
-          {statusFilter === 'archived' ? '📁 Archived Orders' : 
-           statusFilter === 'awaiting_instructions' ? '📥 Awaiting Instructions' : 
-           statusFilter === 'ready' ? '✅ Ready to Ship' :
-           statusFilter === 'in_progress' ? '🔧 In Progress' :
+          {statusFilter === 'archived' ? '📁 Archived (Shipped)' : 
+           statusFilter === 'waiting_for_materials' ? '⏳ Waiting for Materials' : 
+           statusFilter === 'stored' ? '✅ Stored (Ready to Ship)' :
+           statusFilter === 'processing' ? '🔧 Processing' :
+           statusFilter === 'received' ? '📥 Received' :
            '📦 Inventory'}
         </h1>
       </div>
@@ -164,7 +189,7 @@ function InventoryPage() {
       {error && <div className="alert alert-error">{error}</div>}
 
       {/* Tabs */}
-      <div className="tabs">
+      <div className="tabs" style={{ flexWrap: 'wrap' }}>
         <button 
           className={`tab ${statusFilter === 'active' ? 'active' : ''}`}
           onClick={() => setStatusFilter('active')}
@@ -172,62 +197,54 @@ function InventoryPage() {
           All Active
         </button>
         <button 
-          className={`tab ${statusFilter === 'awaiting_instructions' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('awaiting_instructions')}
-          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-        >
-          <Inbox size={14} />
-          Awaiting Instructions
-          {awaitingInstructionsCount > 0 && (
-            <span style={{ 
-              background: '#9c27b0', 
-              color: 'white', 
-              borderRadius: 10, 
-              padding: '2px 8px', 
-              fontSize: '0.7rem',
-              marginLeft: 4
-            }}>
-              {awaitingInstructionsCount}
-            </span>
-          )}
-        </button>
-        <button 
-          className={`tab ${statusFilter === 'in_progress' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('in_progress')}
+          className={`tab ${statusFilter === 'waiting_for_materials' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('waiting_for_materials')}
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <Clock size={14} />
-          In Progress
-          {inProgressCount > 0 && (
-            <span style={{ 
-              background: '#1976d2', 
-              color: 'white', 
-              borderRadius: 10, 
-              padding: '2px 8px', 
-              fontSize: '0.7rem',
-              marginLeft: 4
-            }}>
-              {inProgressCount}
+          Waiting for Materials
+          {waitingCount > 0 && (
+            <span style={{ background: '#f57c00', color: 'white', borderRadius: 10, padding: '2px 8px', fontSize: '0.7rem' }}>
+              {waitingCount}
             </span>
           )}
         </button>
         <button 
-          className={`tab ${statusFilter === 'ready' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('ready')}
+          className={`tab ${statusFilter === 'received' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('received')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <Inbox size={14} />
+          Received
+          {receivedCount > 0 && (
+            <span style={{ background: '#1976d2', color: 'white', borderRadius: 10, padding: '2px 8px', fontSize: '0.7rem' }}>
+              {receivedCount}
+            </span>
+          )}
+        </button>
+        <button 
+          className={`tab ${statusFilter === 'processing' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('processing')}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <Clock size={14} />
+          Processing
+          {processingCount > 0 && (
+            <span style={{ background: '#0288d1', color: 'white', borderRadius: 10, padding: '2px 8px', fontSize: '0.7rem' }}>
+              {processingCount}
+            </span>
+          )}
+        </button>
+        <button 
+          className={`tab ${statusFilter === 'stored' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('stored')}
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <CheckCircle size={14} />
-          Ready to Ship
-          {readyCount > 0 && (
-            <span style={{ 
-              background: '#388e3c', 
-              color: 'white', 
-              borderRadius: 10, 
-              padding: '2px 8px', 
-              fontSize: '0.7rem',
-              marginLeft: 4
-            }}>
-              {readyCount}
+          Stored
+          {storedCount > 0 && (
+            <span style={{ background: '#388e3c', color: 'white', borderRadius: 10, padding: '2px 8px', fontSize: '0.7rem' }}>
+              {storedCount}
             </span>
           )}
         </button>
@@ -237,7 +254,7 @@ function InventoryPage() {
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <Truck size={14} />
-          Archived (Shipped)
+          Shipped/Archived
         </button>
       </div>
 
@@ -248,232 +265,189 @@ function InventoryPage() {
             <Search size={18} className="search-box-icon" />
             <input
               type="text"
-              placeholder="Search by DR#, client, PO number, description..."
+              placeholder="Search by DR#, client, PO#, location..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-box-input"
             />
           </div>
           <select 
             className="form-select" 
-            style={{ width: 'auto' }}
-            value={sortBy}
+            value={sortBy} 
             onChange={(e) => setSortBy(e.target.value)}
+            style={{ width: 'auto', minWidth: 150 }}
           >
             <option value="dr_desc">DR# (Newest)</option>
             <option value="dr_asc">DR# (Oldest)</option>
-            <option value="date_desc">Date (Newest)</option>
-            <option value="date_asc">Date (Oldest)</option>
-            <option value="name_asc">Client A-Z</option>
-            <option value="name_desc">Client Z-A</option>
+            <option value="client">Client Name</option>
+            <option value="date">Date Received</option>
+            <option value="location">Location</option>
           </select>
         </div>
       </div>
 
-      {/* Inventory Grid */}
+      {/* Results count */}
+      <div style={{ marginBottom: 12, color: '#666', fontSize: '0.9rem' }}>
+        {filteredOrders.length} item{filteredOrders.length !== 1 ? 's' : ''}
+      </div>
+
+      {/* Grid */}
       {filteredOrders.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">
-            {statusFilter === 'awaiting_instructions' ? '📥' : '📦'}
-          </div>
-          <div className="empty-state-title">No items found</div>
+          <Package size={48} color="#ccc" />
+          <div className="empty-state-title" style={{ marginTop: 16 }}>No items found</div>
           <p>
             {searchQuery 
               ? 'Try adjusting your search terms' 
-              : statusFilter === 'archived' 
-                ? 'No archived orders yet'
-                : statusFilter === 'awaiting_instructions'
-                  ? 'No work orders awaiting instructions'
-                  : statusFilter === 'in_progress'
-                    ? 'No work orders in progress'
-                    : statusFilter === 'ready'
-                      ? 'No work orders ready to ship'
-                      : 'No items in inventory'}
+              : 'No items match this filter'}
           </p>
         </div>
       ) : (
         <div className="grid grid-3">
-          {filteredOrders.map((order) => (
-            <div 
-              key={order.id} 
-              className="card"
-              onClick={() => navigate(`/workorder/${order.id}`)}
-              style={{ 
-                cursor: 'pointer',
-                borderLeft: (!order.parts || order.parts.length === 0)
-                  ? '4px solid #9c27b0'
-                  : order.status === 'completed' 
-                    ? '4px solid #388e3c'
-                    : '4px solid #1976d2',
-                transition: 'transform 0.15s, box-shadow 0.15s'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.transform = 'none';
-                e.currentTarget.style.boxShadow = '';
-              }}
-            >
-              {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <div>
-                  {order.drNumber ? (
-                    <div style={{ 
-                      fontFamily: 'Courier New, monospace', 
-                      fontWeight: 700, 
-                      fontSize: '1.2rem', 
-                      color: '#1976d2',
-                      background: '#e3f2fd',
-                      padding: '4px 10px',
-                      borderRadius: 6,
-                      display: 'inline-block'
-                    }}>
-                      DR-{order.drNumber}
+          {filteredOrders.map((order) => {
+            const orderImage = getOrderImage(order);
+            return (
+              <div 
+                key={order.id} 
+                className="card"
+                onClick={() => navigate(`/workorder/${order.id}`)}
+                style={{ 
+                  cursor: 'pointer',
+                  borderLeft: `4px solid ${getStatusColor(order.status)}`,
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  padding: 0,
+                  overflow: 'hidden'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.boxShadow = '';
+                }}
+              >
+                {/* Image thumbnail */}
+                {orderImage ? (
+                  <div style={{ 
+                    height: 120, 
+                    background: '#f5f5f5',
+                    backgroundImage: `url(${orderImage})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                  }} />
+                ) : (
+                  <div style={{ 
+                    height: 80, 
+                    background: 'linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <Image size={32} color="#bbb" />
+                  </div>
+                )}
+
+                <div style={{ padding: 16 }}>
+                  {/* Header with DR# and Status */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                    <div>
+                      {order.drNumber ? (
+                        <div style={{ 
+                          fontFamily: 'Courier New, monospace', 
+                          fontWeight: 700, 
+                          fontSize: '1.2rem', 
+                          color: '#1976d2',
+                          background: '#e3f2fd',
+                          padding: '4px 10px',
+                          borderRadius: 6,
+                          display: 'inline-block'
+                        }}>
+                          DR-{order.drNumber}
+                        </div>
+                      ) : (
+                        <div style={{ fontWeight: 600, color: '#666' }}>
+                          {order.orderNumber}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div style={{ fontWeight: 600, color: '#666' }}>
-                      {order.orderNumber}
-                    </div>
-                  )}
-                  <div style={{ fontWeight: 600, fontSize: '1rem', marginTop: 6 }}>
+                    {getStatusBadge(order.status)}
+                  </div>
+
+                  {/* Client Name */}
+                  <div style={{ fontWeight: 600, fontSize: '1rem', marginBottom: 8 }}>
                     {order.clientName}
                   </div>
-                </div>
-                <span className={`status-badge ${getStatusColor(order)}`}>
-                  {getStatusLabel(order)}
-                </span>
-              </div>
 
-              {/* Client PO */}
-              {order.clientPurchaseOrderNumber && (
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 6, 
-                  fontSize: '0.85rem',
-                  color: '#666',
-                  marginBottom: 8
-                }}>
-                  <FileText size={14} />
-                  <span>PO: <strong>{order.clientPurchaseOrderNumber}</strong></span>
-                </div>
-              )}
-
-              {/* Parts info */}
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 6, 
-                fontSize: '0.85rem',
-                color: '#666',
-                marginBottom: 8
-              }}>
-                <Package size={14} />
-                <span>
-                  {order.parts?.length || 0} part{(order.parts?.length || 0) !== 1 ? 's' : ''}
-                  {(!order.parts || order.parts.length === 0) && (
-                    <span style={{ color: '#9c27b0', marginLeft: 6 }}>
-                      (needs instructions)
-                    </span>
+                  {/* Client PO */}
+                  {order.clientPurchaseOrderNumber && (
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 6, 
+                      fontSize: '0.85rem',
+                      color: '#666',
+                      marginBottom: 6
+                    }}>
+                      <FileText size={14} />
+                      <span>PO: <strong>{order.clientPurchaseOrderNumber}</strong></span>
+                    </div>
                   )}
-                </span>
+
+                  {/* Location */}
+                  {order.storageLocation && (
+                    <div style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: 6, 
+                      fontSize: '0.85rem',
+                      color: '#e65100',
+                      marginBottom: 6,
+                      background: '#fff3e0',
+                      padding: '4px 8px',
+                      borderRadius: 4
+                    }}>
+                      <MapPin size={14} />
+                      <span style={{ fontWeight: 500 }}>{order.storageLocation}</span>
+                    </div>
+                  )}
+
+                  {/* Parts count */}
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 6, 
+                    fontSize: '0.85rem',
+                    color: '#666',
+                    marginBottom: 6
+                  }}>
+                    <Package size={14} />
+                    <span>{order.parts?.length || 0} part{(order.parts?.length || 0) !== 1 ? 's' : ''}</span>
+                  </div>
+
+                  {/* Date */}
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 6, 
+                    fontSize: '0.8rem',
+                    color: '#999',
+                    marginTop: 8,
+                    paddingTop: 8,
+                    borderTop: '1px solid #eee'
+                  }}>
+                    <Calendar size={14} />
+                    <span>
+                      {statusFilter === 'archived' 
+                        ? `Shipped ${formatDate(order.shippedAt || order.archivedAt)}`
+                        : `Received ${formatDate(order.createdAt)}`
+                      }
+                    </span>
+                  </div>
+                </div>
               </div>
-
-              {/* Awaiting instructions notice */}
-              {(!order.parts || order.parts.length === 0) && (
-                <div style={{
-                  background: '#f3e5f5',
-                  border: '1px solid #ce93d8',
-                  borderRadius: 6,
-                  padding: 8,
-                  marginBottom: 8,
-                  fontSize: '0.8rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6
-                }}>
-                  <Inbox size={14} style={{ color: '#9c27b0' }} />
-                  <span>Material received - awaiting client instructions</span>
-                </div>
-              )}
-
-              {/* Project description preview */}
-              {order.projectDescription && (
-                <div style={{ 
-                  fontSize: '0.85rem',
-                  color: '#666',
-                  marginBottom: 8,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical'
-                }}>
-                  {order.projectDescription}
-                </div>
-              )}
-
-              {/* Location */}
-              {order.storageLocation && (
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 6, 
-                  fontSize: '0.85rem',
-                  color: '#666',
-                  marginBottom: 8
-                }}>
-                  <MapPin size={14} />
-                  <span>{order.storageLocation}</span>
-                </div>
-              )}
-
-              {/* Date */}
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 6, 
-                fontSize: '0.8rem',
-                color: '#999'
-              }}>
-                <Calendar size={14} />
-                <span>
-                  {statusFilter === 'archived' 
-                    ? `Shipped ${formatDate(order.shippedAt || order.archivedAt)}`
-                    : `Received ${formatDate(order.createdAt)}`
-                  }
-                </span>
-              </div>
-
-              {/* Estimate link */}
-              {order.estimateNumber && (
-                <div style={{ 
-                  marginTop: 8, 
-                  paddingTop: 8, 
-                  borderTop: '1px solid #eee',
-                  fontSize: '0.75rem',
-                  color: '#7b1fa2'
-                }}>
-                  From: {order.estimateNumber}
-                </div>
-              )}
-
-              {/* Duplicate button for archived */}
-              {statusFilter === 'archived' && (
-                <button
-                  className="btn btn-outline btn-sm"
-                  style={{ marginTop: 10, width: '100%' }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/workorder/${order.id}?duplicate=true`);
-                  }}
-                >
-                  📋 Duplicate to New Estimate
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

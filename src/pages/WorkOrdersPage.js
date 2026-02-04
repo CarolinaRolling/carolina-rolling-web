@@ -125,15 +125,21 @@ function WorkOrdersPage() {
 
   const getStatusBadge = (status) => {
     const colors = {
-      draft: { bg: '#f5f5f5', text: '#666', label: 'Draft' },
+      quoted: { bg: '#f5f5f5', text: '#666', label: 'Quoted' },
+      work_order_generated: { bg: '#f3e5f5', text: '#7b1fa2', label: 'WO Generated' },
+      waiting_for_materials: { bg: '#fff3e0', text: '#f57c00', label: 'Waiting Materials' },
       received: { bg: '#e3f2fd', text: '#1565c0', label: 'Received' },
-      in_progress: { bg: '#fff3e0', text: '#e65100', label: 'In Progress' },
-      completed: { bg: '#e8f5e9', text: '#2e7d32', label: 'Completed' },
-      picked_up: { bg: '#f3e5f5', text: '#7b1fa2', label: 'Picked Up' },
+      processing: { bg: '#e1f5fe', text: '#0288d1', label: 'Processing' },
+      stored: { bg: '#e8f5e9', text: '#2e7d32', label: 'Stored' },
       shipped: { bg: '#f3e5f5', text: '#7b1fa2', label: 'Shipped' },
-      archived: { bg: '#eceff1', text: '#546e7a', label: 'Archived' }
+      archived: { bg: '#eceff1', text: '#546e7a', label: 'Archived' },
+      // Legacy mappings
+      draft: { bg: '#e3f2fd', text: '#1565c0', label: 'Received' },
+      in_progress: { bg: '#e1f5fe', text: '#0288d1', label: 'Processing' },
+      completed: { bg: '#e8f5e9', text: '#2e7d32', label: 'Stored' },
+      picked_up: { bg: '#f3e5f5', text: '#7b1fa2', label: 'Shipped' }
     };
-    const style = colors[status] || colors.draft;
+    const style = colors[status] || colors.received;
     return (
       <span style={{
         background: style.bg,
@@ -151,10 +157,13 @@ function WorkOrdersPage() {
   const getStatusColor = (order) => {
     if (!order.parts || order.parts.length === 0) return '#9c27b0'; // Purple - no parts
     switch (order.status) {
+      case 'stored':
       case 'completed': return '#388e3c';
-      case 'picked_up': 
-      case 'shipped': return '#7b1fa2';
-      case 'in_progress': return '#e65100';
+      case 'shipped':
+      case 'picked_up': return '#7b1fa2';
+      case 'processing':
+      case 'in_progress': return '#0288d1';
+      case 'waiting_for_materials': return '#f57c00';
       default: return '#1976d2';
     }
   };
@@ -224,11 +233,11 @@ function WorkOrdersPage() {
         <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {[
             { value: 'all', label: 'All' },
-            { value: 'draft', label: 'Draft' },
+            { value: 'waiting_for_materials', label: 'Waiting Materials' },
             { value: 'received', label: 'Received' },
-            { value: 'in_progress', label: 'In Progress' },
-            { value: 'completed', label: 'Completed' },
-            { value: 'picked_up', label: 'Picked Up' }
+            { value: 'processing', label: 'Processing' },
+            { value: 'stored', label: 'Stored' },
+            { value: 'shipped', label: 'Shipped' }
           ].map(status => (
             <button
               key={status.value}

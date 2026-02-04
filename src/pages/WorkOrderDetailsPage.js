@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
-  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart
+  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download
 } from 'lucide-react';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
@@ -440,7 +440,7 @@ function WorkOrderDetailsPage() {
     // Parts that need ordering: materialSource is 'we_order' AND not already ordered
     return order.parts.filter(p => 
       p.materialSource === 'we_order' && 
-      !p.materialOrdered && 
+      !p.materialOrdered && // false or null/undefined
       p.materialDescription
     );
   };
@@ -456,9 +456,21 @@ function WorkOrderDetailsPage() {
   };
 
   const openOrderModal = async () => {
+    // Debug: show all parts and their orderable status
+    console.log('All parts:', order?.parts?.map(p => ({
+      id: p.id,
+      partNumber: p.partNumber,
+      materialSource: p.materialSource,
+      materialOrdered: p.materialOrdered,
+      materialDescription: p.materialDescription,
+      supplierName: p.supplierName
+    })));
+    
     const orderableParts = getOrderableParts();
+    console.log('Orderable parts:', orderableParts);
+    
     if (orderableParts.length === 0) {
-      setError('No parts with material to order');
+      setError('No parts with material to order. Parts need: materialSource="we_order", materialDescription set, and not already ordered.');
       return;
     }
     setSelectedPartIds(orderableParts.map(p => p.id));
@@ -491,14 +503,37 @@ function WorkOrderDetailsPage() {
 
   const StatusBadge = ({ status }) => {
     const styles = {
-      draft: { background: '#e0e0e0', color: '#555' },
+      quoted: { background: '#f5f5f5', color: '#666' },
+      work_order_generated: { background: '#f3e5f5', color: '#7b1fa2' },
+      waiting_for_materials: { background: '#fff3e0', color: '#f57c00' },
       received: { background: '#e3f2fd', color: '#1565c0' },
-      in_progress: { background: '#fff3e0', color: '#e65100' },
+      processing: { background: '#e1f5fe', color: '#0288d1' },
+      stored: { background: '#e8f5e9', color: '#2e7d32' },
+      shipped: { background: '#f3e5f5', color: '#7b1fa2' },
+      archived: { background: '#eceff1', color: '#546e7a' },
+      pending: { background: '#e0e0e0', color: '#555' },
+      // Legacy mappings
+      draft: { background: '#e3f2fd', color: '#1565c0' },
+      in_progress: { background: '#e1f5fe', color: '#0288d1' },
       completed: { background: '#e8f5e9', color: '#2e7d32' },
       picked_up: { background: '#f3e5f5', color: '#7b1fa2' },
-      pending: { background: '#e0e0e0', color: '#555' },
     };
-    return <span className="status-badge" style={styles[status] || styles.draft}>{status?.replace('_', ' ')}</span>;
+    const labels = {
+      quoted: 'Quoted',
+      work_order_generated: 'WO Generated',
+      waiting_for_materials: 'Waiting Materials',
+      received: 'Received',
+      processing: 'Processing',
+      stored: 'Stored',
+      shipped: 'Shipped',
+      archived: 'Archived',
+      pending: 'Pending',
+      draft: 'Received',
+      in_progress: 'Processing',
+      completed: 'Stored',
+      picked_up: 'Shipped'
+    };
+    return <span className="status-badge" style={styles[status] || styles.received}>{labels[status] || status?.replace('_', ' ')}</span>;
   };
 
   if (loading) return <div className="loading"><div className="spinner"></div></div>;
@@ -530,13 +565,16 @@ function WorkOrderDetailsPage() {
           </div>
         </div>
         <div className="actions-row">
-          {order.status !== 'picked_up' && (
+          {order.status !== 'shipped' && order.status !== 'picked_up' && (
             <>
               <select className="form-select" value={order.status} onChange={(e) => handleStatusChange(e.target.value)} style={{ width: 'auto' }}>
-                <option value="draft">Draft</option><option value="received">Received</option>
-                <option value="in_progress">In Progress</option><option value="completed">Completed</option>
+                <option value="waiting_for_materials">Waiting for Materials</option>
+                <option value="received">Received</option>
+                <option value="processing">Processing</option>
+                <option value="stored">Stored</option>
+                <option value="shipped">Shipped</option>
               </select>
-              {order.status === 'completed' && <button className="btn btn-success" onClick={() => setShowPickupModal(true)}><Check size={18} />Pickup</button>}
+              {order.status === 'stored' && <button className="btn btn-success" onClick={() => setShowPickupModal(true)}><Check size={18} />Pickup/Ship</button>}
             </>
           )}
           <div style={{ position: 'relative' }}>
@@ -686,11 +724,45 @@ function WorkOrderDetailsPage() {
           </>
         )}
 
+        {/* Purchase Orders Section */}
+        {order.documents?.filter(d => d.documentType === 'purchase_order').length > 0 && (
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #eee' }}>
+            <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: '#e65100' }}>
+              <ShoppingCart size={18} /> Purchase Orders
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {order.documents.filter(d => d.documentType === 'purchase_order').map(doc => (
+                <div key={doc.id} style={{ 
+                  display: 'flex', alignItems: 'center', gap: 8, 
+                  background: '#fff3e0', padding: '10px 14px', borderRadius: 8, 
+                  fontSize: '0.9rem', border: '1px solid #ffcc80'
+                }}>
+                  <File size={18} color="#e65100" />
+                  <span style={{ fontWeight: 500 }}>{doc.originalName}</span>
+                  <button 
+                    onClick={() => handleViewDocument(doc.id)} 
+                    className="btn btn-sm"
+                    style={{ background: '#e65100', color: 'white', padding: '4px 12px', marginLeft: 8 }}
+                  >
+                    <Download size={14} style={{ marginRight: 4 }} /> Download
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteDocument(doc.id)} 
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Order Documents Section */}
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #eee' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <File size={18} /> Documents ({order.documents?.length || 0})
+              <File size={18} /> Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order').length || 0})
             </div>
             <button className="btn btn-sm btn-outline" onClick={() => docInputRef.current?.click()} disabled={uploadingDocs}>
               <Upload size={14} />{uploadingDocs ? 'Uploading...' : 'Upload'}
@@ -699,9 +771,9 @@ function WorkOrderDetailsPage() {
               onChange={(e) => handleDocumentUpload(Array.from(e.target.files))} />
           </div>
           <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Upload customer POs, supplier quotes, drawings, etc.</p>
-          {order.documents?.length > 0 && (
+          {order.documents?.filter(d => d.documentType !== 'purchase_order').length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {order.documents.map(doc => (
+              {order.documents.filter(d => d.documentType !== 'purchase_order').map(doc => (
                 <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f5f5f5', padding: '8px 12px', borderRadius: 6, fontSize: '0.85rem' }}>
                   <File size={16} color="#1976d2" />
                   <span style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
