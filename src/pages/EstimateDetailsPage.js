@@ -6,7 +6,8 @@ import {
   addEstimatePart, updateEstimatePart, deleteEstimatePart,
   uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
   downloadEstimatePDF, convertEstimateToWorkOrder,
-  uploadEstimatePartFile, deleteEstimatePartFile
+  uploadEstimatePartFile, deleteEstimatePartFile,
+  searchClients, searchVendors, getSettings
 } from '../services/api';
 
 const PART_TYPES = {
@@ -60,8 +61,46 @@ function EstimateDetailsPage() {
   // Part file upload state
   const [uploadingPartFile, setUploadingPartFile] = useState(null);
   const partFileInputRef = useRef(null);
+  
+  // Client autofill state
+  const [clientSuggestions, setClientSuggestions] = useState([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const clientInputRef = useRef(null);
+  
+  // Vendor autofill state (for parts)
+  const [vendorSuggestions, setVendorSuggestions] = useState([]);
+  const [showVendorSuggestions, setShowVendorSuggestions] = useState(false);
+  
+  // Default settings
+  const [defaultSettings, setDefaultSettings] = useState({
+    defaultTaxRate: 9.75,
+    defaultLaborRate: 125,
+    defaultMaterialMarkup: 20
+  });
 
-  useEffect(() => { if (!isNew) loadEstimate(); }, [id]);
+  useEffect(() => { 
+    loadDefaultSettings();
+    if (!isNew) loadEstimate(); 
+  }, [id]);
+
+  const loadDefaultSettings = async () => {
+    try {
+      const response = await getSettings('tax_settings');
+      if (response.data.data?.value) {
+        const settings = response.data.data.value;
+        setDefaultSettings(settings);
+        // Apply defaults to new estimate
+        if (isNew) {
+          setFormData(prev => ({
+            ...prev,
+            taxRate: settings.defaultTaxRate || 9.75
+          }));
+        }
+      }
+    } catch (err) {
+      // Use built-in defaults
+    }
+  };
 
   const loadEstimate = async () => {
     try {
@@ -167,7 +206,8 @@ function EstimateDetailsPage() {
     setEditingPart(null);
     setPartData({
       partType: '', clientPartNumber: '', heatNumber: '', quantity: 1,
-      materialDescription: '', supplierName: '', materialUnitCost: '', materialMarkupPercent: 20,
+      materialDescription: '', supplierName: '', materialUnitCost: '', 
+      materialMarkupPercent: defaultSettings.defaultMaterialMarkup || 20,
       rollingCost: '', otherServicesCost: '', otherServicesMarkupPercent: 15,
       material: '', thickness: '', width: '', length: '', sectionSize: '',
       outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '',
@@ -181,7 +221,7 @@ function EstimateDetailsPage() {
     setPartData({
       ...part,
       materialUnitCost: part.materialUnitCost || '',
-      materialMarkupPercent: part.materialMarkupPercent || 20,
+      materialMarkupPercent: part.materialMarkupPercent ?? defaultSettings.defaultMaterialMarkup ?? 20,
       rollingCost: part.rollingCost || '',
       otherServicesCost: part.otherServicesCost || '',
       otherServicesMarkupPercent: part.otherServicesMarkupPercent || 15
@@ -403,10 +443,80 @@ function EstimateDetailsPage() {
           <div className="card">
             <h3 className="card-title" style={{ marginBottom: 16 }}>Client Information</h3>
             <div className="grid grid-2">
-              <div className="form-group">
+              <div className="form-group" style={{ position: 'relative' }}>
                 <label className="form-label">Client Name *</label>
-                <input type="text" className="form-input" value={formData.clientName}
-                  onChange={(e) => setFormData({ ...formData, clientName: e.target.value })} />
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={formData.clientName}
+                  ref={clientInputRef}
+                  onChange={async (e) => {
+                    const value = e.target.value;
+                    setFormData({ ...formData, clientName: value });
+                    if (value.length >= 2) {
+                      try {
+                        const res = await searchClients(value);
+                        setClientSuggestions(res.data.data || []);
+                        setShowClientSuggestions(true);
+                      } catch (err) {
+                        setClientSuggestions([]);
+                      }
+                    } else {
+                      setClientSuggestions([]);
+                      setShowClientSuggestions(false);
+                    }
+                  }}
+                  onFocus={() => clientSuggestions.length > 0 && setShowClientSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
+                  autoComplete="off"
+                />
+                {showClientSuggestions && clientSuggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                    background: 'white', border: '1px solid #ddd', borderRadius: 4,
+                    maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                  }}>
+                    {clientSuggestions.map(client => (
+                      <div 
+                        key={client.id}
+                        style={{ 
+                          padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #eee',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}
+                        onMouseDown={() => {
+                          // Apply client data
+                          setFormData({
+                            ...formData,
+                            clientName: client.name,
+                            contactName: client.contactName || formData.contactName,
+                            contactEmail: client.contactEmail || formData.contactEmail,
+                            contactPhone: client.contactPhone || formData.contactPhone,
+                            // Apply tax settings
+                            taxExempt: client.taxStatus === 'resale' || client.taxStatus === 'exempt',
+                            taxExemptReason: client.taxStatus === 'resale' ? 'Resale' : (client.taxStatus === 'exempt' ? 'Tax Exempt' : ''),
+                            taxExemptCertNumber: client.resaleCertificate || '',
+                            useCustomTax: !!client.customTaxRate,
+                            taxRate: client.customTaxRate ? parseFloat(client.customTaxRate) * 100 : formData.taxRate
+                          });
+                          setShowClientSuggestions(false);
+                          showMessage(`Applied ${client.name}'s info`);
+                        }}
+                      >
+                        <div>
+                          <strong>{client.name}</strong>
+                          {client.contactName && <div style={{ fontSize: '0.8rem', color: '#666' }}>{client.contactName}</div>}
+                        </div>
+                        <span style={{ 
+                          fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4,
+                          background: client.taxStatus === 'resale' ? '#fff3e0' : client.taxStatus === 'exempt' ? '#e8f5e9' : '#e3f2fd',
+                          color: client.taxStatus === 'resale' ? '#e65100' : client.taxStatus === 'exempt' ? '#2e7d32' : '#1565c0'
+                        }}>
+                          {client.taxStatus === 'resale' ? 'Resale' : client.taxStatus === 'exempt' ? 'Exempt' : 'Taxable'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Contact Name</label>
@@ -780,11 +890,54 @@ function EstimateDetailsPage() {
                   onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })}
                   placeholder='e.g., A36 Plate 1/2" x 48" x 96"' />
               </div>
-              <div className="form-group">
+              <div className="form-group" style={{ position: 'relative' }}>
                 <label className="form-label">Supplier</label>
-                <input type="text" className="form-input" value={partData.supplierName || ''}
-                  onChange={(e) => setPartData({ ...partData, supplierName: e.target.value })}
-                  placeholder="e.g., Metro Steel Supply" />
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={partData.supplierName || ''}
+                  onChange={async (e) => {
+                    const value = e.target.value;
+                    setPartData({ ...partData, supplierName: value });
+                    if (value.length >= 2) {
+                      try {
+                        const res = await searchVendors(value);
+                        setVendorSuggestions(res.data.data || []);
+                        setShowVendorSuggestions(true);
+                      } catch (err) {
+                        setVendorSuggestions([]);
+                      }
+                    } else {
+                      setVendorSuggestions([]);
+                      setShowVendorSuggestions(false);
+                    }
+                  }}
+                  onFocus={() => vendorSuggestions.length > 0 && setShowVendorSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
+                  placeholder="e.g., Metro Steel Supply"
+                  autoComplete="off"
+                />
+                {showVendorSuggestions && vendorSuggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                    background: 'white', border: '1px solid #ddd', borderRadius: 4,
+                    maxHeight: 150, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                  }}>
+                    {vendorSuggestions.map(vendor => (
+                      <div 
+                        key={vendor.id}
+                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                        onMouseDown={() => {
+                          setPartData({ ...partData, supplierName: vendor.name });
+                          setShowVendorSuggestions(false);
+                        }}
+                      >
+                        <strong>{vendor.name}</strong>
+                        {vendor.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{vendor.contactPhone}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Unit Cost ($)</label>

@@ -21,6 +21,7 @@ import DRNumbersPage from './pages/DRNumbersPage';
 import PONumbersPage from './pages/PONumbersPage';
 import PurchaseOrdersPage from './pages/PurchaseOrdersPage';
 import EmailSettingsPage from './pages/EmailSettingsPage';
+import ClientsVendorsPage from './pages/ClientsVendorsPage';
 import './App.css';
 
 // Protected Route Component
@@ -179,6 +180,12 @@ function AppRoutes() {
       <Route path="/admin/email" element={
         <AdminRoute>
           <Layout><EmailSettingsPage /></Layout>
+        </AdminRoute>
+      } />
+      
+      <Route path="/admin/clients-vendors" element={
+        <AdminRoute>
+          <Layout><ClientsVendorsPage /></Layout>
         </AdminRoute>
       } />
       

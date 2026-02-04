@@ -250,4 +250,20 @@ export const updateScheduleEmailSettings = (email, enabled) =>
   api.put('/settings/schedule-email', { email, enabled });
 export const sendScheduleEmailNow = () => api.post('/settings/schedule-email/send');
 
+// Clients
+export const getClients = (params) => api.get('/clients', { params });
+export const searchClients = (q) => api.get('/clients/search', { params: { q } });
+export const getClient = (id) => api.get(`/clients/${id}`);
+export const createClient = (data) => api.post('/clients', data);
+export const updateClient = (id, data) => api.put(`/clients/${id}`, data);
+export const deleteClient = (id) => api.delete(`/clients/${id}`);
+
+// Vendors
+export const getVendors = (params) => api.get('/vendors', { params });
+export const searchVendors = (q) => api.get('/vendors/search', { params: { q } });
+export const getVendor = (id) => api.get(`/vendors/${id}`);
+export const createVendor = (data) => api.post('/vendors', data);
+export const updateVendor = (id, data) => api.put(`/vendors/${id}`, data);
+export const deleteVendor = (id) => api.delete(`/vendors/${id}`);
+
 export default api;

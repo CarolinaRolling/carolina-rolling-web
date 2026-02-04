@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Users, Activity, Plus, Trash2, Edit, Save, X, 
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
-  Mail, Send
+  Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -60,6 +60,14 @@ function AdminPage() {
   const [scheduleEmailEnabled, setScheduleEmailEnabled] = useState(true);
   const [scheduleEmailSaving, setScheduleEmailSaving] = useState(false);
   const [scheduleEmailSending, setScheduleEmailSending] = useState(false);
+  
+  // Tax settings
+  const [taxSettings, setTaxSettings] = useState({
+    defaultTaxRate: 9.75,
+    defaultLaborRate: 125,
+    defaultMaterialMarkup: 20
+  });
+  const [taxSettingsSaving, setTaxSettingsSaving] = useState(false);
 
   useEffect(() => {
     if (!isAdmin()) {
@@ -73,11 +81,42 @@ function AdminPage() {
       loadLogs();
     } else if (activeTab === 'schedule') {
       loadScheduleEmailSettings();
+    } else if (activeTab === 'tax') {
+      loadTaxSettings();
     } else if (activeTab === 'system') {
       setSystemLogs([...window.nasErrorLog]);
       setLoading(false);
     }
   }, [activeTab, logsPage]);
+
+  const loadTaxSettings = async () => {
+    try {
+      setLoading(true);
+      const response = await getSettings('tax_settings');
+      if (response.data.data?.value) {
+        setTaxSettings(response.data.data.value);
+      }
+    } catch (err) {
+      // Settings may not exist yet, use defaults
+      console.log('Using default tax settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveTaxSettings = async () => {
+    try {
+      setTaxSettingsSaving(true);
+      setError(null);
+      await updateSettings('tax_settings', taxSettings);
+      setSuccess('Tax settings saved successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError('Failed to save tax settings');
+    } finally {
+      setTaxSettingsSaving(false);
+    }
+  };
 
   const loadScheduleEmailSettings = async () => {
     try {
@@ -305,6 +344,25 @@ function AdminPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
+      {/* Quick Links */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3 style={{ marginBottom: 12 }}>Quick Links</h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-outline" onClick={() => navigate('/admin/clients-vendors')}>
+            👥 Clients & Vendors
+          </button>
+          <button className="btn btn-outline" onClick={() => navigate('/admin/dr-numbers')}>
+            📋 DR Numbers
+          </button>
+          <button className="btn btn-outline" onClick={() => navigate('/admin/po-numbers')}>
+            🔢 PO Numbers
+          </button>
+          <button className="btn btn-outline" onClick={() => navigate('/admin/email')}>
+            📧 Email Settings
+          </button>
+        </div>
+      </div>
+
       {/* Tabs */}
       <div className="tabs">
         <button 
@@ -313,6 +371,13 @@ function AdminPage() {
         >
           <Users size={16} style={{ marginRight: 6 }} />
           Users
+        </button>
+        <button 
+          className={`tab ${activeTab === 'tax' ? 'active' : ''}`}
+          onClick={() => setActiveTab('tax')}
+        >
+          <DollarSign size={16} style={{ marginRight: 6 }} />
+          Tax & Rates
         </button>
         <button 
           className={`tab ${activeTab === 'schedule' ? 'active' : ''}`}
@@ -352,6 +417,100 @@ function AdminPage() {
       {loading ? (
         <div className="loading">
           <div className="spinner"></div>
+        </div>
+      ) : activeTab === 'tax' ? (
+        <div>
+          <div className="card">
+            <h3 style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <DollarSign size={20} />
+              Default Tax & Rate Settings
+            </h3>
+            <p style={{ color: '#666', marginBottom: 20 }}>
+              These defaults will be used for new estimates and work orders. Individual clients can have custom rates set in the Clients & Vendors section.
+            </p>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 20 }}>
+              <div className="form-group">
+                <label className="form-label">Default Tax Rate (%)</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  className="form-input" 
+                  value={taxSettings.defaultTaxRate || ''} 
+                  onChange={(e) => setTaxSettings({ ...taxSettings, defaultTaxRate: parseFloat(e.target.value) || 0 })}
+                  placeholder="9.75"
+                />
+                <small style={{ color: '#666', marginTop: 4, display: 'block' }}>
+                  Standard sales tax rate (e.g., 9.75 for 9.75%)
+                </small>
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">Default Labor Rate ($/hour)</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  className="form-input" 
+                  value={taxSettings.defaultLaborRate || ''} 
+                  onChange={(e) => setTaxSettings({ ...taxSettings, defaultLaborRate: parseFloat(e.target.value) || 0 })}
+                  placeholder="125.00"
+                />
+                <small style={{ color: '#666', marginTop: 4, display: 'block' }}>
+                  Default hourly rate for labor on estimates
+                </small>
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">Default Material Markup (%)</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  className="form-input" 
+                  value={taxSettings.defaultMaterialMarkup || ''} 
+                  onChange={(e) => setTaxSettings({ ...taxSettings, defaultMaterialMarkup: parseFloat(e.target.value) || 0 })}
+                  placeholder="20"
+                />
+                <small style={{ color: '#666', marginTop: 4, display: 'block' }}>
+                  Default markup percentage on materials
+                </small>
+              </div>
+            </div>
+            
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #e0e0e0' }}>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleSaveTaxSettings}
+                disabled={taxSettingsSaving}
+              >
+                <Save size={16} style={{ marginRight: 6 }} />
+                {taxSettingsSaving ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
+          </div>
+          
+          <div className="card" style={{ marginTop: 16 }}>
+            <h4 style={{ marginBottom: 12 }}>📋 Tax Status Reference</h4>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ padding: 12, background: '#e3f2fd', borderRadius: 8 }}>
+                <strong style={{ color: '#1565c0' }}>Taxable</strong>
+                <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: '#666' }}>
+                  Standard customers who pay sales tax at the default rate (or custom rate if set)
+                </p>
+              </div>
+              <div style={{ padding: 12, background: '#fff3e0', borderRadius: 8 }}>
+                <strong style={{ color: '#e65100' }}>Resale</strong>
+                <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: '#666' }}>
+                  Customers with a valid resale certificate - no tax charged (they collect from end customer)
+                </p>
+              </div>
+              <div style={{ padding: 12, background: '#e8f5e9', borderRadius: 8 }}>
+                <strong style={{ color: '#2e7d32' }}>Tax Exempt</strong>
+                <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: '#666' }}>
+                  Government, non-profit, or other exempt organizations - no tax charged
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       ) : activeTab === 'schedule' ? (
         <div>

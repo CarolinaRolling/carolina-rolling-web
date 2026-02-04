@@ -9,7 +9,8 @@ import {
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
   uploadPartFiles, getPartFileSignedUrl, deletePartFile,
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument,
-  getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial
+  getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
+  searchVendors
 } from '../services/api';
 
 const PART_TYPES = {
@@ -48,6 +49,8 @@ function WorkOrderDetailsPage() {
   const [orderPONumber, setOrderPONumber] = useState('');
   const [selectedPartIds, setSelectedPartIds] = useState([]);
   const [ordering, setOrdering] = useState(false);
+  const [vendorSuggestions, setVendorSuggestions] = useState([]);
+  const [showVendorSuggestions, setShowVendorSuggestions] = useState(false);
   const fileInputRefs = useRef({});
   const docInputRef = useRef(null);
 
@@ -424,7 +427,12 @@ function WorkOrderDetailsPage() {
   // Order Material functions
   const getOrderableParts = () => {
     if (!order?.parts) return [];
-    return order.parts.filter(p => p.materialDescription && !p.materialOrdered);
+    // Parts that need ordering: materialSource is 'we_order' AND not already ordered
+    return order.parts.filter(p => 
+      p.materialSource === 'we_order' && 
+      !p.materialOrdered && 
+      p.materialDescription
+    );
   };
 
   const getSupplierGroups = () => {
@@ -745,18 +753,31 @@ function WorkOrderDetailsPage() {
                   </div>
                 </div>
 
-                {/* Material Info */}
-                {part.materialDescription && (
-                  <div style={{ background: part.materialOrdered ? '#e8f5e9' : '#fff3e0', padding: 10, borderRadius: 6, marginBottom: 12 }}>
+                {/* Material Source Info */}
+                {(part.materialSource === 'we_order' || part.materialDescription) && (
+                  <div style={{ 
+                    background: part.materialOrdered ? '#e8f5e9' : part.materialSource === 'we_order' ? '#fff3e0' : '#e3f2fd', 
+                    padding: 10, borderRadius: 6, marginBottom: 12 
+                  }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <strong style={{ color: part.materialOrdered ? '#2e7d32' : '#e65100' }}>📦 {part.materialDescription}</strong>
+                        <span style={{ 
+                          background: part.materialSource === 'we_order' ? '#ff9800' : part.materialSource === 'in_stock' ? '#4caf50' : '#2196f3',
+                          color: 'white', padding: '2px 6px', borderRadius: 4, fontSize: '0.7rem', marginRight: 8
+                        }}>
+                          {part.materialSource === 'we_order' ? 'We Order' : part.materialSource === 'in_stock' ? 'In Stock' : 'Customer'}
+                        </span>
+                        {part.materialDescription && (
+                          <strong style={{ color: part.materialOrdered ? '#2e7d32' : '#333' }}>📦 {part.materialDescription}</strong>
+                        )}
                         {part.supplierName && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#666' }}>from {part.supplierName}</span>}
                       </div>
-                      {part.materialOrdered ? (
-                        <span style={{ fontSize: '0.8rem', color: '#2e7d32' }}>Ordered ✓</span>
-                      ) : (
-                        <span style={{ fontSize: '0.8rem', color: '#e65100' }}>Needs ordering</span>
+                      {part.materialSource === 'we_order' && (
+                        part.materialOrdered ? (
+                          <span style={{ fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>✓ {part.materialPurchaseOrderNumber}</span>
+                        ) : (
+                          <span style={{ fontSize: '0.8rem', color: '#e65100' }}>Needs ordering</span>
+                        )
                       )}
                     </div>
                   </div>
@@ -981,9 +1002,53 @@ function WorkOrderDetailsPage() {
                           <option value="in_stock">In Stock</option>
                         </select>
                       </div>
-                      <div className="form-group">
+                      <div className="form-group" style={{ position: 'relative' }}>
                         <label className="form-label">Supplier</label>
-                        <input className="form-input" value={partData.supplierName || ''} onChange={(e) => setPartData({ ...partData, supplierName: e.target.value })} placeholder="e.g. Metal Supermarkets" />
+                        <input 
+                          className="form-input" 
+                          value={partData.supplierName || ''} 
+                          onChange={async (e) => {
+                            const value = e.target.value;
+                            setPartData({ ...partData, supplierName: value });
+                            if (value.length >= 2) {
+                              try {
+                                const res = await searchVendors(value);
+                                setVendorSuggestions(res.data.data || []);
+                                setShowVendorSuggestions(true);
+                              } catch (err) {
+                                setVendorSuggestions([]);
+                              }
+                            } else {
+                              setVendorSuggestions([]);
+                              setShowVendorSuggestions(false);
+                            }
+                          }}
+                          onFocus={() => vendorSuggestions.length > 0 && setShowVendorSuggestions(true)}
+                          onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
+                          placeholder="e.g. Metal Supermarkets"
+                          autoComplete="off"
+                        />
+                        {showVendorSuggestions && vendorSuggestions.length > 0 && (
+                          <div style={{
+                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                            background: 'white', border: '1px solid #ddd', borderRadius: 4,
+                            maxHeight: 150, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                          }}>
+                            {vendorSuggestions.map(vendor => (
+                              <div 
+                                key={vendor.id}
+                                style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                                onMouseDown={() => {
+                                  setPartData({ ...partData, supplierName: vendor.name });
+                                  setShowVendorSuggestions(false);
+                                }}
+                              >
+                                <strong>{vendor.name}</strong>
+                                {vendor.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{vendor.contactPhone}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="form-group" style={{ gridColumn: 'span 2' }}>
                         <label className="form-label">Material Description (for ordering)</label>
