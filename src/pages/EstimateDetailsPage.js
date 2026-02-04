@@ -132,14 +132,35 @@ function EstimateDetailsPage() {
 
   const calculatePartTotal = (part) => {
     const qty = parseInt(part.quantity) || 1;
-    const materialCost = (parseFloat(part.materialUnitCost) || 0) * qty;
-    const materialMarkup = parseFloat(part.materialMarkupPercent) || 0;
+    
+    // Material - only if we supply it
+    const weSupply = part.weSupplyMaterial;
+    const materialCost = weSupply ? (parseFloat(part.materialUnitCost) || 0) * qty : 0;
+    const materialMarkup = weSupply ? (parseFloat(part.materialMarkupPercent) || 0) : 0;
     const materialTotal = materialCost * (1 + materialMarkup / 100);
+    
+    // Rolling
     const rolling = parseFloat(part.rollingCost) || 0;
+    
+    // Additional Services
+    const drillingCost = part.serviceDrilling ? (parseFloat(part.serviceDrillingCost) || 0) : 0;
+    const cuttingCost = part.serviceCutting ? (parseFloat(part.serviceCuttingCost) || 0) : 0;
+    const fittingCost = part.serviceFitting ? (parseFloat(part.serviceFittingCost) || 0) : 0;
+    const weldingCost = part.serviceWelding ? (parseFloat(part.serviceWeldingCost) || 0) : 0;
+    const additionalServices = drillingCost + cuttingCost + fittingCost + weldingCost;
+    
+    // Legacy other services
     const otherCost = parseFloat(part.otherServicesCost) || 0;
     const otherMarkup = parseFloat(part.otherServicesMarkupPercent) || 15;
     const otherTotal = otherCost * (1 + otherMarkup / 100);
-    return { materialCost, materialTotal, otherTotal, partTotal: materialTotal + rolling + otherTotal };
+    
+    return { 
+      materialCost, 
+      materialTotal, 
+      otherTotal, 
+      additionalServices,
+      partTotal: materialTotal + rolling + otherTotal + additionalServices 
+    };
   };
 
   const calculateTotals = () => {
@@ -206,9 +227,20 @@ function EstimateDetailsPage() {
     setEditingPart(null);
     setPartData({
       partType: '', clientPartNumber: '', heatNumber: '', quantity: 1,
+      // Material - controlled by weSupplyMaterial checkbox
+      weSupplyMaterial: false,
       materialDescription: '', supplierName: '', materialUnitCost: '', 
       materialMarkupPercent: defaultSettings.defaultMaterialMarkup || 20,
-      rollingCost: '', otherServicesCost: '', otherServicesMarkupPercent: 15,
+      // Rolling cost
+      rollingCost: '',
+      // Additional Services
+      serviceDrilling: false, serviceDrillingCost: '', serviceDrillingVendor: '',
+      serviceCutting: false, serviceCuttingCost: '', serviceCuttingVendor: '',
+      serviceFitting: false, serviceFittingCost: '', serviceFittingVendor: '',
+      serviceWelding: false, serviceWeldingCost: '', serviceWeldingVendor: '', serviceWeldingPercent: 100,
+      // Legacy other services
+      otherServicesCost: '', otherServicesMarkupPercent: 15,
+      // Specs
       material: '', thickness: '', width: '', length: '', sectionSize: '',
       outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '',
       arcDegrees: '', flangeOut: false, specialInstructions: ''
@@ -220,9 +252,23 @@ function EstimateDetailsPage() {
     setEditingPart(part);
     setPartData({
       ...part,
+      weSupplyMaterial: part.weSupplyMaterial || false,
       materialUnitCost: part.materialUnitCost || '',
       materialMarkupPercent: part.materialMarkupPercent ?? defaultSettings.defaultMaterialMarkup ?? 20,
       rollingCost: part.rollingCost || '',
+      serviceDrilling: part.serviceDrilling || false,
+      serviceDrillingCost: part.serviceDrillingCost || '',
+      serviceDrillingVendor: part.serviceDrillingVendor || '',
+      serviceCutting: part.serviceCutting || false,
+      serviceCuttingCost: part.serviceCuttingCost || '',
+      serviceCuttingVendor: part.serviceCuttingVendor || '',
+      serviceFitting: part.serviceFitting || false,
+      serviceFittingCost: part.serviceFittingCost || '',
+      serviceFittingVendor: part.serviceFittingVendor || '',
+      serviceWelding: part.serviceWelding || false,
+      serviceWeldingCost: part.serviceWeldingCost || '',
+      serviceWeldingVendor: part.serviceWeldingVendor || '',
+      serviceWeldingPercent: part.serviceWeldingPercent || 100,
       otherServicesCost: part.otherServicesCost || '',
       otherServicesMarkupPercent: part.otherServicesMarkupPercent || 15
     });
@@ -234,7 +280,8 @@ function EstimateDetailsPage() {
     if (isNew) { setError('Save the estimate first'); return; }
     try {
       setSaving(true);
-      if (editingPart?.id) {
+      setError(null);
+      if (editingPart && editingPart.id) {
         await updateEstimatePart(id, editingPart.id, partData);
       } else {
         await addEstimatePart(id, partData);
@@ -242,7 +289,10 @@ function EstimateDetailsPage() {
       await loadEstimate();
       setShowPartModal(false);
       showMessage(editingPart ? 'Part updated' : 'Part added');
-    } catch (err) { setError('Failed to save part'); }
+    } catch (err) { 
+      console.error('Save part error:', err);
+      setError(err.response?.data?.error?.message || 'Failed to save part'); 
+    }
     finally { setSaving(false); }
   };
 
@@ -323,14 +373,14 @@ function EstimateDetailsPage() {
     try {
       setConverting(true);
       const response = await convertEstimateToWorkOrder(id, convertData);
-      const { workOrder, inboundOrders } = response.data.data;
+      const workOrder = response.data.data.workOrder;
       setShowConvertModal(false);
       
-      let message = `Work order DR-${workOrder.drNumber} created!`;
-      if (inboundOrders && inboundOrders.length > 0) {
-        message += ` ${inboundOrders.length} inbound order(s) created for material.`;
-      }
+      const message = `Work order DR-${workOrder.drNumber} created!`;
       showMessage(message);
+      
+      // Reload estimate to update workOrderId status
+      await loadEstimate();
       
       // Navigate to the new work order
       setTimeout(() => navigate(`/workorders/${workOrder.id}`), 1500);
@@ -585,13 +635,13 @@ function EstimateDetailsPage() {
                     {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
                   </div>
 
-                  {/* Material Section */}
-                  {part.materialDescription && (
-                    <div style={{ background: '#e8f5e9', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                  {/* Material Section - only show if we supply material */}
+                  {part.weSupplyMaterial && part.materialDescription && (
+                    <div style={{ background: '#fff3e0', borderRadius: 8, padding: 12, marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <strong>📦 Material</strong>
+                        <strong>📦 We Supply Material</strong>
                         {part.supplierName && (
-                          <span style={{ background: '#c8e6c9', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', color: '#2e7d32' }}>
+                          <span style={{ background: '#ffe0b2', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', color: '#e65100' }}>
                             🏭 {part.supplierName}
                           </span>
                         )}
@@ -599,7 +649,7 @@ function EstimateDetailsPage() {
                       <div style={{ fontSize: '0.875rem' }}>{part.materialDescription} (Qty: {part.quantity})</div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: '0.85rem' }}>
                         <span>Cost: {formatCurrency(calc.materialCost)} + {part.materialMarkupPercent}% markup</span>
-                        <strong style={{ color: '#2e7d32' }}>{formatCurrency(calc.materialTotal)}</strong>
+                        <strong style={{ color: '#e65100' }}>{formatCurrency(calc.materialTotal)}</strong>
                       </div>
                     </div>
                   )}
@@ -610,9 +660,34 @@ function EstimateDetailsPage() {
                       <span>🔄 Rolling Cost</span>
                       <strong>{formatCurrency(part.rollingCost)}</strong>
                     </div>
+                    {/* Additional Services */}
+                    {part.serviceDrilling && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                        <span>🔩 Drilling {part.serviceDrillingVendor && <span style={{ fontSize: '0.75rem', color: '#666' }}>({part.serviceDrillingVendor})</span>}</span>
+                        <strong>{formatCurrency(part.serviceDrillingCost)}</strong>
+                      </div>
+                    )}
+                    {part.serviceCutting && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                        <span>✂️ Cutting {part.serviceCuttingVendor && <span style={{ fontSize: '0.75rem', color: '#666' }}>({part.serviceCuttingVendor})</span>}</span>
+                        <strong>{formatCurrency(part.serviceCuttingCost)}</strong>
+                      </div>
+                    )}
+                    {part.serviceFitting && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                        <span>🔧 Fitting {part.serviceFittingVendor && <span style={{ fontSize: '0.75rem', color: '#666' }}>({part.serviceFittingVendor})</span>}</span>
+                        <strong>{formatCurrency(part.serviceFittingCost)}</strong>
+                      </div>
+                    )}
+                    {part.serviceWelding && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                        <span>🔥 Welding {part.serviceWeldingPercent}% {part.serviceWeldingVendor && <span style={{ fontSize: '0.75rem', color: '#666' }}>({part.serviceWeldingVendor})</span>}</span>
+                        <strong>{formatCurrency(part.serviceWeldingCost)}</strong>
+                      </div>
+                    )}
                     {(parseFloat(part.otherServicesCost) > 0) && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
-                        <span>🔧 Other Services (+{part.otherServicesMarkupPercent}%)</span>
+                        <span>Other Services (+{part.otherServicesMarkupPercent}%)</span>
                         <strong>{formatCurrency(calc.otherTotal)}</strong>
                       </div>
                     )}
@@ -882,92 +957,201 @@ function EstimateDetailsPage() {
               </div>
             </div>
 
-            <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>📦 Material Information</h4>
-            <div className="grid grid-2">
-              <div className="form-group">
-                <label className="form-label">Material Description</label>
-                <input type="text" className="form-input" value={partData.materialDescription || ''}
-                  onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })}
-                  placeholder='e.g., A36 Plate 1/2" x 48" x 96"' />
-              </div>
-              <div className="form-group" style={{ position: 'relative' }}>
-                <label className="form-label">Supplier</label>
+            <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>📦 Material</h4>
+            
+            {/* We Supply Material Checkbox Section */}
+            <div style={{ 
+              padding: 16, borderRadius: 8, marginBottom: 16,
+              background: partData.weSupplyMaterial ? '#fff3e0' : '#f5f5f5',
+              border: `2px solid ${partData.weSupplyMaterial ? '#ff9800' : '#e0e0e0'}`
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600 }}>
                 <input 
-                  type="text" 
-                  className="form-input" 
-                  value={partData.supplierName || ''}
-                  onChange={async (e) => {
-                    const value = e.target.value;
-                    setPartData({ ...partData, supplierName: value });
-                    if (value.length >= 2) {
-                      try {
-                        const res = await searchVendors(value);
-                        setVendorSuggestions(res.data.data || []);
-                        setShowVendorSuggestions(true);
-                      } catch (err) {
-                        setVendorSuggestions([]);
-                      }
-                    } else {
-                      setVendorSuggestions([]);
-                      setShowVendorSuggestions(false);
-                    }
-                  }}
-                  onFocus={() => vendorSuggestions.length > 0 && setShowVendorSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
-                  placeholder="e.g., Metro Steel Supply"
-                  autoComplete="off"
+                  type="checkbox" 
+                  checked={partData.weSupplyMaterial || false}
+                  onChange={(e) => setPartData({ ...partData, weSupplyMaterial: e.target.checked })}
+                  style={{ width: 20, height: 20 }}
                 />
-                {showVendorSuggestions && vendorSuggestions.length > 0 && (
-                  <div style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                    background: 'white', border: '1px solid #ddd', borderRadius: 4,
-                    maxHeight: 150, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                  }}>
-                    {vendorSuggestions.map(vendor => (
-                      <div 
-                        key={vendor.id}
-                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                        onMouseDown={() => {
-                          setPartData({ ...partData, supplierName: vendor.name });
-                          setShowVendorSuggestions(false);
+                <span style={{ fontSize: '1.1rem' }}>We Supply Material</span>
+              </label>
+              
+              {partData.weSupplyMaterial && (
+                <div style={{ marginTop: 16 }}>
+                  <div className="grid grid-2" style={{ gap: 12 }}>
+                    <div className="form-group" style={{ gridColumn: 'span 2', margin: 0 }}>
+                      <label className="form-label">Material Description</label>
+                      <input type="text" className="form-input" value={partData.materialDescription || ''}
+                        onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })}
+                        placeholder='e.g., A36 Plate 1/2" x 48" x 96"' />
+                    </div>
+                    <div className="form-group" style={{ position: 'relative', margin: 0 }}>
+                      <label className="form-label">Supplier</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        value={partData.supplierName || ''}
+                        onChange={async (e) => {
+                          const value = e.target.value;
+                          setPartData({ ...partData, supplierName: value });
+                          if (value.length >= 2) {
+                            try {
+                              const res = await searchVendors(value);
+                              setVendorSuggestions(res.data.data || []);
+                              setShowVendorSuggestions(true);
+                            } catch (err) { setVendorSuggestions([]); }
+                          } else {
+                            setVendorSuggestions([]);
+                            setShowVendorSuggestions(false);
+                          }
                         }}
-                      >
-                        <strong>{vendor.name}</strong>
-                        {vendor.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{vendor.contactPhone}</span>}
-                      </div>
-                    ))}
+                        onFocus={() => vendorSuggestions.length > 0 && setShowVendorSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
+                        placeholder="e.g., Metro Steel Supply"
+                        autoComplete="off"
+                      />
+                      {showVendorSuggestions && vendorSuggestions.length > 0 && (
+                        <div style={{
+                          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                          background: 'white', border: '1px solid #ddd', borderRadius: 4,
+                          maxHeight: 150, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                        }}>
+                          {vendorSuggestions.map(vendor => (
+                            <div key={vendor.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                              onMouseDown={() => { setPartData({ ...partData, supplierName: vendor.name }); setShowVendorSuggestions(false); }}>
+                              <strong>{vendor.name}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Unit Cost ($)</label>
+                      <input type="number" className="form-input" value={partData.materialUnitCost || ''}
+                        onChange={(e) => setPartData({ ...partData, materialUnitCost: e.target.value })}
+                        step="0.01" placeholder="0.00" />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Markup (%)</label>
+                      <input type="number" className="form-input" value={partData.materialMarkupPercent || 20}
+                        onChange={(e) => setPartData({ ...partData, materialMarkupPercent: parseFloat(e.target.value) || 0 })} />
+                    </div>
                   </div>
-                )}
-              </div>
-              <div className="form-group">
-                <label className="form-label">Unit Cost ($)</label>
-                <input type="number" className="form-input" value={partData.materialUnitCost || ''}
-                  onChange={(e) => setPartData({ ...partData, materialUnitCost: e.target.value })}
-                  step="0.01" placeholder="0.00" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Markup (%)</label>
-                <input type="number" className="form-input" value={partData.materialMarkupPercent}
-                  onChange={(e) => setPartData({ ...partData, materialMarkupPercent: parseFloat(e.target.value) || 0 })} />
-              </div>
+                </div>
+              )}
             </div>
 
-            <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>💰 Service Costs</h4>
+            <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>🔄 Rolling</h4>
             <div className="grid grid-2">
               <div className="form-group">
-                <label className="form-label">🔄 Rolling Cost *</label>
+                <label className="form-label">Rolling Cost *</label>
                 <input type="number" className="form-input" value={partData.rollingCost || ''}
                   onChange={(e) => setPartData({ ...partData, rollingCost: e.target.value })}
                   step="0.01" placeholder="0.00" />
               </div>
-              <div className="form-group">
-                <label className="form-label">🔧 Other Services Cost</label>
-                <input type="number" className="form-input" value={partData.otherServicesCost || ''}
-                  onChange={(e) => setPartData({ ...partData, otherServicesCost: e.target.value })}
-                  step="0.01" placeholder="0.00" />
-                <p style={{ fontSize: '0.75rem', color: '#666', marginTop: 4 }}>
-                  {partData.otherServicesMarkupPercent}% markup applied
-                </p>
+            </div>
+
+            <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>🔧 Additional Services</h4>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {/* Drilling */}
+              <div style={{ padding: 12, borderRadius: 8, background: partData.serviceDrilling ? '#e3f2fd' : '#fafafa', border: `1px solid ${partData.serviceDrilling ? '#2196f3' : '#e0e0e0'}` }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={partData.serviceDrilling || false}
+                    onChange={(e) => setPartData({ ...partData, serviceDrilling: e.target.checked })} />
+                  <strong>🔩 Drilling</strong>
+                </label>
+                {partData.serviceDrilling && (
+                  <div className="grid grid-2" style={{ marginTop: 8, gap: 8 }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Cost ($)</label>
+                      <input type="number" className="form-input" value={partData.serviceDrillingCost || ''}
+                        onChange={(e) => setPartData({ ...partData, serviceDrillingCost: e.target.value })} step="0.01" placeholder="0.00" />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Vendor (if outsourced)</label>
+                      <input type="text" className="form-input" value={partData.serviceDrillingVendor || ''}
+                        onChange={(e) => setPartData({ ...partData, serviceDrillingVendor: e.target.value })} placeholder="In-house" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Cutting */}
+              <div style={{ padding: 12, borderRadius: 8, background: partData.serviceCutting ? '#e3f2fd' : '#fafafa', border: `1px solid ${partData.serviceCutting ? '#2196f3' : '#e0e0e0'}` }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={partData.serviceCutting || false}
+                    onChange={(e) => setPartData({ ...partData, serviceCutting: e.target.checked })} />
+                  <strong>✂️ Cutting</strong>
+                </label>
+                {partData.serviceCutting && (
+                  <div className="grid grid-2" style={{ marginTop: 8, gap: 8 }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Cost ($)</label>
+                      <input type="number" className="form-input" value={partData.serviceCuttingCost || ''}
+                        onChange={(e) => setPartData({ ...partData, serviceCuttingCost: e.target.value })} step="0.01" placeholder="0.00" />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Vendor (if outsourced)</label>
+                      <input type="text" className="form-input" value={partData.serviceCuttingVendor || ''}
+                        onChange={(e) => setPartData({ ...partData, serviceCuttingVendor: e.target.value })} placeholder="In-house" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Fitting */}
+              <div style={{ padding: 12, borderRadius: 8, background: partData.serviceFitting ? '#e3f2fd' : '#fafafa', border: `1px solid ${partData.serviceFitting ? '#2196f3' : '#e0e0e0'}` }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={partData.serviceFitting || false}
+                    onChange={(e) => setPartData({ ...partData, serviceFitting: e.target.checked })} />
+                  <strong>🔧 Fitting</strong>
+                </label>
+                {partData.serviceFitting && (
+                  <div className="grid grid-2" style={{ marginTop: 8, gap: 8 }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Cost ($)</label>
+                      <input type="number" className="form-input" value={partData.serviceFittingCost || ''}
+                        onChange={(e) => setPartData({ ...partData, serviceFittingCost: e.target.value })} step="0.01" placeholder="0.00" />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Vendor (if outsourced)</label>
+                      <input type="text" className="form-input" value={partData.serviceFittingVendor || ''}
+                        onChange={(e) => setPartData({ ...partData, serviceFittingVendor: e.target.value })} placeholder="In-house" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Welding */}
+              <div style={{ padding: 12, borderRadius: 8, background: partData.serviceWelding ? '#fff3e0' : '#fafafa', border: `1px solid ${partData.serviceWelding ? '#ff9800' : '#e0e0e0'}` }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={partData.serviceWelding || false}
+                    onChange={(e) => setPartData({ ...partData, serviceWelding: e.target.checked })} />
+                  <strong>🔥 Welding</strong>
+                </label>
+                {partData.serviceWelding && (
+                  <div className="grid grid-3" style={{ marginTop: 8, gap: 8 }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Cost ($)</label>
+                      <input type="number" className="form-input" value={partData.serviceWeldingCost || ''}
+                        onChange={(e) => setPartData({ ...partData, serviceWeldingCost: e.target.value })} step="0.01" placeholder="0.00" />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Welding %</label>
+                      <select className="form-select" value={partData.serviceWeldingPercent || 100}
+                        onChange={(e) => setPartData({ ...partData, serviceWeldingPercent: parseInt(e.target.value) })}>
+                        <option value={25}>25%</option>
+                        <option value={50}>50%</option>
+                        <option value={75}>75%</option>
+                        <option value={100}>100%</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Vendor</label>
+                      <input type="text" className="form-input" value={partData.serviceWeldingVendor || ''}
+                        onChange={(e) => setPartData({ ...partData, serviceWeldingVendor: e.target.value })} placeholder="In-house" />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
