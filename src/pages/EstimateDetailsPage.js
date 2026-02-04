@@ -380,13 +380,13 @@ function EstimateDetailsPage() {
               <Send size={18} /> Send
             </button>
           )}
-          {!isNew && estimate?.status !== 'converted' && (
+          {!isNew && !estimate?.workOrderId && (
             <button className="btn" onClick={openConvertModal} disabled={converting}
               style={{ background: '#2e7d32', color: 'white' }}>
               <Package size={18} /> Convert to Work Order
             </button>
           )}
-          {estimate?.status === 'converted' && (
+          {estimate?.workOrderId && (
             <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '8px 16px', borderRadius: 8, fontWeight: 600 }}>
               ✓ Converted to Work Order
             </span>
