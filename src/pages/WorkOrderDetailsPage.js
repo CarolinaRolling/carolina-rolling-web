@@ -195,7 +195,9 @@ function WorkOrderDetailsPage() {
     if (!selectedPartType) { setError('Select a part type'); return; }
     try {
       setSaving(true);
+      setError(null);
       const data = { partType: selectedPartType, ...partData, quantity: parseInt(partData.quantity) || 1 };
+      console.log('Saving part data:', data);
       if (editingPart) {
         await updateWorkOrderPart(id, editingPart.id, data);
       } else {
@@ -205,7 +207,8 @@ function WorkOrderDetailsPage() {
       setShowPartModal(false);
       showMessage(editingPart ? 'Part updated' : 'Part added');
     } catch (err) {
-      setError('Failed to save part');
+      console.error('Save part error:', err.response?.data || err);
+      setError(err.response?.data?.error?.message || 'Failed to save part - check console');
     } finally {
       setSaving(false);
     }
