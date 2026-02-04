@@ -417,9 +417,8 @@ function WorkOrderDetailsPage() {
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
   const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'N/A';
-  const formatCurrency = (val, showZero = false) => {
+  const formatCurrency = (val) => {
     const num = parseFloat(val) || 0;
-    if (num === 0 && !showZero) return '-';
     return '$' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   };
 
@@ -743,13 +742,33 @@ function WorkOrderDetailsPage() {
                   <button 
                     onClick={() => handleViewDocument(doc.id)} 
                     className="btn btn-sm"
-                    style={{ background: '#e65100', color: 'white', padding: '4px 12px', marginLeft: 8 }}
+                    style={{ background: '#1976d2', color: 'white', padding: '4px 10px', marginLeft: 8 }}
+                    title="View"
                   >
-                    <Download size={14} style={{ marginRight: 4 }} /> Download
+                    <Eye size={14} />
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const response = await getWorkOrderDocumentSignedUrl(id, doc.id);
+                        const link = document.createElement('a');
+                        link.href = response.data.data.url;
+                        link.download = doc.originalName;
+                        link.click();
+                      } catch (err) {
+                        setError('Failed to download');
+                      }
+                    }} 
+                    className="btn btn-sm"
+                    style={{ background: '#e65100', color: 'white', padding: '4px 10px' }}
+                    title="Download"
+                  >
+                    <Download size={14} />
                   </button>
                   <button 
                     onClick={() => handleDeleteDocument(doc.id)} 
                     style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}
+                    title="Delete"
                   >
                     <X size={14} />
                   </button>
@@ -965,7 +984,7 @@ function WorkOrderDetailsPage() {
             <div style={{ width: 300 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
                 <span>Parts Subtotal:</span>
-                <span>{formatCurrency(calculateTotals().partsSubtotal, true)}</span>
+                <span>{formatCurrency(calculateTotals().partsSubtotal)}</span>
               </div>
               
               {isEditing ? (
@@ -991,13 +1010,13 @@ function WorkOrderDetailsPage() {
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
                   <span>{order.truckingDescription || 'Trucking'}:</span>
-                  <span>{formatCurrency(order.truckingCost, true)}</span>
+                  <span>{formatCurrency(order.truckingCost)}</span>
                 </div>
               )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
                 <span>Subtotal:</span>
-                <span>{formatCurrency(calculateTotals().subtotal, true)}</span>
+                <span>{formatCurrency(calculateTotals().subtotal)}</span>
               </div>
 
               {isEditing ? (
@@ -1015,13 +1034,13 @@ function WorkOrderDetailsPage() {
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
                   <span>Tax ({((parseFloat(order.taxRate) || 0.0975) * 100).toFixed(2)}%):</span>
-                  <span>{formatCurrency(calculateTotals().taxAmount, true)}</span>
+                  <span>{formatCurrency(calculateTotals().taxAmount)}</span>
                 </div>
               )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontWeight: 700, fontSize: '1.1rem', background: '#e3f2fd', margin: '8px -8px -8px', padding: '12px 8px', borderRadius: '0 0 8px 8px' }}>
                 <span>Grand Total:</span>
-                <span>{formatCurrency(calculateTotals().grandTotal, true)}</span>
+                <span>{formatCurrency(calculateTotals().grandTotal)}</span>
               </div>
             </div>
           </div>
