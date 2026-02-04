@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
-  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download
+  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink
 } from 'lucide-react';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
@@ -10,7 +10,7 @@ import {
   uploadPartFiles, getPartFileSignedUrl, deletePartFile,
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
-  searchVendors
+  searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder
 } from '../services/api';
 
 const PART_TYPES = {
@@ -51,6 +51,11 @@ function WorkOrderDetailsPage() {
   const [ordering, setOrdering] = useState(false);
   const [vendorSuggestions, setVendorSuggestions] = useState([]);
   const [showVendorSuggestions, setShowVendorSuggestions] = useState(false);
+  const [showLinkEstimateModal, setShowLinkEstimateModal] = useState(false);
+  const [estimateSearchQuery, setEstimateSearchQuery] = useState('');
+  const [estimateSearchResults, setEstimateSearchResults] = useState([]);
+  const [searchingEstimates, setSearchingEstimates] = useState(false);
+  const [linkingEstimate, setLinkingEstimate] = useState(false);
   const fileInputRefs = useRef({});
   const docInputRef = useRef(null);
 
@@ -417,6 +422,52 @@ function WorkOrderDetailsPage() {
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
   const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'N/A';
+  // === Link Estimate Handlers ===
+  const handleSearchEstimates = async (query) => {
+    setEstimateSearchQuery(query);
+    if (query.length < 2) {
+      setEstimateSearchResults([]);
+      return;
+    }
+    try {
+      setSearchingEstimates(true);
+      const response = await searchLinkableEstimates(query);
+      setEstimateSearchResults(response.data.data || []);
+    } catch (err) {
+      console.error('Search estimates error:', err);
+    } finally {
+      setSearchingEstimates(false);
+    }
+  };
+
+  const handleLinkEstimate = async (estimateId) => {
+    if (!window.confirm('Link this estimate to the work order? This will copy all parts, pricing, and client info from the estimate.')) return;
+    try {
+      setLinkingEstimate(true);
+      const response = await linkEstimateToWorkOrder(id, estimateId);
+      showMessage(response.data.message);
+      setShowLinkEstimateModal(false);
+      setEstimateSearchQuery('');
+      setEstimateSearchResults([]);
+      await loadOrder();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to link estimate');
+    } finally {
+      setLinkingEstimate(false);
+    }
+  };
+
+  const handleUnlinkEstimate = async () => {
+    if (!window.confirm('Unlink the estimate from this work order? Parts already copied will remain.')) return;
+    try {
+      await unlinkEstimateFromWorkOrder(id);
+      showMessage('Estimate unlinked');
+      await loadOrder();
+    } catch (err) {
+      setError('Failed to unlink estimate');
+    }
+  };
+
   const formatCurrency = (val) => {
     const num = parseFloat(val) || 0;
     return '$' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -440,8 +491,7 @@ function WorkOrderDetailsPage() {
     // Parts that need ordering: materialSource is 'we_order' AND not already ordered
     return order.parts.filter(p => 
       p.materialSource === 'we_order' && 
-      !p.materialOrdered && // false or null/undefined
-      p.materialDescription
+      !p.materialOrdered // false or null/undefined
     );
   };
 
@@ -470,7 +520,7 @@ function WorkOrderDetailsPage() {
     console.log('Orderable parts:', orderableParts);
     
     if (orderableParts.length === 0) {
-      setError('No parts with material to order. Parts need: materialSource="we_order", materialDescription set, and not already ordered.');
+      setError('No parts need material ordering. Parts need materialSource="we_order" and not already ordered.');
       return;
     }
     setSelectedPartIds(orderableParts.map(p => p.id));
@@ -811,6 +861,19 @@ function WorkOrderDetailsPage() {
         <div className="card-header">
           <h3 className="card-title"><Package size={20} style={{ marginRight: 8 }} />Parts ({order.parts?.length || 0})</h3>
           <div style={{ display: 'flex', gap: 8 }}>
+            {!order.estimateNumber && (
+              <button className="btn btn-sm" onClick={() => setShowLinkEstimateModal(true)} style={{ background: '#7b1fa2', color: 'white' }}>
+                <Link2 size={16} /> Link Estimate
+              </button>
+            )}
+            {order.estimateNumber && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.85rem', color: '#7b1fa2', fontWeight: 500 }}>
+                <Link2 size={14} /> {order.estimateNumber}
+                <button onClick={handleUnlinkEstimate} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d32f2f' }} title="Unlink estimate">
+                  <Unlink size={14} />
+                </button>
+              </span>
+            )}
             {getOrderableParts().length > 0 && (
               <button className="btn btn-sm" onClick={openOrderModal} style={{ background: '#ff9800', color: 'white' }}>
                 <ShoppingCart size={16} /> Order Material
@@ -823,8 +886,15 @@ function WorkOrderDetailsPage() {
           <div className="empty-state" style={{ padding: 40 }}>
             <Package size={48} color="#9c27b0" />
             <p style={{ marginTop: 12, color: '#9c27b0', fontWeight: 500 }}>Awaiting Instructions</p>
-            <p style={{ color: '#666', fontSize: '0.9rem' }}>Add parts when the client calls with rolling/bending instructions</p>
-            <button className="btn btn-primary" onClick={openAddPartModal} style={{ marginTop: 16 }}><Plus size={16} />Add First Part</button>
+            <p style={{ color: '#666', fontSize: '0.9rem' }}>Add parts when the client calls with rolling/bending instructions, or link an existing estimate</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button className="btn btn-primary" onClick={openAddPartModal}><Plus size={16} />Add First Part</button>
+              {!order.estimateNumber && (
+                <button className="btn" onClick={() => setShowLinkEstimateModal(true)} style={{ background: '#7b1fa2', color: 'white' }}>
+                  <Link2 size={16} /> Link Estimate
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div>
@@ -1301,6 +1371,84 @@ function WorkOrderDetailsPage() {
                 <ShoppingCart size={16} />
                 {ordering ? 'Creating...' : `Create ${Object.keys(getSupplierGroups()).length} PO(s)`}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link Estimate Modal */}
+      {showLinkEstimateModal && (
+        <div className="modal-overlay" onClick={() => setShowLinkEstimateModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Link2 size={24} />
+                Link Estimate to Work Order
+              </h3>
+              <button className="btn-close" onClick={() => setShowLinkEstimateModal(false)}><X size={20} /></button>
+            </div>
+            
+            <div style={{ padding: 20 }}>
+              <p style={{ color: '#666', marginBottom: 16, fontSize: '0.9rem' }}>
+                Search for an estimate to link. All parts, pricing, and client info will be copied to this work order.
+              </p>
+              
+              <input
+                className="form-input"
+                placeholder="Search by client name, estimate number, or description..."
+                value={estimateSearchQuery}
+                onChange={(e) => handleSearchEstimates(e.target.value)}
+                autoFocus
+                style={{ marginBottom: 16 }}
+              />
+
+              {searchingEstimates && (
+                <p style={{ color: '#666', textAlign: 'center', padding: 20 }}>Searching...</p>
+              )}
+
+              {!searchingEstimates && estimateSearchQuery.length >= 2 && estimateSearchResults.length === 0 && (
+                <p style={{ color: '#999', textAlign: 'center', padding: 20 }}>No matching estimates found</p>
+              )}
+
+              <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                {estimateSearchResults.map(est => (
+                  <div key={est.id} style={{ 
+                    border: '1px solid #e0e0e0', borderRadius: 8, padding: 14, marginBottom: 8,
+                    cursor: 'pointer', transition: 'background 0.2s',
+                    ':hover': { background: '#f5f5f5' }
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f3e5f5'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                    onClick={() => handleLinkEstimate(est.id)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#7b1fa2' }}>{est.estimateNumber}</div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 500, marginTop: 2 }}>{est.clientName}</div>
+                        {est.contactName && (
+                          <div style={{ fontSize: '0.85rem', color: '#666' }}>Contact: {est.contactName}</div>
+                        )}
+                        {est.projectDescription && (
+                          <div style={{ fontSize: '0.85rem', color: '#666', marginTop: 2 }}>{est.projectDescription}</div>
+                        )}
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 600, color: '#2e7d32' }}>
+                          {est.grandTotal ? `$${parseFloat(est.grandTotal).toFixed(2)}` : '-'}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#666' }}>{est.partCount} part(s)</div>
+                        <div style={{ fontSize: '0.8rem', color: '#999' }}>{new Date(est.createdAt).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {linkingEstimate && (
+                <div style={{ textAlign: 'center', padding: 20, color: '#7b1fa2' }}>
+                  Linking estimate and copying parts...
+                </div>
+              )}
             </div>
           </div>
         </div>

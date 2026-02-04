@@ -145,6 +145,14 @@ export const deleteWorkOrderDocument = (workOrderId, documentId) =>
 export const orderWorkOrderMaterial = (workOrderId, data) => 
   api.post(`/workorders/${workOrderId}/order-material`, data);
 
+// Work Order Estimate Linking
+export const searchLinkableEstimates = (query) => 
+  api.get('/workorders/linkable-estimates/search', { params: { q: query } });
+export const linkEstimateToWorkOrder = (workOrderId, estimateId) => 
+  api.post(`/workorders/${workOrderId}/link-estimate`, { estimateId });
+export const unlinkEstimateFromWorkOrder = (workOrderId) => 
+  api.post(`/workorders/${workOrderId}/unlink-estimate`);
+
 // Estimates
 export const getEstimates = (params) => api.get('/estimates', { params });
 export const getEstimateById = (id) => api.get(`/estimates/${id}`);
