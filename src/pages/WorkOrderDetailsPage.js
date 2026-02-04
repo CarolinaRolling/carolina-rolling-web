@@ -71,6 +71,10 @@ function WorkOrderDetailsPage() {
         receivedBy: data.receivedBy || '',
         requestedDueDate: data.requestedDueDate || '',
         promisedDate: data.promisedDate || '',
+        // Pricing fields
+        truckingDescription: data.truckingDescription || '',
+        truckingCost: data.truckingCost || '',
+        taxRate: data.taxRate || '0.0975',
       });
 
       // Load linked shipment
@@ -171,7 +175,9 @@ function WorkOrderDetailsPage() {
     setEditingPart(null);
     setSelectedPartType('');
     setPartData({ clientPartNumber: '', heatNumber: '', quantity: 1, material: '', thickness: '', width: '', length: '',
-      outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '', arcDegrees: '', sectionSize: '', flangeOut: false, specialInstructions: '' });
+      outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '', arcDegrees: '', sectionSize: '', flangeOut: false, specialInstructions: '',
+      laborRate: '', laborHours: '', laborTotal: '', materialUnitCost: '', materialTotal: '', setupCharge: '', otherCharges: '', partTotal: '',
+      materialSource: 'customer', supplierName: '', materialDescription: '' });
     setShowPartModal(true);
   };
 
@@ -398,6 +404,22 @@ function WorkOrderDetailsPage() {
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
   const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'N/A';
+  const formatCurrency = (val) => {
+    const num = parseFloat(val) || 0;
+    return '$' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  };
+
+  // Calculate pricing totals
+  const calculateTotals = () => {
+    const parts = order?.parts || [];
+    const partsSubtotal = parts.reduce((sum, p) => sum + (parseFloat(p.partTotal) || 0), 0);
+    const trucking = parseFloat(editData.truckingCost) || parseFloat(order?.truckingCost) || 0;
+    const subtotal = partsSubtotal + trucking;
+    const taxRate = parseFloat(editData.taxRate) || parseFloat(order?.taxRate) || 0.0975;
+    const taxAmount = subtotal * taxRate;
+    const grandTotal = subtotal + taxAmount;
+    return { partsSubtotal, trucking, subtotal, taxRate, taxAmount, grandTotal };
+  };
   
   // Order Material functions
   const getOrderableParts = () => {
@@ -756,6 +778,16 @@ function WorkOrderDetailsPage() {
                 </div>
                 {part.specialInstructions && <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: '0.875rem' }}><strong>Instructions:</strong> {part.specialInstructions}</div>}
                 
+                {/* Pricing Summary */}
+                {(part.partTotal || part.laborTotal || part.materialTotal) && (
+                  <div style={{ marginTop: 8, padding: 8, background: '#e3f2fd', borderRadius: 4, fontSize: '0.85rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                    {part.laborTotal && <span><strong>Labor:</strong> ${parseFloat(part.laborTotal).toFixed(2)}</span>}
+                    {part.materialTotal && <span><strong>Material:</strong> ${parseFloat(part.materialTotal).toFixed(2)}</span>}
+                    {part.setupCharge && <span><strong>Setup:</strong> ${parseFloat(part.setupCharge).toFixed(2)}</span>}
+                    {part.partTotal && <span style={{ fontWeight: 600, color: '#1565c0' }}><strong>Total:</strong> ${parseFloat(part.partTotal).toFixed(2)}</span>}
+                  </div>
+                )}
+                
                 {/* Part Files */}
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -781,6 +813,115 @@ function WorkOrderDetailsPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Pricing Section */}
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-header">
+          <h3 className="card-title"><FileText size={20} style={{ marginRight: 8 }} />Pricing</h3>
+        </div>
+        <div style={{ padding: 16 }}>
+          {/* Parts Pricing Table */}
+          {order.parts?.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 20, fontSize: '0.9rem' }}>
+              <thead>
+                <tr style={{ background: '#f5f5f5' }}>
+                  <th style={{ padding: 8, textAlign: 'left', borderBottom: '2px solid #ddd' }}>#</th>
+                  <th style={{ padding: 8, textAlign: 'left', borderBottom: '2px solid #ddd' }}>Description</th>
+                  <th style={{ padding: 8, textAlign: 'right', borderBottom: '2px solid #ddd' }}>Qty</th>
+                  <th style={{ padding: 8, textAlign: 'right', borderBottom: '2px solid #ddd' }}>Labor</th>
+                  <th style={{ padding: 8, textAlign: 'right', borderBottom: '2px solid #ddd' }}>Material</th>
+                  <th style={{ padding: 8, textAlign: 'right', borderBottom: '2px solid #ddd' }}>Setup</th>
+                  <th style={{ padding: 8, textAlign: 'right', borderBottom: '2px solid #ddd' }}>Other</th>
+                  <th style={{ padding: 8, textAlign: 'right', borderBottom: '2px solid #ddd' }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {order.parts.sort((a, b) => a.partNumber - b.partNumber).map(part => (
+                  <tr key={part.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: 8 }}>{part.partNumber}</td>
+                    <td style={{ padding: 8 }}>
+                      {PART_TYPES[part.partType]?.label || part.partType}
+                      {part.materialDescription && <div style={{ fontSize: '0.8rem', color: '#666' }}>{part.materialDescription}</div>}
+                    </td>
+                    <td style={{ padding: 8, textAlign: 'right' }}>{part.quantity}</td>
+                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.laborTotal)}</td>
+                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.materialTotal)}</td>
+                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.setupCharge)}</td>
+                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.otherCharges)}</td>
+                    <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{formatCurrency(part.partTotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Totals */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ width: 300 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                <span>Parts Subtotal:</span>
+                <span>{formatCurrency(calculateTotals().partsSubtotal)}</span>
+              </div>
+              
+              {isEditing ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                  <div style={{ flex: 1 }}>
+                    <input 
+                      className="form-input" 
+                      placeholder="Trucking description"
+                      value={editData.truckingDescription}
+                      onChange={(e) => setEditData({ ...editData, truckingDescription: e.target.value })}
+                      style={{ marginBottom: 4, fontSize: '0.85rem' }}
+                    />
+                  </div>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    className="form-input" 
+                    value={editData.truckingCost}
+                    onChange={(e) => setEditData({ ...editData, truckingCost: e.target.value })}
+                    style={{ width: 100, textAlign: 'right', marginLeft: 8 }}
+                  />
+                </div>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                  <span>{order.truckingDescription || 'Trucking'}:</span>
+                  <span>{formatCurrency(order.truckingCost)}</span>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                <span>Subtotal:</span>
+                <span>{formatCurrency(calculateTotals().subtotal)}</span>
+              </div>
+
+              {isEditing ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                  <span>Tax Rate:</span>
+                  <input 
+                    type="number" 
+                    step="0.0001"
+                    className="form-input" 
+                    value={editData.taxRate}
+                    onChange={(e) => setEditData({ ...editData, taxRate: e.target.value })}
+                    style={{ width: 80, textAlign: 'right' }}
+                  />
+                </div>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                  <span>Tax ({((parseFloat(order.taxRate) || 0.0975) * 100).toFixed(2)}%):</span>
+                  <span>{formatCurrency(calculateTotals().taxAmount)}</span>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontWeight: 700, fontSize: '1.1rem', background: '#e3f2fd', margin: '8px -8px -8px', padding: '12px 8px', borderRadius: '0 0 8px 8px' }}>
+                <span>Grand Total:</span>
+                <span>{formatCurrency(calculateTotals().grandTotal)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Part Modal */}
@@ -827,6 +968,68 @@ function WorkOrderDetailsPage() {
                     </label></div>
                   )}
                   <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Special Instructions</label><textarea className="form-textarea" value={partData.specialInstructions} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} /></div>
+                  
+                  {/* Material Source Section */}
+                  <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 12, paddingTop: 12 }}>
+                    <h4 style={{ marginBottom: 12, color: '#e65100' }}>📦 Material Source</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div className="form-group">
+                        <label className="form-label">Material Source</label>
+                        <select className="form-select" value={partData.materialSource || 'customer'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
+                          <option value="customer">Customer Supplies</option>
+                          <option value="we_order">We Order</option>
+                          <option value="in_stock">In Stock</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Supplier</label>
+                        <input className="form-input" value={partData.supplierName || ''} onChange={(e) => setPartData({ ...partData, supplierName: e.target.value })} placeholder="e.g. Metal Supermarkets" />
+                      </div>
+                      <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                        <label className="form-label">Material Description (for ordering)</label>
+                        <input className="form-input" value={partData.materialDescription || ''} onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })} placeholder="e.g. 1/4 x 4 x 120 A36 Plate" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pricing Section */}
+                  <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 12, paddingTop: 12 }}>
+                    <h4 style={{ marginBottom: 12, color: '#1976d2' }}>💰 Pricing</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                      <div className="form-group">
+                        <label className="form-label">Labor Rate ($/hr)</label>
+                        <input type="number" step="0.01" className="form-input" value={partData.laborRate || ''} onChange={(e) => setPartData({ ...partData, laborRate: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Labor Hours</label>
+                        <input type="number" step="0.25" className="form-input" value={partData.laborHours || ''} onChange={(e) => setPartData({ ...partData, laborHours: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Labor Total</label>
+                        <input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Material Unit Cost</label>
+                        <input type="number" step="0.01" className="form-input" value={partData.materialUnitCost || ''} onChange={(e) => setPartData({ ...partData, materialUnitCost: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Material Total</label>
+                        <input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Setup Charge</label>
+                        <input type="number" step="0.01" className="form-input" value={partData.setupCharge || ''} onChange={(e) => setPartData({ ...partData, setupCharge: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Other Charges</label>
+                        <input type="number" step="0.01" className="form-input" value={partData.otherCharges || ''} onChange={(e) => setPartData({ ...partData, otherCharges: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Part Total</label>
+                        <input type="number" step="0.01" className="form-input" value={partData.partTotal || ''} onChange={(e) => setPartData({ ...partData, partTotal: e.target.value })} style={{ fontWeight: 600 }} />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
