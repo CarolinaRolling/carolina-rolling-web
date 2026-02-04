@@ -2,14 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
-  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File
+  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart
 } from 'lucide-react';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
   uploadPartFiles, getPartFileSignedUrl, deletePartFile,
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument,
-  getShipmentByWorkOrderId
+  getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial
 } from '../services/api';
 
 const PART_TYPES = {
@@ -44,6 +44,10 @@ function WorkOrderDetailsPage() {
   const [showPickupModal, setShowPickupModal] = useState(false);
   const [pickupData, setPickupData] = useState({ pickedUpBy: '' });
   const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [orderPONumber, setOrderPONumber] = useState('');
+  const [selectedPartIds, setSelectedPartIds] = useState([]);
+  const [ordering, setOrdering] = useState(false);
   const fileInputRefs = useRef({});
   const docInputRef = useRef(null);
 
@@ -395,6 +399,56 @@ function WorkOrderDetailsPage() {
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
   const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'N/A';
   
+  // Order Material functions
+  const getOrderableParts = () => {
+    if (!order?.parts) return [];
+    return order.parts.filter(p => p.materialDescription && !p.materialOrdered);
+  };
+
+  const getSupplierGroups = () => {
+    const groups = {};
+    order.parts?.filter(p => selectedPartIds.includes(p.id)).forEach(part => {
+      const supplier = part.supplierName || 'Unknown Supplier';
+      if (!groups[supplier]) groups[supplier] = [];
+      groups[supplier].push(part);
+    });
+    return groups;
+  };
+
+  const openOrderModal = async () => {
+    const orderableParts = getOrderableParts();
+    if (orderableParts.length === 0) {
+      setError('No parts with material to order');
+      return;
+    }
+    setSelectedPartIds(orderableParts.map(p => p.id));
+    
+    try {
+      const poRes = await getNextPONumber();
+      setOrderPONumber(poRes.data.data.nextNumber.toString());
+    } catch (err) {
+      setOrderPONumber('');
+    }
+    
+    setShowOrderModal(true);
+  };
+
+  const handleOrderMaterial = async () => {
+    if (!orderPONumber.trim()) { setError('PO number required'); return; }
+    if (selectedPartIds.length === 0) { setError('Select at least one part'); return; }
+    try {
+      setOrdering(true);
+      await orderWorkOrderMaterial(id, { purchaseOrderNumber: orderPONumber, partIds: selectedPartIds });
+      await loadOrder();
+      setShowOrderModal(false);
+      setSuccess('Purchase orders created! Check Inbound & Purchase Orders pages.');
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) { 
+      setError(err.response?.data?.error?.message || 'Failed to create orders'); 
+    }
+    finally { setOrdering(false); }
+  };
+
   const StatusBadge = ({ status }) => {
     const styles = {
       draft: { background: '#e0e0e0', color: '#555' },
@@ -624,7 +678,14 @@ function WorkOrderDetailsPage() {
       <div className="card" style={{ marginTop: 20 }}>
         <div className="card-header">
           <h3 className="card-title"><Package size={20} style={{ marginRight: 8 }} />Parts ({order.parts?.length || 0})</h3>
-          <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {getOrderableParts().length > 0 && (
+              <button className="btn btn-sm" onClick={openOrderModal} style={{ background: '#ff9800', color: 'white' }}>
+                <ShoppingCart size={16} /> Order Material
+              </button>
+            )}
+            <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
+          </div>
         </div>
         {hasNoParts ? (
           <div className="empty-state" style={{ padding: 40 }}>
@@ -643,6 +704,11 @@ function WorkOrderDetailsPage() {
                       <span style={{ fontWeight: 600, fontSize: '1.1rem' }}>#{part.partNumber}</span>
                       <span style={{ color: '#1976d2' }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
                       <StatusBadge status={part.status} />
+                      {part.materialOrdered && (
+                        <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '2px 8px', borderRadius: 4, fontSize: '0.7rem' }}>
+                          ✓ {part.materialPurchaseOrderNumber}
+                        </span>
+                      )}
                     </div>
                     {part.clientPartNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Client Part#: {part.clientPartNumber}</div>}
                     {part.heatNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Heat#: {part.heatNumber}</div>}
@@ -656,6 +722,24 @@ function WorkOrderDetailsPage() {
                     <button className="btn btn-sm btn-danger" onClick={() => handleDeletePart(part.id)}><Trash2 size={14} /></button>
                   </div>
                 </div>
+
+                {/* Material Info */}
+                {part.materialDescription && (
+                  <div style={{ background: part.materialOrdered ? '#e8f5e9' : '#fff3e0', padding: 10, borderRadius: 6, marginBottom: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <strong style={{ color: part.materialOrdered ? '#2e7d32' : '#e65100' }}>📦 {part.materialDescription}</strong>
+                        {part.supplierName && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#666' }}>from {part.supplierName}</span>}
+                      </div>
+                      {part.materialOrdered ? (
+                        <span style={{ fontSize: '0.8rem', color: '#2e7d32' }}>Ordered ✓</span>
+                      ) : (
+                        <span style={{ fontSize: '0.8rem', color: '#e65100' }}>Needs ordering</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, fontSize: '0.875rem' }}>
                   <div><strong>Qty:</strong> {part.quantity}</div>
                   {part.material && <div><strong>Material:</strong> {part.material}</div>}
@@ -765,6 +849,88 @@ function WorkOrderDetailsPage() {
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowPickupModal(false)}>Cancel</button>
               <button className="btn btn-success" onClick={handlePickup}><Check size={18} />Confirm Pickup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order Material Modal */}
+      {showOrderModal && (
+        <div className="modal-overlay" onClick={() => setShowOrderModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ShoppingCart size={24} />
+                Order Material
+              </h3>
+              <button className="btn btn-icon" onClick={() => setShowOrderModal(false)}><X size={20} /></button>
+            </div>
+            
+            <div style={{ padding: 20 }}>
+              <div style={{ background: '#e3f2fd', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                <strong>DR-{order.drNumber}</strong> • {order.clientName}
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label">Starting PO Number *</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 600, color: '#1976d2' }}>PO</span>
+                  <input 
+                    type="number" 
+                    className="form-input" 
+                    value={orderPONumber}
+                    onChange={(e) => setOrderPONumber(e.target.value)}
+                    placeholder="7765" 
+                    style={{ maxWidth: 150 }} 
+                  />
+                </div>
+                {Object.keys(getSupplierGroups()).length > 1 && (
+                  <p style={{ fontSize: '0.8rem', color: '#666', marginTop: 4 }}>
+                    Will create: {Object.keys(getSupplierGroups()).map((s, i) => `PO${parseInt(orderPONumber) + i}`).join(', ')}
+                  </p>
+                )}
+              </div>
+
+              <h4 style={{ marginBottom: 12 }}>Select Materials to Order:</h4>
+              {Object.entries(getSupplierGroups()).map(([supplier, supplierParts], idx) => (
+                <div key={supplier} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 12, marginBottom: 12, background: '#f9f9f9' }}>
+                  <div style={{ fontWeight: 600, marginBottom: 8, color: '#e65100' }}>🏭 {supplier}</div>
+                  {supplierParts.map(part => (
+                    <label key={part.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 8, cursor: 'pointer', background: 'white', borderRadius: 4, marginBottom: 4 }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedPartIds.includes(part.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedPartIds([...selectedPartIds, part.id]);
+                          else setSelectedPartIds(selectedPartIds.filter(pid => pid !== part.id));
+                        }}
+                        style={{ marginTop: 4 }} 
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div><strong>Part #{part.partNumber}:</strong> {part.materialDescription || part.partType}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#666' }}>Qty: {part.quantity}</div>
+                      </div>
+                    </label>
+                  ))}
+                  <div style={{ background: '#e3f2fd', borderRadius: 4, padding: 8, marginTop: 8 }}>
+                    <strong style={{ color: '#1976d2' }}>PO{parseInt(orderPONumber) + idx}</strong>
+                    <span style={{ marginLeft: 12, fontSize: '0.8rem', color: '#388e3c' }}>→ Creates Inbound + Purchase Order</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowOrderModal(false)}>Cancel</button>
+              <button 
+                className="btn" 
+                style={{ background: '#ff9800', color: 'white' }}
+                onClick={handleOrderMaterial}
+                disabled={ordering || !orderPONumber || selectedPartIds.length === 0}
+              >
+                <ShoppingCart size={16} />
+                {ordering ? 'Creating...' : `Create ${Object.keys(getSupplierGroups()).length} PO(s)`}
+              </button>
             </div>
           </div>
         </div>

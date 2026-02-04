@@ -221,11 +221,19 @@ function EstimateDetailsPage() {
     } catch (err) { setError('Failed to delete part'); }
   };
 
-  const openOrderModal = () => {
+  const openOrderModal = async () => {
     const orderableParts = parts.filter(p => p.supplierName && !p.materialOrdered);
     if (orderableParts.length === 0) { setError('No parts with suppliers to order'); return; }
     setSelectedPartIds(orderableParts.map(p => p.id));
-    setOrderPONumber('');
+    
+    // Fetch next PO number
+    try {
+      const poRes = await getNextPONumber();
+      setOrderPONumber(poRes.data.data.nextNumber.toString());
+    } catch (err) {
+      setOrderPONumber('');
+    }
+    
     setShowOrderModal(true);
   };
 
@@ -961,15 +969,21 @@ function EstimateDetailsPage() {
             </p>
 
             <div className="form-group">
-              <label className="form-label">Purchase Order Number *</label>
-              <input type="text" className="form-input" value={orderPONumber}
-                onChange={(e) => setOrderPONumber(e.target.value)}
-                placeholder="e.g., 4455" style={{ maxWidth: 200 }} />
+              <label className="form-label">Starting PO Number *</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 600, color: '#1976d2' }}>PO</span>
+                <input type="number" className="form-input" value={orderPONumber}
+                  onChange={(e) => setOrderPONumber(e.target.value)}
+                  placeholder="7765" style={{ maxWidth: 150 }} />
+              </div>
               {Object.keys(getSupplierGroups()).length > 1 && (
                 <p style={{ fontSize: '0.8rem', color: '#666', marginTop: 4 }}>
-                  Will create: {Object.keys(getSupplierGroups()).map((s, i) => `${orderPONumber}${'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i]}`).join(', ')}
+                  Will create: {Object.keys(getSupplierGroups()).map((s, i) => `PO${parseInt(orderPONumber) + i}`).join(', ')}
                 </p>
               )}
+              <p style={{ fontSize: '0.75rem', color: '#999', marginTop: 4 }}>
+                PO numbers will be tracked in Purchase Orders page
+              </p>
             </div>
 
             <h4 style={{ marginTop: 20, marginBottom: 12 }}>Select Materials:</h4>
@@ -992,9 +1006,9 @@ function EstimateDetailsPage() {
                     </div>
                   </label>
                 ))}
-                <div style={{ background: '#fff3e0', borderRadius: 4, padding: 8, marginTop: 8 }}>
-                  <strong style={{ color: '#e65100' }}>PO# {orderPONumber}{'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[idx]}</strong>
-                  <span style={{ marginLeft: 12, fontSize: '0.8rem', color: '#388e3c' }}>→ Creates Inbound shipment</span>
+                <div style={{ background: '#e3f2fd', borderRadius: 4, padding: 8, marginTop: 8 }}>
+                  <strong style={{ color: '#1976d2' }}>PO{parseInt(orderPONumber) + idx}</strong>
+                  <span style={{ marginLeft: 12, fontSize: '0.8rem', color: '#388e3c' }}>→ Creates Inbound shipment + Purchase Order</span>
                 </div>
               </div>
             ))}
