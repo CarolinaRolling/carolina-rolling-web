@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, Send, Upload, Eye, X, Printer, ShoppingCart, Check, FileDown, Package, FileText } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Send, Upload, Eye, X, Printer, Check, FileDown, Package, FileText } from 'lucide-react';
 import {
   getEstimateById, createEstimate, updateEstimate,
   addEstimatePart, updateEstimatePart, deleteEstimatePart,
   uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
-  orderMaterial, downloadEstimatePDF, convertEstimateToWorkOrder,
-  uploadEstimatePartFile, deleteEstimatePartFile, getNextPONumber
+  downloadEstimatePDF, convertEstimateToWorkOrder,
+  uploadEstimatePartFile, deleteEstimatePartFile
 } from '../services/api';
 
 const PART_TYPES = {
@@ -46,10 +46,6 @@ function EstimateDetailsPage() {
   const [showPartModal, setShowPartModal] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
   const [partData, setPartData] = useState({});
-  const [showOrderModal, setShowOrderModal] = useState(false);
-  const [orderPONumber, setOrderPONumber] = useState('');
-  const [selectedPartIds, setSelectedPartIds] = useState([]);
-  const [ordering, setOrdering] = useState(false);
   
   // Convert to Work Order state
   const [showConvertModal, setShowConvertModal] = useState(false);
@@ -58,10 +54,8 @@ function EstimateDetailsPage() {
     clientPurchaseOrderNumber: '',
     requestedDueDate: '',
     promisedDate: '',
-    notes: '',
-    supplierPOs: {} // { supplierName: poNumber }
+    notes: ''
   });
-  const [nextPONumber, setNextPONumber] = useState(null);
   
   // Part file upload state
   const [uploadingPartFile, setUploadingPartFile] = useState(null);
@@ -221,45 +215,6 @@ function EstimateDetailsPage() {
     } catch (err) { setError('Failed to delete part'); }
   };
 
-  const openOrderModal = async () => {
-    const orderableParts = parts.filter(p => p.supplierName && !p.materialOrdered);
-    if (orderableParts.length === 0) { setError('No parts with suppliers to order'); return; }
-    setSelectedPartIds(orderableParts.map(p => p.id));
-    
-    // Fetch next PO number
-    try {
-      const poRes = await getNextPONumber();
-      setOrderPONumber(poRes.data.data.nextNumber.toString());
-    } catch (err) {
-      setOrderPONumber('');
-    }
-    
-    setShowOrderModal(true);
-  };
-
-  const getSupplierGroups = () => {
-    const groups = {};
-    parts.filter(p => selectedPartIds.includes(p.id)).forEach(part => {
-      const supplier = part.supplierName || 'Unknown';
-      if (!groups[supplier]) groups[supplier] = [];
-      groups[supplier].push(part);
-    });
-    return groups;
-  };
-
-  const handleOrderMaterial = async () => {
-    if (!orderPONumber.trim()) { setError('PO number required'); return; }
-    if (selectedPartIds.length === 0) { setError('Select at least one part'); return; }
-    try {
-      setOrdering(true);
-      await orderMaterial(id, { purchaseOrderNumber: orderPONumber, partIds: selectedPartIds });
-      await loadEstimate();
-      setShowOrderModal(false);
-      showMessage('Purchase orders created!');
-    } catch (err) { setError('Failed to create orders'); }
-    finally { setOrdering(false); }
-  };
-
   const handleFileUpload = async (uploadedFiles) => {
     if (isNew) { setError('Save first'); return; }
     try {
@@ -314,37 +269,12 @@ function EstimateDetailsPage() {
       return;
     }
     
-    // Get next PO number
-    try {
-      const poRes = await getNextPONumber();
-      setNextPONumber(poRes.data.data.nextNumber);
-      
-      // Get unique suppliers for parts that need ordering
-      const partsNeedingMaterial = parts.filter(p => p.materialSource === 'we_order' && !p.materialOrdered);
-      const suppliers = [...new Set(partsNeedingMaterial.map(p => p.supplierName || 'Unknown Supplier'))];
-      
-      // Initialize PO numbers for each supplier
-      const supplierPOs = {};
-      suppliers.forEach((supplier, index) => {
-        supplierPOs[supplier] = poRes.data.data.nextNumber + index;
-      });
-      
-      setConvertData({
-        clientPurchaseOrderNumber: '',
-        requestedDueDate: '',
-        promisedDate: '',
-        notes: formData.notes,
-        supplierPOs
-      });
-    } catch (err) {
-      setConvertData({
-        clientPurchaseOrderNumber: '',
-        requestedDueDate: '',
-        promisedDate: '',
-        notes: formData.notes,
-        supplierPOs: {}
-      });
-    }
+    setConvertData({
+      clientPurchaseOrderNumber: '',
+      requestedDueDate: '',
+      promisedDate: '',
+      notes: formData.notes
+    });
     
     setShowConvertModal(true);
   };
@@ -420,7 +350,6 @@ function EstimateDetailsPage() {
   };
 
   const totals = calculateTotals();
-  const hasOrderableParts = parts.some(p => p.supplierName && !p.materialOrdered);
 
   if (loading) return <div className="loading"><div className="spinner"></div></div>;
 
@@ -437,11 +366,6 @@ function EstimateDetailsPage() {
           </div>
         </div>
         <div className="actions-row">
-          {!isNew && hasOrderableParts && (
-            <button className="btn btn-success" onClick={openOrderModal} style={{ background: 'linear-gradient(135deg, #43a047, #2e7d32)' }}>
-              <ShoppingCart size={18} /> Order Material
-            </button>
-          )}
           {!isNew && (
             <button className="btn btn-outline" onClick={handleDownloadPDF} disabled={downloadingPDF}>
               <FileDown size={18} /> {downloadingPDF ? 'Generating...' : 'Download PDF'}
@@ -955,75 +879,6 @@ function EstimateDetailsPage() {
         </div>
       )}
 
-      {/* Order Material Modal */}
-      {showOrderModal && (
-        <div className="modal-overlay" onClick={() => setShowOrderModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">🛒 Order Material</h3>
-              <button className="modal-close" onClick={() => setShowOrderModal(false)}>&times;</button>
-            </div>
-
-            <p style={{ color: '#666', marginBottom: 16 }}>
-              Select materials to order. Different suppliers will create separate purchase orders with letter suffixes.
-            </p>
-
-            <div className="form-group">
-              <label className="form-label">Starting PO Number *</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontWeight: 600, color: '#1976d2' }}>PO</span>
-                <input type="number" className="form-input" value={orderPONumber}
-                  onChange={(e) => setOrderPONumber(e.target.value)}
-                  placeholder="7765" style={{ maxWidth: 150 }} />
-              </div>
-              {Object.keys(getSupplierGroups()).length > 1 && (
-                <p style={{ fontSize: '0.8rem', color: '#666', marginTop: 4 }}>
-                  Will create: {Object.keys(getSupplierGroups()).map((s, i) => `PO${parseInt(orderPONumber) + i}`).join(', ')}
-                </p>
-              )}
-              <p style={{ fontSize: '0.75rem', color: '#999', marginTop: 4 }}>
-                PO numbers will be tracked in Purchase Orders page
-              </p>
-            </div>
-
-            <h4 style={{ marginTop: 20, marginBottom: 12 }}>Select Materials:</h4>
-            {Object.entries(getSupplierGroups()).map(([supplier, supplierParts], idx) => (
-              <div key={supplier} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 16, marginBottom: 12, background: '#f9f9f9' }}>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>🏭 {supplier}</div>
-                {supplierParts.map(part => (
-                  <label key={part.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 8, cursor: 'pointer', background: 'white', borderRadius: 4, marginBottom: 4 }}>
-                    <input type="checkbox" checked={selectedPartIds.includes(part.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) setSelectedPartIds([...selectedPartIds, part.id]);
-                        else setSelectedPartIds(selectedPartIds.filter(id => id !== part.id));
-                      }}
-                      style={{ marginTop: 4 }} />
-                    <div style={{ flex: 1 }}>
-                      <div><strong>Part #{part.partNumber}:</strong> {part.materialDescription}</div>
-                      <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                        Qty: {part.quantity} • {formatCurrency((parseFloat(part.materialUnitCost) || 0) * (parseInt(part.quantity) || 1))}
-                      </div>
-                    </div>
-                  </label>
-                ))}
-                <div style={{ background: '#e3f2fd', borderRadius: 4, padding: 8, marginTop: 8 }}>
-                  <strong style={{ color: '#1976d2' }}>PO{parseInt(orderPONumber) + idx}</strong>
-                  <span style={{ marginLeft: 12, fontSize: '0.8rem', color: '#388e3c' }}>→ Creates Inbound shipment + Purchase Order</span>
-                </div>
-              </div>
-            ))}
-
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowOrderModal(false)}>Cancel</button>
-              <button className="btn btn-success" onClick={handleOrderMaterial}
-                disabled={ordering || !orderPONumber || selectedPartIds.length === 0}>
-                {ordering ? 'Creating...' : `Create ${Object.keys(getSupplierGroups()).length} Purchase Order(s)`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Convert to Work Order Modal */}
       {showConvertModal && (
         <div className="modal-overlay" onClick={() => setShowConvertModal(false)}>
@@ -1086,55 +941,11 @@ function EstimateDetailsPage() {
                 />
               </div>
 
-              {/* Material Orders with PO Numbers */}
-              {parts.some(p => p.materialSource === 'we_order' && !p.materialOrdered) && (
-                <div style={{ background: '#fff3e0', padding: 16, borderRadius: 8, marginTop: 16 }}>
-                  <strong style={{ color: '#e65100', display: 'block', marginBottom: 12 }}>📦 Material to Order - Assign PO Numbers:</strong>
-                  
-                  {Object.entries(convertData.supplierPOs || {}).map(([supplier, poNum]) => {
-                    const supplierParts = parts.filter(p => 
-                      p.materialSource === 'we_order' && 
-                      !p.materialOrdered && 
-                      (p.supplierName || 'Unknown Supplier') === supplier
-                    );
-                    
-                    return (
-                      <div key={supplier} style={{ 
-                        background: 'white', 
-                        padding: 12, 
-                        borderRadius: 6, 
-                        marginBottom: 12,
-                        border: '1px solid #ffcc80'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <strong style={{ color: '#e65100' }}>🏭 {supplier}</strong>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: '0.85rem', color: '#666' }}>PO#</span>
-                            <input
-                              type="number"
-                              className="form-input"
-                              value={poNum}
-                              onChange={(e) => setConvertData({
-                                ...convertData,
-                                supplierPOs: { ...convertData.supplierPOs, [supplier]: parseInt(e.target.value) || '' }
-                              })}
-                              style={{ width: 100, padding: '4px 8px' }}
-                            />
-                          </div>
-                        </div>
-                        <ul style={{ margin: 0, paddingLeft: 20, fontSize: '0.85rem', color: '#666' }}>
-                          {supplierParts.map(p => (
-                            <li key={p.id}>
-                              Part #{p.partNumber}: {p.materialDescription || p.partType} (Qty: {p.quantity})
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    );
-                  })}
-                  
-                  <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#666', fontStyle: 'italic' }}>
-                    PO numbers will be tracked in Admin → PO Numbers
+              {/* Note about material ordering */}
+              {parts.some(p => p.materialSource === 'we_order') && (
+                <div style={{ background: '#e3f2fd', padding: 12, borderRadius: 8, marginTop: 16 }}>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#1565c0' }}>
+                    💡 <strong>Material Ordering:</strong> After converting, you can order material from the Work Order page using the "Order Material" button.
                   </p>
                 </div>
               )}
