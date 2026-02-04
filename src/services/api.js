@@ -226,6 +226,7 @@ export const setNextPONumber = (nextNumber) => api.put('/po-numbers/next', { nex
 export const assignPONumber = (data) => api.post('/po-numbers/assign', data);
 export const voidPONumber = (poNumber, reason, voidedBy) => api.post(`/po-numbers/${poNumber}/void`, { reason, voidedBy });
 export const getVoidedPONumbers = () => api.get('/po-numbers/voided');
+export const deletePONumber = (id) => api.delete(`/po-numbers/${id}`);
 
 // Daily Email Settings
 export const getDailyEmailSettings = () => api.get('/email/settings');

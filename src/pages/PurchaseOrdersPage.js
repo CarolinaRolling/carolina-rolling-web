@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, Printer, Edit2, Eye, RefreshCw, Search, Plus, X, Save, Trash2 } from 'lucide-react';
-import { getPONumbers, getNextPONumber, assignPONumber, voidPONumber } from '../services/api';
+import { getPONumbers, getNextPONumber, assignPONumber, voidPONumber, deletePONumber } from '../services/api';
 
 function PurchaseOrdersPage() {
   const navigate = useNavigate();
@@ -513,6 +513,24 @@ function PurchaseOrdersPage() {
                           <Edit2 size={14} />
                         </button>
                       )}
+                      <button
+                        className="btn btn-sm btn-danger"
+                        onClick={async () => {
+                          if (window.confirm(`Delete PO${po.poNumber}? This will also clear material order flags on associated parts.`)) {
+                            try {
+                              await deletePONumber(po.id);
+                              setSuccess(`PO${po.poNumber} deleted`);
+                              loadPurchaseOrders();
+                              setTimeout(() => setSuccess(null), 3000);
+                            } catch (err) {
+                              setError(err.response?.data?.error?.message || 'Failed to delete');
+                            }
+                          }
+                        }}
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </td>
                 </tr>

@@ -417,8 +417,9 @@ function WorkOrderDetailsPage() {
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
   const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'N/A';
-  const formatCurrency = (val) => {
+  const formatCurrency = (val, showZero = false) => {
     const num = parseFloat(val) || 0;
+    if (num === 0 && !showZero) return '-';
     return '$' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   };
 
@@ -964,7 +965,7 @@ function WorkOrderDetailsPage() {
             <div style={{ width: 300 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
                 <span>Parts Subtotal:</span>
-                <span>{formatCurrency(calculateTotals().partsSubtotal)}</span>
+                <span>{formatCurrency(calculateTotals().partsSubtotal, true)}</span>
               </div>
               
               {isEditing ? (
@@ -990,13 +991,13 @@ function WorkOrderDetailsPage() {
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
                   <span>{order.truckingDescription || 'Trucking'}:</span>
-                  <span>{formatCurrency(order.truckingCost)}</span>
+                  <span>{formatCurrency(order.truckingCost, true)}</span>
                 </div>
               )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
                 <span>Subtotal:</span>
-                <span>{formatCurrency(calculateTotals().subtotal)}</span>
+                <span>{formatCurrency(calculateTotals().subtotal, true)}</span>
               </div>
 
               {isEditing ? (
@@ -1014,13 +1015,13 @@ function WorkOrderDetailsPage() {
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
                   <span>Tax ({((parseFloat(order.taxRate) || 0.0975) * 100).toFixed(2)}%):</span>
-                  <span>{formatCurrency(calculateTotals().taxAmount)}</span>
+                  <span>{formatCurrency(calculateTotals().taxAmount, true)}</span>
                 </div>
               )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontWeight: 700, fontSize: '1.1rem', background: '#e3f2fd', margin: '8px -8px -8px', padding: '12px 8px', borderRadius: '0 0 8px 8px' }}>
                 <span>Grand Total:</span>
-                <span>{formatCurrency(calculateTotals().grandTotal)}</span>
+                <span>{formatCurrency(calculateTotals().grandTotal, true)}</span>
               </div>
             </div>
           </div>
