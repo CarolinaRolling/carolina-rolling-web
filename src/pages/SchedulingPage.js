@@ -44,8 +44,10 @@ function SchedulingPage() {
     try {
       setLoading(true);
       const response = await getShipments();
-      // Filter out shipped items
-      const activeShipments = (response.data.data || []).filter(s => s.status !== 'shipped');
+      // Filter out shipped AND stored/completed items — they're done
+      const activeShipments = (response.data.data || []).filter(s => 
+        s.status !== 'shipped' && s.status !== 'stored' && s.status !== 'completed'
+      );
       setShipments(activeShipments);
     } catch (err) {
       setError('Failed to load shipments');

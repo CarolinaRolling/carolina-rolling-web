@@ -118,23 +118,14 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     };
   }, [partData.thickness, rollValue, rollMeasurePoint, rollMeasureType, showAngle, angleValue, showTangent, tangentLength]);
 
-  // Whether we have a valid arc angle calc (controls roll direction auto-fill + graying)
-  const hasAngleCalc = showAngle && (parseFloat(angleValue) || 0) > 0 && calcResult;
-
-  // Auto-fill Easy Way / Hard Way based on calculated layout vs width
-  useEffect(() => {
-    if (hasAngleCalc && calcResult) {
-      const layoutLength = calcResult.totalLength;
-      const widthVal = parseFloat(partData.width) || 0;
-      if (layoutLength > 0 && widthVal > 0) {
-        const autoDirection = layoutLength >= widthVal ? 'easy_way' : 'hard_way';
-        setPartData(prev => ({ ...prev, rollType: autoDirection }));
-      }
-    } else {
-      // Clear roll direction when angle is removed
-      setPartData(prev => ({ ...prev, rollType: '' }));
+  // Auto-determine Easy Way / Hard Way based on total length vs width
+  const autoSelectRollDirection = (totalLength) => {
+    const widthVal = parseFloat(partData.width) || 0;
+    if (totalLength > 0 && widthVal > 0) {
+      const autoDirection = totalLength >= widthVal ? 'easy_way' : 'hard_way';
+      setPartData(prev => ({ ...prev, rollType: autoDirection }));
     }
-  }, [hasAngleCalc, calcResult?.totalLength, partData.width]);
+  };
 
   // Build material description string — includes quantity
   const materialDescription = useMemo(() => {
@@ -285,7 +276,10 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
                 <span style={{ fontWeight: 700, fontSize: '1.1rem', marginLeft: 8 }}>{calcResult.totalLength.toFixed(3)}"</span>
               </div>
               <button type="button" className="btn btn-sm" style={{ background: '#1565c0', color: 'white' }}
-                onClick={() => setPartData(prev => ({ ...prev, length: calcResult.totalLength.toFixed(2) }))}>
+                onClick={() => {
+                  setPartData(prev => ({ ...prev, length: calcResult.totalLength.toFixed(2) }));
+                  autoSelectRollDirection(calcResult.totalLength);
+                }}>
                 → Set as Length
               </button>
             </div>
@@ -296,22 +290,19 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       {/* === EASY/HARD WAY & SHAPE === */}
       <div style={{ ...sectionStyle, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div className="form-group">
-          <label className="form-label" style={{ color: hasAngleCalc ? undefined : '#999' }}>
+          <label className="form-label">
             Roll Direction
-            {!hasAngleCalc && <span style={{ fontSize: '0.75rem', marginLeft: 6, fontWeight: 400 }}>(set arc angle first)</span>}
           </label>
           <select
             className="form-select"
             value={partData.rollType || ''}
             onChange={(e) => setPartData({ ...partData, rollType: e.target.value })}
-            disabled={!hasAngleCalc}
-            style={!hasAngleCalc ? { opacity: 0.5, cursor: 'not-allowed', background: '#f0f0f0' } : {}}
           >
             <option value="">Select...</option>
             <option value="easy_way">Easy Way</option>
             <option value="hard_way">Hard Way</option>
           </select>
-          {hasAngleCalc && partData.rollType && (
+          {partData.rollType && calcResult && (
             <div style={{ fontSize: '0.75rem', color: '#1565c0', marginTop: 4 }}>
               ↑ Auto-set: layout {calcResult.totalLength.toFixed(1)}" vs width {partData.width || '—'}
             </div>
