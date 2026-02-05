@@ -4,6 +4,7 @@ import {
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
   Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink
 } from 'lucide-react';
+import PlateRollForm from '../components/PlateRollForm';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
@@ -1214,172 +1215,122 @@ function WorkOrderDetailsPage() {
                 <div className="grid grid-2">
                   <div className="form-group"><label className="form-label">Client Part#</label><input className="form-input" value={partData.clientPartNumber} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} /></div>
                   <div className="form-group"><label className="form-label">Heat#</label><input className="form-input" value={partData.heatNumber} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} /></div>
-                  <div className="form-group"><label className="form-label">Quantity *</label><input type="number" className="form-input" value={partData.quantity} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} min="1" /></div>
-                  {PART_TYPES[selectedPartType]?.fields.includes('material') && <div className="form-group"><label className="form-label">Material</label><input className="form-input" value={partData.material} onChange={(e) => setPartData({ ...partData, material: e.target.value })} /></div>}
-                  {PART_TYPES[selectedPartType]?.fields.includes('thickness') && <div className="form-group"><label className="form-label">Thickness</label><input className="form-input" value={partData.thickness} onChange={(e) => setPartData({ ...partData, thickness: e.target.value })} /></div>}
-                  {PART_TYPES[selectedPartType]?.fields.includes('width') && <div className="form-group"><label className="form-label">Width</label><input className="form-input" value={partData.width} onChange={(e) => setPartData({ ...partData, width: e.target.value })} /></div>}
-                  {PART_TYPES[selectedPartType]?.fields.includes('length') && <div className="form-group"><label className="form-label">Length</label><input className="form-input" value={partData.length} onChange={(e) => setPartData({ ...partData, length: e.target.value })} /></div>}
-                  {PART_TYPES[selectedPartType]?.fields.includes('sectionSize') && <div className="form-group"><label className="form-label">Section Size</label><input className="form-input" value={partData.sectionSize} onChange={(e) => setPartData({ ...partData, sectionSize: e.target.value })} placeholder="e.g. W8x31" /></div>}
-                  {PART_TYPES[selectedPartType]?.fields.includes('outerDiameter') && <div className="form-group"><label className="form-label">Outer Diameter</label><input className="form-input" value={partData.outerDiameter} onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} /></div>}
-                  {PART_TYPES[selectedPartType]?.fields.includes('wallThickness') && <div className="form-group"><label className="form-label">Wall Thickness</label><input className="form-input" value={partData.wallThickness} onChange={(e) => setPartData({ ...partData, wallThickness: e.target.value })} /></div>}
-                  {PART_TYPES[selectedPartType]?.fields.includes('rollType') && (
-                    <div className="form-group"><label className="form-label">Roll Type</label>
-                      <select className="form-select" value={partData.rollType} onChange={(e) => setPartData({ ...partData, rollType: e.target.value })}>
-                        <option value="">Select...</option><option value="easy_way">Easy Way</option><option value="hard_way">Hard Way</option>
-                      </select>
-                    </div>
-                  )}
-                  {PART_TYPES[selectedPartType]?.fields.includes('radius') && <div className="form-group"><label className="form-label">Radius</label><input className="form-input" value={partData.radius} onChange={(e) => setPartData({ ...partData, radius: e.target.value })} /></div>}
-                  {PART_TYPES[selectedPartType]?.fields.includes('diameter') && <div className="form-group"><label className="form-label">Diameter</label><input className="form-input" value={partData.diameter} onChange={(e) => setPartData({ ...partData, diameter: e.target.value })} /></div>}
-                  {PART_TYPES[selectedPartType]?.fields.includes('arcDegrees') && <div className="form-group"><label className="form-label">Arc (degrees)</label><input className="form-input" value={partData.arcDegrees} onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} /></div>}
-                  {PART_TYPES[selectedPartType]?.fields.includes('flangeOut') && (
-                    <div className="form-group"><label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input type="checkbox" checked={partData.flangeOut} onChange={(e) => setPartData({ ...partData, flangeOut: e.target.checked })} /> Flange Out
-                    </label></div>
-                  )}
-                  <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Special Instructions</label><textarea className="form-textarea" value={partData.specialInstructions} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} /></div>
                   
-                  {/* Material Source Section */}
-                  <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 12, paddingTop: 12 }}>
-                    <h4 style={{ marginBottom: 12, color: '#e65100' }}>📦 Material Source</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                      <div className="form-group">
-                        <label className="form-label">Material Source</label>
-                        <select className="form-select" value={partData.materialSource || 'customer'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
-                          <option value="customer">Customer Supplies</option>
-                          <option value="we_order">We Order</option>
-                          <option value="in_stock">In Stock</option>
-                        </select>
-                      </div>
-                      <div className="form-group" style={{ position: 'relative' }}>
-                        <label className="form-label">Vendor</label>
-                        <input 
-                          className="form-input" 
-                          value={partData._vendorSearch !== undefined ? partData._vendorSearch : (partData.vendor?.name || partData.supplierName || '')} 
-                          onChange={async (e) => {
-                            const value = e.target.value;
-                            setPartData({ ...partData, _vendorSearch: value });
-                            if (value.length >= 1) {
-                              try {
-                                const res = await searchVendors(value);
-                                setVendorSuggestions(res.data.data || []);
-                                setShowVendorSuggestions(true);
-                              } catch (err) {
-                                setVendorSuggestions([]);
-                              }
-                            } else {
-                              // Clear vendor if search emptied
-                              setPartData({ ...partData, _vendorSearch: value, vendorId: null, supplierName: '' });
-                              setVendorSuggestions([]);
-                              setShowVendorSuggestions(false);
-                            }
-                          }}
-                          onFocus={async () => {
-                            try {
-                              const res = await searchVendors('');
-                              setVendorSuggestions(res.data.data || []);
-                              setShowVendorSuggestions(true);
-                            } catch (err) {}
-                          }}
-                          onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
-                          placeholder="Search or add vendor..."
-                          autoComplete="off"
-                        />
-                        {showVendorSuggestions && (
-                          <div style={{
-                            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                            background: 'white', border: '1px solid #ddd', borderRadius: 4,
-                            maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                          }}>
-                            {vendorSuggestions.map(vendor => (
-                              <div 
-                                key={vendor.id}
-                                style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                                onMouseDown={() => {
-                                  setPartData({ ...partData, vendorId: vendor.id, supplierName: vendor.name, _vendorSearch: undefined });
-                                  setShowVendorSuggestions(false);
-                                  setVendorSuggestions([]);
-                                }}
-                              >
-                                <strong>{vendor.name}</strong>
-                                {vendor.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{vendor.contactPhone}</span>}
+                  {/* Plate Roll gets custom form */}
+                  {selectedPartType === 'plate_roll' ? (
+                    <PlateRollForm 
+                      partData={partData} 
+                      setPartData={setPartData}
+                      vendorSuggestions={vendorSuggestions}
+                      setVendorSuggestions={setVendorSuggestions}
+                      showVendorSuggestions={showVendorSuggestions}
+                      setShowVendorSuggestions={setShowVendorSuggestions}
+                      showMessage={showMessage}
+                      setError={setError}
+                    />
+                  ) : (
+                    <>
+                      {/* Generic form for other part types */}
+                      <div className="form-group"><label className="form-label">Quantity *</label><input type="number" className="form-input" value={partData.quantity} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} min="1" /></div>
+                      {PART_TYPES[selectedPartType]?.fields.includes('material') && <div className="form-group"><label className="form-label">Material</label><input className="form-input" value={partData.material} onChange={(e) => setPartData({ ...partData, material: e.target.value })} /></div>}
+                      {PART_TYPES[selectedPartType]?.fields.includes('thickness') && <div className="form-group"><label className="form-label">Thickness</label><input className="form-input" value={partData.thickness} onChange={(e) => setPartData({ ...partData, thickness: e.target.value })} /></div>}
+                      {PART_TYPES[selectedPartType]?.fields.includes('width') && <div className="form-group"><label className="form-label">Width</label><input className="form-input" value={partData.width} onChange={(e) => setPartData({ ...partData, width: e.target.value })} /></div>}
+                      {PART_TYPES[selectedPartType]?.fields.includes('length') && <div className="form-group"><label className="form-label">Length</label><input className="form-input" value={partData.length} onChange={(e) => setPartData({ ...partData, length: e.target.value })} /></div>}
+                      {PART_TYPES[selectedPartType]?.fields.includes('sectionSize') && <div className="form-group"><label className="form-label">Section Size</label><input className="form-input" value={partData.sectionSize} onChange={(e) => setPartData({ ...partData, sectionSize: e.target.value })} placeholder="e.g. W8x31" /></div>}
+                      {PART_TYPES[selectedPartType]?.fields.includes('outerDiameter') && <div className="form-group"><label className="form-label">Outer Diameter</label><input className="form-input" value={partData.outerDiameter} onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} /></div>}
+                      {PART_TYPES[selectedPartType]?.fields.includes('wallThickness') && <div className="form-group"><label className="form-label">Wall Thickness</label><input className="form-input" value={partData.wallThickness} onChange={(e) => setPartData({ ...partData, wallThickness: e.target.value })} /></div>}
+                      {PART_TYPES[selectedPartType]?.fields.includes('rollType') && (
+                        <div className="form-group"><label className="form-label">Roll Type</label>
+                          <select className="form-select" value={partData.rollType} onChange={(e) => setPartData({ ...partData, rollType: e.target.value })}>
+                            <option value="">Select...</option><option value="easy_way">Easy Way</option><option value="hard_way">Hard Way</option>
+                          </select>
+                        </div>
+                      )}
+                      {PART_TYPES[selectedPartType]?.fields.includes('radius') && <div className="form-group"><label className="form-label">Radius</label><input className="form-input" value={partData.radius} onChange={(e) => setPartData({ ...partData, radius: e.target.value })} /></div>}
+                      {PART_TYPES[selectedPartType]?.fields.includes('diameter') && <div className="form-group"><label className="form-label">Diameter</label><input className="form-input" value={partData.diameter} onChange={(e) => setPartData({ ...partData, diameter: e.target.value })} /></div>}
+                      {PART_TYPES[selectedPartType]?.fields.includes('arcDegrees') && <div className="form-group"><label className="form-label">Arc (degrees)</label><input className="form-input" value={partData.arcDegrees} onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} /></div>}
+                      {PART_TYPES[selectedPartType]?.fields.includes('flangeOut') && (
+                        <div className="form-group"><label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input type="checkbox" checked={partData.flangeOut} onChange={(e) => setPartData({ ...partData, flangeOut: e.target.checked })} /> Flange Out
+                        </label></div>
+                      )}
+                      <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Special Instructions</label><textarea className="form-textarea" value={partData.specialInstructions} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} /></div>
+                      
+                      {/* Material Source Section - for non-plate types */}
+                      <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 12, paddingTop: 12 }}>
+                        <h4 style={{ marginBottom: 12, color: '#e65100' }}>📦 Material Source</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                          <div className="form-group">
+                            <label className="form-label">Material Source</label>
+                            <select className="form-select" value={partData.materialSource || 'customer'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
+                              <option value="customer">Customer Supplies</option>
+                              <option value="we_order">We Order</option>
+                              <option value="in_stock">In Stock</option>
+                            </select>
+                          </div>
+                          <div className="form-group" style={{ position: 'relative' }}>
+                            <label className="form-label">Vendor</label>
+                            <input className="form-input"
+                              value={partData._vendorSearch !== undefined ? partData._vendorSearch : (partData.vendor?.name || partData.supplierName || '')}
+                              onChange={async (e) => {
+                                const value = e.target.value;
+                                setPartData({ ...partData, _vendorSearch: value });
+                                if (value.length >= 1) {
+                                  try { const res = await searchVendors(value); setVendorSuggestions(res.data.data || []); setShowVendorSuggestions(true); } catch { setVendorSuggestions([]); }
+                                } else {
+                                  setPartData({ ...partData, _vendorSearch: value, vendorId: null, supplierName: '' }); setVendorSuggestions([]); setShowVendorSuggestions(false);
+                                }
+                              }}
+                              onFocus={async () => { try { const res = await searchVendors(''); setVendorSuggestions(res.data.data || []); setShowVendorSuggestions(true); } catch {} }}
+                              onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
+                              placeholder="Search or add vendor..." autoComplete="off"
+                            />
+                            {showVendorSuggestions && (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid #ddd', borderRadius: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                                {vendorSuggestions.map(v => (
+                                  <div key={v.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                                    onMouseDown={() => { setPartData({ ...partData, vendorId: v.id, supplierName: v.name, _vendorSearch: undefined }); setShowVendorSuggestions(false); setVendorSuggestions([]); }}>
+                                    <strong>{v.name}</strong>
+                                    {v.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{v.contactPhone}</span>}
+                                  </div>
+                                ))}
+                                {partData._vendorSearch && partData._vendorSearch.length >= 2 && !vendorSuggestions.some(v => v.name.toLowerCase() === (partData._vendorSearch || '').toLowerCase()) && (
+                                  <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600 }}
+                                    onMouseDown={async () => {
+                                      try {
+                                        const res = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/vendors`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` }, body: JSON.stringify({ name: partData._vendorSearch }) });
+                                        const data = await res.json();
+                                        if (data.data) { setPartData({ ...partData, vendorId: data.data.id, supplierName: data.data.name, _vendorSearch: undefined }); showMessage(`Vendor "${data.data.name}" created`); }
+                                      } catch { setError('Failed to create vendor'); }
+                                      setShowVendorSuggestions(false);
+                                    }}>+ Add "{partData._vendorSearch}" as new vendor</div>
+                                )}
                               </div>
-                            ))}
-                            {partData._vendorSearch && partData._vendorSearch.length >= 2 && !vendorSuggestions.some(v => v.name.toLowerCase() === (partData._vendorSearch || '').toLowerCase()) && (
-                              <div 
-                                style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, borderTop: '2px solid #c8e6c9' }}
-                                onMouseDown={async () => {
-                                  try {
-                                    const res = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/vendors`, {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                                      body: JSON.stringify({ name: partData._vendorSearch })
-                                    });
-                                    const data = await res.json();
-                                    if (data.data) {
-                                      setPartData({ ...partData, vendorId: data.data.id, supplierName: data.data.name, _vendorSearch: undefined });
-                                      showMessage(`Vendor "${data.data.name}" created`);
-                                    }
-                                  } catch (err) {
-                                    setError('Failed to create vendor');
-                                  }
-                                  setShowVendorSuggestions(false);
-                                }}
-                              >
-                                + Add "{partData._vendorSearch}" as new vendor
-                              </div>
-                            )}
-                            {vendorSuggestions.length === 0 && (!partData._vendorSearch || partData._vendorSearch.length < 2) && (
-                              <div style={{ padding: '8px 12px', color: '#999', fontSize: '0.85rem' }}>Type to search vendors...</div>
                             )}
                           </div>
-                        )}
+                          <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                            <label className="form-label">Material Description (for ordering)</label>
+                            <input className="form-input" value={partData.materialDescription || ''} onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })} placeholder="e.g. 1/4 x 4 x 120 A36 Plate" />
+                          </div>
+                        </div>
                       </div>
-                      <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                        <label className="form-label">Material Description (for ordering)</label>
-                        <input className="form-input" value={partData.materialDescription || ''} onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })} placeholder="e.g. 1/4 x 4 x 120 A36 Plate" />
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Pricing Section */}
-                  <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 12, paddingTop: 12 }}>
-                    <h4 style={{ marginBottom: 12, color: '#1976d2' }}>💰 Pricing</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                      <div className="form-group">
-                        <label className="form-label">Labor Rate ($/hr)</label>
-                        <input type="number" step="0.01" className="form-input" value={partData.laborRate || ''} onChange={(e) => setPartData({ ...partData, laborRate: e.target.value })} />
+                      {/* Pricing Section - for non-plate types */}
+                      <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 12, paddingTop: 12 }}>
+                        <h4 style={{ marginBottom: 12, color: '#1976d2' }}>💰 Pricing</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                          <div className="form-group"><label className="form-label">Labor Rate ($/hr)</label><input type="number" step="0.01" className="form-input" value={partData.laborRate || ''} onChange={(e) => setPartData({ ...partData, laborRate: e.target.value })} /></div>
+                          <div className="form-group"><label className="form-label">Labor Hours</label><input type="number" step="0.25" className="form-input" value={partData.laborHours || ''} onChange={(e) => setPartData({ ...partData, laborHours: e.target.value })} /></div>
+                          <div className="form-group"><label className="form-label">Labor Total</label><input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} /></div>
+                          <div className="form-group"><label className="form-label">Material Unit Cost</label><input type="number" step="0.01" className="form-input" value={partData.materialUnitCost || ''} onChange={(e) => setPartData({ ...partData, materialUnitCost: e.target.value })} /></div>
+                          <div className="form-group"><label className="form-label">Material Total</label><input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} /></div>
+                          <div className="form-group"><label className="form-label">Setup Charge</label><input type="number" step="0.01" className="form-input" value={partData.setupCharge || ''} onChange={(e) => setPartData({ ...partData, setupCharge: e.target.value })} /></div>
+                          <div className="form-group"><label className="form-label">Other Charges</label><input type="number" step="0.01" className="form-input" value={partData.otherCharges || ''} onChange={(e) => setPartData({ ...partData, otherCharges: e.target.value })} /></div>
+                          <div className="form-group"><label className="form-label">Part Total</label><input type="number" step="0.01" className="form-input" value={partData.partTotal || ''} onChange={(e) => setPartData({ ...partData, partTotal: e.target.value })} style={{ fontWeight: 600 }} /></div>
+                        </div>
                       </div>
-                      <div className="form-group">
-                        <label className="form-label">Labor Hours</label>
-                        <input type="number" step="0.25" className="form-input" value={partData.laborHours || ''} onChange={(e) => setPartData({ ...partData, laborHours: e.target.value })} />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Labor Total</label>
-                        <input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Material Unit Cost</label>
-                        <input type="number" step="0.01" className="form-input" value={partData.materialUnitCost || ''} onChange={(e) => setPartData({ ...partData, materialUnitCost: e.target.value })} />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Material Total</label>
-                        <input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Setup Charge</label>
-                        <input type="number" step="0.01" className="form-input" value={partData.setupCharge || ''} onChange={(e) => setPartData({ ...partData, setupCharge: e.target.value })} />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Other Charges</label>
-                        <input type="number" step="0.01" className="form-input" value={partData.otherCharges || ''} onChange={(e) => setPartData({ ...partData, otherCharges: e.target.value })} />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Part Total</label>
-                        <input type="number" step="0.01" className="form-input" value={partData.partTotal || ''} onChange={(e) => setPartData({ ...partData, partTotal: e.target.value })} style={{ fontWeight: 600 }} />
-                      </div>
-                    </div>
-                  </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
