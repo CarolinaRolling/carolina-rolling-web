@@ -135,6 +135,16 @@ function EstimateDetailsPage() {
   };
 
   const calculatePartTotal = (part) => {
+    // For plate_roll and angle_roll, use the directly saved pricing fields
+    if (part.partType === 'plate_roll' || part.partType === 'angle_roll') {
+      const materialTotal = parseFloat(part.materialTotal) || 0;
+      const laborTotal = parseFloat(part.laborTotal) || 0;
+      const setupCharge = parseFloat(part.setupCharge) || 0;
+      const otherCharges = parseFloat(part.otherCharges) || 0;
+      const partTotal = parseFloat(part.partTotal) || 0;
+      return { materialCost: materialTotal, materialTotal, laborTotal, setupCharge, otherCharges, otherTotal: 0, additionalServices: 0, partTotal };
+    }
+    
     const qty = parseInt(part.quantity) || 1;
     
     // Material - only if we supply it
@@ -465,15 +475,24 @@ function EstimateDetailsPage() {
     const totals = calculateTotals();
     const partsHtml = parts.map(part => {
       const calc = calculatePartTotal(part);
+      const isRollPart = part.partType === 'plate_roll' || part.partType === 'angle_roll';
+      const pricingHtml = isRollPart
+        ? `<table style="width:100%;margin-top:8px;">
+            ${parseFloat(part.materialTotal) > 0 ? `<tr><td>Material:</td><td style="text-align:right;">${formatCurrency(part.materialTotal)}</td></tr>` : ''}
+            ${parseFloat(part.laborTotal) > 0 ? `<tr><td>Labor / Rolling:</td><td style="text-align:right;">${formatCurrency(part.laborTotal)}</td></tr>` : ''}
+            ${parseFloat(part.setupCharge) > 0 ? `<tr><td>Setup Charge:</td><td style="text-align:right;">${formatCurrency(part.setupCharge)}</td></tr>` : ''}
+            ${parseFloat(part.otherCharges) > 0 ? `<tr><td>Other Charges:</td><td style="text-align:right;">${formatCurrency(part.otherCharges)}</td></tr>` : ''}
+            <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Part Total:</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`
+        : `<table style="width:100%;margin-top:8px;"><tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialTotal)}</td></tr>
+            <tr><td>Rolling:</td><td style="text-align:right;">${formatCurrency(part.rollingCost)}</td></tr>
+            <tr><td>Other Services:</td><td style="text-align:right;">${formatCurrency(calc.otherTotal)}</td></tr>
+            <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Part Total:</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`;
       return `<div style="border:1px solid #ddd;border-radius:8px;padding:16px;margin-bottom:12px;">
         <h4 style="margin:0 0 8px;color:#1976d2;">Part #${part.partNumber} - ${PART_TYPES[part.partType]?.label || part.partType}</h4>
         <p style="margin:0 0 8px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''}</p>
         <p><strong>Qty:</strong> ${part.quantity} | <strong>Material:</strong> ${part.materialDescription || 'N/A'}</p>
         ${part.supplierName ? `<p style="color:#388e3c;">Supplier: ${part.supplierName}</p>` : ''}
-        <table style="width:100%;margin-top:8px;"><tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialTotal)}</td></tr>
-        <tr><td>Rolling:</td><td style="text-align:right;">${formatCurrency(part.rollingCost)}</td></tr>
-        <tr><td>Other Services:</td><td style="text-align:right;">${formatCurrency(calc.otherTotal)}</td></tr>
-        <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Part Total:</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>
+        ${pricingHtml}
       </div>`;
     }).join('');
     
@@ -726,8 +745,8 @@ function EstimateDetailsPage() {
                     {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
                   </div>
 
-                  {/* Material Section - only show if we supply material */}
-                  {part.weSupplyMaterial && part.materialDescription && (
+                  {/* Material Section - only show if we supply material (old part types) */}
+                  {part.partType !== 'plate_roll' && part.partType !== 'angle_roll' && part.weSupplyMaterial && part.materialDescription && (
                     <div style={{ background: '#fff3e0', borderRadius: 8, padding: 12, marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <strong>📦 We Supply Material</strong>
@@ -745,7 +764,46 @@ function EstimateDetailsPage() {
                     </div>
                   )}
 
-                  {/* Costs Section */}
+                  {/* Costs Section - plate_roll / angle_roll pricing */}
+                  {(part.partType === 'plate_roll' || part.partType === 'angle_roll') ? (
+                    <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
+                      {part.materialDescription && (
+                        <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
+                          📦 {part.materialDescription}
+                          {part.supplierName && <span style={{ marginLeft: 8, background: '#ffe0b2', padding: '2px 6px', borderRadius: 4, fontSize: '0.75rem', color: '#e65100' }}>🏭 {part.supplierName}</span>}
+                        </div>
+                      )}
+                      {parseFloat(part.materialTotal) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                          <span>📦 Material</span>
+                          <strong>{formatCurrency(part.materialTotal)}</strong>
+                        </div>
+                      )}
+                      {parseFloat(part.laborTotal) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                          <span>🔄 Labor / Rolling</span>
+                          <strong>{formatCurrency(part.laborTotal)}</strong>
+                        </div>
+                      )}
+                      {parseFloat(part.setupCharge) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                          <span>⚙️ Setup Charge</span>
+                          <strong>{formatCurrency(part.setupCharge)}</strong>
+                        </div>
+                      )}
+                      {parseFloat(part.otherCharges) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
+                          <span>📋 Other Charges</span>
+                          <strong>{formatCurrency(part.otherCharges)}</strong>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '1.05rem' }}>
+                        <strong>Part Total</strong>
+                        <strong style={{ color: '#1976d2' }}>{formatCurrency(calc.partTotal)}</strong>
+                      </div>
+                    </div>
+                  ) : (
+                  /* Costs Section - old part types */
                   <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
                       <span>🔄 Rolling Cost</span>
@@ -787,6 +845,7 @@ function EstimateDetailsPage() {
                       <strong style={{ color: '#1976d2' }}>{formatCurrency(calc.partTotal)}</strong>
                     </div>
                   </div>
+                  )}
 
                   {/* Part Files Section */}
                   <div style={{ marginTop: 12, padding: 12, background: '#f5f5f5', borderRadius: 8 }}>
