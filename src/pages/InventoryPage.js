@@ -153,15 +153,10 @@ function InventoryPage() {
     });
   };
 
-  // Get first image from parts
+  // Get thumbnail image for order (uses server-generated signed URL)
   const getOrderImage = (order) => {
-    if (!order.parts) return null;
-    for (const part of order.parts) {
-      if (part.files && part.files.length > 0) {
-        const imageFile = part.files.find(f => f.mimeType?.startsWith('image/'));
-        if (imageFile) return imageFile.url;
-      }
-    }
+    // Use the pre-signed thumbnail URL from the backend
+    if (order.thumbnailUrl) return order.thumbnailUrl;
     return null;
   };
 
@@ -332,10 +327,15 @@ function InventoryPage() {
                   <div style={{ 
                     height: 120, 
                     background: '#f5f5f5',
-                    backgroundImage: `url(${orderImage})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center'
-                  }} />
+                    overflow: 'hidden'
+                  }}>
+                    <img 
+                      src={orderImage} 
+                      alt={order.clientName || 'Work order'} 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  </div>
                 ) : (
                   <div style={{ 
                     height: 80, 

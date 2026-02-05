@@ -118,15 +118,6 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     };
   }, [partData.thickness, rollValue, rollMeasurePoint, rollMeasureType, showAngle, angleValue, showTangent, tangentLength]);
 
-  // Auto-determine Easy Way / Hard Way based on total length vs width
-  const autoSelectRollDirection = (totalLength) => {
-    const widthVal = parseFloat(partData.width) || 0;
-    if (totalLength > 0 && widthVal > 0) {
-      const autoDirection = totalLength >= widthVal ? 'easy_way' : 'hard_way';
-      setPartData(prev => ({ ...prev, rollType: autoDirection }));
-    }
-  };
-
   // Build material description string — includes quantity
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
@@ -277,8 +268,16 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
               </div>
               <button type="button" className="btn btn-sm" style={{ background: '#1565c0', color: 'white' }}
                 onClick={() => {
-                  setPartData(prev => ({ ...prev, length: calcResult.totalLength.toFixed(2) }));
-                  autoSelectRollDirection(calcResult.totalLength);
+                  const totalLen = calcResult.totalLength;
+                  const widthVal = parseFloat(partData.width) || 0;
+                  const autoDirection = (totalLen > 0 && widthVal > 0) 
+                    ? (totalLen >= widthVal ? 'easy_way' : 'hard_way') 
+                    : '';
+                  setPartData(prev => ({ 
+                    ...prev, 
+                    length: totalLen.toFixed(2),
+                    ...(autoDirection ? { rollType: autoDirection } : {})
+                  }));
                 }}>
                 → Set as Length
               </button>
