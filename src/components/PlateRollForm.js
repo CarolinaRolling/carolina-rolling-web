@@ -18,7 +18,6 @@ function thicknessToDecimal(t) {
     '12 ga': 0.1046, '11 ga': 0.1196, '10 ga': 0.1345
   };
   if (gaugeMap[t]) return gaugeMap[t];
-  // Parse fraction strings like '1/4"', '1-1/2"'
   const clean = t.replace(/"/g, '').trim();
   if (clean.includes('-')) {
     const [whole, frac] = clean.split('-');
@@ -36,8 +35,8 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   const [customThickness, setCustomThickness] = useState('');
   const [customGrade, setCustomGrade] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
-  const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'inside'); // inside, outside, centerline
-  const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'radius'); // radius, diameter
+  const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'inside');
+  const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'radius');
   const [showAngle, setShowAngle] = useState(!!(partData.arcDegrees));
   const [angleValue, setAngleValue] = useState(partData.arcDegrees || '');
   const [showTangent, setShowTangent] = useState(!!(partData._tangentLength));
@@ -90,7 +89,6 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
 
     let diameter = rollMeasureType === 'radius' ? rv * 2 : rv;
 
-    // Adjust based on measure point
     let effectiveDiameter;
     if (rollMeasurePoint === 'inside') {
       effectiveDiameter = diameter + thickDecimal;
@@ -102,13 +100,11 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
 
     let arcLength = effectiveDiameter * Math.PI;
 
-    // If angle, divide by 360 and multiply by angle
     const angle = parseFloat(angleValue) || 0;
     if (showAngle && angle > 0) {
       arcLength = (arcLength / 360) * angle;
     }
 
-    // Add tangents
     const tang = parseFloat(tangentLength) || 0;
     let totalLength = arcLength;
     if (showTangent && tang > 0) {
@@ -122,19 +118,39 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     };
   }, [partData.thickness, rollValue, rollMeasurePoint, rollMeasureType, showAngle, angleValue, showTangent, tangentLength]);
 
-  // Build material description string
+  // Whether we have a valid arc angle calc (controls roll direction auto-fill + graying)
+  const hasAngleCalc = showAngle && (parseFloat(angleValue) || 0) > 0 && calcResult;
+
+  // Auto-fill Easy Way / Hard Way based on calculated layout vs width
+  useEffect(() => {
+    if (hasAngleCalc && calcResult) {
+      const layoutLength = calcResult.totalLength;
+      const widthVal = parseFloat(partData.width) || 0;
+      if (layoutLength > 0 && widthVal > 0) {
+        const autoDirection = layoutLength >= widthVal ? 'easy_way' : 'hard_way';
+        setPartData(prev => ({ ...prev, rollType: autoDirection }));
+      }
+    } else {
+      // Clear roll direction when angle is removed
+      setPartData(prev => ({ ...prev, rollType: '' }));
+    }
+  }, [hasAngleCalc, calcResult?.totalLength, partData.width]);
+
+  // Build material description string — includes quantity
   const materialDescription = useMemo(() => {
-    const parts = [];
-    if (partData.thickness) parts.push(partData.thickness);
-    if (partData.width) parts.push(`x ${partData.width}`);
-    if (partData.length) parts.push(`x ${partData.length}`);
+    const qty = parseInt(partData.quantity) || 1;
+    const descParts = [];
+    if (qty > 1) descParts.push(`(${qty})`);
+    if (partData.thickness) descParts.push(partData.thickness);
+    if (partData.width) descParts.push(`x ${partData.width}`);
+    if (partData.length) descParts.push(`x ${partData.length}`);
     const grade = partData.material || '';
-    if (grade) parts.push(grade);
-    parts.push('Plate');
+    if (grade) descParts.push(grade);
+    descParts.push('Plate');
     const origin = partData._materialOrigin || '';
-    if (origin) parts.push(`(${origin})`);
-    return parts.join(' ');
-  }, [partData.thickness, partData.width, partData.length, partData.material, partData._materialOrigin]);
+    if (origin) descParts.push(`(${origin})`);
+    return descParts.join(' ');
+  }, [partData.thickness, partData.width, partData.length, partData.material, partData._materialOrigin, partData.quantity]);
 
   // Auto-update material description
   useEffect(() => {
@@ -280,12 +296,26 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       {/* === EASY/HARD WAY & SHAPE === */}
       <div style={{ ...sectionStyle, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div className="form-group">
-          <label className="form-label">Roll Direction</label>
-          <select className="form-select" value={partData.rollType || ''} onChange={(e) => setPartData({ ...partData, rollType: e.target.value })}>
+          <label className="form-label" style={{ color: hasAngleCalc ? undefined : '#999' }}>
+            Roll Direction
+            {!hasAngleCalc && <span style={{ fontSize: '0.75rem', marginLeft: 6, fontWeight: 400 }}>(set arc angle first)</span>}
+          </label>
+          <select
+            className="form-select"
+            value={partData.rollType || ''}
+            onChange={(e) => setPartData({ ...partData, rollType: e.target.value })}
+            disabled={!hasAngleCalc}
+            style={!hasAngleCalc ? { opacity: 0.5, cursor: 'not-allowed', background: '#f0f0f0' } : {}}
+          >
             <option value="">Select...</option>
             <option value="easy_way">Easy Way</option>
             <option value="hard_way">Hard Way</option>
           </select>
+          {hasAngleCalc && partData.rollType && (
+            <div style={{ fontSize: '0.75rem', color: '#1565c0', marginTop: 4 }}>
+              ↑ Auto-set: layout {calcResult.totalLength.toFixed(1)}" vs width {partData.width || '—'}
+            </div>
+          )}
         </div>
         <div className="form-group">
           <label className="form-label">Custom Shape (PDF)</label>
@@ -434,6 +464,21 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #ddd', paddingTop: 8 }}>
             <span style={{ fontWeight: 600 }}>Part Total ({partData.quantity || 1} × ${unitPrice.toFixed(2)}):</span>
             <span style={{ fontWeight: 700, fontSize: '1.2rem', color: '#2e7d32' }}>${(unitPrice * (parseInt(partData.quantity) || 1)).toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* === TRACKING (Client Part # / Heat #) — moved to bottom === */}
+      <div style={sectionStyle}>
+        {sectionTitle('🏷️', 'Tracking', '#616161')}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Client Part Number</label>
+            <input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Heat Number</label>
+            <input type="text" className="form-input" value={partData.heatNumber || ''} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} placeholder="Optional" />
           </div>
         </div>
       </div>

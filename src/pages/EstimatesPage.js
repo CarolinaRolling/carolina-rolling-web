@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, DollarSign, Send, Check, X, Archive, Trash2 } from 'lucide-react';
-import { getEstimates, deleteEstimate, convertEstimateToWorkOrder } from '../services/api';
+import { getEstimates, deleteEstimate, convertEstimateToWorkOrder, createEstimate, searchClients } from '../services/api';
 
 function EstimatesPage() {
   const navigate = useNavigate();
@@ -14,6 +14,16 @@ function EstimatesPage() {
   const [showConvertModal, setShowConvertModal] = useState(null);
   const [convertData, setConvertData] = useState({ clientPurchaseOrderNumber: '', promisedDate: '' });
   const [converting, setConverting] = useState(false);
+
+  // New estimate modal state
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [newEstData, setNewEstData] = useState({
+    clientName: '', contactName: '', contactEmail: '', contactPhone: '', projectDescription: ''
+  });
+  const [creating, setCreating] = useState(false);
+  const [clientSuggestions, setClientSuggestions] = useState([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const clientInputRef = useRef(null);
 
   useEffect(() => {
     loadEstimates();
@@ -77,6 +87,28 @@ function EstimatesPage() {
     }
   };
 
+  const handleCreateEstimate = async () => {
+    if (!newEstData.clientName.trim()) { setError('Client name is required'); return; }
+    try {
+      setCreating(true);
+      setError(null);
+      const response = await createEstimate({ ...newEstData, status: 'draft' });
+      const newId = response.data.data.id;
+      setShowNewModal(false);
+      navigate(`/estimates/${newId}`);
+    } catch (err) {
+      setError('Failed to create estimate');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const openNewEstimateModal = () => {
+    setNewEstData({ clientName: '', contactName: '', contactEmail: '', contactPhone: '', projectDescription: '' });
+    setClientSuggestions([]);
+    setShowNewModal(true);
+  };
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
   };
@@ -113,7 +145,7 @@ function EstimatesPage() {
             {activeCount} active estimates
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => navigate('/estimates/new')}>
+        <button className="btn btn-primary" onClick={openNewEstimateModal}>
           <Plus size={18} />
           New Estimate
         </button>
@@ -279,6 +311,127 @@ function EstimatesPage() {
               <button className="btn btn-secondary" onClick={() => setShowConvertModal(null)}>Cancel</button>
               <button className="btn btn-success" onClick={handleConvert} disabled={converting}>
                 {converting ? 'Converting...' : 'Create Work Order'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Estimate Modal */}
+      {showNewModal && (
+        <div className="modal-overlay" onClick={() => setShowNewModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 550 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">New Estimate</h3>
+              <button className="modal-close" onClick={() => setShowNewModal(false)}>&times;</button>
+            </div>
+
+            <div style={{ padding: 20 }}>
+              <div className="form-group" style={{ position: 'relative' }}>
+                <label className="form-label">Client Name *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  ref={clientInputRef}
+                  value={newEstData.clientName}
+                  onChange={async (e) => {
+                    const value = e.target.value;
+                    setNewEstData({ ...newEstData, clientName: value });
+                    if (value.length >= 2) {
+                      try {
+                        const res = await searchClients(value);
+                        setClientSuggestions(res.data.data || []);
+                        setShowClientSuggestions(true);
+                      } catch { setClientSuggestions([]); }
+                    } else {
+                      setClientSuggestions([]);
+                      setShowClientSuggestions(false);
+                    }
+                  }}
+                  onFocus={() => clientSuggestions.length > 0 && setShowClientSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
+                  autoComplete="off"
+                  placeholder="Start typing to search..."
+                  autoFocus
+                />
+                {showClientSuggestions && clientSuggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                    background: 'white', border: '1px solid #ddd', borderRadius: 4,
+                    maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                  }}>
+                    {clientSuggestions.map(client => (
+                      <div
+                        key={client.id}
+                        style={{
+                          padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #eee',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}
+                        onMouseDown={() => {
+                          setNewEstData({
+                            ...newEstData,
+                            clientName: client.name,
+                            contactName: client.contactName || '',
+                            contactEmail: client.contactEmail || '',
+                            contactPhone: client.contactPhone || ''
+                          });
+                          setShowClientSuggestions(false);
+                        }}
+                      >
+                        <div>
+                          <strong>{client.name}</strong>
+                          {client.contactName && <div style={{ fontSize: '0.8rem', color: '#666' }}>{client.contactName}</div>}
+                        </div>
+                        <span style={{
+                          fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4,
+                          background: client.taxStatus === 'resale' ? '#fff3e0' : client.taxStatus === 'exempt' ? '#e8f5e9' : '#e3f2fd',
+                          color: client.taxStatus === 'resale' ? '#e65100' : client.taxStatus === 'exempt' ? '#2e7d32' : '#1565c0'
+                        }}>
+                          {client.taxStatus === 'resale' ? 'Resale' : client.taxStatus === 'exempt' ? 'Exempt' : 'Taxable'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">Contact Name</label>
+                  <input type="text" className="form-input" value={newEstData.contactName}
+                    onChange={(e) => setNewEstData({ ...newEstData, contactName: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Phone</label>
+                  <input type="tel" className="form-input" value={newEstData.contactPhone}
+                    onChange={(e) => setNewEstData({ ...newEstData, contactPhone: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Email</label>
+                <input type="email" className="form-input" value={newEstData.contactEmail}
+                  onChange={(e) => setNewEstData({ ...newEstData, contactEmail: e.target.value })} />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Project Description</label>
+                <textarea className="form-textarea" value={newEstData.projectDescription}
+                  onChange={(e) => setNewEstData({ ...newEstData, projectDescription: e.target.value })}
+                  placeholder="Brief description of the job..."
+                  rows={2} />
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowNewModal(false)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleCreateEstimate}
+                disabled={creating || !newEstData.clientName.trim()}
+              >
+                <Plus size={16} />
+                {creating ? 'Creating...' : 'Generate Estimate'}
               </button>
             </div>
           </div>

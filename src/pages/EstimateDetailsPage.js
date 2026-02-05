@@ -999,7 +999,8 @@ function EstimateDetailsPage() {
 
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
 
-              {/* Common fields for all part types */}
+              {/* Common fields for all part types (plate_roll has its own at bottom) */}
+              {partData.partType !== 'plate_roll' && (
               <div className="grid grid-2" style={{ marginBottom: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Client Part Number</label>
@@ -1012,6 +1013,7 @@ function EstimateDetailsPage() {
                     onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} />
                 </div>
               </div>
+              )}
 
               {/* Type-specific form */}
               {partData.partType === 'plate_roll' ? (
