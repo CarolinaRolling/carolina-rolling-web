@@ -290,19 +290,68 @@ function EstimateDetailsPage() {
     setShowPartModal(true);
   };
 
+  const validatePart = () => {
+    const warnings = [];
+    
+    if (!partData.partType) {
+      warnings.push('Part type is required');
+      return warnings;
+    }
+    
+    if (partData.partType === 'plate_roll') {
+      if (!partData.thickness) warnings.push('Thickness is required');
+      if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+    }
+    
+    if (partData.partType === 'angle_roll') {
+      if (!partData._angleSize) warnings.push('Angle size is required');
+      if (partData._angleSize === 'Custom' && !partData._customAngleSize) warnings.push('Custom angle size is required');
+      if (!partData.thickness) warnings.push('Thickness is required');
+      if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      
+      // Check unequal legs orientation
+      if (partData._angleSize && partData._angleSize !== 'Custom') {
+        const parts = partData._angleSize.split('x').map(Number);
+        if (parts.length === 2 && parts[0] !== parts[1] && partData.rollType && !partData._legOrientation) {
+          warnings.push('Leg orientation is required for unequal angle sizes');
+        }
+      }
+    }
+    
+    // Generic validations for all types
+    if (!partData.quantity || parseInt(partData.quantity) < 1) warnings.push('Quantity must be at least 1');
+    
+    return warnings;
+  };
+
   const handleSavePart = async () => {
-    if (!partData.partType) { setError('Part type is required'); return; }
+    const warnings = validatePart();
+    if (warnings.length > 0) {
+      setError(warnings.join('\n'));
+      return;
+    }
     if (isNew) { setError('Generate the estimate first to add parts'); return; }
     try {
       setSaving(true);
       setError(null);
+      
+      // Ensure materialSource has a valid value before sending
+      const dataToSend = { ...partData };
+      if (!dataToSend.materialSource || !['we_order', 'customer_supplied'].includes(dataToSend.materialSource)) {
+        dataToSend.materialSource = 'customer_supplied';
+      }
+      
       if (editingPart && editingPart.id) {
-        await updateEstimatePart(id, editingPart.id, partData);
+        await updateEstimatePart(id, editingPart.id, dataToSend);
       } else {
-        await addEstimatePart(id, partData);
+        await addEstimatePart(id, dataToSend);
       }
       await loadEstimate();
       setShowPartModal(false);
+      setEditingPart(null);
+      setPartData({});
       showMessage(editingPart ? 'Part updated' : 'Part added');
     } catch (err) { 
       console.error('Save part error:', err);
@@ -522,7 +571,7 @@ function EstimateDetailsPage() {
         </div>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && <div className="alert alert-error" style={{ whiteSpace: 'pre-line' }}>{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
