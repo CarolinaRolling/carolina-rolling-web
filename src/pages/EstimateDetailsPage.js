@@ -9,16 +9,17 @@ import {
   uploadEstimatePartFile, deleteEstimatePartFile,
   searchClients, searchVendors, getSettings, resetEstimateConversion
 } from '../services/api';
+import PlateRollForm from '../components/PlateRollForm';
 
 const PART_TYPES = {
-  plate_roll: { label: 'Plate Roll' },
-  pipe_roll: { label: 'Pipe/Tube Roll' },
-  angle_roll: { label: 'Angle Roll' },
-  beam_roll: { label: 'Beam Roll' },
-  section_roll: { label: 'Section Roll' },
-  channel_roll: { label: 'Channel Roll' },
-  flat_bar: { label: 'Flat Bar' },
-  other: { label: 'Other' }
+  plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator' },
+  pipe_roll: { label: 'Pipe/Tube Roll', icon: '🔧', desc: 'Round pipe and tube bending' },
+  angle_roll: { label: 'Angle Roll', icon: '📐', desc: 'Angle iron rolling' },
+  beam_roll: { label: 'Beam Roll', icon: '🏗️', desc: 'I-beam and H-beam rolling' },
+  section_roll: { label: 'Section Roll', icon: '📏', desc: 'Structural section rolling' },
+  channel_roll: { label: 'Channel Roll', icon: '🔲', desc: 'C-channel rolling' },
+  flat_bar: { label: 'Flat Bar', icon: '▬', desc: 'Flat bar bending' },
+  other: { label: 'Other', icon: '📦', desc: 'Custom or miscellaneous parts' }
 };
 
 function EstimateDetailsPage() {
@@ -45,6 +46,7 @@ function EstimateDetailsPage() {
   const [parts, setParts] = useState([]);
   const [files, setFiles] = useState([]);
   const [showPartModal, setShowPartModal] = useState(false);
+  const [showPartTypePicker, setShowPartTypePicker] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
   const [partData, setPartData] = useState({});
   
@@ -225,8 +227,13 @@ function EstimateDetailsPage() {
 
   const openAddPartModal = () => {
     setEditingPart(null);
+    setShowPartTypePicker(true);
+  };
+
+  const handleSelectPartType = (type) => {
+    setShowPartTypePicker(false);
     setPartData({
-      partType: '', clientPartNumber: '', heatNumber: '', quantity: 1,
+      partType: type, clientPartNumber: '', heatNumber: '', quantity: 1,
       // Material - controlled by weSupplyMaterial checkbox
       weSupplyMaterial: false,
       materialDescription: '', supplierName: '', materialUnitCost: '', 
@@ -243,7 +250,11 @@ function EstimateDetailsPage() {
       // Specs
       material: '', thickness: '', width: '', length: '', sectionSize: '',
       outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '',
-      arcDegrees: '', flangeOut: false, specialInstructions: ''
+      arcDegrees: '', flangeOut: false, specialInstructions: '',
+      // PlateRollForm fields
+      materialTotal: '', laborTotal: '', setupCharge: '', otherCharges: '', partTotal: '',
+      materialSource: 'customer', _materialOrigin: '', _rollValue: '', _rollMeasurePoint: 'inside',
+      _rollMeasureType: 'radius', _tangentLength: ''
     });
     setShowPartModal(true);
   };
@@ -277,7 +288,7 @@ function EstimateDetailsPage() {
 
   const handleSavePart = async () => {
     if (!partData.partType) { setError('Part type is required'); return; }
-    if (isNew) { setError('Save the estimate first'); return; }
+    if (isNew) { setError('Generate the estimate first to add parts'); return; }
     try {
       setSaving(true);
       setError(null);
@@ -463,7 +474,7 @@ function EstimateDetailsPage() {
           )}
           {!isNew && <button className="btn btn-outline" onClick={printEstimate}><Printer size={18} /> Print</button>}
           <button className="btn btn-secondary" onClick={() => handleSave(false)} disabled={saving}>
-            <Save size={18} /> {saving ? 'Saving...' : 'Save'}
+            <Save size={18} /> {saving ? 'Saving...' : isNew ? 'Generate New Estimate' : 'Save'}
           </button>
           {(isNew || estimate?.status === 'draft') && (
             <button className="btn btn-primary" onClick={() => handleSave(true)} disabled={saving}>
@@ -942,41 +953,88 @@ function EstimateDetailsPage() {
         </div>
       </div>
 
+      {/* Part Type Picker Modal */}
+      {showPartTypePicker && (
+        <div className="modal-overlay" onClick={() => setShowPartTypePicker(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Select Part Type</h3>
+              <button className="modal-close" onClick={() => setShowPartTypePicker(false)}>&times;</button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                {Object.entries(PART_TYPES).map(([key, { label, icon, desc }]) => (
+                  <div
+                    key={key}
+                    onClick={() => handleSelectPartType(key)}
+                    style={{
+                      padding: 16, borderRadius: 12, border: '2px solid #e0e0e0', cursor: 'pointer',
+                      transition: 'all 0.15s', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      textAlign: 'center', gap: 8
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1976d2'; e.currentTarget.style.background = '#e3f2fd'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.background = 'white'; }}
+                  >
+                    <span style={{ fontSize: '2rem' }}>{icon}</span>
+                    <strong style={{ fontSize: '1rem' }}>{label}</strong>
+                    <span style={{ fontSize: '0.8rem', color: '#666' }}>{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add/Edit Part Modal */}
       {showPartModal && (
         <div className="modal-overlay" onClick={() => setShowPartModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
             <div className="modal-header">
-              <h3 className="modal-title">{editingPart ? 'Edit Part' : 'Add Part'}</h3>
+              <h3 className="modal-title">
+                {editingPart ? 'Edit Part' : 'Add Part'} — {PART_TYPES[partData.partType]?.icon} {PART_TYPES[partData.partType]?.label || partData.partType}
+              </h3>
               <button className="modal-close" onClick={() => setShowPartModal(false)}>&times;</button>
             </div>
 
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-            <div className="grid grid-2">
-              <div className="form-group">
-                <label className="form-label">Part Type *</label>
-                <select className="form-select" value={partData.partType}
-                  onChange={(e) => setPartData({ ...partData, partType: e.target.value })}>
-                  <option value="">Select...</option>
-                  {Object.entries(PART_TYPES).map(([val, { label }]) => (
-                    <option key={val} value={val}>{label}</option>
-                  ))}
-                </select>
+
+              {/* Common fields for all part types */}
+              <div className="grid grid-2" style={{ marginBottom: 16 }}>
+                <div className="form-group">
+                  <label className="form-label">Client Part Number</label>
+                  <input type="text" className="form-input" value={partData.clientPartNumber || ''}
+                    onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Heat Number</label>
+                  <input type="text" className="form-input" value={partData.heatNumber || ''}
+                    onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} />
+                </div>
               </div>
+
+              {/* Type-specific form */}
+              {partData.partType === 'plate_roll' ? (
+                <div className="grid grid-2">
+                  <PlateRollForm
+                    partData={partData}
+                    setPartData={setPartData}
+                    vendorSuggestions={vendorSuggestions}
+                    setVendorSuggestions={setVendorSuggestions}
+                    showVendorSuggestions={showVendorSuggestions}
+                    setShowVendorSuggestions={setShowVendorSuggestions}
+                    showMessage={showMessage}
+                    setError={setError}
+                  />
+                </div>
+              ) : (
+                /* Generic form for all other part types */
+                <div>
+            <div className="grid grid-2">
               <div className="form-group">
                 <label className="form-label">Quantity *</label>
                 <input type="number" className="form-input" value={partData.quantity}
                   onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })} min="1" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Client Part Number</label>
-                <input type="text" className="form-input" value={partData.clientPartNumber || ''}
-                  onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Heat Number</label>
-                <input type="text" className="form-input" value={partData.heatNumber || ''}
-                  onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} />
               </div>
             </div>
 
@@ -1227,6 +1285,8 @@ function EstimateDetailsPage() {
               <textarea className="form-textarea" value={partData.specialInstructions || ''} rows={2}
                 onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} />
             </div>
+                </div>
+              )}
             </div>
 
             <div className="modal-footer">
