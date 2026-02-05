@@ -10,6 +10,7 @@ import {
   searchClients, searchVendors, getSettings, resetEstimateConversion
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
+import AngleRollForm from '../components/AngleRollForm';
 
 const PART_TYPES = {
   plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator' },
@@ -254,7 +255,9 @@ function EstimateDetailsPage() {
       // PlateRollForm fields
       materialTotal: '', laborTotal: '', setupCharge: '', otherCharges: '', partTotal: '',
       materialSource: 'customer', _materialOrigin: '', _rollValue: '', _rollMeasurePoint: 'inside',
-      _rollMeasureType: 'radius', _tangentLength: ''
+      _rollMeasureType: 'radius', _tangentLength: '',
+      // AngleRollForm fields
+      _angleSize: '', _customAngleSize: '', _legOrientation: '', _rollingDescription: ''
     });
     setShowPartModal(true);
   };
@@ -999,8 +1002,8 @@ function EstimateDetailsPage() {
 
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
 
-              {/* Common fields for all part types (plate_roll has its own at bottom) */}
-              {partData.partType !== 'plate_roll' && (
+              {/* Common fields for all part types (plate_roll and angle_roll have their own at bottom) */}
+              {partData.partType !== 'plate_roll' && partData.partType !== 'angle_roll' && (
               <div className="grid grid-2" style={{ marginBottom: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Client Part Number</label>
@@ -1019,6 +1022,19 @@ function EstimateDetailsPage() {
               {partData.partType === 'plate_roll' ? (
                 <div className="grid grid-2">
                   <PlateRollForm
+                    partData={partData}
+                    setPartData={setPartData}
+                    vendorSuggestions={vendorSuggestions}
+                    setVendorSuggestions={setVendorSuggestions}
+                    showVendorSuggestions={showVendorSuggestions}
+                    setShowVendorSuggestions={setShowVendorSuggestions}
+                    showMessage={showMessage}
+                    setError={setError}
+                  />
+                </div>
+              ) : partData.partType === 'angle_roll' ? (
+                <div className="grid grid-2">
+                  <AngleRollForm
                     partData={partData}
                     setPartData={setPartData}
                     vendorSuggestions={vendorSuggestions}
