@@ -775,8 +775,8 @@ function EstimateDetailsPage() {
                       )}
                       {parseFloat(part.materialTotal) > 0 && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
-                          <span>📦 Material</span>
-                          <strong>{formatCurrency(part.materialTotal)}</strong>
+                          <span>📦 Material {parseInt(part.quantity) > 1 ? `(${part.quantity} × ${formatCurrency(part.materialTotal)}/ea)` : ''}</span>
+                          <strong>{formatCurrency(parseFloat(part.materialTotal) * (parseInt(part.quantity) || 1))}</strong>
                         </div>
                       )}
                       {parseFloat(part.laborTotal) > 0 && (

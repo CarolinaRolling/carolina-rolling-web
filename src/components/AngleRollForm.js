@@ -177,20 +177,18 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     }
   }, [rollingDescription]);
 
-  // Calculate unit price
-  const unitPrice = useMemo(() => {
-    const mat = parseFloat(partData.materialTotal) || 0;
-    const lab = parseFloat(partData.laborTotal) || 0;
-    const setup = parseFloat(partData.setupCharge) || 0;
-    const other = parseFloat(partData.otherCharges) || 0;
-    return mat + lab + setup + other;
-  }, [partData.materialTotal, partData.laborTotal, partData.setupCharge, partData.otherCharges]);
+  // Calculate part total: material per-each × qty + flat charges
+  const qty = parseInt(partData.quantity) || 1;
+  const materialEach = parseFloat(partData.materialTotal) || 0;
+  const lab = parseFloat(partData.laborTotal) || 0;
+  const setup = parseFloat(partData.setupCharge) || 0;
+  const other = parseFloat(partData.otherCharges) || 0;
+  const calculatedTotal = (materialEach * qty) + lab + setup + other;
 
   // Auto-update part total
   useEffect(() => {
-    const qty = parseInt(partData.quantity) || 1;
-    setPartData(prev => ({ ...prev, partTotal: (unitPrice * qty).toFixed(2) }));
-  }, [unitPrice, partData.quantity]);
+    setPartData(prev => ({ ...prev, partTotal: calculatedTotal.toFixed(2) }));
+  }, [calculatedTotal]);
 
   const isCustomThickness = partData.thickness && !THICKNESS_OPTIONS.includes(partData.thickness) && partData.thickness !== 'Custom';
   const selectedThicknessOption = THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : '');
@@ -519,7 +517,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
         {sectionTitle('💰', 'Pricing', '#1976d2')}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div className="form-group">
-            <label className="form-label">Material Price</label>
+            <label className="form-label">Material Price (each)</label>
             <input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
           </div>
           <div className="form-group">
@@ -536,15 +534,17 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
           </div>
         </div>
 
-        {/* Unit Price & Part Total */}
+        {/* Pricing Summary */}
         <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 8, marginTop: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <span style={{ fontWeight: 500, color: '#666' }}>Unit Price:</span>
-            <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#1976d2' }}>${unitPrice.toFixed(2)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #ddd', paddingTop: 8 }}>
-            <span style={{ fontWeight: 600 }}>Part Total ({partData.quantity || 1} × ${unitPrice.toFixed(2)}):</span>
-            <span style={{ fontWeight: 700, fontSize: '1.2rem', color: '#2e7d32' }}>${(unitPrice * (parseInt(partData.quantity) || 1)).toFixed(2)}</span>
+          {materialEach > 0 && qty > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, fontSize: '0.85rem', color: '#666' }}>
+              <span>Material: ${materialEach.toFixed(2)} × {qty} pcs</span>
+              <span>${(materialEach * qty).toFixed(2)}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: materialEach > 0 && qty > 1 ? '1px solid #ddd' : 'none', paddingTop: materialEach > 0 && qty > 1 ? 8 : 0 }}>
+            <span style={{ fontWeight: 600 }}>Part Total:</span>
+            <span style={{ fontWeight: 700, fontSize: '1.2rem', color: '#2e7d32' }}>${calculatedTotal.toFixed(2)}</span>
           </div>
         </div>
       </div>

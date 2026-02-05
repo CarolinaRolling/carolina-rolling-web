@@ -190,7 +190,7 @@ function WorkOrderDetailsPage() {
     setPartData({ clientPartNumber: '', heatNumber: '', quantity: 1, material: '', thickness: '', width: '', length: '',
       outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '', arcDegrees: '', sectionSize: '', flangeOut: false, specialInstructions: '',
       laborRate: '', laborHours: '', laborTotal: '', materialUnitCost: '', materialTotal: '', setupCharge: '', otherCharges: '', partTotal: '',
-      materialSource: 'customer', vendorId: null, supplierName: '', materialDescription: '' });
+      materialSource: 'customer_supplied', vendorId: null, supplierName: '', materialDescription: '' });
     setShowPartModal(true);
   };
 
