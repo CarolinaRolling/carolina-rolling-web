@@ -10,7 +10,8 @@ import {
   uploadPartFiles, getPartFileSignedUrl, deletePartFile,
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
-  searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder
+  searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
+  searchClients
 } from '../services/api';
 
 const PART_TYPES = {
@@ -56,6 +57,8 @@ function WorkOrderDetailsPage() {
   const [estimateSearchResults, setEstimateSearchResults] = useState([]);
   const [searchingEstimates, setSearchingEstimates] = useState(false);
   const [linkingEstimate, setLinkingEstimate] = useState(false);
+  const [clientSuggestions, setClientSuggestions] = useState([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const fileInputRefs = useRef({});
   const docInputRef = useRef(null);
 
@@ -68,6 +71,7 @@ function WorkOrderDetailsPage() {
       const data = response.data.data;
       setOrder(data);
       setEditData({
+        clientId: data.clientId || null,
         clientName: data.clientName || '',
         clientPurchaseOrderNumber: data.clientPurchaseOrderNumber || '',
         jobNumber: data.jobNumber || '',
@@ -185,7 +189,7 @@ function WorkOrderDetailsPage() {
     setPartData({ clientPartNumber: '', heatNumber: '', quantity: 1, material: '', thickness: '', width: '', length: '',
       outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '', arcDegrees: '', sectionSize: '', flangeOut: false, specialInstructions: '',
       laborRate: '', laborHours: '', laborTotal: '', materialUnitCost: '', materialTotal: '', setupCharge: '', otherCharges: '', partTotal: '',
-      materialSource: 'customer', supplierName: '', materialDescription: '' });
+      materialSource: 'customer', vendorId: null, supplierName: '', materialDescription: '' });
     setShowPartModal(true);
   };
 
@@ -498,7 +502,7 @@ function WorkOrderDetailsPage() {
   const getSupplierGroups = () => {
     const groups = {};
     order.parts?.filter(p => selectedPartIds.includes(p.id)).forEach(part => {
-      const supplier = part.supplierName || 'Unknown Supplier';
+      const supplier = part.vendor?.name || part.supplierName || 'Unknown Supplier';
       if (!groups[supplier]) groups[supplier] = [];
       groups[supplier].push(part);
     });
@@ -746,7 +750,80 @@ function WorkOrderDetailsPage() {
         </div>
         {isEditing ? (
           <div className="grid grid-2">
-            <div className="form-group"><label className="form-label">Client *</label><input className="form-input" value={editData.clientName} onChange={(e) => setEditData({ ...editData, clientName: e.target.value })} /></div>
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label className="form-label">Client *</label>
+              <input 
+                className="form-input" 
+                value={editData._clientSearch !== undefined ? editData._clientSearch : editData.clientName} 
+                onChange={async (e) => {
+                  const value = e.target.value;
+                  setEditData({ ...editData, _clientSearch: value });
+                  if (value.length >= 1) {
+                    try {
+                      const res = await searchClients(value);
+                      setClientSuggestions(res.data.data || []);
+                      setShowClientSuggestions(true);
+                    } catch (err) { setClientSuggestions([]); }
+                  } else {
+                    setEditData({ ...editData, _clientSearch: value, clientId: null, clientName: '' });
+                    setClientSuggestions([]);
+                    setShowClientSuggestions(false);
+                  }
+                }}
+                onFocus={async () => {
+                  try {
+                    const res = await searchClients('');
+                    setClientSuggestions(res.data.data || []);
+                    setShowClientSuggestions(true);
+                  } catch (err) {}
+                }}
+                onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
+                placeholder="Search or add client..."
+                autoComplete="off"
+              />
+              {showClientSuggestions && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                  background: 'white', border: '1px solid #ddd', borderRadius: 4,
+                  maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                }}>
+                  {clientSuggestions.map(client => (
+                    <div key={client.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                      onMouseDown={() => {
+                        setEditData({ ...editData, clientId: client.id, clientName: client.name, _clientSearch: undefined,
+                          contactName: client.contactName || editData.contactName,
+                          contactPhone: client.contactPhone || editData.contactPhone,
+                          contactEmail: client.contactEmail || editData.contactEmail
+                        });
+                        setShowClientSuggestions(false);
+                      }}>
+                      <strong>{client.name}</strong>
+                      {client.contactName && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{client.contactName}</span>}
+                    </div>
+                  ))}
+                  {editData._clientSearch && editData._clientSearch.length >= 2 && !clientSuggestions.some(c => c.name.toLowerCase() === (editData._clientSearch || '').toLowerCase()) && (
+                    <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, borderTop: '2px solid #c8e6c9' }}
+                      onMouseDown={async () => {
+                        try {
+                          const res = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/clients`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                            body: JSON.stringify({ name: editData._clientSearch })
+                          });
+                          const data = await res.json();
+                          if (data.data) {
+                            setEditData({ ...editData, clientId: data.data.id, clientName: data.data.name, _clientSearch: undefined });
+                            showMessage(`Client "${data.data.name}" created`);
+                          }
+                        } catch (err) { setError('Failed to create client'); }
+                        setShowClientSuggestions(false);
+                      }}>
+                      + Add "{editData._clientSearch}" as new client
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="form-group"><label className="form-label">Client PO#</label><input className="form-input" value={editData.clientPurchaseOrderNumber} onChange={(e) => setEditData({ ...editData, clientPurchaseOrderNumber: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Job Number</label><input className="form-input" value={editData.jobNumber} onChange={(e) => setEditData({ ...editData, jobNumber: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Storage Location</label><input className="form-input" value={editData.storageLocation} onChange={(e) => setEditData({ ...editData, storageLocation: e.target.value })} /></div>
@@ -942,7 +1019,7 @@ function WorkOrderDetailsPage() {
                         {part.materialDescription && (
                           <strong style={{ color: part.materialOrdered ? '#2e7d32' : '#333' }}>📦 {part.materialDescription}</strong>
                         )}
-                        {part.supplierName && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#666' }}>from {part.supplierName}</span>}
+                        {(part.vendor?.name || part.supplierName) && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#666' }}>from {part.vendor?.name || part.supplierName}</span>}
                       </div>
                       {part.materialSource === 'we_order' && (
                         part.materialOrdered ? (
@@ -1175,14 +1252,14 @@ function WorkOrderDetailsPage() {
                         </select>
                       </div>
                       <div className="form-group" style={{ position: 'relative' }}>
-                        <label className="form-label">Supplier</label>
+                        <label className="form-label">Vendor</label>
                         <input 
                           className="form-input" 
-                          value={partData.supplierName || ''} 
+                          value={partData._vendorSearch !== undefined ? partData._vendorSearch : (partData.vendor?.name || partData.supplierName || '')} 
                           onChange={async (e) => {
                             const value = e.target.value;
-                            setPartData({ ...partData, supplierName: value });
-                            if (value.length >= 2) {
+                            setPartData({ ...partData, _vendorSearch: value });
+                            if (value.length >= 1) {
                               try {
                                 const res = await searchVendors(value);
                                 setVendorSuggestions(res.data.data || []);
@@ -1191,34 +1268,70 @@ function WorkOrderDetailsPage() {
                                 setVendorSuggestions([]);
                               }
                             } else {
+                              // Clear vendor if search emptied
+                              setPartData({ ...partData, _vendorSearch: value, vendorId: null, supplierName: '' });
                               setVendorSuggestions([]);
                               setShowVendorSuggestions(false);
                             }
                           }}
-                          onFocus={() => vendorSuggestions.length > 0 && setShowVendorSuggestions(true)}
+                          onFocus={async () => {
+                            try {
+                              const res = await searchVendors('');
+                              setVendorSuggestions(res.data.data || []);
+                              setShowVendorSuggestions(true);
+                            } catch (err) {}
+                          }}
                           onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
-                          placeholder="e.g. Metal Supermarkets"
+                          placeholder="Search or add vendor..."
                           autoComplete="off"
                         />
-                        {showVendorSuggestions && vendorSuggestions.length > 0 && (
+                        {showVendorSuggestions && (
                           <div style={{
                             position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
                             background: 'white', border: '1px solid #ddd', borderRadius: 4,
-                            maxHeight: 150, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                            maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                           }}>
                             {vendorSuggestions.map(vendor => (
                               <div 
                                 key={vendor.id}
                                 style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
                                 onMouseDown={() => {
-                                  setPartData({ ...partData, supplierName: vendor.name });
+                                  setPartData({ ...partData, vendorId: vendor.id, supplierName: vendor.name, _vendorSearch: undefined });
                                   setShowVendorSuggestions(false);
+                                  setVendorSuggestions([]);
                                 }}
                               >
                                 <strong>{vendor.name}</strong>
                                 {vendor.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{vendor.contactPhone}</span>}
                               </div>
                             ))}
+                            {partData._vendorSearch && partData._vendorSearch.length >= 2 && !vendorSuggestions.some(v => v.name.toLowerCase() === (partData._vendorSearch || '').toLowerCase()) && (
+                              <div 
+                                style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, borderTop: '2px solid #c8e6c9' }}
+                                onMouseDown={async () => {
+                                  try {
+                                    const res = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/vendors`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                                      body: JSON.stringify({ name: partData._vendorSearch })
+                                    });
+                                    const data = await res.json();
+                                    if (data.data) {
+                                      setPartData({ ...partData, vendorId: data.data.id, supplierName: data.data.name, _vendorSearch: undefined });
+                                      showMessage(`Vendor "${data.data.name}" created`);
+                                    }
+                                  } catch (err) {
+                                    setError('Failed to create vendor');
+                                  }
+                                  setShowVendorSuggestions(false);
+                                }}
+                              >
+                                + Add "{partData._vendorSearch}" as new vendor
+                              </div>
+                            )}
+                            {vendorSuggestions.length === 0 && (!partData._vendorSearch || partData._vendorSearch.length < 2) && (
+                              <div style={{ padding: '8px 12px', color: '#999', fontSize: '0.85rem' }}>Type to search vendors...</div>
+                            )}
                           </div>
                         )}
                       </div>

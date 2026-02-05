@@ -57,7 +57,7 @@ function InboundPage() {
 
     // Group by supplier
     const grouped = filtered.reduce((acc, order) => {
-      const supplier = order.supplierName || 'Unknown Supplier';
+      const supplier = order.vendor?.name || order.supplierName || order.supplier || 'Unknown Supplier';
       if (!acc[supplier]) {
         acc[supplier] = [];
       }
