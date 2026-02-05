@@ -254,10 +254,11 @@ function EstimateDetailsPage() {
       arcDegrees: '', flangeOut: false, specialInstructions: '',
       // PlateRollForm fields
       materialTotal: '', laborTotal: '', setupCharge: '', otherCharges: '', partTotal: '',
-      materialSource: 'customer', _materialOrigin: '', _rollValue: '', _rollMeasurePoint: 'inside',
+      materialSource: 'customer_supplied', _materialOrigin: '', _rollValue: '', _rollMeasurePoint: 'inside',
       _rollMeasureType: 'radius', _tangentLength: '',
       // AngleRollForm fields
-      _angleSize: '', _customAngleSize: '', _legOrientation: '', _rollingDescription: ''
+      _angleSize: '', _customAngleSize: '', _legOrientation: '', _rollingDescription: '',
+      _lengthOption: '', _customLength: ''
     });
     setShowPartModal(true);
   };

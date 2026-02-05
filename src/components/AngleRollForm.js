@@ -257,7 +257,25 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
 
       <div className="form-group">
         <label className="form-label">Length</label>
-        <input className="form-input" value={partData.length || ''} onChange={(e) => setPartData({ ...partData, length: e.target.value })} placeholder="e.g. 20'" />
+        <select className="form-select" value={partData._lengthOption || ''} onChange={(e) => {
+          const val = e.target.value;
+          if (val === 'Custom') {
+            setPartData({ ...partData, _lengthOption: 'Custom', length: partData._customLength || '' });
+          } else {
+            setPartData({ ...partData, _lengthOption: val, length: val, _customLength: '' });
+          }
+        }}>
+          <option value="">Select...</option>
+          <option value="20'">20'</option>
+          <option value="30'">30'</option>
+          <option value="40'">40'</option>
+          <option value="Custom">Custom</option>
+        </select>
+        {(partData._lengthOption === 'Custom') && (
+          <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter length"
+            value={partData._customLength || ''}
+            onChange={(e) => { setPartData({ ...partData, _customLength: e.target.value, length: e.target.value }); }} />
+        )}
       </div>
 
       {/* === ROLL INFO === */}
@@ -434,10 +452,9 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
           </div>
           <div className="form-group">
             <label className="form-label">Material Source</label>
-            <select className="form-select" value={partData.materialSource || 'customer'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
-              <option value="customer">Client Supplies</option>
+            <select className="form-select" value={partData.materialSource || 'customer_supplied'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
+              <option value="customer_supplied">Client Supplies</option>
               <option value="we_order">We Order</option>
-              <option value="in_stock">Stock Material</option>
             </select>
           </div>
         </div>

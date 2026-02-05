@@ -360,10 +360,9 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
           </div>
           <div className="form-group">
             <label className="form-label">Material Source</label>
-            <select className="form-select" value={partData.materialSource || 'customer'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
-              <option value="customer">Client Supplies</option>
+            <select className="form-select" value={partData.materialSource || 'customer_supplied'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
+              <option value="customer_supplied">Client Supplies</option>
               <option value="we_order">We Order</option>
-              <option value="in_stock">Stock Material</option>
             </select>
           </div>
         </div>
