@@ -33,6 +33,7 @@ function EstimateDetailsPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [partFormError, setPartFormError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
 
@@ -260,6 +261,7 @@ function EstimateDetailsPage() {
       _angleSize: '', _customAngleSize: '', _legOrientation: '', _rollingDescription: '',
       _lengthOption: '', _customLength: ''
     });
+    setPartFormError(null);
     setShowPartModal(true);
   };
 
@@ -287,6 +289,7 @@ function EstimateDetailsPage() {
       otherServicesCost: part.otherServicesCost || '',
       otherServicesMarkupPercent: part.otherServicesMarkupPercent || 15
     });
+    setPartFormError(null);
     setShowPartModal(true);
   };
 
@@ -329,13 +332,13 @@ function EstimateDetailsPage() {
   const handleSavePart = async () => {
     const warnings = validatePart();
     if (warnings.length > 0) {
-      setError(warnings.join('\n'));
+      setPartFormError(warnings);
       return;
     }
-    if (isNew) { setError('Generate the estimate first to add parts'); return; }
+    if (isNew) { setPartFormError(['Generate the estimate first to add parts']); return; }
     try {
       setSaving(true);
-      setError(null);
+      setPartFormError(null);
       
       // Ensure materialSource has a valid value before sending
       const dataToSend = { ...partData };
@@ -352,10 +355,11 @@ function EstimateDetailsPage() {
       setShowPartModal(false);
       setEditingPart(null);
       setPartData({});
+      setPartFormError(null);
       showMessage(editingPart ? 'Part updated' : 'Part added');
     } catch (err) { 
       console.error('Save part error:', err);
-      setError(err.response?.data?.error?.message || 'Failed to save part'); 
+      setPartFormError([err.response?.data?.error?.message || 'Failed to save part']); 
     }
     finally { setSaving(false); }
   };
@@ -1356,6 +1360,17 @@ function EstimateDetailsPage() {
                 </div>
               )}
             </div>
+
+            {partFormError && (
+              <div style={{ margin: '0 20px 12px', padding: 12, background: '#fff3e0', border: '2px solid #ff9800', borderRadius: 8 }}>
+                <div style={{ fontWeight: 700, color: '#e65100', marginBottom: 6, fontSize: '0.9rem' }}>⚠️ Please fix the following:</div>
+                {partFormError.map((msg, i) => (
+                  <div key={i} style={{ color: '#bf360c', fontSize: '0.85rem', padding: '2px 0', paddingLeft: 12, position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 0 }}>•</span> {msg}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowPartModal(false)}>Cancel</button>
