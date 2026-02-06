@@ -263,16 +263,16 @@ function AdminPage() {
   // ── MATERIAL GRADES ──
   const defaultMaterialGrades = [
     { name: 'A36', partTypes: ['plate_roll', 'flat_stock'], yieldStrength: '36,000', tensileStrength: '58,000-80,000' },
-    { name: 'A500 Gr B', partTypes: ['pipe_roll'], yieldStrength: '42,000', tensileStrength: '58,000' },
-    { name: 'A513', partTypes: ['pipe_roll'], yieldStrength: '32,000', tensileStrength: '48,000' },
-    { name: 'DOM', partTypes: ['pipe_roll'], yieldStrength: '70,000', tensileStrength: '80,000' },
+    { name: 'A500 Gr B', partTypes: ['pipe_roll', 'tube_roll'], yieldStrength: '42,000', tensileStrength: '58,000' },
+    { name: 'A513', partTypes: ['pipe_roll', 'tube_roll'], yieldStrength: '32,000', tensileStrength: '48,000' },
+    { name: 'DOM', partTypes: ['pipe_roll', 'tube_roll'], yieldStrength: '70,000', tensileStrength: '80,000' },
     { name: 'A572 Gr 50', partTypes: ['plate_roll', 'beam_roll', 'channel_roll'], yieldStrength: '50,000', tensileStrength: '65,000' },
-    { name: '304 S/S', partTypes: ['plate_roll', 'pipe_roll', 'angle_roll', 'flat_stock'], yieldStrength: '30,000', tensileStrength: '75,000' },
-    { name: '316 S/S', partTypes: ['plate_roll', 'pipe_roll', 'angle_roll', 'flat_stock'], yieldStrength: '30,000', tensileStrength: '75,000' },
+    { name: '304 S/S', partTypes: ['plate_roll', 'pipe_roll', 'tube_roll', 'angle_roll', 'flat_stock'], yieldStrength: '30,000', tensileStrength: '75,000' },
+    { name: '316 S/S', partTypes: ['plate_roll', 'pipe_roll', 'tube_roll', 'angle_roll', 'flat_stock'], yieldStrength: '30,000', tensileStrength: '75,000' },
     { name: 'AR400', partTypes: ['plate_roll'], yieldStrength: '100,000', tensileStrength: '120,000' },
-    { name: '6061-T6 Alum', partTypes: ['plate_roll', 'pipe_roll', 'angle_roll'], yieldStrength: '40,000', tensileStrength: '45,000' },
-    { name: '5052 Alum', partTypes: ['plate_roll', 'pipe_roll'], yieldStrength: '28,000', tensileStrength: '33,000' },
-    { name: '6063-T6 Alum', partTypes: ['pipe_roll'], yieldStrength: '25,000', tensileStrength: '30,000' },
+    { name: '6061-T6 Alum', partTypes: ['plate_roll', 'pipe_roll', 'tube_roll', 'angle_roll'], yieldStrength: '40,000', tensileStrength: '45,000' },
+    { name: '5052 Alum', partTypes: ['plate_roll', 'pipe_roll', 'tube_roll'], yieldStrength: '28,000', tensileStrength: '33,000' },
+    { name: '6063-T6 Alum', partTypes: ['pipe_roll', 'tube_roll'], yieldStrength: '25,000', tensileStrength: '30,000' },
   ];
 
   const loadMaterialGrades = async () => {
@@ -756,6 +756,7 @@ function AdminPage() {
                           <option value="plate_roll">Plate Roll</option>
                           <option value="angle_roll">Angle Roll</option>
                           <option value="pipe_roll">Pipe/Tube Roll</option>
+                          <option value="tube_roll">Sq/Rect Tube Roll</option>
                           <option value="beam_roll">Beam Roll</option>
                           <option value="channel_roll">Channel Roll</option>
                           <option value="flat_bar">Flat Bar</option>
@@ -993,6 +994,7 @@ function AdminPage() {
                             { key: 'plate_roll', label: 'Plate' },
                             { key: 'angle_roll', label: 'Angle' },
                             { key: 'pipe_roll', label: 'Pipe/Tube' },
+                            { key: 'tube_roll', label: 'Sq/Rect Tube' },
                             { key: 'beam_roll', label: 'Beam' },
                             { key: 'channel_roll', label: 'Channel' },
                             { key: 'flat_stock', label: 'Flat' },

@@ -21,6 +21,7 @@ const PART_TYPES = {
   angle_roll: { label: 'Angle Roll', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
   beam_roll: { label: 'Beam Roll', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
   pipe_roll: { label: 'Pipe/Tube Roll', fields: ['material', 'outerDiameter', 'wallThickness', 'length', 'radius', 'diameter', 'arcDegrees'] },
+  tube_roll: { label: 'Sq/Rect Tube Roll', fields: ['material', 'sectionSize', 'thickness', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
   channel_roll: { label: 'Channel Roll', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
   flat_bar: { label: 'Flat Bar', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
   flat_stock: { label: 'Flat Stock', fields: ['material', 'thickness', 'width', 'length'] },

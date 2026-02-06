@@ -12,10 +12,12 @@ import {
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
 import PipeRollForm from '../components/PipeRollForm';
+import SquareTubeRollForm from '../components/SquareTubeRollForm';
 
 const PART_TYPES = {
   plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator' },
   pipe_roll: { label: 'Pipe/Tube Roll', icon: '🔧', desc: 'Round pipe and tube bending' },
+  tube_roll: { label: 'Sq/Rect Tube Roll', icon: '⬜', desc: 'Square and rectangular tube rolling' },
   angle_roll: { label: 'Angle Roll', icon: '📐', desc: 'Angle iron rolling' },
   beam_roll: { label: 'Beam Roll', icon: '🏗️', desc: 'I-beam and H-beam rolling' },
   section_roll: { label: 'Section Roll', icon: '📏', desc: 'Structural section rolling' },
@@ -163,7 +165,7 @@ function EstimateDetailsPage() {
 
   const calculatePartTotal = (part) => {
     // For plate_roll, angle_roll, flat_stock — use ea pricing: (mat ea + labor ea) × qty
-    if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType)) {
+    if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll'].includes(part.partType)) {
       const qty = parseInt(part.quantity) || 1;
       const materialEach = parseFloat(part.materialTotal) || 0;
       const laborEach = parseFloat(part.laborTotal) || 0;
@@ -233,6 +235,9 @@ function EstimateDetailsPage() {
     }
     if (part.partType === 'pipe_roll') {
       return parseDimension(part.outerDiameter);
+    }
+    if (part.partType === 'tube_roll') {
+      return parseDimension(part._tubeSize || part.sectionSize || '');
     }
     return parseDimension(part.sectionSize || part.thickness || '');
   };
@@ -319,7 +324,7 @@ function EstimateDetailsPage() {
     let highestMinRule = null;
 
     parts.forEach(part => {
-      if (!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType)) return;
+      if (!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll'].includes(part.partType)) return;
       const laborEach = parseFloat(part.laborTotal) || 0;
       const materialEach = parseFloat(part.materialTotal) || 0;
       const qty = parseInt(part.quantity) || 1;
@@ -349,7 +354,7 @@ function EstimateDetailsPage() {
     
     parts.forEach(part => {
       const calc = calculatePartTotal(part);
-      if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType)) {
+      if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll'].includes(part.partType)) {
         eaPricedTotal += calc.partTotal;
       } else {
         partsSubtotal += calc.partTotal;
@@ -496,6 +501,10 @@ function EstimateDetailsPage() {
     if (part.partType === 'pipe_roll' && part.sectionSize && !part._pipeSize) {
       editData._pipeSize = part.sectionSize;
     }
+    // Restore _tubeSize from sectionSize for sq/rect tube parts
+    if (part.partType === 'tube_roll' && part.sectionSize && !part._tubeSize) {
+      editData._tubeSize = part.sectionSize;
+    }
     setPartData(editData);
     setPartFormError(null);
     setShowPartModal(true);
@@ -538,6 +547,14 @@ function EstimateDetailsPage() {
     if (partData.partType === 'pipe_roll') {
       if (!partData._pipeSize && !partData.outerDiameter) warnings.push('Pipe/tube size or OD is required');
       if (partData._pipeSize === 'Custom' && !partData.outerDiameter) warnings.push('Outer diameter is required for custom size');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+    }
+
+    if (partData.partType === 'tube_roll') {
+      if (!partData._tubeSize) warnings.push('Tube size is required');
+      if (partData._tubeSize === 'Custom' && !partData._customTubeSize) warnings.push('Custom tube size is required');
+      if (!partData.thickness) warnings.push('Wall thickness is required');
+      if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
       if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
     }
     
@@ -685,7 +702,7 @@ function EstimateDetailsPage() {
     const totals = calculateTotals();
     const partsHtml = parts.map(part => {
       const calc = calculatePartTotal(part);
-      const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType);
+      const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll'].includes(part.partType);
       const pricingHtml = isEaPricing
         ? `<table style="width:100%;margin-top:8px;">
             <tr><td>Material (ea):</td><td style="text-align:right;">${formatCurrency(part.materialTotal)}</td></tr>
@@ -698,8 +715,11 @@ function EstimateDetailsPage() {
             <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Part Total:</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`;
       return `<div style="border:1px solid #ddd;border-radius:8px;padding:16px;margin-bottom:12px;">
         <h4 style="margin:0 0 8px;color:#1976d2;">Part #${part.partNumber} - ${PART_TYPES[part.partType]?.label || part.partType}</h4>
-        <p style="margin:0 0 8px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''}</p>
-        <p><strong>Qty:</strong> ${part.quantity} | <strong>Material:</strong> ${part.materialDescription || 'N/A'}</p>
+        <p style="margin:0 0 4px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''}</p>
+        <p style="margin:0 0 4px;"><strong>Qty:</strong> ${part.quantity}${part.sectionSize ? ` | <strong>Size:</strong> ${part.sectionSize}` : ''}${part.thickness ? ` | <strong>Thk:</strong> ${part.thickness}` : ''}${part.material ? ` | <strong>Grade:</strong> ${part.material}` : ''}</p>
+        ${part.materialDescription ? `<p style="margin:0 0 4px;font-size:0.9em;color:#555;">📦 ${part.materialDescription}</p>` : ''}
+        ${(part.diameter || part.radius) ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">🔄 ${part.diameter ? part.diameter + '" Dia' : part.radius + '" Rad'}${part.rollType ? ' (' + (part.rollType === 'easy_way' ? 'EW' : 'HW') + ')' : ''}${part.arcDegrees ? ' | Arc: ' + part.arcDegrees + '°' : ''}</p>` : ''}
+        ${part._pitchEnabled ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;">🌀 Pitch: ${part._pitchDirection === 'clockwise' ? 'CW' : 'CCW'}${part._pitchMethod === 'runrise' && part._pitchRise ? ' | Run: ' + part._pitchRun + '" / Rise: ' + part._pitchRise + '"' : ''}${part._pitchMethod === 'degree' && part._pitchAngle ? ' | Angle: ' + part._pitchAngle + '°' : ''}${part._pitchMethod === 'space' && part._pitchSpaceValue ? ' | ' + (part._pitchSpaceType === 'center' ? 'C-C' : 'Between') + ': ' + part._pitchSpaceValue + '"' : ''}</p>` : ''}
         ${part.supplierName ? `<p style="color:#388e3c;">Supplier: ${part.supplierName}</p>` : ''}
         ${pricingHtml}
       </div>`;
@@ -954,16 +974,52 @@ function EstimateDetailsPage() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, fontSize: '0.875rem', marginBottom: 12 }}>
-                    <div><strong>Qty:</strong> {part.quantity}</div>
-                    {part.material && <div><strong>Material:</strong> {part.material}</div>}
-                    {part.diameter && <div><strong>Diameter:</strong> {part.diameter}"</div>}
-                    {part.radius && <div><strong>Radius:</strong> {part.radius}"</div>}
-                    {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
+                  <div style={{ fontSize: '0.875rem', marginBottom: 12 }}>
+                    {/* Line 1: Qty, Size, Grade */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                      <span><strong>Qty:</strong> {part.quantity}</span>
+                      {part.sectionSize && <span style={{ color: '#555' }}>| <strong>Size:</strong> {part.sectionSize}</span>}
+                      {part.thickness && <span style={{ color: '#555' }}>| <strong>Thk:</strong> {part.thickness}</span>}
+                      {part.outerDiameter && <span style={{ color: '#555' }}>| <strong>OD:</strong> {part.outerDiameter}"</span>}
+                      {part.wallThickness && <span style={{ color: '#555' }}>| <strong>Wall:</strong> {part.wallThickness}</span>}
+                      {part.width && <span style={{ color: '#555' }}>| <strong>Width:</strong> {part.width}"</span>}
+                      {part.length && <span style={{ color: '#555' }}>| <strong>Len:</strong> {part.length}</span>}
+                      {part.material && <span style={{ color: '#555' }}>| <strong>Grade:</strong> {part.material}</span>}
+                    </div>
+                    {/* Line 2: Roll info */}
+                    {(part.diameter || part.radius) && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, color: '#1565c0', fontSize: '0.82rem' }}>
+                        🔄 {part.diameter ? `${part.diameter}" Dia` : `${part.radius}" Rad`}
+                        {part.rollType && <span>({part.rollType === 'easy_way' ? 'EW' : 'HW'})</span>}
+                        {part._rollMeasurePoint && part._rollMeasurePoint !== 'centerline' && (
+                          <span>({part._rollMeasurePoint === 'inside' ? 'ID' : 'OD'})</span>
+                        )}
+                        {part.arcDegrees && <span>| Arc: {part.arcDegrees}°</span>}
+                        {part._legOrientation && <span>| {part._legOrientation}" leg {part.rollType === 'easy_way' ? 'out' : 'in'}</span>}
+                        {part._sideOrientation && <span>| {part._sideOrientation}" side {part.rollType === 'easy_way' ? 'out' : 'in'}</span>}
+                      </div>
+                    )}
+                    {/* Line 3: Centerline Ø (pipe/tube) or Rise/chord calc */}
+                    {part._rollingDescription && (part._rollingDescription.includes('Centerline') || part._rollingDescription.includes('Rise:')) && (
+                      <div style={{ fontSize: '0.8rem', color: '#6a1b9a', marginTop: 2 }}>
+                        {part._rollingDescription.split('\n').filter(l => l.includes('Centerline') || l.includes('Rise:')).map((line, i) => (
+                          <div key={i}>📐 {line.trim()}</div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Line 4: Pitch info */}
+                    {part._pitchEnabled && (
+                      <div style={{ fontSize: '0.8rem', color: '#e65100', marginTop: 2 }}>
+                        🌀 Pitch: {part._pitchDirection === 'clockwise' ? 'CW' : 'CCW'}
+                        {part._pitchMethod === 'runrise' && part._pitchRise && ` | Run: ${part._pitchRun}" / Rise: ${part._pitchRise}"`}
+                        {part._pitchMethod === 'degree' && part._pitchAngle && ` | Angle: ${part._pitchAngle}°`}
+                        {part._pitchMethod === 'space' && part._pitchSpaceValue && ` | ${part._pitchSpaceType === 'center' ? 'C-C' : 'Between'}: ${part._pitchSpaceValue}"`}
+                      </div>
+                    )}
                   </div>
 
                   {/* Material Section - only show if we supply material (old part types) */}
-                  {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType) && part.weSupplyMaterial && part.materialDescription && (
+                  {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll'].includes(part.partType) && part.weSupplyMaterial && part.materialDescription && (
                     <div style={{ background: '#fff3e0', borderRadius: 8, padding: 12, marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <strong>📦 We Supply Material</strong>
@@ -982,7 +1038,7 @@ function EstimateDetailsPage() {
                   )}
 
                   {/* Costs Section - plate_roll / angle_roll / flat_stock pricing */}
-                  {['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType) ? (
+                  {['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll'].includes(part.partType) ? (
                     <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
                       {part.materialDescription && (
                         <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
@@ -1412,7 +1468,7 @@ function EstimateDetailsPage() {
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
 
               {/* Common fields for all part types (plate_roll, angle_roll, flat_stock have their own) */}
-              {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(partData.partType) && (
+              {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll'].includes(partData.partType) && (
               <div className="grid grid-2" style={{ marginBottom: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Client Part Number</label>
@@ -1457,6 +1513,19 @@ function EstimateDetailsPage() {
               ) : partData.partType === 'pipe_roll' ? (
                 <div className="grid grid-2">
                   <PipeRollForm
+                    partData={partData}
+                    setPartData={setPartData}
+                    vendorSuggestions={vendorSuggestions}
+                    setVendorSuggestions={setVendorSuggestions}
+                    showVendorSuggestions={showVendorSuggestions}
+                    setShowVendorSuggestions={setShowVendorSuggestions}
+                    showMessage={showMessage}
+                    setError={setError}
+                  />
+                </div>
+              ) : partData.partType === 'tube_roll' ? (
+                <div className="grid grid-2">
+                  <SquareTubeRollForm
                     partData={partData}
                     setPartData={setPartData}
                     vendorSuggestions={vendorSuggestions}

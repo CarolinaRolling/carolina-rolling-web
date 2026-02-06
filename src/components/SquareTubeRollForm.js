@@ -1,0 +1,552 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { Upload } from 'lucide-react';
+import { searchVendors, getSettings } from '../services/api';
+
+const THICKNESS_OPTIONS = [
+  '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
+  '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '1"', 'Custom'
+];
+
+const TUBE_SIZE_OPTIONS = [
+  // Square
+  '1x1', '1.25x1.25', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '5x5', '6x6',
+  // Rectangular
+  '1x2', '1x3', '1.5x2', '1.5x3', '2x3', '2x4', '3x4', '3x5', '4x6',
+  'Custom'
+];
+
+const DEFAULT_GRADE_OPTIONS = ['A500 Gr B', 'A513', '304 S/S', '316 S/S', '6061-T6 Alum', 'Custom'];
+
+// Parse tube size string like "2x4" into { side1, side2 }
+function parseTubeSize(sizeStr) {
+  if (!sizeStr || sizeStr === 'Custom') return null;
+  const parts = sizeStr.split('x').map(Number);
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+    return { side1: parts[0], side2: parts[1] };
+  }
+  return null;
+}
+
+function isSquare(sizeStr) {
+  const parsed = parseTubeSize(sizeStr);
+  return parsed && parsed.side1 === parsed.side2;
+}
+
+// Calculate height of rise given a chord length and radius (sagitta formula)
+function calculateRise(radiusInches, chordInches) {
+  if (!radiusInches || radiusInches <= 0) return null;
+  const halfChord = chordInches / 2;
+  if (halfChord >= radiusInches) return null;
+  return radiusInches - Math.sqrt(radiusInches * radiusInches - halfChord * halfChord);
+}
+
+export default function SquareTubeRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
+  const [customThickness, setCustomThickness] = useState('');
+  const [customGrade, setCustomGrade] = useState('');
+  const [customTubeSize, setCustomTubeSize] = useState('');
+  const [rollValue, setRollValue] = useState(partData._rollValue || '');
+  const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'radius');
+  const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
+
+  // Load grades from admin settings
+  useEffect(() => {
+    const loadGrades = async () => {
+      try {
+        const resp = await getSettings('material_grades');
+        if (resp.data.data?.value) {
+          const grades = resp.data.data.value.filter(g => g.partTypes?.includes('tube_roll'));
+          if (grades.length > 0) setGradeOptions([...grades.map(g => g.name), 'Custom']);
+        }
+      } catch {}
+    };
+    loadGrades();
+  }, []);
+
+  // Sync roll fields from partData on mount (for editing)
+  useEffect(() => {
+    if (partData.radius && !partData.diameter) {
+      setRollValue(partData.radius);
+      setRollMeasureType('radius');
+    } else if (partData.diameter) {
+      setRollValue(partData.diameter);
+      setRollMeasureType('diameter');
+    }
+    if (partData._rollMeasureType) setRollMeasureType(partData._rollMeasureType);
+  }, []);
+
+  // Update partData when roll fields change
+  useEffect(() => {
+    const updates = {
+      _rollValue: rollValue,
+      _rollMeasureType: rollMeasureType,
+    };
+    if (rollMeasureType === 'radius') {
+      updates.radius = rollValue;
+      updates.diameter = '';
+    } else {
+      updates.diameter = rollValue;
+      updates.radius = '';
+    }
+    setPartData(prev => ({ ...prev, ...updates }));
+  }, [rollValue, rollMeasureType]);
+
+  // Parse size
+  const parsedSize = useMemo(() => parseTubeSize(partData._tubeSize), [partData._tubeSize]);
+  const isRectangular = parsedSize && parsedSize.side1 !== parsedSize.side2;
+
+  // Calculate effective radius for rise
+  const effectiveRadius = useMemo(() => {
+    const rv = parseFloat(rollValue) || 0;
+    if (!rv) return 0;
+    return rollMeasureType === 'radius' ? rv : rv / 2;
+  }, [rollValue, rollMeasureType]);
+
+  // Calculate rise for large radius parts
+  const riseCalc = useMemo(() => {
+    const rv = parseFloat(rollValue) || 0;
+    if (!rv) return null;
+    const diameterValue = rollMeasureType === 'radius' ? rv * 2 : rv;
+    const radiusValue = rollMeasureType === 'radius' ? rv : rv / 2;
+    if (diameterValue > 120 || radiusValue > 120) {
+      const rise = calculateRise(radiusValue, 60);
+      if (rise !== null) return { rise, chord: 60 };
+    }
+    return null;
+  }, [rollValue, rollMeasureType]);
+
+  // Build material description
+  const materialDescription = useMemo(() => {
+    const qty = parseInt(partData.quantity) || 1;
+    const descParts = [];
+    descParts.push(`${qty}pc`);
+
+    if (partData._tubeSize && partData._tubeSize !== 'Custom') {
+      const parsed = parseTubeSize(partData._tubeSize);
+      if (parsed) {
+        descParts.push(`${parsed.side1}" x ${parsed.side2}"`);
+      }
+    } else if (partData._customTubeSize) {
+      descParts.push(partData._customTubeSize);
+    }
+
+    if (partData.thickness) descParts.push(`x ${partData.thickness}`);
+    descParts.push(isRectangular ? 'Rect Tube' : 'Sq Tube');
+    if (partData.length) descParts.push(`x ${partData.length} long`);
+
+    const grade = partData.material || '';
+    if (grade) descParts.push(grade);
+    const origin = partData._materialOrigin || '';
+    if (origin) descParts.push(`(${origin})`);
+
+    return descParts.join(' ');
+  }, [partData._tubeSize, partData._customTubeSize, partData.thickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, isRectangular]);
+
+  // Build rolling description
+  const rollingDescription = useMemo(() => {
+    const rv = parseFloat(rollValue) || 0;
+    if (!rv) return '';
+    const lines = [];
+    const typeLabel = rollMeasureType === 'radius' ? 'radius' : 'diameter';
+    const ewHw = partData.rollType === 'easy_way' ? 'EW' : partData.rollType === 'hard_way' ? 'HW' : '';
+
+    let rollLine = `Roll to ${rv}" ${typeLabel}`;
+    if (ewHw) rollLine += ` ${ewHw}`;
+
+    if (isRectangular && partData._sideOrientation) {
+      rollLine += ` (${partData._sideOrientation}" side ${partData.rollType === 'easy_way' ? 'out' : 'in'})`;
+    }
+    lines.push(rollLine);
+
+    if (riseCalc) {
+      lines.push(`Rise: ${riseCalc.rise.toFixed(4)}" over ${riseCalc.chord}" chord`);
+    }
+    return lines.join('\n');
+  }, [rollValue, rollMeasureType, partData.rollType, isRectangular, partData._sideOrientation, riseCalc]);
+
+  // Auto-update material description + sectionSize
+  useEffect(() => {
+    const updates = { materialDescription };
+    if (partData._tubeSize && partData._tubeSize !== 'Custom') {
+      updates.sectionSize = partData._tubeSize;
+    } else if (partData._customTubeSize) {
+      updates.sectionSize = partData._customTubeSize;
+    }
+    setPartData(prev => ({ ...prev, ...updates }));
+  }, [materialDescription]);
+
+  // Auto-update rolling description
+  useEffect(() => {
+    if (rollingDescription) {
+      setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
+    }
+  }, [rollingDescription]);
+
+  // Pricing
+  const qty = parseInt(partData.quantity) || 1;
+  const materialEach = parseFloat(partData.materialTotal) || 0;
+  const laborEach = parseFloat(partData.laborTotal) || 0;
+  const unitPrice = materialEach + laborEach;
+  const lineTotal = unitPrice * qty;
+
+  useEffect(() => {
+    setPartData(prev => ({ ...prev, partTotal: lineTotal.toFixed(2) }));
+  }, [lineTotal]);
+
+  const isCustomThickness = partData.thickness && !THICKNESS_OPTIONS.includes(partData.thickness) && partData.thickness !== 'Custom';
+  const selectedThicknessOption = THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : '');
+  const isCustomGrade = partData.material && !gradeOptions.includes(partData.material);
+  const selectedGradeOption = gradeOptions.includes(partData.material) ? partData.material : (partData.material ? 'Custom' : '');
+  const selectedTubeSizeOption = TUBE_SIZE_OPTIONS.includes(partData._tubeSize) ? partData._tubeSize : (partData._tubeSize ? 'Custom' : '');
+
+  const sectionStyle = { gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 8, paddingTop: 12 };
+  const sectionTitle = (icon, text, color) => <h4 style={{ marginBottom: 10, color, fontSize: '0.95rem' }}>{icon} {text}</h4>;
+
+  return (
+    <>
+      {/* === DIMENSIONS === */}
+      <div className="form-group">
+        <label className="form-label">Quantity *</label>
+        <input type="number" className="form-input" value={partData.quantity} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} min="1" />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Tube Size *</label>
+        <select className="form-select" value={selectedTubeSizeOption} onChange={(e) => {
+          if (e.target.value === 'Custom') {
+            setPartData({ ...partData, _tubeSize: 'Custom', _sideOrientation: '' });
+          } else {
+            setPartData({ ...partData, _tubeSize: e.target.value, _sideOrientation: '' });
+            setCustomTubeSize('');
+          }
+        }}>
+          <option value="">Select...</option>
+          <optgroup label="Square">
+            {TUBE_SIZE_OPTIONS.filter(s => { const p = parseTubeSize(s); return p && p.side1 === p.side2; }).map(s => {
+              const p = parseTubeSize(s);
+              return <option key={s} value={s}>{p.side1}" x {p.side2}" Sq</option>;
+            })}
+          </optgroup>
+          <optgroup label="Rectangular">
+            {TUBE_SIZE_OPTIONS.filter(s => { const p = parseTubeSize(s); return p && p.side1 !== p.side2; }).map(s => {
+              const p = parseTubeSize(s);
+              return <option key={s} value={s}>{p.side1}" x {p.side2}" Rect</option>;
+            })}
+          </optgroup>
+          <option value="Custom">Custom Size</option>
+        </select>
+        {(selectedTubeSizeOption === 'Custom') && (
+          <input className="form-input" style={{ marginTop: 4 }} placeholder='e.g. 3x5 or 3" x 5"'
+            value={partData._customTubeSize || customTubeSize}
+            onChange={(e) => { setCustomTubeSize(e.target.value); setPartData({ ...partData, _customTubeSize: e.target.value }); }} />
+        )}
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Wall Thickness *</label>
+        <select className="form-select" value={selectedThicknessOption} onChange={(e) => {
+          if (e.target.value === 'Custom') {
+            setPartData({ ...partData, thickness: customThickness || 'Custom' });
+          } else {
+            setPartData({ ...partData, thickness: e.target.value });
+            setCustomThickness('');
+          }
+        }}>
+          <option value="">Select...</option>
+          {THICKNESS_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        {(selectedThicknessOption === 'Custom' || isCustomThickness) && (
+          <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter wall thickness"
+            value={partData.thickness === 'Custom' ? customThickness : partData.thickness}
+            onChange={(e) => { setCustomThickness(e.target.value); setPartData({ ...partData, thickness: e.target.value }); }} />
+        )}
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Length</label>
+        <select className="form-select" value={partData._lengthOption || ''} onChange={(e) => {
+          const val = e.target.value;
+          if (val === 'Custom') {
+            setPartData({ ...partData, _lengthOption: 'Custom', length: partData._customLength || '' });
+          } else {
+            setPartData({ ...partData, _lengthOption: val, length: val, _customLength: '' });
+          }
+        }}>
+          <option value="">Select...</option>
+          <option value="20'">20'</option>
+          <option value="24'">24'</option>
+          <option value="40'">40'</option>
+          <option value="Custom">Custom</option>
+        </select>
+        {(partData._lengthOption === 'Custom') && (
+          <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter length"
+            value={partData._customLength || ''}
+            onChange={(e) => { setPartData({ ...partData, _customLength: e.target.value, length: e.target.value }); }} />
+        )}
+      </div>
+
+      {/* === ROLL INFO === */}
+      <div style={sectionStyle}>
+        {sectionTitle('🔄', 'Roll Information', '#1565c0')}
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8, marginBottom: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Roll Value *</label>
+            <input className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" type="number" step="0.001" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Type</label>
+            <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
+              <option value="radius">Radius</option>
+              <option value="diameter">Diameter</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Easy Way / Hard Way */}
+        <div style={{ marginBottom: 12 }}>
+          <label className="form-label">Roll Direction *</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button"
+              style={{
+                flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem',
+                border: `2px solid ${partData.rollType === 'easy_way' ? '#2e7d32' : '#ccc'}`,
+                background: partData.rollType === 'easy_way' ? '#e8f5e9' : '#fff',
+                color: partData.rollType === 'easy_way' ? '#2e7d32' : '#666',
+                cursor: 'pointer'
+              }}
+              onClick={() => setPartData({ ...partData, rollType: 'easy_way', _sideOrientation: '' })}
+            >
+              Easy Way (EW)
+            </button>
+            <button type="button"
+              style={{
+                flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem',
+                border: `2px solid ${partData.rollType === 'hard_way' ? '#c62828' : '#ccc'}`,
+                background: partData.rollType === 'hard_way' ? '#ffebee' : '#fff',
+                color: partData.rollType === 'hard_way' ? '#c62828' : '#666',
+                cursor: 'pointer'
+              }}
+              onClick={() => setPartData({ ...partData, rollType: 'hard_way', _sideOrientation: '' })}
+            >
+              Hard Way (HW)
+            </button>
+          </div>
+        </div>
+
+        {/* Side Orientation for rectangular tubes */}
+        {isRectangular && partData.rollType && (
+          <div style={{
+            background: '#e3f2fd', borderRadius: 8, padding: 12, marginBottom: 12,
+            border: '1px solid #90caf9'
+          }}>
+            <label className="form-label" style={{ marginBottom: 8, fontWeight: 600 }}>
+              Which side faces {partData.rollType === 'easy_way' ? 'outward' : 'inward'}?
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[parsedSize.side1, parsedSize.side2].filter((v, i, a) => a.indexOf(v) === i).map(side => (
+                <button key={side} type="button"
+                  style={{
+                    flex: 1, padding: 10, borderRadius: 8, cursor: 'pointer', fontWeight: 600,
+                    border: `2px solid ${partData._sideOrientation === String(side) ? '#1565c0' : '#ccc'}`,
+                    background: partData._sideOrientation === String(side) ? '#e3f2fd' : '#fff',
+                    color: partData._sideOrientation === String(side) ? '#1565c0' : '#666',
+                  }}
+                  onClick={() => setPartData({ ...partData, _sideOrientation: String(side) })}
+                >
+                  {side}" side {partData.rollType === 'easy_way' ? 'out' : 'in'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Arc */}
+        <div className="form-group">
+          <label className="form-label">Arc (degrees)</label>
+          <input type="number" step="0.1" className="form-input" value={partData.arcDegrees || ''}
+            onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} placeholder="e.g. 90, 180, 360" />
+        </div>
+
+        {/* Rise Calculation for large radius */}
+        {riseCalc && (
+          <div style={{ background: '#f3e5f5', borderRadius: 8, padding: 10, marginTop: 8 }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#6a1b9a', marginBottom: 4 }}>
+              📐 Rise Calculation (check dimension)
+            </div>
+            <div style={{ fontSize: '0.82rem', color: '#4a148c' }}>
+              Over a {riseCalc.chord}" chord: <strong>{riseCalc.rise.toFixed(4)}" rise</strong>
+            </div>
+          </div>
+        )}
+
+        {/* Rolling Description */}
+        {rollingDescription && (
+          <div style={{ background: '#f5f5f5', borderRadius: 6, padding: 8, marginTop: 8, fontSize: '0.8rem', color: '#666', whiteSpace: 'pre-line' }}>
+            {rollingDescription}
+          </div>
+        )}
+      </div>
+
+      {/* === SPECIAL INSTRUCTIONS === */}
+      <div style={sectionStyle}>
+        <div className="form-group">
+          <label className="form-label">Special Instructions</label>
+          <textarea className="form-textarea" value={partData.specialInstructions || ''} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} rows={2} />
+        </div>
+      </div>
+
+      {/* Custom Shape Upload */}
+      <div style={sectionStyle}>
+        <div className="form-group">
+          <label className="form-label">Custom Shape (PDF)</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px dashed #bbb', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}>
+            <Upload size={16} /> Upload drawing...
+            <input type="file" accept=".pdf,.png,.jpg" style={{ display: 'none' }} onChange={(e) => {
+              if (e.target.files[0]) setPartData({ ...partData, _shapeFile: e.target.files[0] });
+            }} />
+          </label>
+          {partData._shapeFile && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile.name}</div>}
+        </div>
+      </div>
+
+      {/* === MATERIAL INFO === */}
+      <div style={sectionStyle}>
+        {sectionTitle('📦', 'Material Information', '#e65100')}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Grade</label>
+            <select className="form-select" value={selectedGradeOption} onChange={(e) => {
+              if (e.target.value === 'Custom') {
+                setPartData({ ...partData, material: customGrade || '' });
+              } else {
+                setPartData({ ...partData, material: e.target.value });
+                setCustomGrade('');
+              }
+            }}>
+              <option value="">Select...</option>
+              {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+            {(selectedGradeOption === 'Custom' || isCustomGrade) && (
+              <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter grade"
+                value={isCustomGrade ? partData.material : customGrade}
+                onChange={(e) => { setCustomGrade(e.target.value); setPartData({ ...partData, material: e.target.value }); }} />
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Origin</label>
+            <select className="form-select" value={partData._materialOrigin || ''} onChange={(e) => setPartData({ ...partData, _materialOrigin: e.target.value })}>
+              <option value="">Select...</option>
+              <option value="Domestic">Domestic</option>
+              <option value="Import">Import</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Material Source</label>
+            <select className="form-select" value={partData.materialSource || 'customer_supplied'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
+              <option value="customer_supplied">Client Supplies</option>
+              <option value="we_order">We Order</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Vendor Selector */}
+        {partData.materialSource === 'we_order' && (
+          <div className="form-group" style={{ position: 'relative', marginTop: 8 }}>
+            <label className="form-label">Vendor</label>
+            <input className="form-input"
+              value={partData._vendorSearch !== undefined ? partData._vendorSearch : (partData.vendor?.name || partData.supplierName || '')}
+              onChange={async (e) => {
+                const value = e.target.value;
+                setPartData({ ...partData, _vendorSearch: value });
+                if (value.length >= 1) {
+                  try { const res = await searchVendors(value); setVendorSuggestions(res.data.data || []); setShowVendorSuggestions(true); } catch { setVendorSuggestions([]); }
+                } else {
+                  setPartData({ ...partData, _vendorSearch: value, vendorId: null, supplierName: '' }); setVendorSuggestions([]); setShowVendorSuggestions(false);
+                }
+              }}
+              onFocus={async () => { try { const res = await searchVendors(''); setVendorSuggestions(res.data.data || []); setShowVendorSuggestions(true); } catch {} }}
+              onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
+              placeholder="Search or add vendor..." autoComplete="off"
+            />
+            {showVendorSuggestions && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid #ddd', borderRadius: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                {vendorSuggestions.map(v => (
+                  <div key={v.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                    onMouseDown={() => { setPartData({ ...partData, vendorId: v.id, supplierName: v.name, _vendorSearch: undefined }); setShowVendorSuggestions(false); }}>
+                    <strong>{v.name}</strong>
+                    {v.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{v.contactPhone}</span>}
+                  </div>
+                ))}
+                {partData._vendorSearch && partData._vendorSearch.length >= 2 && !vendorSuggestions.some(v => v.name.toLowerCase() === (partData._vendorSearch || '').toLowerCase()) && (
+                  <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600 }}
+                    onMouseDown={async () => {
+                      try {
+                        const res = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/vendors`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` }, body: JSON.stringify({ name: partData._vendorSearch }) });
+                        const data = await res.json();
+                        if (data.data) { setPartData({ ...partData, vendorId: data.data.id, supplierName: data.data.name, _vendorSearch: undefined }); showMessage(`Vendor "${data.data.name}" created`); }
+                      } catch { setError('Failed to create vendor'); }
+                      setShowVendorSuggestions(false);
+                    }}>
+                    + Add "{partData._vendorSearch}" as new vendor
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="form-group" style={{ marginTop: 12 }}>
+          <label className="form-label">Material Description (for ordering)</label>
+          <textarea className="form-textarea" value={partData.materialDescription || ''} onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })} rows={2}
+            style={{ fontFamily: 'monospace', fontSize: '0.9rem' }} />
+          <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 2 }}>Auto-generated — edit as needed</div>
+        </div>
+      </div>
+
+      {/* === PRICING === */}
+      <div style={sectionStyle}>
+        {sectionTitle('💰', 'Pricing', '#1976d2')}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Material (each)</label>
+            <input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Labor (each)</label>
+            <input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" />
+          </div>
+        </div>
+
+        <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
+            <span>Material (ea)</span><span>${materialEach.toFixed(2)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
+            <span>Labor (ea)</span><span>${laborEach.toFixed(2)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9', marginTop: 4 }}>
+            <strong>Unit Price</strong><strong style={{ color: '#1976d2' }}>${unitPrice.toFixed(2)}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9' }}>
+            <strong>Line Total ({qty} × ${unitPrice.toFixed(2)})</strong>
+            <strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong>
+          </div>
+        </div>
+      </div>
+
+      {/* === TRACKING === */}
+      <div style={sectionStyle}>
+        {sectionTitle('🏷️', 'Tracking', '#616161')}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Client Part Number</label>
+            <input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Heat Number</label>
+            <input type="text" className="form-input" value={partData.heatNumber || ''} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} placeholder="Optional" />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
