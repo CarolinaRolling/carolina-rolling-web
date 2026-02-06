@@ -825,7 +825,6 @@ function AdminPage() {
           </div>
         </div>
 
-      {/* ── ROLL LIMITS TAB ── */}
       ) : activeTab === 'rolllimits' ? (
         <div>
           <div className="card">
@@ -893,7 +892,6 @@ function AdminPage() {
           </div>
         </div>
 
-      {/* ── MANDREL DIES TAB ── */}
       ) : activeTab === 'mandreldies' ? (
         <div>
           <div className="card">
@@ -962,7 +960,6 @@ function AdminPage() {
           </div>
         </div>
 
-      {/* ── MATERIAL GRADES TAB ── */}
       ) : activeTab === 'grades' ? (
         <div>
           <div className="card">

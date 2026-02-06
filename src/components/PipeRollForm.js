@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Upload, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { searchVendors, getSettings } from '../services/api';
 
 // ── PIPE & TUBE SIZE DATA ──────────────────────────────────────────────────────

@@ -17,7 +17,7 @@
     "dev": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "heroku-postbuild": "npm run build"
+    "heroku-postbuild": "CI=false npm run build"
   },
   "engines": {
     "node": "18.x"
