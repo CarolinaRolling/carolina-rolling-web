@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Upload } from 'lucide-react';
-import { searchVendors } from '../services/api';
+import { searchVendors, getSettings } from '../services/api';
 
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
@@ -8,7 +8,7 @@ const THICKNESS_OPTIONS = [
   '1"', '1-1/4"', '1-1/2"', '2"', 'Custom'
 ];
 
-const GRADE_OPTIONS = ['A36', '304 S/S', '316 S/S', 'AR400', 'Custom'];
+const DEFAULT_GRADE_OPTIONS = ['A36', '304 S/S', '316 S/S', 'AR400', 'Custom'];
 
 // Convert thickness string to decimal inches for calculation
 function thicknessToDecimal(t) {
@@ -41,7 +41,22 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   const [angleValue, setAngleValue] = useState(partData.arcDegrees || '');
   const [showTangent, setShowTangent] = useState(!!(partData._tangentLength));
   const [tangentLength, setTangentLength] = useState(partData._tangentLength || '');
+  const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
 
+  // Load grades from admin settings
+  useEffect(() => {
+    const loadGrades = async () => {
+      try {
+        const resp = await getSettings('material_grades');
+        if (resp.data.data?.value) {
+          const partType = partData.partType === 'flat_stock' ? 'flat_stock' : 'plate_roll';
+          const grades = resp.data.data.value.filter(g => g.partTypes?.includes(partType));
+          if (grades.length > 0) setGradeOptions([...grades.map(g => g.name), 'Custom']);
+        }
+      } catch {}
+    };
+    loadGrades();
+  }, [partData.partType]);
   // Sync roll fields from partData on mount (for editing)
   useEffect(() => {
     if (partData.radius && !partData.diameter) {
@@ -154,8 +169,8 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   const isCustomThickness = partData.thickness === 'Custom' || (partData.thickness && !THICKNESS_OPTIONS.includes(partData.thickness) && partData.thickness !== customThickness);
   const selectedThicknessOption = THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : '');
 
-  const isCustomGrade = partData.material && !GRADE_OPTIONS.includes(partData.material);
-  const selectedGradeOption = GRADE_OPTIONS.includes(partData.material) ? partData.material : (partData.material ? 'Custom' : '');
+  const isCustomGrade = partData.material && !gradeOptions.includes(partData.material);
+  const selectedGradeOption = gradeOptions.includes(partData.material) ? partData.material : (partData.material ? 'Custom' : '');
 
   const sectionStyle = { gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 8, paddingTop: 12 };
   const sectionTitle = (icon, text, color) => <h4 style={{ marginBottom: 10, color, fontSize: '0.95rem' }}>{icon} {text}</h4>;
@@ -339,7 +354,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
               }
             }}>
               <option value="">Select...</option>
-              {GRADE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+              {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
             {(selectedGradeOption === 'Custom' || isCustomGrade) && (
               <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter grade"

@@ -73,6 +73,18 @@ function AdminPage() {
   const [laborMinimums, setLaborMinimums] = useState([]);
   const [laborMinSaving, setLaborMinSaving] = useState(false);
 
+  // Roll limits (min rollable diameter per size/material)
+  const [rollLimits, setRollLimits] = useState([]);
+  const [rollLimitsSaving, setRollLimitsSaving] = useState(false);
+
+  // Mandrel dies
+  const [mandrelDies, setMandrelDies] = useState([]);
+  const [mandrelDiesSaving, setMandrelDiesSaving] = useState(false);
+
+  // Material grades
+  const [materialGrades, setMaterialGrades] = useState([]);
+  const [materialGradesSaving, setMaterialGradesSaving] = useState(false);
+
   useEffect(() => {
     if (!isAdmin()) {
       navigate('/inventory');
@@ -89,6 +101,12 @@ function AdminPage() {
       loadTaxSettings();
     } else if (activeTab === 'minimums') {
       loadLaborMinimums();
+    } else if (activeTab === 'rolllimits') {
+      loadRollLimits();
+    } else if (activeTab === 'mandreldies') {
+      loadMandrelDies();
+    } else if (activeTab === 'grades') {
+      loadMaterialGrades();
     } else if (activeTab === 'system') {
       setSystemLogs([...window.nasErrorLog]);
       setLoading(false);
@@ -179,6 +197,104 @@ function AdminPage() {
 
   const removeLaborMinimum = (index) => {
     setLaborMinimums(laborMinimums.filter((_, i) => i !== index));
+  };
+
+  // ── ROLL LIMITS ──
+  const defaultRollLimits = [
+    { od: '0.625', materialCategory: 'steel', minDiameter: '6', label: '.625" Tube Steel' },
+    { od: '0.75', materialCategory: 'steel', minDiameter: '7', label: '.75" Tube Steel' },
+    { od: '1', materialCategory: 'steel', minDiameter: '8', label: '1" Tube Steel' },
+    { od: '1.25', materialCategory: 'steel', minDiameter: '10', label: '1.25" Tube Steel' },
+    { od: '1.5', materialCategory: 'steel', minDiameter: '12', label: '1.5" Tube Steel' },
+    { od: '2', materialCategory: 'steel', minDiameter: '16', label: '2" Tube/Pipe Steel' },
+    { od: '3', materialCategory: 'steel', minDiameter: '24', label: '3" Tube/Pipe Steel' },
+    { od: '4', materialCategory: 'steel', minDiameter: '32', label: '4" Tube/Pipe Steel' },
+    { od: '1', materialCategory: 'aluminum', minDiameter: '12', label: '1" Tube Aluminum' },
+    { od: '1.5', materialCategory: 'aluminum', minDiameter: '18', label: '1.5" Tube Aluminum' },
+    { od: '2', materialCategory: 'aluminum', minDiameter: '24', label: '2" Tube/Pipe Aluminum' },
+  ];
+
+  const loadRollLimits = async () => {
+    try {
+      setLoading(true);
+      const resp = await getSettings('roll_limits');
+      if (resp.data.data?.value && Array.isArray(resp.data.data.value) && resp.data.data.value.length > 0) {
+        setRollLimits(resp.data.data.value);
+      } else {
+        setRollLimits(defaultRollLimits);
+      }
+    } catch {
+      setRollLimits(defaultRollLimits);
+    } finally { setLoading(false); }
+  };
+
+  const handleSaveRollLimits = async () => {
+    try {
+      setRollLimitsSaving(true); setError(null);
+      await updateSettings('roll_limits', rollLimits);
+      setSuccess('Roll limits saved'); setTimeout(() => setSuccess(null), 3000);
+    } catch { setError('Failed to save roll limits'); }
+    finally { setRollLimitsSaving(false); }
+  };
+
+  // ── MANDREL DIES ──
+  const loadMandrelDies = async () => {
+    try {
+      setLoading(true);
+      const resp = await getSettings('mandrel_dies');
+      if (resp.data.data?.value && Array.isArray(resp.data.data.value)) {
+        setMandrelDies(resp.data.data.value);
+      } else {
+        setMandrelDies([]);
+      }
+    } catch { setMandrelDies([]); }
+    finally { setLoading(false); }
+  };
+
+  const handleSaveMandrelDies = async () => {
+    try {
+      setMandrelDiesSaving(true); setError(null);
+      await updateSettings('mandrel_dies', mandrelDies);
+      setSuccess('Mandrel dies saved'); setTimeout(() => setSuccess(null), 3000);
+    } catch { setError('Failed to save mandrel dies'); }
+    finally { setMandrelDiesSaving(false); }
+  };
+
+  // ── MATERIAL GRADES ──
+  const defaultMaterialGrades = [
+    { name: 'A36', partTypes: ['plate_roll', 'flat_stock'], yieldStrength: '36,000', tensileStrength: '58,000-80,000' },
+    { name: 'A500 Gr B', partTypes: ['pipe_roll'], yieldStrength: '42,000', tensileStrength: '58,000' },
+    { name: 'A513', partTypes: ['pipe_roll'], yieldStrength: '32,000', tensileStrength: '48,000' },
+    { name: 'DOM', partTypes: ['pipe_roll'], yieldStrength: '70,000', tensileStrength: '80,000' },
+    { name: 'A572 Gr 50', partTypes: ['plate_roll', 'beam_roll', 'channel_roll'], yieldStrength: '50,000', tensileStrength: '65,000' },
+    { name: '304 S/S', partTypes: ['plate_roll', 'pipe_roll', 'angle_roll', 'flat_stock'], yieldStrength: '30,000', tensileStrength: '75,000' },
+    { name: '316 S/S', partTypes: ['plate_roll', 'pipe_roll', 'angle_roll', 'flat_stock'], yieldStrength: '30,000', tensileStrength: '75,000' },
+    { name: 'AR400', partTypes: ['plate_roll'], yieldStrength: '100,000', tensileStrength: '120,000' },
+    { name: '6061-T6 Alum', partTypes: ['plate_roll', 'pipe_roll', 'angle_roll'], yieldStrength: '40,000', tensileStrength: '45,000' },
+    { name: '5052 Alum', partTypes: ['plate_roll', 'pipe_roll'], yieldStrength: '28,000', tensileStrength: '33,000' },
+    { name: '6063-T6 Alum', partTypes: ['pipe_roll'], yieldStrength: '25,000', tensileStrength: '30,000' },
+  ];
+
+  const loadMaterialGrades = async () => {
+    try {
+      setLoading(true);
+      const resp = await getSettings('material_grades');
+      if (resp.data.data?.value && Array.isArray(resp.data.data.value) && resp.data.data.value.length > 0) {
+        setMaterialGrades(resp.data.data.value);
+      } else {
+        setMaterialGrades(defaultMaterialGrades);
+      }
+    } catch { setMaterialGrades(defaultMaterialGrades); }
+    finally { setLoading(false); }
+  };
+
+  const handleSaveMaterialGrades = async () => {
+    try {
+      setMaterialGradesSaving(true); setError(null);
+      await updateSettings('material_grades', materialGrades);
+      setSuccess('Material grades saved'); setTimeout(() => setSuccess(null), 3000);
+    } catch { setError('Failed to save material grades'); }
+    finally { setMaterialGradesSaving(false); }
   };
 
   const loadScheduleEmailSettings = async () => {
@@ -450,6 +566,24 @@ function AdminPage() {
           Labor Minimums
         </button>
         <button 
+          className={`tab ${activeTab === 'rolllimits' ? 'active' : ''}`}
+          onClick={() => setActiveTab('rolllimits')}
+        >
+          🔧 Roll Limits
+        </button>
+        <button 
+          className={`tab ${activeTab === 'mandreldies' ? 'active' : ''}`}
+          onClick={() => setActiveTab('mandreldies')}
+        >
+          ⚙️ Mandrel Dies
+        </button>
+        <button 
+          className={`tab ${activeTab === 'grades' ? 'active' : ''}`}
+          onClick={() => setActiveTab('grades')}
+        >
+          📊 Material Grades
+        </button>
+        <button 
           className={`tab ${activeTab === 'schedule' ? 'active' : ''}`}
           onClick={() => setActiveTab('schedule')}
         >
@@ -690,6 +824,231 @@ function AdminPage() {
             </div>
           </div>
         </div>
+
+      {/* ── ROLL LIMITS TAB ── */}
+      ) : activeTab === 'rolllimits' ? (
+        <div>
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>🔧 Minimum Rollable Diameters</h3>
+              <button className="btn btn-primary btn-sm" onClick={() => setRollLimits([...rollLimits, { od: '', materialCategory: 'steel', minDiameter: '', label: '' }])}>
+                + Add Rule
+              </button>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ background: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
+                    <th style={{ padding: '10px 6px', textAlign: 'left' }}>Label</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center' }}>OD (inches)</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center' }}>Material</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center' }}>Min CL Diameter</th>
+                    <th style={{ padding: '10px 4px', textAlign: 'center' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rollLimits.map((rule, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '6px 4px' }}>
+                        <input className="form-input" value={rule.label || ''} onChange={(e) => { const u = [...rollLimits]; u[idx] = { ...u[idx], label: e.target.value }; setRollLimits(u); }} placeholder="e.g. 2&quot; Tube Steel" style={{ padding: '4px 6px', fontSize: '0.8rem' }} />
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <input type="number" step="0.001" className="form-input" value={rule.od || ''} onChange={(e) => { const u = [...rollLimits]; u[idx] = { ...u[idx], od: e.target.value }; setRollLimits(u); }} style={{ width: 70, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <select className="form-input" value={rule.materialCategory || 'steel'} onChange={(e) => { const u = [...rollLimits]; u[idx] = { ...u[idx], materialCategory: e.target.value }; setRollLimits(u); }} style={{ padding: '4px', fontSize: '0.8rem' }}>
+                          <option value="steel">Steel</option>
+                          <option value="stainless">Stainless</option>
+                          <option value="aluminum">Aluminum</option>
+                          <option value="all">All Materials</option>
+                        </select>
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <input type="number" step="0.1" className="form-input" value={rule.minDiameter || ''} onChange={(e) => { const u = [...rollLimits]; u[idx] = { ...u[idx], minDiameter: e.target.value }; setRollLimits(u); }} style={{ width: 80, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <button className="btn btn-sm btn-danger" onClick={() => setRollLimits(rollLimits.filter((_, i) => i !== idx))} style={{ padding: '3px 6px' }}>
+                          <Trash2 size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-primary" onClick={handleSaveRollLimits} disabled={rollLimitsSaving}>
+                <Save size={16} style={{ marginRight: 6 }} />
+                {rollLimitsSaving ? 'Saving...' : 'Save Roll Limits'}
+              </button>
+            </div>
+
+            <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 8, fontSize: '0.8rem', color: '#666' }}>
+              <strong>How it works:</strong> Set the smallest centerline diameter you can roll for each pipe/tube OD size.
+              Different materials can have different limits (aluminum typically needs a larger min diameter than steel).
+              If no rule matches, a default of 8× OD (steel) or 12× OD (aluminum) is used.
+            </div>
+          </div>
+        </div>
+
+      {/* ── MANDREL DIES TAB ── */}
+      ) : activeTab === 'mandreldies' ? (
+        <div>
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>⚙️ Mandrel Bending Dies</h3>
+              <button className="btn btn-primary btn-sm" onClick={() => setMandrelDies([...mandrelDies, { od: '', minDiameter: '', label: '', notes: '' }])}>
+                + Add Die
+              </button>
+            </div>
+
+            {mandrelDies.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>
+                No mandrel dies configured. Click "Add Die" to add one.
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
+                      <th style={{ padding: '10px 6px', textAlign: 'left' }}>Label</th>
+                      <th style={{ padding: '10px 6px', textAlign: 'center' }}>Tube/Pipe OD</th>
+                      <th style={{ padding: '10px 6px', textAlign: 'center' }}>Min CL Diameter</th>
+                      <th style={{ padding: '10px 6px', textAlign: 'left' }}>Notes</th>
+                      <th style={{ padding: '10px 4px', textAlign: 'center' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mandrelDies.map((die, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '6px 4px' }}>
+                          <input className="form-input" value={die.label || ''} onChange={(e) => { const u = [...mandrelDies]; u[idx] = { ...u[idx], label: e.target.value }; setMandrelDies(u); }} placeholder='e.g. 2" CLR die' style={{ padding: '4px 6px', fontSize: '0.8rem' }} />
+                        </td>
+                        <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                          <input type="number" step="0.001" className="form-input" value={die.od || ''} onChange={(e) => { const u = [...mandrelDies]; u[idx] = { ...u[idx], od: e.target.value }; setMandrelDies(u); }} style={{ width: 70, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                        </td>
+                        <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                          <input type="number" step="0.1" className="form-input" value={die.minDiameter || ''} onChange={(e) => { const u = [...mandrelDies]; u[idx] = { ...u[idx], minDiameter: e.target.value }; setMandrelDies(u); }} style={{ width: 80, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                        </td>
+                        <td style={{ padding: '6px 4px' }}>
+                          <input className="form-input" value={die.notes || ''} onChange={(e) => { const u = [...mandrelDies]; u[idx] = { ...u[idx], notes: e.target.value }; setMandrelDies(u); }} placeholder="Optional notes" style={{ padding: '4px 6px', fontSize: '0.8rem' }} />
+                        </td>
+                        <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                          <button className="btn btn-sm btn-danger" onClick={() => setMandrelDies(mandrelDies.filter((_, i) => i !== idx))} style={{ padding: '3px 6px' }}>
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-primary" onClick={handleSaveMandrelDies} disabled={mandrelDiesSaving}>
+                <Save size={16} style={{ marginRight: 6 }} />
+                {mandrelDiesSaving ? 'Saving...' : 'Save Mandrel Dies'}
+              </button>
+            </div>
+
+            <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 8, fontSize: '0.8rem', color: '#666' }}>
+              <strong>How it works:</strong> When a requested roll diameter is below the minimum rollable limit for that size,
+              the system checks for available mandrel dies. If a die exists for that OD and can achieve the requested diameter,
+              it shows as an option. Otherwise, a warning appears with the smallest achievable diameter.
+            </div>
+          </div>
+        </div>
+
+      {/* ── MATERIAL GRADES TAB ── */}
+      ) : activeTab === 'grades' ? (
+        <div>
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>📊 Material Grades</h3>
+              <button className="btn btn-primary btn-sm" onClick={() => setMaterialGrades([...materialGrades, { name: '', partTypes: [], yieldStrength: '', tensileStrength: '' }])}>
+                + Add Grade
+              </button>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ background: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
+                    <th style={{ padding: '10px 6px', textAlign: 'left' }}>Grade Name</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'left' }}>Part Types</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center' }}>Yield (PSI)</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'center' }}>Tensile (PSI)</th>
+                    <th style={{ padding: '10px 4px', textAlign: 'center' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {materialGrades.map((grade, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '6px 4px' }}>
+                        <input className="form-input" value={grade.name || ''} onChange={(e) => { const u = [...materialGrades]; u[idx] = { ...u[idx], name: e.target.value }; setMaterialGrades(u); }} placeholder="e.g. A36" style={{ padding: '4px 6px', fontSize: '0.8rem', width: 120 }} />
+                      </td>
+                      <td style={{ padding: '6px 4px' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {[
+                            { key: 'plate_roll', label: 'Plate' },
+                            { key: 'angle_roll', label: 'Angle' },
+                            { key: 'pipe_roll', label: 'Pipe/Tube' },
+                            { key: 'beam_roll', label: 'Beam' },
+                            { key: 'channel_roll', label: 'Channel' },
+                            { key: 'flat_stock', label: 'Flat' },
+                          ].map(pt => (
+                            <label key={pt.key} style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.75rem', cursor: 'pointer',
+                              background: (grade.partTypes || []).includes(pt.key) ? '#e3f2fd' : '#f5f5f5',
+                              padding: '2px 6px', borderRadius: 4, border: `1px solid ${(grade.partTypes || []).includes(pt.key) ? '#1976d2' : '#ddd'}` }}>
+                              <input type="checkbox" checked={(grade.partTypes || []).includes(pt.key)}
+                                onChange={(e) => {
+                                  const u = [...materialGrades];
+                                  const pts = [...(u[idx].partTypes || [])];
+                                  if (e.target.checked) { pts.push(pt.key); } else { const i = pts.indexOf(pt.key); if (i > -1) pts.splice(i, 1); }
+                                  u[idx] = { ...u[idx], partTypes: pts };
+                                  setMaterialGrades(u);
+                                }}
+                                style={{ width: 12, height: 12 }} />
+                              {pt.label}
+                            </label>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <input className="form-input" value={grade.yieldStrength || ''} onChange={(e) => { const u = [...materialGrades]; u[idx] = { ...u[idx], yieldStrength: e.target.value }; setMaterialGrades(u); }} placeholder="e.g. 36,000" style={{ width: 100, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <input className="form-input" value={grade.tensileStrength || ''} onChange={(e) => { const u = [...materialGrades]; u[idx] = { ...u[idx], tensileStrength: e.target.value }; setMaterialGrades(u); }} placeholder="e.g. 58,000" style={{ width: 100, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <button className="btn btn-sm btn-danger" onClick={() => setMaterialGrades(materialGrades.filter((_, i) => i !== idx))} style={{ padding: '3px 6px' }}>
+                          <Trash2 size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-primary" onClick={handleSaveMaterialGrades} disabled={materialGradesSaving}>
+                <Save size={16} style={{ marginRight: 6 }} />
+                {materialGradesSaving ? 'Saving...' : 'Save Grades'}
+              </button>
+            </div>
+
+            <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 8, fontSize: '0.8rem', color: '#666' }}>
+              <strong>How it works:</strong> Material grades defined here will appear as dropdown options in the part forms.
+              Each grade can be assigned to specific part types. Yield and tensile strength are stored as reference data.
+              The grade dropdown in each form will show only grades assigned to that part type, plus a "Custom" option.
+            </div>
+          </div>
+        </div>
+
       ) : activeTab === 'schedule' ? (
         <div>
           <div className="card">

@@ -11,6 +11,7 @@ import {
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
+import PipeRollForm from '../components/PipeRollForm';
 
 const PART_TYPES = {
   plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator' },
@@ -162,7 +163,7 @@ function EstimateDetailsPage() {
 
   const calculatePartTotal = (part) => {
     // For plate_roll, angle_roll, flat_stock — use ea pricing: (mat ea + labor ea) × qty
-    if (['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType)) {
+    if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType)) {
       const qty = parseInt(part.quantity) || 1;
       const materialEach = parseFloat(part.materialTotal) || 0;
       const laborEach = parseFloat(part.laborTotal) || 0;
@@ -318,7 +319,7 @@ function EstimateDetailsPage() {
     let highestMinRule = null;
 
     parts.forEach(part => {
-      if (!['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType)) return;
+      if (!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType)) return;
       const laborEach = parseFloat(part.laborTotal) || 0;
       const materialEach = parseFloat(part.materialTotal) || 0;
       const qty = parseInt(part.quantity) || 1;
@@ -348,7 +349,7 @@ function EstimateDetailsPage() {
     
     parts.forEach(part => {
       const calc = calculatePartTotal(part);
-      if (['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType)) {
+      if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType)) {
         eaPricedTotal += calc.partTotal;
       } else {
         partsSubtotal += calc.partTotal;
@@ -491,6 +492,10 @@ function EstimateDetailsPage() {
     if (part.partType === 'angle_roll' && part.sectionSize && !part._angleSize) {
       editData._angleSize = part.sectionSize;
     }
+    // Restore _pipeSize from sectionSize for pipe parts
+    if (part.partType === 'pipe_roll' && part.sectionSize && !part._pipeSize) {
+      editData._pipeSize = part.sectionSize;
+    }
     setPartData(editData);
     setPartFormError(null);
     setShowPartModal(true);
@@ -528,6 +533,12 @@ function EstimateDetailsPage() {
           warnings.push('Leg orientation is required for unequal angle sizes');
         }
       }
+    }
+    
+    if (partData.partType === 'pipe_roll') {
+      if (!partData._pipeSize && !partData.outerDiameter) warnings.push('Pipe/tube size or OD is required');
+      if (partData._pipeSize === 'Custom' && !partData.outerDiameter) warnings.push('Outer diameter is required for custom size');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
     }
     
     // Generic validations for all types
@@ -672,7 +683,7 @@ function EstimateDetailsPage() {
     const totals = calculateTotals();
     const partsHtml = parts.map(part => {
       const calc = calculatePartTotal(part);
-      const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType);
+      const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType);
       const pricingHtml = isEaPricing
         ? `<table style="width:100%;margin-top:8px;">
             <tr><td>Material (ea):</td><td style="text-align:right;">${formatCurrency(part.materialTotal)}</td></tr>
@@ -950,7 +961,7 @@ function EstimateDetailsPage() {
                   </div>
 
                   {/* Material Section - only show if we supply material (old part types) */}
-                  {!['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType) && part.weSupplyMaterial && part.materialDescription && (
+                  {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType) && part.weSupplyMaterial && part.materialDescription && (
                     <div style={{ background: '#fff3e0', borderRadius: 8, padding: 12, marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <strong>📦 We Supply Material</strong>
@@ -969,7 +980,7 @@ function EstimateDetailsPage() {
                   )}
 
                   {/* Costs Section - plate_roll / angle_roll / flat_stock pricing */}
-                  {['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType) ? (
+                  {['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(part.partType) ? (
                     <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
                       {part.materialDescription && (
                         <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
@@ -1399,7 +1410,7 @@ function EstimateDetailsPage() {
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
 
               {/* Common fields for all part types (plate_roll, angle_roll, flat_stock have their own) */}
-              {!['plate_roll', 'angle_roll', 'flat_stock'].includes(partData.partType) && (
+              {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll'].includes(partData.partType) && (
               <div className="grid grid-2" style={{ marginBottom: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Client Part Number</label>
@@ -1431,6 +1442,19 @@ function EstimateDetailsPage() {
               ) : partData.partType === 'angle_roll' ? (
                 <div className="grid grid-2">
                   <AngleRollForm
+                    partData={partData}
+                    setPartData={setPartData}
+                    vendorSuggestions={vendorSuggestions}
+                    setVendorSuggestions={setVendorSuggestions}
+                    showVendorSuggestions={showVendorSuggestions}
+                    setShowVendorSuggestions={setShowVendorSuggestions}
+                    showMessage={showMessage}
+                    setError={setError}
+                  />
+                </div>
+              ) : partData.partType === 'pipe_roll' ? (
+                <div className="grid grid-2">
+                  <PipeRollForm
                     partData={partData}
                     setPartData={setPartData}
                     vendorSuggestions={vendorSuggestions}

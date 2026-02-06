@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Upload } from 'lucide-react';
-import { searchVendors } from '../services/api';
+import { searchVendors, getSettings } from '../services/api';
 
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
@@ -13,7 +13,7 @@ const ANGLE_SIZE_OPTIONS = [
   '1x2', '2x3', '3x4', '4x5', '4x6', 'Custom'
 ];
 
-const GRADE_OPTIONS = ['A36', '304 S/S', '316 S/S', 'AR400', 'Custom'];
+const DEFAULT_GRADE_OPTIONS = ['A36', '304 S/S', '316 S/S', 'AR400', 'Custom'];
 
 // Parse angle size string like "3x4" into { leg1: 3, leg2: 4 }
 function parseAngleSize(sizeStr) {
@@ -41,6 +41,21 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
   const [customAngleSize, setCustomAngleSize] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
   const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'radius');
+  const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
+
+  // Load grades from admin settings
+  useEffect(() => {
+    const loadGrades = async () => {
+      try {
+        const resp = await getSettings('material_grades');
+        if (resp.data.data?.value) {
+          const grades = resp.data.data.value.filter(g => g.partTypes?.includes('angle_roll'));
+          if (grades.length > 0) setGradeOptions([...grades.map(g => g.name), 'Custom']);
+        }
+      } catch {}
+    };
+    loadGrades();
+  }, []);
 
   // Sync roll fields from partData on mount (for editing)
   useEffect(() => {
@@ -199,8 +214,8 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
   const isCustomThickness = partData.thickness && !THICKNESS_OPTIONS.includes(partData.thickness) && partData.thickness !== 'Custom';
   const selectedThicknessOption = THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : '');
 
-  const isCustomGrade = partData.material && !GRADE_OPTIONS.includes(partData.material);
-  const selectedGradeOption = GRADE_OPTIONS.includes(partData.material) ? partData.material : (partData.material ? 'Custom' : '');
+  const isCustomGrade = partData.material && !gradeOptions.includes(partData.material);
+  const selectedGradeOption = gradeOptions.includes(partData.material) ? partData.material : (partData.material ? 'Custom' : '');
 
   const selectedAngleSizeOption = ANGLE_SIZE_OPTIONS.includes(partData._angleSize) ? partData._angleSize : (partData._angleSize ? 'Custom' : '');
 
@@ -438,7 +453,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
               }
             }}>
               <option value="">Select...</option>
-              {GRADE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+              {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
             {(selectedGradeOption === 'Custom' || isCustomGrade) && (
               <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter grade"
