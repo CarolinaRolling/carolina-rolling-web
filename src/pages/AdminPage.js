@@ -133,18 +133,20 @@ function AdminPage() {
       } else {
         // Default minimums
         setLaborMinimums([
-          { partType: 'plate_roll', label: 'Plate Roll ≤ 3/8"', sizeField: 'thickness', maxSize: '0.375', minimum: 125 },
-          { partType: 'plate_roll', label: 'Plate Roll > 3/8"', sizeField: 'thickness', minSize: '0.376', minimum: 200 },
-          { partType: 'angle_roll', label: 'Angle Roll ≤ 2x2', sizeField: 'angleSize', maxSize: '2', minimum: 150 },
-          { partType: 'angle_roll', label: 'Angle Roll > 2x2', sizeField: 'angleSize', minSize: '2.01', minimum: 250 },
+          { partType: 'plate_roll', label: 'Plate ≤ 3/8"', sizeField: 'thickness', maxSize: '0.375', minWidth: '', maxWidth: '', minimum: 125 },
+          { partType: 'plate_roll', label: 'Plate ≤ 3/8" (24-60" wide)', sizeField: 'thickness', maxSize: '0.375', minWidth: '24', maxWidth: '60', minimum: 150 },
+          { partType: 'plate_roll', label: 'Plate > 3/8"', sizeField: 'thickness', minSize: '0.376', minWidth: '', maxWidth: '', minimum: 200 },
+          { partType: 'angle_roll', label: 'Angle ≤ 2x2', sizeField: 'angleSize', maxSize: '2', minWidth: '', maxWidth: '', minimum: 150 },
+          { partType: 'angle_roll', label: 'Angle > 2x2', sizeField: 'angleSize', minSize: '2.01', minWidth: '', maxWidth: '', minimum: 250 },
         ]);
       }
     } catch (err) {
       setLaborMinimums([
-        { partType: 'plate_roll', label: 'Plate Roll ≤ 3/8"', sizeField: 'thickness', maxSize: '0.375', minimum: 125 },
-        { partType: 'plate_roll', label: 'Plate Roll > 3/8"', sizeField: 'thickness', minSize: '0.376', minimum: 200 },
-        { partType: 'angle_roll', label: 'Angle Roll ≤ 2x2', sizeField: 'angleSize', maxSize: '2', minimum: 150 },
-        { partType: 'angle_roll', label: 'Angle Roll > 2x2', sizeField: 'angleSize', minSize: '2.01', minimum: 250 },
+        { partType: 'plate_roll', label: 'Plate ≤ 3/8"', sizeField: 'thickness', maxSize: '0.375', minWidth: '', maxWidth: '', minimum: 125 },
+        { partType: 'plate_roll', label: 'Plate ≤ 3/8" (24-60" wide)', sizeField: 'thickness', maxSize: '0.375', minWidth: '24', maxWidth: '60', minimum: 150 },
+        { partType: 'plate_roll', label: 'Plate > 3/8"', sizeField: 'thickness', minSize: '0.376', minWidth: '', maxWidth: '', minimum: 200 },
+        { partType: 'angle_roll', label: 'Angle ≤ 2x2', sizeField: 'angleSize', maxSize: '2', minWidth: '', maxWidth: '', minimum: 150 },
+        { partType: 'angle_roll', label: 'Angle > 2x2', sizeField: 'angleSize', minSize: '2.01', minWidth: '', maxWidth: '', minimum: 250 },
       ]);
     } finally {
       setLoading(false);
@@ -166,7 +168,7 @@ function AdminPage() {
   };
 
   const addLaborMinimum = () => {
-    setLaborMinimums([...laborMinimums, { partType: 'plate_roll', label: '', sizeField: 'thickness', minSize: '', maxSize: '', minimum: 0 }]);
+    setLaborMinimums([...laborMinimums, { partType: 'plate_roll', label: '', sizeField: 'thickness', minSize: '', maxSize: '', minWidth: '', maxWidth: '', minimum: 0 }]);
   };
 
   const updateLaborMinimum = (index, field, value) => {
@@ -601,13 +603,15 @@ function AdminPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
                   <tr style={{ background: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
-                    <th style={{ padding: '10px 8px', textAlign: 'left' }}>Part Type</th>
-                    <th style={{ padding: '10px 8px', textAlign: 'left' }}>Label</th>
-                    <th style={{ padding: '10px 8px', textAlign: 'left' }}>Size Field</th>
-                    <th style={{ padding: '10px 8px', textAlign: 'center' }}>Min Size</th>
-                    <th style={{ padding: '10px 8px', textAlign: 'center' }}>Max Size</th>
-                    <th style={{ padding: '10px 8px', textAlign: 'right' }}>Minimum $</th>
-                    <th style={{ padding: '10px 8px', textAlign: 'center' }}></th>
+                    <th style={{ padding: '10px 6px', textAlign: 'left' }}>Part Type</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'left' }}>Label</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'left' }}>Size Field</th>
+                    <th style={{ padding: '10px 4px', textAlign: 'center' }}>Min Size</th>
+                    <th style={{ padding: '10px 4px', textAlign: 'center' }}>Max Size</th>
+                    <th style={{ padding: '10px 4px', textAlign: 'center' }}>Min Width</th>
+                    <th style={{ padding: '10px 4px', textAlign: 'center' }}>Max Width</th>
+                    <th style={{ padding: '10px 6px', textAlign: 'right' }}>Minimum $</th>
+                    <th style={{ padding: '10px 4px', textAlign: 'center' }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -638,10 +642,16 @@ function AdminPage() {
                         </select>
                       </td>
                       <td style={{ padding: '6px 4px', textAlign: 'center' }}>
-                        <input type="number" step="0.001" className="form-input" value={rule.minSize || ''} onChange={(e) => updateLaborMinimum(idx, 'minSize', e.target.value)} placeholder="—" style={{ width: 70, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                        <input type="number" step="0.001" className="form-input" value={rule.minSize || ''} onChange={(e) => updateLaborMinimum(idx, 'minSize', e.target.value)} placeholder="—" style={{ width: 60, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
                       </td>
                       <td style={{ padding: '6px 4px', textAlign: 'center' }}>
-                        <input type="number" step="0.001" className="form-input" value={rule.maxSize || ''} onChange={(e) => updateLaborMinimum(idx, 'maxSize', e.target.value)} placeholder="—" style={{ width: 70, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                        <input type="number" step="0.001" className="form-input" value={rule.maxSize || ''} onChange={(e) => updateLaborMinimum(idx, 'maxSize', e.target.value)} placeholder="—" style={{ width: 60, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <input type="number" step="0.1" className="form-input" value={rule.minWidth || ''} onChange={(e) => updateLaborMinimum(idx, 'minWidth', e.target.value)} placeholder="—" style={{ width: 60, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <input type="number" step="0.1" className="form-input" value={rule.maxWidth || ''} onChange={(e) => updateLaborMinimum(idx, 'maxWidth', e.target.value)} placeholder="—" style={{ width: 60, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
                       </td>
                       <td style={{ padding: '6px 4px', textAlign: 'right' }}>
                         <input type="number" step="1" className="form-input" value={rule.minimum} onChange={(e) => updateLaborMinimum(idx, 'minimum', parseFloat(e.target.value) || 0)} style={{ width: 80, textAlign: 'right', padding: '4px', fontSize: '0.8rem' }} />
@@ -671,8 +681,12 @@ function AdminPage() {
             </div>
 
             <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 8, fontSize: '0.8rem', color: '#666' }}>
-              <strong>How it works:</strong> When creating an estimate, if total labor (labor ea × qty) for a part falls below the minimum for its type and size range, a warning will appear. 
-              You can override minimums per-estimate with the "Override Minimums" button. Leave min/max size blank to match all sizes for that part type.
+              <strong>How it works:</strong> The minimum applies to the <em>entire estimate's total labor</em>. 
+              All parts' labor is summed, then compared against the highest applicable minimum from any part on the estimate.
+              If total labor is below that minimum, the minimum charge replaces total labor. Material is unaffected.
+              <br /><br />
+              <strong>Width:</strong> Use Min/Max Width for plate rules to set different minimums by width range (e.g. 24-60" plates).
+              Leave blank to match any width. The most specific matching rule (highest minimum) wins.
             </div>
           </div>
         </div>

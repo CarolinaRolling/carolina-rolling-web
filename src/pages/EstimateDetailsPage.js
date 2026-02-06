@@ -108,19 +108,22 @@ function EstimateDetailsPage() {
       }
     } catch (err) {}
     // Load labor minimums
+    const defaultMinimums = [
+      { partType: 'plate_roll', label: 'Plate ≤ 3/8"', sizeField: 'thickness', maxSize: 0.375, minWidth: '', maxWidth: '', minimum: 125 },
+      { partType: 'plate_roll', label: 'Plate ≤ 3/8" (24-60" wide)', sizeField: 'thickness', maxSize: 0.375, minWidth: 24, maxWidth: 60, minimum: 150 },
+      { partType: 'plate_roll', label: 'Plate > 3/8"', sizeField: 'thickness', minSize: 0.376, minWidth: '', maxWidth: '', minimum: 200 },
+      { partType: 'angle_roll', label: 'Angle ≤ 2x2', sizeField: 'angleSize', maxSize: 2, minWidth: '', maxWidth: '', minimum: 150 },
+      { partType: 'angle_roll', label: 'Angle > 2x2', sizeField: 'angleSize', minSize: 2.01, minWidth: '', maxWidth: '', minimum: 250 },
+    ];
     try {
       const resp = await getSettings('labor_minimums');
-      if (resp.data.data?.value) {
+      if (resp.data.data?.value && Array.isArray(resp.data.data.value) && resp.data.data.value.length > 0) {
         setLaborMinimums(resp.data.data.value);
+      } else {
+        setLaborMinimums(defaultMinimums);
       }
     } catch (err) {
-      // Use default minimums
-      setLaborMinimums([
-        { partType: 'plate_roll', label: 'Plate Roll ≤ 3/8"', sizeField: 'thickness', maxSize: 0.375, minimum: 125 },
-        { partType: 'plate_roll', label: 'Plate Roll > 3/8"', sizeField: 'thickness', minSize: 0.376, minimum: 200 },
-        { partType: 'angle_roll', label: 'Angle Roll ≤ 2x2', sizeField: 'angleSize', maxSize: 2, minimum: 150 },
-        { partType: 'angle_roll', label: 'Angle Roll > 2x2', sizeField: 'angleSize', minSize: 2.01, minimum: 250 },
-      ]);
+      setLaborMinimums(defaultMinimums);
     }
   };
 
@@ -164,7 +167,7 @@ function EstimateDetailsPage() {
       const materialEach = parseFloat(part.materialTotal) || 0;
       const laborEach = parseFloat(part.laborTotal) || 0;
       const unitPrice = materialEach + laborEach;
-      const partTotal = parseFloat(part.partTotal) || (unitPrice * qty);
+      const partTotal = unitPrice * qty;
       return { materialEach, laborEach, unitPrice, qty, partTotal };
     }
     
@@ -200,34 +203,114 @@ function EstimateDetailsPage() {
     };
   };
 
-  // Check labor minimum for a part - returns the matching rule
+  // Parse dimension string: "3/8"" → 0.375, "1-1/2"" → 1.5, "2.5" → 2.5, "24 ga" → 0.025, "2x2" → 2
+  const parseDimension = (val) => {
+    if (!val) return 0;
+    const s = String(val).trim().replace(/["\u2033]/g, '');
+    if (!isNaN(s) && s !== '') return parseFloat(s);
+    const gaugeMatch = s.match(/^(\d+)\s*ga/i);
+    if (gaugeMatch) {
+      const gaugeMap = { 24: 0.025, 22: 0.030, 20: 0.036, 18: 0.048, 16: 0.060, 14: 0.075, 12: 0.105, 11: 0.120, 10: 0.135 };
+      return gaugeMap[parseInt(gaugeMatch[1])] || 0;
+    }
+    const mixedMatch = s.match(/^(\d+)\s*[-\u2013]\s*(\d+)\s*\/\s*(\d+)/);
+    if (mixedMatch) return parseInt(mixedMatch[1]) + parseInt(mixedMatch[2]) / parseInt(mixedMatch[3]);
+    const fracMatch = s.match(/^(\d+)\s*\/\s*(\d+)/);
+    if (fracMatch) return parseInt(fracMatch[1]) / parseInt(fracMatch[2]);
+    const leadMatch = s.match(/^([\d.]+)/);
+    if (leadMatch) return parseFloat(leadMatch[1]);
+    return 0;
+  };
+
+  // Get primary size for a part based on its type
+  const getPartSize = (part) => {
+    if (part.partType === 'plate_roll' || part.partType === 'flat_stock') {
+      return parseDimension(part.thickness);
+    }
+    if (part.partType === 'angle_roll') {
+      return parseDimension(part._angleSize || part.sectionSize || '');
+    }
+    if (part.partType === 'pipe_roll') {
+      return parseDimension(part.outerDiameter);
+    }
+    return parseDimension(part.sectionSize || part.thickness || '');
+  };
+
+  const getPartWidth = (part) => {
+    return parseDimension(part.width);
+  };
+
+  // Check labor minimum for a part - returns the best matching rule
+  // Finds ALL rules matching this part type, filters by size/width, picks highest minimum
   const getLaborMinimum = (part) => {
     if (!laborMinimums.length) return null;
+
+    const partSize = getPartSize(part);
+    const partWidth = getPartWidth(part);
+
+    let bestSpecificRule = null;
+    let bestGeneralRule = null;
+    let bestFallbackRule = null;  // Any rule for this part type, regardless of constraints
+
     for (const rule of laborMinimums) {
       if (rule.partType !== part.partType) continue;
-      let size = 0;
-      if (rule.sizeField === 'thickness') {
-        size = parseFloat(part.thickness) || 0;
-      } else if (rule.sizeField === 'angleSize') {
-        const match = (part._angleSize || part.sectionSize || '').match(/^([\d.]+)/);
-        size = match ? parseFloat(match[1]) : 0;
-      } else if (rule.sizeField === 'sectionSize') {
-        const match = (part.sectionSize || '').match(/^([\d.]+)/);
-        size = match ? parseFloat(match[1]) : 0;
-      } else if (rule.sizeField === 'outerDiameter') {
-        size = parseFloat(part.outerDiameter) || 0;
+
+      // Track the highest minimum for this part type as absolute fallback
+      if (!bestFallbackRule || parseFloat(rule.minimum) > parseFloat(bestFallbackRule.minimum)) {
+        bestFallbackRule = rule;
       }
-      const minOk = rule.minSize === undefined || rule.minSize === null || rule.minSize === '' || size >= parseFloat(rule.minSize);
-      const maxOk = rule.maxSize === undefined || rule.maxSize === null || rule.maxSize === '' || size <= parseFloat(rule.maxSize);
-      if (minOk && maxOk && size > 0) return rule;
+
+      const hasMinSize = rule.minSize !== undefined && rule.minSize !== null && rule.minSize !== '' && parseFloat(rule.minSize) > 0;
+      const hasMaxSize = rule.maxSize !== undefined && rule.maxSize !== null && rule.maxSize !== '' && parseFloat(rule.maxSize) > 0;
+      const hasMinWidth = rule.minWidth !== undefined && rule.minWidth !== null && rule.minWidth !== '' && parseFloat(rule.minWidth) > 0;
+      const hasMaxWidth = rule.maxWidth !== undefined && rule.maxWidth !== null && rule.maxWidth !== '' && parseFloat(rule.maxWidth) > 0;
+      const hasSizeConstraints = hasMinSize || hasMaxSize;
+      const hasWidthConstraints = hasMinWidth || hasMaxWidth;
+
+      // No constraints = general catch-all for this part type
+      if (!hasSizeConstraints && !hasWidthConstraints) {
+        if (!bestGeneralRule || parseFloat(rule.minimum) > parseFloat(bestGeneralRule.minimum)) {
+          bestGeneralRule = rule;
+        }
+        continue;
+      }
+
+      // Check size constraints
+      let sizeOk = true;
+      if (hasSizeConstraints) {
+        if (partSize <= 0) { sizeOk = false; }
+        else {
+          if (hasMinSize && partSize < parseFloat(rule.minSize)) sizeOk = false;
+          if (hasMaxSize && partSize > parseFloat(rule.maxSize)) sizeOk = false;
+        }
+      }
+
+      // Check width constraints
+      let widthOk = true;
+      if (hasWidthConstraints) {
+        if (partWidth <= 0) { widthOk = false; }
+        else {
+          if (hasMinWidth && partWidth < parseFloat(rule.minWidth)) widthOk = false;
+          if (hasMaxWidth && partWidth > parseFloat(rule.maxWidth)) widthOk = false;
+        }
+      }
+
+      if (sizeOk && widthOk) {
+        if (!bestSpecificRule || parseFloat(rule.minimum) > parseFloat(bestSpecificRule.minimum)) {
+          bestSpecificRule = rule;
+        }
+      }
     }
-    return null;
+
+    // Priority: specific match > general match > fallback (any rule for this part type)
+    return bestSpecificRule || bestGeneralRule || bestFallbackRule;
   };
 
   // Estimate-level minimum check:
-  // - Sum total labor across all ea-priced parts
-  // - Find the highest applicable minimum among all parts
-  // - If total labor < highest minimum, bump labor to highest minimum
+  // 1. Sum total labor across ALL ea-priced parts
+  // 2. Find the highest applicable minimum from any part's matching rule
+  // 3. If total labor < highest minimum, replace labor with minimum
+  // Material is never affected
   const getMinimumInfo = () => {
     let totalLabor = 0;
     let totalMaterial = 0;
@@ -382,7 +465,7 @@ function EstimateDetailsPage() {
 
   const openEditPartModal = (part) => {
     setEditingPart(part);
-    setPartData({
+    const editData = {
       ...part,
       weSupplyMaterial: part.weSupplyMaterial || false,
       materialUnitCost: part.materialUnitCost || '',
@@ -403,7 +486,12 @@ function EstimateDetailsPage() {
       serviceWeldingPercent: part.serviceWeldingPercent || 100,
       otherServicesCost: part.otherServicesCost || '',
       otherServicesMarkupPercent: part.otherServicesMarkupPercent || 15
-    });
+    };
+    // Restore _angleSize from sectionSize for angle parts
+    if (part.partType === 'angle_roll' && part.sectionSize && !part._angleSize) {
+      editData._angleSize = part.sectionSize;
+    }
+    setPartData(editData);
     setPartFormError(null);
     setShowPartModal(true);
   };
@@ -611,6 +699,9 @@ function EstimateDetailsPage() {
     const discountLine = totals.discountAmt > 0
       ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;color:#c62828;"><span>Discount${formData.discountReason ? ` (${formData.discountReason})` : ''}</span><span>-${formatCurrency(totals.discountAmt)}</span></div>` : '';
 
+    const minimumLine = totals.minInfo.minimumApplies
+      ? `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #ddd;font-size:0.85em;color:#e65100;"><span>Minimum Labor Charge Applied (${totals.minInfo.highestMinRule?.label || ''})</span><span>${formatCurrency(totals.minInfo.adjustedLabor)}</span></div>` : '';
+
     const w = window.open('', '_blank');
     w.document.write(`<!DOCTYPE html><html><head><title>Estimate ${estimate?.estimateNumber}</title>
       <style>body{font-family:Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto}</style></head><body>
@@ -621,6 +712,7 @@ function EstimateDetailsPage() {
       <h3>Parts</h3>${partsHtml}
       ${formData.truckingCost > 0 ? `<div style="background:#fff3e0;padding:12px;border-radius:8px;margin:12px 0;"><strong>🚚 Trucking:</strong> ${formData.truckingDescription || ''} - ${formatCurrency(formData.truckingCost)} (Not Taxed)</div>` : ''}
       <div style="background:#f0f7ff;padding:16px;border-radius:8px;margin-top:20px;">
+        ${minimumLine}
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Parts Subtotal</span><span>${formatCurrency(totals.partsSubtotal)}</span></div>
         ${discountLine}
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Trucking</span><span>${formatCurrency(totals.trucking)}</span></div>
@@ -1225,6 +1317,14 @@ function EstimateDetailsPage() {
                   value={formData.minimumOverrideReason}
                   onChange={(e) => setFormData({ ...formData, minimumOverrideReason: e.target.value })}
                   style={{ fontSize: '0.8rem', padding: '4px 8px', marginTop: 6 }} />
+              </div>
+            )}
+
+            {/* Minimum Rules Status */}
+            {parts.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: '0.7rem', color: '#999', padding: '4px 8px' }}>
+                Min rules: {laborMinimums.length} | Labor total: {formatCurrency(totals.minInfo.totalLabor)} | Highest min: {formatCurrency(totals.minInfo.highestMinimum)}
+                {totals.minInfo.highestMinRule ? ` (${totals.minInfo.highestMinRule.label})` : ' (no match)'}
               </div>
             )}
 

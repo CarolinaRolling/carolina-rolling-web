@@ -165,9 +165,16 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     return lines.join('\n');
   }, [rollValue, rollMeasureType, partData.rollType, isUnequalLegs, partData._legOrientation, riseCalc]);
 
-  // Auto-update material description
+  // Auto-update material description + sectionSize
   useEffect(() => {
-    setPartData(prev => ({ ...prev, materialDescription: materialDescription }));
+    const updates = { materialDescription: materialDescription };
+    // Persist angle size to sectionSize (DB column) so minimum checks work on reload
+    if (partData._angleSize && partData._angleSize !== 'Custom') {
+      updates.sectionSize = partData._angleSize;
+    } else if (partData._customAngleSize) {
+      updates.sectionSize = partData._customAngleSize;
+    }
+    setPartData(prev => ({ ...prev, ...updates }));
   }, [materialDescription]);
 
   // Auto-update rolling description in special instructions
