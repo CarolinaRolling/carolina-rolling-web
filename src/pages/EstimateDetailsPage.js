@@ -563,6 +563,8 @@ function EstimateDetailsPage() {
       if (!dataToSend.materialSource || !['we_order', 'customer_supplied'].includes(dataToSend.materialSource)) {
         dataToSend.materialSource = 'customer_supplied';
       }
+      // Sanitize ENUM fields — empty strings break Postgres ENUMs, must be null
+      if (!dataToSend.rollType) dataToSend.rollType = null;
       
       if (editingPart && editingPart.id) {
         await updateEstimatePart(id, editingPart.id, dataToSend);

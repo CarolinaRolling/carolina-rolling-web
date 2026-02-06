@@ -84,6 +84,16 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const [mandrelDies, setMandrelDies] = useState([]);  // admin: available mandrel dies
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADES);
 
+  // Pitch / Helix state
+  const [pitchEnabled, setPitchEnabled] = useState(!!(partData._pitchEnabled));
+  const [pitchMethod, setPitchMethod] = useState(partData._pitchMethod || 'runrise');
+  const [pitchRun, setPitchRun] = useState(partData._pitchRun || '12');
+  const [pitchRise, setPitchRise] = useState(partData._pitchRise || '');
+  const [pitchAngle, setPitchAngle] = useState(partData._pitchAngle || '');
+  const [pitchSpaceType, setPitchSpaceType] = useState(partData._pitchSpaceType || 'between');
+  const [pitchSpaceValue, setPitchSpaceValue] = useState(partData._pitchSpaceValue || '');
+  const [pitchDirection, setPitchDirection] = useState(partData._pitchDirection || 'clockwise');
+
   // Load admin settings
   useEffect(() => {
     const loadSettings = async () => {
@@ -236,6 +246,60 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     return parts.join(' ');
   }, [partData._pipeSize, partData._schedule, partData.outerDiameter, partData.wallThickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, selectedSize]);
 
+  // Pitch / Helix calculations — cross-convert between input methods
+  const pitchCalc = useMemo(() => {
+    if (!pitchEnabled) return null;
+    const od = selectedSize ? selectedSize.od : (parseFloat(partData.outerDiameter) || 0);
+    const clDia = rollCalc ? rollCalc.centerlineDia : 0;
+    const circumference = clDia > 0 ? Math.PI * clDia : 0;
+
+    let angle = 0;   // degrees
+    let run = parseFloat(pitchRun) || 12;
+    let rise = 0;
+    let risePerRev = 0;
+    let spaceBetween = 0;
+    let spaceCenter = 0;
+
+    if (pitchMethod === 'runrise') {
+      rise = parseFloat(pitchRise) || 0;
+      if (rise > 0 && run > 0) {
+        angle = Math.atan(rise / run) * (180 / Math.PI);
+      }
+    } else if (pitchMethod === 'degree') {
+      angle = parseFloat(pitchAngle) || 0;
+      if (angle > 0 && angle < 90 && run > 0) {
+        rise = run * Math.tan(angle * (Math.PI / 180));
+      }
+    } else if (pitchMethod === 'space') {
+      const sv = parseFloat(pitchSpaceValue) || 0;
+      if (sv > 0 && circumference > 0) {
+        if (pitchSpaceType === 'center') {
+          spaceCenter = sv;
+          spaceBetween = sv - od;
+          risePerRev = sv;
+        } else {
+          spaceBetween = sv;
+          spaceCenter = sv + od;
+          risePerRev = sv + od;
+        }
+        // Derive angle from space: rise per rev over circumference
+        angle = Math.atan(risePerRev / circumference) * (180 / Math.PI);
+        rise = (risePerRev / circumference) * (run > 0 ? run : 12);
+      }
+    }
+
+    // Compute rise per revolution from angle if not already set via space
+    if (pitchMethod !== 'space' && angle > 0 && circumference > 0) {
+      risePerRev = circumference * Math.tan(angle * (Math.PI / 180));
+      spaceCenter = risePerRev;
+      spaceBetween = risePerRev - od;
+    }
+
+    if (angle <= 0 && rise <= 0) return null;
+
+    return { angle, rise, run, risePerRev, spaceBetween, spaceCenter, circumference, od };
+  }, [pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, rollCalc, selectedSize, partData.outerDiameter]);
+
   // Build rolling description
   const rollingDescription = useMemo(() => {
     const rv = parseFloat(rollValue) || 0;
@@ -248,8 +312,40 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       lines.push(`Centerline Ø: ${rollCalc.centerlineDia.toFixed(2)}"`);
     }
     if (partData.arcDegrees) lines.push(`Arc: ${partData.arcDegrees}°`);
+    if (pitchEnabled) {
+      lines.push(`Pitch: ${pitchDirection === 'clockwise' ? 'CW' : 'CCW'} (from ground floor)`);
+      if (pitchMethod === 'runrise') {
+        lines.push(`  Run: ${pitchRun}" / Rise: ${pitchRise}"`);
+      } else if (pitchMethod === 'degree') {
+        lines.push(`  Pitch Angle: ${pitchAngle}°`);
+      } else if (pitchMethod === 'space') {
+        lines.push(`  ${pitchSpaceType === 'center' ? 'Center-to-Center' : 'Between'} Spacing: ${pitchSpaceValue}"`);
+      }
+      if (pitchCalc) {
+        lines.push(`  → Angle: ${pitchCalc.angle.toFixed(2)}° | Rise/Rev: ${pitchCalc.risePerRev.toFixed(2)}"`);
+      }
+    }
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, rollCalc, partData.arcDegrees]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, rollCalc, partData.arcDegrees, pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, pitchDirection, pitchCalc]);
+
+  // Sync pitch fields to partData
+  useEffect(() => {
+    if (pitchEnabled) {
+      setPartData(prev => ({
+        ...prev,
+        _pitchEnabled: true,
+        _pitchMethod: pitchMethod,
+        _pitchRun: pitchRun,
+        _pitchRise: pitchRise,
+        _pitchAngle: pitchAngle,
+        _pitchSpaceType: pitchSpaceType,
+        _pitchSpaceValue: pitchSpaceValue,
+        _pitchDirection: pitchDirection,
+      }));
+    } else {
+      setPartData(prev => ({ ...prev, _pitchEnabled: false }));
+    }
+  }, [pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, pitchDirection]);
 
   // Auto-update descriptions
   useEffect(() => {
@@ -513,6 +609,140 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
           <label className="form-label">Arc (degrees)</label>
           <input type="number" step="0.1" className="form-input" value={partData.arcDegrees || ''}
             onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} placeholder="e.g. 90, 180, 360" />
+        </div>
+
+        {/* === PITCH / HELIX === */}
+        <div style={{
+          marginTop: 16, padding: 14, borderRadius: 8,
+          background: pitchEnabled ? '#fff8e1' : '#f9f9f9',
+          border: `2px solid ${pitchEnabled ? '#ffc107' : '#e0e0e0'}`,
+          transition: 'all 0.2s'
+        }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600 }}>
+            <input type="checkbox" checked={pitchEnabled}
+              onChange={(e) => setPitchEnabled(e.target.checked)}
+              style={{ width: 18, height: 18 }} />
+            <span style={{ fontSize: '1rem' }}>🌀 Pitch / Helix (Spiral Staircase, Coil)</span>
+          </label>
+
+          {pitchEnabled && (
+            <div style={{ marginTop: 14 }}>
+              {/* Direction */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Direction (from ground floor)</label>
+                  <select className="form-select" value={pitchDirection} onChange={(e) => setPitchDirection(e.target.value)}>
+                    <option value="clockwise">↻ Clockwise (going up)</option>
+                    <option value="counterclockwise">↺ Counter-Clockwise (going up)</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Input Method</label>
+                  <select className="form-select" value={pitchMethod} onChange={(e) => setPitchMethod(e.target.value)}>
+                    <option value="runrise">Run & Rise</option>
+                    <option value="degree">Degree of Angle</option>
+                    <option value="space">Spacing (Between / C-to-C)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Run & Rise */}
+              {pitchMethod === 'runrise' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Run (inches)</label>
+                    <input type="number" step="0.1" className="form-input" value={pitchRun}
+                      onChange={(e) => setPitchRun(e.target.value)} placeholder="12" />
+                    <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Horizontal distance (default 12")</div>
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Rise (inches)</label>
+                    <input type="number" step="0.01" className="form-input" value={pitchRise}
+                      onChange={(e) => setPitchRise(e.target.value)} placeholder="Height at run point" />
+                    <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Vertical rise at the run distance</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Degree of Angle */}
+              {pitchMethod === 'degree' && (
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Pitch Angle (degrees)</label>
+                  <input type="number" step="0.1" className="form-input" value={pitchAngle}
+                    onChange={(e) => setPitchAngle(e.target.value)} placeholder="e.g. 5, 10, 15" />
+                  <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Angle of the helix from horizontal</div>
+                </div>
+              )}
+
+              {/* Spacing */}
+              {pitchMethod === 'space' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Spacing Type</label>
+                    <select className="form-select" value={pitchSpaceType} onChange={(e) => setPitchSpaceType(e.target.value)}>
+                      <option value="between">Between (gap between profiles)</option>
+                      <option value="center">Center-to-Center</option>
+                    </select>
+                    <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>
+                      {pitchSpaceType === 'center'
+                        ? 'Measured from CL of one revolution to the next (includes 1 OD)'
+                        : 'Clear gap between bottom of upper profile and top of lower profile'}
+                    </div>
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Spacing (inches)</label>
+                    <input type="number" step="0.01" className="form-input" value={pitchSpaceValue}
+                      onChange={(e) => setPitchSpaceValue(e.target.value)} placeholder="Rise per full revolution" />
+                    <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Rise over one full revolution (run = circumference)</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Calculated results */}
+              {pitchCalc && (
+                <div style={{ marginTop: 14, background: '#f3e5f5', borderRadius: 8, padding: 12, fontSize: '0.82rem' }}>
+                  <div style={{ fontWeight: 600, color: '#6a1b9a', marginBottom: 8, fontSize: '0.85rem' }}>📐 Pitch Calculations</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    <div>
+                      <div style={{ color: '#888', fontSize: '0.7rem' }}>Pitch Angle</div>
+                      <div style={{ fontWeight: 600 }}>{pitchCalc.angle.toFixed(2)}°</div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#888', fontSize: '0.7rem' }}>Run / Rise</div>
+                      <div style={{ fontWeight: 600 }}>{pitchCalc.run}" / {pitchCalc.rise.toFixed(3)}"</div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#888', fontSize: '0.7rem' }}>Rise per Revolution</div>
+                      <div style={{ fontWeight: 600 }}>{pitchCalc.risePerRev > 0 ? pitchCalc.risePerRev.toFixed(3) + '"' : '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#888', fontSize: '0.7rem' }}>Between Spacing</div>
+                      <div style={{ fontWeight: 600 }}>{pitchCalc.spaceBetween > 0 ? pitchCalc.spaceBetween.toFixed(3) + '"' : '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#888', fontSize: '0.7rem' }}>Center-to-Center</div>
+                      <div style={{ fontWeight: 600 }}>{pitchCalc.spaceCenter > 0 ? pitchCalc.spaceCenter.toFixed(3) + '"' : '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#888', fontSize: '0.7rem' }}>CL Circumference</div>
+                      <div style={{ fontWeight: 600 }}>{pitchCalc.circumference > 0 ? pitchCalc.circumference.toFixed(2) + '"' : 'Need Ø'}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#666', borderTop: '1px solid #ddd', paddingTop: 6 }}>
+                    Direction: <strong>{pitchDirection === 'clockwise' ? '↻ Clockwise' : '↺ Counter-Clockwise'}</strong> (looking down, going up from ground floor)
+                    {pitchCalc.od > 0 && <span> | Profile OD: {pitchCalc.od}"</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Warning if no diameter for space calcs */}
+              {pitchEnabled && pitchMethod === 'space' && (!rollCalc || rollCalc.centerlineDia <= 0) && (
+                <div style={{ marginTop: 8, background: '#fff3e0', padding: 8, borderRadius: 6, fontSize: '0.8rem', color: '#e65100' }}>
+                  ⚠️ Enter a roll diameter above to calculate spacing values (circumference needed for spacing method).
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
