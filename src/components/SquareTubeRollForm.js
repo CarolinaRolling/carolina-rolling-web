@@ -45,8 +45,12 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   const [customGrade, setCustomGrade] = useState('');
   const [customTubeSize, setCustomTubeSize] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
-  const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'radius');
+  const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'diameter');
+  const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'inside');
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
+  const [completeRings, setCompleteRings] = useState(!!(partData._completeRings));
+  const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
+  const [tangentLength, setTangentLength] = useState(partData._tangentLength || '12');
 
   // Load grades from admin settings
   useEffect(() => {
@@ -72,6 +76,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
       setRollMeasureType('diameter');
     }
     if (partData._rollMeasureType) setRollMeasureType(partData._rollMeasureType);
+    if (partData._rollMeasurePoint) setRollMeasurePoint(partData._rollMeasurePoint);
   }, []);
 
   // Update partData when roll fields change
@@ -79,6 +84,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     const updates = {
       _rollValue: rollValue,
       _rollMeasureType: rollMeasureType,
+      _rollMeasurePoint: rollMeasurePoint,
     };
     if (rollMeasureType === 'radius') {
       updates.radius = rollValue;
@@ -88,33 +94,74 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
       updates.radius = '';
     }
     setPartData(prev => ({ ...prev, ...updates }));
-  }, [rollValue, rollMeasureType]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint]);
 
   // Parse size
   const parsedSize = useMemo(() => parseTubeSize(partData._tubeSize), [partData._tubeSize]);
   const isRectangular = parsedSize && parsedSize.side1 !== parsedSize.side2;
 
-  // Calculate effective radius for rise
-  const effectiveRadius = useMemo(() => {
+  // Profile size for CL offset
+  const profileSize = useMemo(() => {
+    if (!parsedSize) return 0;
+    return Math.max(parsedSize.side1, parsedSize.side2);
+  }, [parsedSize]);
+
+  // Calculate centerline diameter from input + measure point
+  const clDiameter = useMemo(() => {
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return 0;
-    return rollMeasureType === 'radius' ? rv : rv / 2;
-  }, [rollValue, rollMeasureType]);
+    const dia = rollMeasureType === 'radius' ? rv * 2 : rv;
+    if (rollMeasurePoint === 'inside') return dia + profileSize;
+    if (rollMeasurePoint === 'outside') return dia - profileSize;
+    return dia;
+  }, [rollValue, rollMeasureType, rollMeasurePoint, profileSize]);
 
-  // Calculate chord and rise (check dimension for verifying bend radius)
+  // Calculate chord and rise using CL radius
   const riseCalc = useMemo(() => {
-    const rv = parseFloat(rollValue) || 0;
-    if (!rv) return null;
-    const radiusValue = rollMeasureType === 'radius' ? rv : rv / 2;
+    const radiusValue = clDiameter > 0 ? clDiameter / 2 : 0;
     if (radiusValue <= 0) return null;
-    // Pick a sensible chord: 60" for large radius, smaller for tight bends
     const chord = radiusValue >= 60 ? 60 : radiusValue >= 24 ? 24 : radiusValue >= 12 ? 12 : radiusValue >= 6 ? 6 : 3;
     const rise = calculateRise(radiusValue, chord);
-    if (rise !== null && rise > 0) {
-      return { rise, chord };
-    }
+    if (rise !== null && rise > 0) return { rise, chord };
     return null;
-  }, [rollValue, rollMeasureType]);
+  }, [clDiameter]);
+
+  // Parse length to inches
+  const lengthInches = useMemo(() => {
+    const raw = partData.length || '';
+    const m = raw.match(/([\d.]+)/);
+    if (!m) return 0;
+    const val = parseFloat(m[1]);
+    if (raw.includes("'") || raw.includes('ft')) return val * 12;
+    return val;
+  }, [partData.length]);
+
+  // Complete rings calculation
+  const ringCalc = useMemo(() => {
+    if (!completeRings || clDiameter <= 0) return null;
+    const circumference = Math.PI * clDiameter;
+    const tang = parseFloat(tangentLength) || 0;
+    const usable = lengthInches - (2 * tang);
+    if (usable <= 0) return { error: 'Length too short after tangents' };
+    const pcsPerRing = Math.ceil(circumference / usable);
+    const totalQty = pcsPerRing * (parseInt(ringsNeeded) || 1);
+    return { circumference, usable, pcsPerRing, totalQty, tangent: tang };
+  }, [completeRings, clDiameter, lengthInches, tangentLength, ringsNeeded]);
+
+  // Auto-update quantity when complete rings changes
+  useEffect(() => {
+    if (completeRings && ringCalc && !ringCalc.error) {
+      setPartData(prev => ({
+        ...prev,
+        quantity: String(ringCalc.totalQty),
+        _completeRings: true,
+        _ringsNeeded: ringsNeeded,
+        _tangentLength: tangentLength,
+      }));
+    } else {
+      setPartData(prev => ({ ...prev, _completeRings: false }));
+    }
+  }, [completeRings, ringCalc, ringsNeeded, tangentLength]);
 
   // Build material description
   const materialDescription = useMemo(() => {
@@ -149,9 +196,10 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     if (!rv) return '';
     const lines = [];
     const typeLabel = rollMeasureType === 'radius' ? 'radius' : 'diameter';
+    const pointLabel = rollMeasurePoint === 'inside' ? 'ID' : rollMeasurePoint === 'outside' ? 'OD' : 'CL';
     const ewHw = partData.rollType === 'easy_way' ? 'EW' : partData.rollType === 'hard_way' ? 'HW' : '';
 
-    let rollLine = `Roll to ${rv}" ${typeLabel}`;
+    let rollLine = `Roll to ${rv}" ${typeLabel} (${pointLabel})`;
     if (ewHw) rollLine += ` ${ewHw}`;
 
     if (isRectangular && partData._sideOrientation) {
@@ -159,11 +207,21 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     }
     lines.push(rollLine);
 
+    if (clDiameter > 0 && rollMeasurePoint !== 'centerline') {
+      lines.push(`Centerline Ø: ${clDiameter.toFixed(2)}"`);
+    }
+
     if (riseCalc) {
       lines.push(`Rise: ${riseCalc.rise.toFixed(4)}" over ${riseCalc.chord}" chord`);
     }
+
+    if (completeRings && ringCalc && !ringCalc.error) {
+      lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.pcsPerRing} pcs/ring, ${ringCalc.totalQty} pcs total`);
+      lines.push(`Tangents: ${ringCalc.tangent}" each end`);
+    }
+
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, partData.rollType, isRectangular, partData._sideOrientation, riseCalc]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, isRectangular, partData._sideOrientation, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded]);
 
   // Auto-update material description + sectionSize
   useEffect(() => {
@@ -208,7 +266,15 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
       {/* === DIMENSIONS === */}
       <div className="form-group">
         <label className="form-label">Quantity *</label>
-        <input type="number" className="form-input" value={partData.quantity} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} min="1" />
+        <input type="number" className="form-input" value={partData.quantity}
+          onChange={(e) => setPartData({ ...partData, quantity: e.target.value })}
+          min="1" disabled={completeRings}
+          style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
+        {completeRings && ringCalc && !ringCalc.error && (
+          <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>
+            ⭕ Auto: {ringsNeeded} ring(s) × {ringCalc.pcsPerRing} pcs = {ringCalc.totalQty}
+          </div>
+        )}
       </div>
 
       <div className="form-group">
@@ -292,7 +358,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
       {/* === ROLL INFO === */}
       <div style={sectionStyle}>
         {sectionTitle('🔄', 'Roll Information', '#1565c0')}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8, marginBottom: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
           <div className="form-group">
             <label className="form-label">Roll Value *</label>
             <input className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" type="number" step="0.001" />
@@ -300,11 +366,25 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
           <div className="form-group">
             <label className="form-label">Type</label>
             <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
-              <option value="radius">Radius</option>
               <option value="diameter">Diameter</option>
+              <option value="radius">Radius</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Measured At</label>
+            <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
+              <option value="inside">Inside (ID)</option>
+              <option value="outside">Outside (OD)</option>
             </select>
           </div>
         </div>
+
+        {/* CL diameter display */}
+        {clDiameter > 0 && (
+          <div style={{ background: '#f3e5f5', padding: 8, borderRadius: 6, marginBottom: 8, fontSize: '0.85rem' }}>
+            Centerline {rollMeasureType === 'radius' ? 'Radius' : 'Diameter'}: <strong>{rollMeasureType === 'radius' ? (clDiameter / 2).toFixed(2) : clDiameter.toFixed(2)}"</strong>
+          </div>
+        )}
 
         {/* Easy Way / Hard Way — only for rectangular tubes */}
         {isRectangular && (
@@ -391,6 +471,73 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
             {rollingDescription}
           </div>
         )}
+
+        {/* === COMPLETE RINGS === */}
+        <div style={{
+          marginTop: 12, padding: 14, borderRadius: 8,
+          background: completeRings ? '#e8f5e9' : '#f9f9f9',
+          border: `2px solid ${completeRings ? '#4caf50' : '#e0e0e0'}`,
+          transition: 'all 0.2s'
+        }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600 }}>
+            <input type="checkbox" checked={completeRings}
+              onChange={(e) => setCompleteRings(e.target.checked)}
+              style={{ width: 18, height: 18 }} />
+            <span style={{ fontSize: '1rem' }}>⭕ Complete Rings</span>
+          </label>
+
+          {completeRings && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Rings Needed</label>
+                  <input type="number" min="1" className="form-input" value={ringsNeeded}
+                    onChange={(e) => setRingsNeeded(parseInt(e.target.value) || 1)} />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Tangent Each End (inches)</label>
+                  <input type="number" step="0.5" className="form-input" value={tangentLength}
+                    onChange={(e) => setTangentLength(e.target.value)} />
+                  <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Flat/straight ends that won't bend</div>
+                </div>
+              </div>
+
+              {ringCalc && !ringCalc.error && (
+                <div style={{ background: '#c8e6c9', borderRadius: 8, padding: 12, fontSize: '0.85rem' }}>
+                  <div style={{ fontWeight: 600, color: '#2e7d32', marginBottom: 8 }}>⭕ Ring Calculation</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    <div>
+                      <div style={{ color: '#666', fontSize: '0.7rem' }}>CL Circumference</div>
+                      <div style={{ fontWeight: 600 }}>{ringCalc.circumference.toFixed(2)}"</div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#666', fontSize: '0.7rem' }}>Usable/Piece</div>
+                      <div style={{ fontWeight: 600 }}>{ringCalc.usable.toFixed(2)}" <span style={{ color: '#999', fontSize: '0.75rem' }}>({lengthInches}" - {ringCalc.tangent * 2}" tang)</span></div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#666', fontSize: '0.7rem' }}>Pieces/Ring</div>
+                      <div style={{ fontWeight: 600, fontSize: '1.1rem', color: '#1565c0' }}>{ringCalc.pcsPerRing}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 10, padding: '8px 0', borderTop: '1px solid #a5d6a7', display: 'flex', justifyContent: 'space-between', fontSize: '1rem' }}>
+                    <span><strong>{ringsNeeded}</strong> ring(s) × <strong>{ringCalc.pcsPerRing}</strong> pcs/ring</span>
+                    <strong style={{ color: '#2e7d32', fontSize: '1.1rem' }}>= {ringCalc.totalQty} pcs total</strong>
+                  </div>
+                </div>
+              )}
+              {ringCalc && ringCalc.error && (
+                <div style={{ background: '#ffebee', padding: 8, borderRadius: 6, fontSize: '0.85rem', color: '#c62828' }}>
+                  ⚠️ {ringCalc.error}
+                </div>
+              )}
+              {!ringCalc && clDiameter <= 0 && (
+                <div style={{ background: '#fff3e0', padding: 8, borderRadius: 6, fontSize: '0.85rem', color: '#e65100' }}>
+                  ⚠️ Enter a roll diameter/radius above to calculate ring pieces
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* === SPECIAL INSTRUCTIONS === */}

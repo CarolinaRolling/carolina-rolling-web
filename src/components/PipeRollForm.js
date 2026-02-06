@@ -102,6 +102,11 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const [pitchSpaceValue, setPitchSpaceValue] = useState(partData._pitchSpaceValue || '');
   const [pitchDirection, setPitchDirection] = useState(partData._pitchDirection || 'clockwise');
 
+  // Complete rings state
+  const [completeRings, setCompleteRings] = useState(!!(partData._completeRings));
+  const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
+  const [tangentLength, setTangentLength] = useState(partData._tangentLength || '12');
+
   // Load admin settings
   useEffect(() => {
     const loadSettings = async () => {
@@ -319,6 +324,43 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     return null;
   }, [rollCalc]);
 
+  // Parse length to inches
+  const lengthInches = useMemo(() => {
+    const raw = partData.length || '';
+    const m = raw.match(/([\d.]+)/);
+    if (!m) return 0;
+    const val = parseFloat(m[1]);
+    if (raw.includes("'") || raw.includes('ft')) return val * 12;
+    return val;
+  }, [partData.length]);
+
+  // Complete rings calculation
+  const ringCalc = useMemo(() => {
+    if (!completeRings || !rollCalc || rollCalc.centerlineDia <= 0) return null;
+    const circumference = Math.PI * rollCalc.centerlineDia;
+    const tang = parseFloat(tangentLength) || 0;
+    const usable = lengthInches - (2 * tang);
+    if (usable <= 0) return { error: 'Length too short after tangents' };
+    const pcsPerRing = Math.ceil(circumference / usable);
+    const totalQty = pcsPerRing * (parseInt(ringsNeeded) || 1);
+    return { circumference, usable, pcsPerRing, totalQty, tangent: tang };
+  }, [completeRings, rollCalc, lengthInches, tangentLength, ringsNeeded]);
+
+  // Auto-update quantity when complete rings changes
+  useEffect(() => {
+    if (completeRings && ringCalc && !ringCalc.error) {
+      setPartData(prev => ({
+        ...prev,
+        quantity: String(ringCalc.totalQty),
+        _completeRings: true,
+        _ringsNeeded: ringsNeeded,
+        _tangentLength: tangentLength,
+      }));
+    } else {
+      setPartData(prev => ({ ...prev, _completeRings: false }));
+    }
+  }, [completeRings, ringCalc, ringsNeeded, tangentLength]);
+
   // Build rolling description
   const rollingDescription = useMemo(() => {
     const rv = parseFloat(rollValue) || 0;
@@ -347,8 +389,12 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
         lines.push(`  → Angle: ${pitchCalc.angle.toFixed(2)}° | Rise/Rev: ${pitchCalc.risePerRev.toFixed(2)}"`);
       }
     }
+    if (completeRings && ringCalc && !ringCalc.error) {
+      lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.pcsPerRing} pcs/ring, ${ringCalc.totalQty} pcs total`);
+      lines.push(`Tangents: ${ringCalc.tangent}" each end`);
+    }
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, rollCalc, riseCalc, partData.arcDegrees, pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, pitchDirection, pitchCalc]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, rollCalc, riseCalc, partData.arcDegrees, pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, pitchDirection, pitchCalc, completeRings, ringCalc, ringsNeeded]);
 
   // Sync pitch fields to partData
   useEffect(() => {
@@ -468,7 +514,14 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
           <div className="form-group">
             <label className="form-label">Quantity *</label>
             <input type="number" className="form-input" value={partData.quantity || 1}
-              onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })} min="1" />
+              onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })}
+              min="1" disabled={completeRings}
+              style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
+            {completeRings && ringCalc && !ringCalc.error && (
+              <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>
+                ⭕ Auto: {ringsNeeded} ring(s) × {ringCalc.pcsPerRing} pcs = {ringCalc.totalQty}
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label className="form-label">Size *</label>
@@ -643,6 +696,73 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
           <label className="form-label">Arc (degrees)</label>
           <input type="number" step="0.1" className="form-input" value={partData.arcDegrees || ''}
             onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} placeholder="e.g. 90, 180, 360" />
+        </div>
+
+        {/* === COMPLETE RINGS === */}
+        <div style={{
+          marginTop: 12, padding: 14, borderRadius: 8,
+          background: completeRings ? '#e8f5e9' : '#f9f9f9',
+          border: `2px solid ${completeRings ? '#4caf50' : '#e0e0e0'}`,
+          transition: 'all 0.2s'
+        }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600 }}>
+            <input type="checkbox" checked={completeRings}
+              onChange={(e) => setCompleteRings(e.target.checked)}
+              style={{ width: 18, height: 18 }} />
+            <span style={{ fontSize: '1rem' }}>⭕ Complete Rings</span>
+          </label>
+
+          {completeRings && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Rings Needed</label>
+                  <input type="number" min="1" className="form-input" value={ringsNeeded}
+                    onChange={(e) => setRingsNeeded(parseInt(e.target.value) || 1)} />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Tangent Each End (inches)</label>
+                  <input type="number" step="0.5" className="form-input" value={tangentLength}
+                    onChange={(e) => setTangentLength(e.target.value)} />
+                  <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Flat/straight ends that won't bend</div>
+                </div>
+              </div>
+
+              {ringCalc && !ringCalc.error && (
+                <div style={{ background: '#c8e6c9', borderRadius: 8, padding: 12, fontSize: '0.85rem' }}>
+                  <div style={{ fontWeight: 600, color: '#2e7d32', marginBottom: 8 }}>⭕ Ring Calculation</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    <div>
+                      <div style={{ color: '#666', fontSize: '0.7rem' }}>CL Circumference</div>
+                      <div style={{ fontWeight: 600 }}>{ringCalc.circumference.toFixed(2)}"</div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#666', fontSize: '0.7rem' }}>Usable/Piece</div>
+                      <div style={{ fontWeight: 600 }}>{ringCalc.usable.toFixed(2)}" <span style={{ color: '#999', fontSize: '0.75rem' }}>({lengthInches}" - {ringCalc.tangent * 2}" tang)</span></div>
+                    </div>
+                    <div>
+                      <div style={{ color: '#666', fontSize: '0.7rem' }}>Pieces/Ring</div>
+                      <div style={{ fontWeight: 600, fontSize: '1.1rem', color: '#1565c0' }}>{ringCalc.pcsPerRing}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 10, padding: '8px 0', borderTop: '1px solid #a5d6a7', display: 'flex', justifyContent: 'space-between', fontSize: '1rem' }}>
+                    <span><strong>{ringsNeeded}</strong> ring(s) × <strong>{ringCalc.pcsPerRing}</strong> pcs/ring</span>
+                    <strong style={{ color: '#2e7d32', fontSize: '1.1rem' }}>= {ringCalc.totalQty} pcs total</strong>
+                  </div>
+                </div>
+              )}
+              {ringCalc && ringCalc.error && (
+                <div style={{ background: '#ffebee', padding: 8, borderRadius: 6, fontSize: '0.85rem', color: '#c62828' }}>
+                  ⚠️ {ringCalc.error}
+                </div>
+              )}
+              {!ringCalc && (!rollCalc || rollCalc.centerlineDia <= 0) && (
+                <div style={{ background: '#fff3e0', padding: 8, borderRadius: 6, fontSize: '0.85rem', color: '#e65100' }}>
+                  ⚠️ Enter a roll diameter/radius above to calculate ring pieces
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* === PITCH / HELIX === */}

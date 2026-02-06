@@ -36,7 +36,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   const [customGrade, setCustomGrade] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
   const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'inside');
-  const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'radius');
+  const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'diameter');
   const [showAngle, setShowAngle] = useState(!!(partData.arcDegrees));
   const [angleValue, setAngleValue] = useState(partData.arcDegrees || '');
   const [showTangent, setShowTangent] = useState(!!(partData._tangentLength));
