@@ -200,7 +200,7 @@ function EstimateDetailsPage() {
     };
   };
 
-  // Check labor minimum for a part
+  // Check labor minimum for a part - returns the matching rule
   const getLaborMinimum = (part) => {
     if (!laborMinimums.length) return null;
     for (const rule of laborMinimums) {
@@ -209,7 +209,6 @@ function EstimateDetailsPage() {
       if (rule.sizeField === 'thickness') {
         size = parseFloat(part.thickness) || 0;
       } else if (rule.sizeField === 'angleSize') {
-        // Parse angle size like "2 x 2" -> 2
         const match = (part._angleSize || part.sectionSize || '').match(/^([\d.]+)/);
         size = match ? parseFloat(match[1]) : 0;
       } else if (rule.sizeField === 'sectionSize') {
@@ -225,29 +224,60 @@ function EstimateDetailsPage() {
     return null;
   };
 
-  const getMinimumWarnings = () => {
-    if (formData.minimumOverride) return [];
-    const warnings = [];
+  // Estimate-level minimum check:
+  // - Sum total labor across all ea-priced parts
+  // - Find the highest applicable minimum among all parts
+  // - If total labor < highest minimum, bump labor to highest minimum
+  const getMinimumInfo = () => {
+    let totalLabor = 0;
+    let totalMaterial = 0;
+    let highestMinimum = 0;
+    let highestMinRule = null;
+
     parts.forEach(part => {
       if (!['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType)) return;
-      const rule = getLaborMinimum(part);
-      if (!rule) return;
       const laborEach = parseFloat(part.laborTotal) || 0;
+      const materialEach = parseFloat(part.materialTotal) || 0;
       const qty = parseInt(part.quantity) || 1;
-      const totalLabor = laborEach * qty;
-      if (totalLabor > 0 && totalLabor < rule.minimum) {
-        warnings.push({ partNumber: part.partNumber, partType: part.partType, totalLabor, minimum: rule.minimum, label: rule.label });
+      totalLabor += laborEach * qty;
+      totalMaterial += materialEach * qty;
+
+      const rule = getLaborMinimum(part);
+      if (rule && parseFloat(rule.minimum) > highestMinimum) {
+        highestMinimum = parseFloat(rule.minimum);
+        highestMinRule = rule;
       }
     });
-    return warnings;
+
+    const minimumApplies = !formData.minimumOverride && highestMinimum > 0 && totalLabor > 0 && totalLabor < highestMinimum;
+    const adjustedLabor = minimumApplies ? highestMinimum : totalLabor;
+    const laborDifference = minimumApplies ? (highestMinimum - totalLabor) : 0;
+
+    return { totalLabor, totalMaterial, highestMinimum, highestMinRule, minimumApplies, adjustedLabor, laborDifference };
   };
 
   const calculateTotals = () => {
+    const minInfo = getMinimumInfo();
+    
+    // For ea-priced parts, recalculate with minimum applied
     let partsSubtotal = 0;
+    let eaPricedTotal = 0;
+    
     parts.forEach(part => {
-      const { partTotal } = calculatePartTotal(part);
-      partsSubtotal += partTotal;
+      const calc = calculatePartTotal(part);
+      if (['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType)) {
+        eaPricedTotal += calc.partTotal;
+      } else {
+        partsSubtotal += calc.partTotal;
+      }
     });
+
+    // If minimum applies: replace ea-priced total with (total material + adjusted labor)
+    if (minInfo.minimumApplies) {
+      partsSubtotal += minInfo.totalMaterial + minInfo.adjustedLabor;
+    } else {
+      partsSubtotal += eaPricedTotal;
+    }
     
     // Discount
     let discountAmt = 0;
@@ -268,7 +298,7 @@ function EstimateDetailsPage() {
     const ccFee = (grandTotal * ccFeeRate / 100) + ccFeeFixed;
     const ccTotal = grandTotal + ccFee;
     
-    return { partsSubtotal, discountAmt, afterDiscount, trucking, taxAmount, grandTotal, ccFee, ccTotal };
+    return { partsSubtotal, discountAmt, afterDiscount, trucking, taxAmount, grandTotal, ccFee, ccTotal, minInfo };
   };
 
   const handleDownloadPDF = async () => {
@@ -871,21 +901,6 @@ function EstimateDetailsPage() {
                         <strong>Line Total ({part.quantity} × {formatCurrency(calc.unitPrice)})</strong>
                         <strong style={{ color: '#2e7d32' }}>{formatCurrency(calc.partTotal)}</strong>
                       </div>
-                      {/* Minimum charge warning */}
-                      {(() => {
-                        const rule = getLaborMinimum(part);
-                        const laborEach = parseFloat(part.laborTotal) || 0;
-                        const qty = parseInt(part.quantity) || 1;
-                        const totalLabor = laborEach * qty;
-                        if (rule && totalLabor > 0 && totalLabor < rule.minimum && !formData.minimumOverride) {
-                          return (
-                            <div style={{ background: '#fff3e0', border: '1px solid #ff9800', borderRadius: 6, padding: 8, marginTop: 8, fontSize: '0.8rem', color: '#e65100' }}>
-                              ⚠️ Total labor {formatCurrency(totalLabor)} is below minimum {formatCurrency(rule.minimum)} for {rule.label}
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
                     </div>
                   ) : (
                   /* Costs Section - old part types */
@@ -1066,6 +1081,18 @@ function EstimateDetailsPage() {
             )}
 
             <div style={{ background: '#f0f7ff', borderRadius: 8, padding: 16 }}>
+              {/* Show labor/material breakdown when minimum applies */}
+              {totals.minInfo.minimumApplies && (
+                <div style={{ padding: '4px 0 8px', borderBottom: '1px solid #ddd', fontSize: '0.8rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#555', padding: '2px 0' }}>
+                    <span>Total Material</span><span>{formatCurrency(totals.minInfo.totalMaterial)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#555', padding: '2px 0' }}>
+                    <span>Total Labor <s style={{ color: '#999' }}>{formatCurrency(totals.minInfo.totalLabor)}</s></span>
+                    <span style={{ color: '#e65100', fontWeight: 600 }}>{formatCurrency(totals.minInfo.adjustedLabor)} (min)</span>
+                  </div>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #ddd' }}>
                 <span>Parts Subtotal</span><span>{formatCurrency(totals.partsSubtotal)}</span>
               </div>
@@ -1156,28 +1183,34 @@ function EstimateDetailsPage() {
               </div>
             </div>
 
-            {/* Minimum Charge Warnings */}
-            {(() => {
-              const warnings = getMinimumWarnings();
-              if (warnings.length === 0) return null;
-              return (
-                <div style={{ marginTop: 12, padding: 12, background: '#fff3e0', border: '1px solid #ff9800', borderRadius: 8 }}>
-                  <div style={{ fontWeight: 600, color: '#e65100', marginBottom: 8, fontSize: '0.85rem' }}>⚠️ Labor Below Minimum</div>
-                  {warnings.map((w, i) => (
-                    <div key={i} style={{ fontSize: '0.8rem', color: '#bf360c', marginBottom: 4 }}>
-                      Part #{w.partNumber}: {formatCurrency(w.totalLabor)} labor (min {formatCurrency(w.minimum)} for {w.label})
-                    </div>
-                  ))}
-                  <button
-                    className="btn btn-sm"
-                    style={{ marginTop: 8, background: '#ff9800', color: '#fff', border: 'none', fontSize: '0.75rem' }}
-                    onClick={() => setFormData({ ...formData, minimumOverride: true })}
-                  >
-                    Override Minimums
-                  </button>
+            {/* Minimum Charge Info */}
+            {totals.minInfo.minimumApplies && (
+              <div style={{ marginTop: 12, padding: 12, background: '#fff3e0', border: '1px solid #ff9800', borderRadius: 8 }}>
+                <div style={{ fontWeight: 600, color: '#e65100', marginBottom: 8, fontSize: '0.85rem' }}>⚠️ Minimum Charge Applied</div>
+                <div style={{ fontSize: '0.8rem', color: '#bf360c', marginBottom: 4 }}>
+                  Total labor across all parts: {formatCurrency(totals.minInfo.totalLabor)}
                 </div>
-              );
-            })()}
+                <div style={{ fontSize: '0.8rem', color: '#bf360c', marginBottom: 4 }}>
+                  Minimum charge ({totals.minInfo.highestMinRule?.label}): {formatCurrency(totals.minInfo.highestMinimum)}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#bf360c', marginBottom: 8 }}>
+                  Labor adjusted up by {formatCurrency(totals.minInfo.laborDifference)}
+                </div>
+                <button
+                  className="btn btn-sm"
+                  style={{ background: '#ff9800', color: '#fff', border: 'none', fontSize: '0.75rem' }}
+                  onClick={() => setFormData({ ...formData, minimumOverride: true })}
+                >
+                  Override Minimum
+                </button>
+              </div>
+            )}
+
+            {!totals.minInfo.minimumApplies && totals.minInfo.highestMinimum > 0 && totals.minInfo.totalLabor > 0 && !formData.minimumOverride && (
+              <div style={{ marginTop: 12, padding: 8, background: '#e8f5e9', border: '1px solid #66bb6a', borderRadius: 8, fontSize: '0.8rem', color: '#2e7d32' }}>
+                ✅ Total labor {formatCurrency(totals.minInfo.totalLabor)} meets minimum {formatCurrency(totals.minInfo.highestMinimum)}
+              </div>
+            )}
 
             {formData.minimumOverride && (
               <div style={{ marginTop: 12, padding: 12, background: '#fce4ec', border: '1px solid #e91e63', borderRadius: 8 }}>
