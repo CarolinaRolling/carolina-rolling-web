@@ -554,8 +554,12 @@ function EstimateDetailsPage() {
       if (!partData._tubeSize) warnings.push('Tube size is required');
       if (partData._tubeSize === 'Custom' && !partData._customTubeSize) warnings.push('Custom tube size is required');
       if (!partData.thickness) warnings.push('Wall thickness is required');
-      if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
       if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      // Only require EW/HW for rectangular tubes
+      const tubeParts = (partData._tubeSize || '').split('x').map(Number);
+      if (tubeParts.length === 2 && tubeParts[0] !== tubeParts[1] && !partData.rollType) {
+        warnings.push('Roll Direction (Easy Way / Hard Way) is required for rectangular tubes');
+      }
     }
     
     // Generic validations for all types
@@ -719,6 +723,7 @@ function EstimateDetailsPage() {
         <p style="margin:0 0 4px;"><strong>Qty:</strong> ${part.quantity}${part.sectionSize ? ` | <strong>Size:</strong> ${part.sectionSize}` : ''}${part.thickness ? ` | <strong>Thk:</strong> ${part.thickness}` : ''}${part.material ? ` | <strong>Grade:</strong> ${part.material}` : ''}</p>
         ${part.materialDescription ? `<p style="margin:0 0 4px;font-size:0.9em;color:#555;">📦 ${part.materialDescription}</p>` : ''}
         ${(part.diameter || part.radius) ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">🔄 ${part.diameter ? part.diameter + '" Dia' : part.radius + '" Rad'}${part.rollType ? ' (' + (part.rollType === 'easy_way' ? 'EW' : 'HW') + ')' : ''}${part.arcDegrees ? ' | Arc: ' + part.arcDegrees + '°' : ''}</p>` : ''}
+        ${(() => { const desc = part._rollingDescription || part.specialInstructions || ''; const lines = desc.split('\n').filter(l => l.includes('Centerline') || l.includes('Rise:')); return lines.length ? `<p style="margin:0 0 4px;color:#6a1b9a;font-size:0.85em;">📐 ${lines.map(l => l.trim()).join(' | ')}</p>` : ''; })()}
         ${part._pitchEnabled ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;">🌀 Pitch: ${part._pitchDirection === 'clockwise' ? 'CW' : 'CCW'}${part._pitchMethod === 'runrise' && part._pitchRise ? ' | Run: ' + part._pitchRun + '" / Rise: ' + part._pitchRise + '"' : ''}${part._pitchMethod === 'degree' && part._pitchAngle ? ' | Angle: ' + part._pitchAngle + '°' : ''}${part._pitchMethod === 'space' && part._pitchSpaceValue ? ' | ' + (part._pitchSpaceType === 'center' ? 'C-C' : 'Between') + ': ' + part._pitchSpaceValue + '"' : ''}</p>` : ''}
         ${part.supplierName ? `<p style="color:#388e3c;">Supplier: ${part.supplierName}</p>` : ''}
         ${pricingHtml}
@@ -1000,13 +1005,17 @@ function EstimateDetailsPage() {
                       </div>
                     )}
                     {/* Line 3: Centerline Ø (pipe/tube) or Rise/chord calc */}
-                    {part._rollingDescription && (part._rollingDescription.includes('Centerline') || part._rollingDescription.includes('Rise:')) && (
-                      <div style={{ fontSize: '0.8rem', color: '#6a1b9a', marginTop: 2 }}>
-                        {part._rollingDescription.split('\n').filter(l => l.includes('Centerline') || l.includes('Rise:')).map((line, i) => (
-                          <div key={i}>📐 {line.trim()}</div>
-                        ))}
-                      </div>
-                    )}
+                    {(() => {
+                      const desc = part._rollingDescription || part.specialInstructions || '';
+                      const infoLines = desc.split('\n').filter(l => l.includes('Centerline') || l.includes('Rise:'));
+                      return infoLines.length > 0 && (
+                        <div style={{ fontSize: '0.8rem', color: '#6a1b9a', marginTop: 2 }}>
+                          {infoLines.map((line, i) => (
+                            <div key={i}>📐 {line.trim()}</div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     {/* Line 4: Pitch info */}
                     {part._pitchEnabled && (
                       <div style={{ fontSize: '0.8rem', color: '#e65100', marginTop: 2 }}>

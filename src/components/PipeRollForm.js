@@ -2,6 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { searchVendors, getSettings } from '../services/api';
 
+// Sagitta formula: h = R - sqrt(R² - (c/2)²)
+function calculateRise(radiusInches, chordInches) {
+  if (!radiusInches || radiusInches <= 0) return null;
+  const halfChord = chordInches / 2;
+  if (halfChord >= radiusInches) return null;
+  return radiusInches - Math.sqrt(radiusInches * radiusInches - halfChord * halfChord);
+}
+
 // ── PIPE & TUBE SIZE DATA ──────────────────────────────────────────────────────
 const TUBE_SIZES = [
   { label: '.625" OD Tube', od: 0.625, type: 'tube', defaultLength: '20\'' },
@@ -300,6 +308,17 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     return { angle, rise, run, risePerRev, spaceBetween, spaceCenter, circumference, od };
   }, [pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, rollCalc, selectedSize, partData.outerDiameter]);
 
+  // Calculate chord and rise (check dimension for verifying bend radius)
+  const riseCalc = useMemo(() => {
+    if (!rollCalc) return null;
+    const radiusValue = rollCalc.centerlineDia / 2;
+    if (radiusValue <= 0) return null;
+    const chord = radiusValue >= 60 ? 60 : radiusValue >= 24 ? 24 : radiusValue >= 12 ? 12 : radiusValue >= 6 ? 6 : 3;
+    const rise = calculateRise(radiusValue, chord);
+    if (rise !== null && rise > 0) return { rise, chord };
+    return null;
+  }, [rollCalc]);
+
   // Build rolling description
   const rollingDescription = useMemo(() => {
     const rv = parseFloat(rollValue) || 0;
@@ -310,6 +329,9 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     lines.push(`Roll to ${rv}" ${typeLabel} (${pointLabel})`);
     if (rollCalc) {
       lines.push(`Centerline Ø: ${rollCalc.centerlineDia.toFixed(2)}"`);
+    }
+    if (riseCalc) {
+      lines.push(`Rise: ${riseCalc.rise.toFixed(4)}" over ${riseCalc.chord}" chord`);
     }
     if (partData.arcDegrees) lines.push(`Arc: ${partData.arcDegrees}°`);
     if (pitchEnabled) {
@@ -326,7 +348,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       }
     }
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, rollCalc, partData.arcDegrees, pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, pitchDirection, pitchCalc]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, rollCalc, riseCalc, partData.arcDegrees, pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, pitchDirection, pitchCalc]);
 
   // Sync pitch fields to partData
   useEffect(() => {
@@ -602,6 +624,18 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
               </div>
             )}
           </>
+        )}
+
+        {/* Chord & Rise calculation */}
+        {riseCalc && (
+          <div style={{ background: '#f3e5f5', borderRadius: 8, padding: 10, marginTop: 8 }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#6a1b9a', marginBottom: 4 }}>
+              📐 Chord & Rise (check dimension)
+            </div>
+            <div style={{ fontSize: '0.82rem', color: '#4a148c' }}>
+              Over a {riseCalc.chord}" chord: <strong>{riseCalc.rise.toFixed(4)}" rise</strong>
+            </div>
+          </div>
         )}
 
         {/* Arc degrees */}

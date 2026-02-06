@@ -101,15 +101,17 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     return rollMeasureType === 'radius' ? rv : rv / 2;
   }, [rollValue, rollMeasureType]);
 
-  // Calculate rise for large radius parts
+  // Calculate chord and rise (check dimension for verifying bend radius)
   const riseCalc = useMemo(() => {
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return null;
-    const diameterValue = rollMeasureType === 'radius' ? rv * 2 : rv;
     const radiusValue = rollMeasureType === 'radius' ? rv : rv / 2;
-    if (diameterValue > 120 || radiusValue > 120) {
-      const rise = calculateRise(radiusValue, 60);
-      if (rise !== null) return { rise, chord: 60 };
+    if (radiusValue <= 0) return null;
+    // Pick a sensible chord: 60" for large radius, smaller for tight bends
+    const chord = radiusValue >= 60 ? 60 : radiusValue >= 24 ? 24 : radiusValue >= 12 ? 12 : radiusValue >= 6 ? 6 : 3;
+    const rise = calculateRise(radiusValue, chord);
+    if (rise !== null && rise > 0) {
+      return { rise, chord };
     }
     return null;
   }, [rollValue, rollMeasureType]);
@@ -212,10 +214,13 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
       <div className="form-group">
         <label className="form-label">Tube Size *</label>
         <select className="form-select" value={selectedTubeSizeOption} onChange={(e) => {
-          if (e.target.value === 'Custom') {
-            setPartData({ ...partData, _tubeSize: 'Custom', _sideOrientation: '' });
+          const newSize = e.target.value;
+          const parsed = parseTubeSize(newSize);
+          const isSq = parsed && parsed.side1 === parsed.side2;
+          if (newSize === 'Custom') {
+            setPartData({ ...partData, _tubeSize: 'Custom', _sideOrientation: '', rollType: null });
           } else {
-            setPartData({ ...partData, _tubeSize: e.target.value, _sideOrientation: '' });
+            setPartData({ ...partData, _tubeSize: newSize, _sideOrientation: '', rollType: isSq ? null : partData.rollType });
             setCustomTubeSize('');
           }
         }}>
@@ -301,7 +306,8 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
           </div>
         </div>
 
-        {/* Easy Way / Hard Way */}
+        {/* Easy Way / Hard Way — only for rectangular tubes */}
+        {isRectangular && (
         <div style={{ marginBottom: 12 }}>
           <label className="form-label">Roll Direction *</label>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -331,6 +337,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
             </button>
           </div>
         </div>
+        )}
 
         {/* Side Orientation for rectangular tubes */}
         {isRectangular && partData.rollType && (

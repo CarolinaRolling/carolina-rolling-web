@@ -96,18 +96,17 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     return rollMeasureType === 'radius' ? rv : rv / 2;
   }, [rollValue, rollMeasureType]);
 
-  // Calculate rise if radius/diameter > 120"
+  // Calculate chord and rise (check dimension for verifying bend radius)
   const riseCalc = useMemo(() => {
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return null;
-    const diameterValue = rollMeasureType === 'radius' ? rv * 2 : rv;
     const radiusValue = rollMeasureType === 'radius' ? rv : rv / 2;
-    
-    if (diameterValue > 120 || radiusValue > 120) {
-      const rise = calculateRise(radiusValue, 60);
-      if (rise !== null) {
-        return { rise, chord: 60 };
-      }
+    if (radiusValue <= 0) return null;
+    // Pick a sensible chord: 60" for large radius, smaller for tight bends
+    const chord = radiusValue >= 60 ? 60 : radiusValue >= 24 ? 24 : radiusValue >= 12 ? 12 : radiusValue >= 6 ? 6 : 3;
+    const rise = calculateRise(radiusValue, chord);
+    if (rise !== null && rise > 0) {
+      return { rise, chord };
     }
     return null;
   }, [rollValue, rollMeasureType]);
@@ -400,7 +399,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
               <span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm)</span>
             </div>
             <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 4 }}>
-              Shown because {rollMeasureType === 'radius' ? 'radius' : 'diameter'} ({rollValue}") exceeds 120"
+              Check dimension — measure {riseCalc.chord}" chord, verify rise height
             </div>
           </div>
         )}
