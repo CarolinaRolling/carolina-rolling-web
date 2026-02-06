@@ -20,6 +20,7 @@ const PART_TYPES = {
   section_roll: { label: 'Section Roll', icon: '📏', desc: 'Structural section rolling' },
   channel_roll: { label: 'Channel Roll', icon: '🔲', desc: 'C-channel rolling' },
   flat_bar: { label: 'Flat Bar', icon: '▬', desc: 'Flat bar bending' },
+  flat_stock: { label: 'Flat Stock', icon: '📄', desc: 'Flat material cut to custom print' },
   other: { label: 'Other', icon: '📦', desc: 'Custom or miscellaneous parts' }
 };
 
@@ -42,7 +43,9 @@ function EstimateDetailsPage() {
     projectDescription: '', notes: '', internalNotes: '', validUntil: '',
     taxRate: 7.0, useCustomTax: false, customTaxReason: '',
     taxExempt: false, taxExemptReason: '', taxExemptCertNumber: '',
-    truckingDescription: '', truckingCost: 0
+    truckingDescription: '', truckingCost: 0,
+    discountPercent: '', discountAmount: '', discountReason: '',
+    minimumOverride: false, minimumOverrideReason: ''
   });
 
   const [parts, setParts] = useState([]);
@@ -51,6 +54,9 @@ function EstimateDetailsPage() {
   const [showPartTypePicker, setShowPartTypePicker] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
   const [partData, setPartData] = useState({});
+  
+  // Labor minimums from admin settings
+  const [laborMinimums, setLaborMinimums] = useState([]);
   
   // Convert to Work Order state
   const [showConvertModal, setShowConvertModal] = useState(false);
@@ -93,7 +99,6 @@ function EstimateDetailsPage() {
       if (response.data.data?.value) {
         const settings = response.data.data.value;
         setDefaultSettings(settings);
-        // Apply defaults to new estimate
         if (isNew) {
           setFormData(prev => ({
             ...prev,
@@ -101,8 +106,21 @@ function EstimateDetailsPage() {
           }));
         }
       }
+    } catch (err) {}
+    // Load labor minimums
+    try {
+      const resp = await getSettings('labor_minimums');
+      if (resp.data.data?.value) {
+        setLaborMinimums(resp.data.data.value);
+      }
     } catch (err) {
-      // Use built-in defaults
+      // Use default minimums
+      setLaborMinimums([
+        { partType: 'plate_roll', label: 'Plate Roll ≤ 3/8"', sizeField: 'thickness', maxSize: 0.375, minimum: 125 },
+        { partType: 'plate_roll', label: 'Plate Roll > 3/8"', sizeField: 'thickness', minSize: 0.376, minimum: 200 },
+        { partType: 'angle_roll', label: 'Angle Roll ≤ 2x2', sizeField: 'angleSize', maxSize: 2, minimum: 150 },
+        { partType: 'angle_roll', label: 'Angle Roll > 2x2', sizeField: 'angleSize', minSize: 2.01, minimum: 250 },
+      ]);
     }
   };
 
@@ -123,7 +141,12 @@ function EstimateDetailsPage() {
         taxExemptReason: data.taxExemptReason || '',
         taxExemptCertNumber: data.taxExemptCertNumber || '',
         truckingDescription: data.truckingDescription || '',
-        truckingCost: parseFloat(data.truckingCost) || 0
+        truckingCost: parseFloat(data.truckingCost) || 0,
+        discountPercent: data.discountPercent || '',
+        discountAmount: data.discountAmount || '',
+        discountReason: data.discountReason || '',
+        minimumOverride: data.minimumOverride || false,
+        minimumOverrideReason: data.minimumOverrideReason || ''
       });
       setParts((data.parts || []).sort((a, b) => a.partNumber - b.partNumber));
       setFiles(data.files || []);
@@ -135,14 +158,14 @@ function EstimateDetailsPage() {
   };
 
   const calculatePartTotal = (part) => {
-    // For plate_roll and angle_roll, use the directly saved pricing fields
-    if (part.partType === 'plate_roll' || part.partType === 'angle_roll') {
-      const materialTotal = parseFloat(part.materialTotal) || 0;
-      const laborTotal = parseFloat(part.laborTotal) || 0;
-      const setupCharge = parseFloat(part.setupCharge) || 0;
-      const otherCharges = parseFloat(part.otherCharges) || 0;
-      const partTotal = parseFloat(part.partTotal) || 0;
-      return { materialCost: materialTotal, materialTotal, laborTotal, setupCharge, otherCharges, otherTotal: 0, additionalServices: 0, partTotal };
+    // For plate_roll, angle_roll, flat_stock — use ea pricing: (mat ea + labor ea) × qty
+    if (['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType)) {
+      const qty = parseInt(part.quantity) || 1;
+      const materialEach = parseFloat(part.materialTotal) || 0;
+      const laborEach = parseFloat(part.laborTotal) || 0;
+      const unitPrice = materialEach + laborEach;
+      const partTotal = parseFloat(part.partTotal) || (unitPrice * qty);
+      return { materialEach, laborEach, unitPrice, qty, partTotal };
     }
     
     const qty = parseInt(part.quantity) || 1;
@@ -177,15 +200,67 @@ function EstimateDetailsPage() {
     };
   };
 
+  // Check labor minimum for a part
+  const getLaborMinimum = (part) => {
+    if (!laborMinimums.length) return null;
+    for (const rule of laborMinimums) {
+      if (rule.partType !== part.partType) continue;
+      let size = 0;
+      if (rule.sizeField === 'thickness') {
+        size = parseFloat(part.thickness) || 0;
+      } else if (rule.sizeField === 'angleSize') {
+        // Parse angle size like "2 x 2" -> 2
+        const match = (part._angleSize || part.sectionSize || '').match(/^([\d.]+)/);
+        size = match ? parseFloat(match[1]) : 0;
+      } else if (rule.sizeField === 'sectionSize') {
+        const match = (part.sectionSize || '').match(/^([\d.]+)/);
+        size = match ? parseFloat(match[1]) : 0;
+      } else if (rule.sizeField === 'outerDiameter') {
+        size = parseFloat(part.outerDiameter) || 0;
+      }
+      const minOk = rule.minSize === undefined || rule.minSize === null || rule.minSize === '' || size >= parseFloat(rule.minSize);
+      const maxOk = rule.maxSize === undefined || rule.maxSize === null || rule.maxSize === '' || size <= parseFloat(rule.maxSize);
+      if (minOk && maxOk && size > 0) return rule;
+    }
+    return null;
+  };
+
+  const getMinimumWarnings = () => {
+    if (formData.minimumOverride) return [];
+    const warnings = [];
+    parts.forEach(part => {
+      if (!['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType)) return;
+      const rule = getLaborMinimum(part);
+      if (!rule) return;
+      const laborEach = parseFloat(part.laborTotal) || 0;
+      const qty = parseInt(part.quantity) || 1;
+      const totalLabor = laborEach * qty;
+      if (totalLabor > 0 && totalLabor < rule.minimum) {
+        warnings.push({ partNumber: part.partNumber, partType: part.partType, totalLabor, minimum: rule.minimum, label: rule.label });
+      }
+    });
+    return warnings;
+  };
+
   const calculateTotals = () => {
     let partsSubtotal = 0;
     parts.forEach(part => {
       const { partTotal } = calculatePartTotal(part);
       partsSubtotal += partTotal;
     });
+    
+    // Discount
+    let discountAmt = 0;
+    if (parseFloat(formData.discountPercent) > 0) {
+      discountAmt = partsSubtotal * (parseFloat(formData.discountPercent) / 100);
+    } else if (parseFloat(formData.discountAmount) > 0) {
+      discountAmt = parseFloat(formData.discountAmount);
+    }
+    const afterDiscount = partsSubtotal - discountAmt;
+    
     const trucking = parseFloat(formData.truckingCost) || 0;
-    const taxAmount = formData.taxExempt ? 0 : partsSubtotal * (parseFloat(formData.taxRate) / 100);
-    const grandTotal = partsSubtotal + taxAmount + trucking;
+    const taxAmount = formData.taxExempt ? 0 : afterDiscount * (parseFloat(formData.taxRate) / 100);
+    const grandTotal = afterDiscount + taxAmount + trucking;
     
     // Calculate credit card total (Square: 2.9% + $0.30)
     const ccFeeRate = 2.9;
@@ -193,7 +268,7 @@ function EstimateDetailsPage() {
     const ccFee = (grandTotal * ccFeeRate / 100) + ccFeeFixed;
     const ccTotal = grandTotal + ccFee;
     
-    return { partsSubtotal, trucking, taxAmount, grandTotal, ccFee, ccTotal };
+    return { partsSubtotal, discountAmt, afterDiscount, trucking, taxAmount, grandTotal, ccFee, ccTotal };
   };
 
   const handleDownloadPDF = async () => {
@@ -315,6 +390,10 @@ function EstimateDetailsPage() {
       if (!partData.thickness) warnings.push('Thickness is required');
       if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
       if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+    }
+
+    if (partData.partType === 'flat_stock') {
+      if (!partData.thickness) warnings.push('Thickness is required');
     }
     
     if (partData.partType === 'angle_roll') {
@@ -475,14 +554,13 @@ function EstimateDetailsPage() {
     const totals = calculateTotals();
     const partsHtml = parts.map(part => {
       const calc = calculatePartTotal(part);
-      const isRollPart = part.partType === 'plate_roll' || part.partType === 'angle_roll';
-      const pricingHtml = isRollPart
+      const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType);
+      const pricingHtml = isEaPricing
         ? `<table style="width:100%;margin-top:8px;">
-            ${parseFloat(part.materialTotal) > 0 ? `<tr><td>Material:</td><td style="text-align:right;">${formatCurrency(part.materialTotal)}</td></tr>` : ''}
-            ${parseFloat(part.laborTotal) > 0 ? `<tr><td>Labor / Rolling:</td><td style="text-align:right;">${formatCurrency(part.laborTotal)}</td></tr>` : ''}
-            ${parseFloat(part.setupCharge) > 0 ? `<tr><td>Setup Charge:</td><td style="text-align:right;">${formatCurrency(part.setupCharge)}</td></tr>` : ''}
-            ${parseFloat(part.otherCharges) > 0 ? `<tr><td>Other Charges:</td><td style="text-align:right;">${formatCurrency(part.otherCharges)}</td></tr>` : ''}
-            <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Part Total:</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`
+            <tr><td>Material (ea):</td><td style="text-align:right;">${formatCurrency(part.materialTotal)}</td></tr>
+            <tr><td>Labor (ea):</td><td style="text-align:right;">${formatCurrency(part.laborTotal)}</td></tr>
+            <tr style="border-top:1px solid #ddd;"><td><strong>Unit Price:</strong></td><td style="text-align:right;"><strong>${formatCurrency(calc.unitPrice)}</strong></td></tr>
+            <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Line Total (${part.quantity} × ${formatCurrency(calc.unitPrice)}):</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`
         : `<table style="width:100%;margin-top:8px;"><tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialTotal)}</td></tr>
             <tr><td>Rolling:</td><td style="text-align:right;">${formatCurrency(part.rollingCost)}</td></tr>
             <tr><td>Other Services:</td><td style="text-align:right;">${formatCurrency(calc.otherTotal)}</td></tr>
@@ -500,6 +578,9 @@ function EstimateDetailsPage() {
       ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Tax</span><span style="color:#c62828;font-weight:bold;">EXEMPT${formData.taxExemptCertNumber ? ` (Cert#: ${formData.taxExemptCertNumber})` : ''}</span></div>`
       : `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Tax (${formData.taxRate}%)</span><span>${formatCurrency(totals.taxAmount)}</span></div>`;
     
+    const discountLine = totals.discountAmt > 0
+      ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;color:#c62828;"><span>Discount${formData.discountReason ? ` (${formData.discountReason})` : ''}</span><span>-${formatCurrency(totals.discountAmt)}</span></div>` : '';
+
     const w = window.open('', '_blank');
     w.document.write(`<!DOCTYPE html><html><head><title>Estimate ${estimate?.estimateNumber}</title>
       <style>body{font-family:Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto}</style></head><body>
@@ -511,6 +592,7 @@ function EstimateDetailsPage() {
       ${formData.truckingCost > 0 ? `<div style="background:#fff3e0;padding:12px;border-radius:8px;margin:12px 0;"><strong>🚚 Trucking:</strong> ${formData.truckingDescription || ''} - ${formatCurrency(formData.truckingCost)} (Not Taxed)</div>` : ''}
       <div style="background:#f0f7ff;padding:16px;border-radius:8px;margin-top:20px;">
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Parts Subtotal</span><span>${formatCurrency(totals.partsSubtotal)}</span></div>
+        ${discountLine}
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Trucking</span><span>${formatCurrency(totals.trucking)}</span></div>
         ${taxLine}
         <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:1.3em;font-weight:bold;color:#1976d2;"><span>Grand Total</span><span>${formatCurrency(totals.grandTotal)}</span></div>
@@ -746,7 +828,7 @@ function EstimateDetailsPage() {
                   </div>
 
                   {/* Material Section - only show if we supply material (old part types) */}
-                  {part.partType !== 'plate_roll' && part.partType !== 'angle_roll' && part.weSupplyMaterial && part.materialDescription && (
+                  {!['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType) && part.weSupplyMaterial && part.materialDescription && (
                     <div style={{ background: '#fff3e0', borderRadius: 8, padding: 12, marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <strong>📦 We Supply Material</strong>
@@ -764,8 +846,8 @@ function EstimateDetailsPage() {
                     </div>
                   )}
 
-                  {/* Costs Section - plate_roll / angle_roll pricing */}
-                  {(part.partType === 'plate_roll' || part.partType === 'angle_roll') ? (
+                  {/* Costs Section - plate_roll / angle_roll / flat_stock pricing */}
+                  {['plate_roll', 'angle_roll', 'flat_stock'].includes(part.partType) ? (
                     <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
                       {part.materialDescription && (
                         <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
@@ -773,34 +855,37 @@ function EstimateDetailsPage() {
                           {part.supplierName && <span style={{ marginLeft: 8, background: '#ffe0b2', padding: '2px 6px', borderRadius: 4, fontSize: '0.75rem', color: '#e65100' }}>🏭 {part.supplierName}</span>}
                         </div>
                       )}
-                      {parseFloat(part.materialTotal) > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
-                          <span>📦 Material {parseInt(part.quantity) > 1 ? `(${part.quantity} × ${formatCurrency(part.materialTotal)}/ea)` : ''}</span>
-                          <strong>{formatCurrency(parseFloat(part.materialTotal) * (parseInt(part.quantity) || 1))}</strong>
-                        </div>
-                      )}
-                      {parseFloat(part.laborTotal) > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
-                          <span>🔄 Labor / Rolling</span>
-                          <strong>{formatCurrency(part.laborTotal)}</strong>
-                        </div>
-                      )}
-                      {parseFloat(part.setupCharge) > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
-                          <span>⚙️ Setup Charge</span>
-                          <strong>{formatCurrency(part.setupCharge)}</strong>
-                        </div>
-                      )}
-                      {parseFloat(part.otherCharges) > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
-                          <span>📋 Other Charges</span>
-                          <strong>{formatCurrency(part.otherCharges)}</strong>
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '1.05rem' }}>
-                        <strong>Part Total</strong>
-                        <strong style={{ color: '#1976d2' }}>{formatCurrency(calc.partTotal)}</strong>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
+                        <span>Material (ea)</span>
+                        <span>{formatCurrency(part.materialTotal)}</span>
                       </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
+                        <span>Labor (ea)</span>
+                        <span>{formatCurrency(part.laborTotal)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #ddd', marginTop: 4, fontWeight: 600 }}>
+                        <span>Unit Price</span>
+                        <span style={{ color: '#1976d2' }}>{formatCurrency(calc.unitPrice)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '1.05rem', borderTop: '1px solid #ddd' }}>
+                        <strong>Line Total ({part.quantity} × {formatCurrency(calc.unitPrice)})</strong>
+                        <strong style={{ color: '#2e7d32' }}>{formatCurrency(calc.partTotal)}</strong>
+                      </div>
+                      {/* Minimum charge warning */}
+                      {(() => {
+                        const rule = getLaborMinimum(part);
+                        const laborEach = parseFloat(part.laborTotal) || 0;
+                        const qty = parseInt(part.quantity) || 1;
+                        const totalLabor = laborEach * qty;
+                        if (rule && totalLabor > 0 && totalLabor < rule.minimum && !formData.minimumOverride) {
+                          return (
+                            <div style={{ background: '#fff3e0', border: '1px solid #ff9800', borderRadius: 6, padding: 8, marginTop: 8, fontSize: '0.8rem', color: '#e65100' }}>
+                              ⚠️ Total labor {formatCurrency(totalLabor)} is below minimum {formatCurrency(rule.minimum)} for {rule.label}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   ) : (
                   /* Costs Section - old part types */
@@ -984,6 +1069,31 @@ function EstimateDetailsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #ddd' }}>
                 <span>Parts Subtotal</span><span>{formatCurrency(totals.partsSubtotal)}</span>
               </div>
+              
+              {/* Discount Section */}
+              <div style={{ padding: '8px 0', borderBottom: '1px solid #ddd' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>💸 Discount</span>
+                  <input type="number" step="0.1" className="form-input" placeholder="%" value={formData.discountPercent}
+                    onChange={(e) => setFormData({ ...formData, discountPercent: e.target.value, discountAmount: '' })}
+                    style={{ width: 55, textAlign: 'center', padding: '3px 4px', fontSize: '0.8rem' }} />
+                  <span style={{ fontSize: '0.8rem', color: '#999' }}>% or $</span>
+                  <input type="number" step="0.01" className="form-input" placeholder="$0.00" value={formData.discountAmount}
+                    onChange={(e) => setFormData({ ...formData, discountAmount: e.target.value, discountPercent: '' })}
+                    style={{ width: 70, textAlign: 'center', padding: '3px 4px', fontSize: '0.8rem' }} />
+                </div>
+                {(parseFloat(formData.discountPercent) > 0 || parseFloat(formData.discountAmount) > 0) && (
+                  <>
+                    <input type="text" className="form-input" placeholder="Discount reason..." value={formData.discountReason}
+                      onChange={(e) => setFormData({ ...formData, discountReason: e.target.value })}
+                      style={{ fontSize: '0.8rem', padding: '4px 8px', marginTop: 4 }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, color: '#c62828', fontWeight: 600, fontSize: '0.9rem' }}>
+                      <span>Discount</span><span>-{formatCurrency(totals.discountAmt)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #ddd' }}>
                 <span>Trucking</span><span>{formatCurrency(totals.trucking)}</span>
               </div>
@@ -1046,6 +1156,45 @@ function EstimateDetailsPage() {
               </div>
             </div>
 
+            {/* Minimum Charge Warnings */}
+            {(() => {
+              const warnings = getMinimumWarnings();
+              if (warnings.length === 0) return null;
+              return (
+                <div style={{ marginTop: 12, padding: 12, background: '#fff3e0', border: '1px solid #ff9800', borderRadius: 8 }}>
+                  <div style={{ fontWeight: 600, color: '#e65100', marginBottom: 8, fontSize: '0.85rem' }}>⚠️ Labor Below Minimum</div>
+                  {warnings.map((w, i) => (
+                    <div key={i} style={{ fontSize: '0.8rem', color: '#bf360c', marginBottom: 4 }}>
+                      Part #{w.partNumber}: {formatCurrency(w.totalLabor)} labor (min {formatCurrency(w.minimum)} for {w.label})
+                    </div>
+                  ))}
+                  <button
+                    className="btn btn-sm"
+                    style={{ marginTop: 8, background: '#ff9800', color: '#fff', border: 'none', fontSize: '0.75rem' }}
+                    onClick={() => setFormData({ ...formData, minimumOverride: true })}
+                  >
+                    Override Minimums
+                  </button>
+                </div>
+              );
+            })()}
+
+            {formData.minimumOverride && (
+              <div style={{ marginTop: 12, padding: 12, background: '#fce4ec', border: '1px solid #e91e63', borderRadius: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#c2185b' }}>🔓 Minimum Override Active</span>
+                  <button className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }}
+                    onClick={() => setFormData({ ...formData, minimumOverride: false, minimumOverrideReason: '' })}>
+                    Remove
+                  </button>
+                </div>
+                <input type="text" className="form-input" placeholder="Override reason..."
+                  value={formData.minimumOverrideReason}
+                  onChange={(e) => setFormData({ ...formData, minimumOverrideReason: e.target.value })}
+                  style={{ fontSize: '0.8rem', padding: '4px 8px', marginTop: 6 }} />
+              </div>
+            )}
+
             {/* Material by Supplier */}
             {parts.some(p => p.supplierName) && (
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>
@@ -1053,8 +1202,9 @@ function EstimateDetailsPage() {
                 <div style={{ fontSize: '0.8rem' }}>
                   {Object.entries(parts.reduce((acc, p) => {
                     if (p.supplierName) {
-                      const calc = calculatePartTotal(p);
-                      acc[p.supplierName] = (acc[p.supplierName] || 0) + calc.materialTotal;
+                      const matEa = parseFloat(p.materialTotal) || 0;
+                      const q = parseInt(p.quantity) || 1;
+                      acc[p.supplierName] = (acc[p.supplierName] || 0) + (matEa * q);
                     }
                     return acc;
                   }, {})).map(([supplier, total]) => (
@@ -1115,8 +1265,8 @@ function EstimateDetailsPage() {
 
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
 
-              {/* Common fields for all part types (plate_roll and angle_roll have their own at bottom) */}
-              {partData.partType !== 'plate_roll' && partData.partType !== 'angle_roll' && (
+              {/* Common fields for all part types (plate_roll, angle_roll, flat_stock have their own) */}
+              {!['plate_roll', 'angle_roll', 'flat_stock'].includes(partData.partType) && (
               <div className="grid grid-2" style={{ marginBottom: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Client Part Number</label>
@@ -1132,7 +1282,7 @@ function EstimateDetailsPage() {
               )}
 
               {/* Type-specific form */}
-              {partData.partType === 'plate_roll' ? (
+              {(partData.partType === 'plate_roll' || partData.partType === 'flat_stock') ? (
                 <div className="grid grid-2">
                   <PlateRollForm
                     partData={partData}

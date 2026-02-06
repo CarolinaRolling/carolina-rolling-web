@@ -23,6 +23,7 @@ const PART_TYPES = {
   pipe_roll: { label: 'Pipe/Tube Roll', fields: ['material', 'outerDiameter', 'wallThickness', 'length', 'radius', 'diameter', 'arcDegrees'] },
   channel_roll: { label: 'Channel Roll', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
   flat_bar: { label: 'Flat Bar', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
+  flat_stock: { label: 'Flat Stock', fields: ['material', 'thickness', 'width', 'length'] },
   other: { label: 'Other', fields: ['material', 'thickness', 'width', 'length', 'sectionSize', 'outerDiameter', 'wallThickness', 'rollType', 'radius', 'diameter', 'arcDegrees'] }
 };
 

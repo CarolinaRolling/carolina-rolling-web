@@ -139,18 +139,17 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     setPartData(prev => ({ ...prev, materialDescription: materialDescription }));
   }, [materialDescription]);
 
-  // Calculate unit price and part total
+  // Calculate pricing: material ea + labor ea = unit price, unit price × qty = line total
   const qty = parseInt(partData.quantity) || 1;
   const materialEach = parseFloat(partData.materialTotal) || 0;
-  const lab = parseFloat(partData.laborTotal) || 0;
-  const setup = parseFloat(partData.setupCharge) || 0;
-  const other = parseFloat(partData.otherCharges) || 0;
-  const calculatedTotal = (materialEach * qty) + lab + setup + other;
+  const laborEach = parseFloat(partData.laborTotal) || 0;
+  const unitPrice = materialEach + laborEach;
+  const lineTotal = unitPrice * qty;
 
   // Auto-update part total
   useEffect(() => {
-    setPartData(prev => ({ ...prev, partTotal: calculatedTotal.toFixed(2) }));
-  }, [calculatedTotal]);
+    setPartData(prev => ({ ...prev, partTotal: lineTotal.toFixed(2) }));
+  }, [lineTotal]);
 
   const isCustomThickness = partData.thickness === 'Custom' || (partData.thickness && !THICKNESS_OPTIONS.includes(partData.thickness) && partData.thickness !== customThickness);
   const selectedThicknessOption = THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : '');
@@ -425,34 +424,32 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
         {sectionTitle('💰', 'Pricing', '#1976d2')}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div className="form-group">
-            <label className="form-label">Material Price (each)</label>
+            <label className="form-label">Material (each)</label>
             <input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
           </div>
           <div className="form-group">
-            <label className="form-label">Labor Price</label>
+            <label className="form-label">Labor (each)</label>
             <input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Setup Charge</label>
-            <input type="number" step="0.01" className="form-input" value={partData.setupCharge || ''} onChange={(e) => setPartData({ ...partData, setupCharge: e.target.value })} placeholder="0.00" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Other Charges</label>
-            <input type="number" step="0.01" className="form-input" value={partData.otherCharges || ''} onChange={(e) => setPartData({ ...partData, otherCharges: e.target.value })} placeholder="0.00" />
           </div>
         </div>
 
         {/* Pricing Summary */}
-        <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 8, marginTop: 12 }}>
-          {materialEach > 0 && qty > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, fontSize: '0.85rem', color: '#666' }}>
-              <span>Material: ${materialEach.toFixed(2)} × {qty} pcs</span>
-              <span>${(materialEach * qty).toFixed(2)}</span>
-            </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: materialEach > 0 && qty > 1 ? '1px solid #ddd' : 'none', paddingTop: materialEach > 0 && qty > 1 ? 8 : 0 }}>
-            <span style={{ fontWeight: 600 }}>Part Total:</span>
-            <span style={{ fontWeight: 700, fontSize: '1.2rem', color: '#2e7d32' }}>${calculatedTotal.toFixed(2)}</span>
+        <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
+            <span>Material (ea)</span>
+            <span>${materialEach.toFixed(2)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
+            <span>Labor (ea)</span>
+            <span>${laborEach.toFixed(2)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9', marginTop: 4 }}>
+            <strong>Unit Price</strong>
+            <strong style={{ color: '#1976d2' }}>${unitPrice.toFixed(2)}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9' }}>
+            <strong>Line Total ({qty} × ${unitPrice.toFixed(2)})</strong>
+            <strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong>
           </div>
         </div>
       </div>

@@ -69,6 +69,10 @@ function AdminPage() {
   });
   const [taxSettingsSaving, setTaxSettingsSaving] = useState(false);
 
+  // Labor minimums
+  const [laborMinimums, setLaborMinimums] = useState([]);
+  const [laborMinSaving, setLaborMinSaving] = useState(false);
+
   useEffect(() => {
     if (!isAdmin()) {
       navigate('/inventory');
@@ -83,6 +87,8 @@ function AdminPage() {
       loadScheduleEmailSettings();
     } else if (activeTab === 'tax') {
       loadTaxSettings();
+    } else if (activeTab === 'minimums') {
+      loadLaborMinimums();
     } else if (activeTab === 'system') {
       setSystemLogs([...window.nasErrorLog]);
       setLoading(false);
@@ -116,6 +122,61 @@ function AdminPage() {
     } finally {
       setTaxSettingsSaving(false);
     }
+  };
+
+  const loadLaborMinimums = async () => {
+    try {
+      setLoading(true);
+      const response = await getSettings('labor_minimums');
+      if (response.data.data?.value) {
+        setLaborMinimums(response.data.data.value);
+      } else {
+        // Default minimums
+        setLaborMinimums([
+          { partType: 'plate_roll', label: 'Plate Roll ≤ 3/8"', sizeField: 'thickness', maxSize: '0.375', minimum: 125 },
+          { partType: 'plate_roll', label: 'Plate Roll > 3/8"', sizeField: 'thickness', minSize: '0.376', minimum: 200 },
+          { partType: 'angle_roll', label: 'Angle Roll ≤ 2x2', sizeField: 'angleSize', maxSize: '2', minimum: 150 },
+          { partType: 'angle_roll', label: 'Angle Roll > 2x2', sizeField: 'angleSize', minSize: '2.01', minimum: 250 },
+        ]);
+      }
+    } catch (err) {
+      setLaborMinimums([
+        { partType: 'plate_roll', label: 'Plate Roll ≤ 3/8"', sizeField: 'thickness', maxSize: '0.375', minimum: 125 },
+        { partType: 'plate_roll', label: 'Plate Roll > 3/8"', sizeField: 'thickness', minSize: '0.376', minimum: 200 },
+        { partType: 'angle_roll', label: 'Angle Roll ≤ 2x2', sizeField: 'angleSize', maxSize: '2', minimum: 150 },
+        { partType: 'angle_roll', label: 'Angle Roll > 2x2', sizeField: 'angleSize', minSize: '2.01', minimum: 250 },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveLaborMinimums = async () => {
+    try {
+      setLaborMinSaving(true);
+      setError(null);
+      await updateSettings('labor_minimums', laborMinimums);
+      setSuccess('Labor minimums saved successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError('Failed to save labor minimums');
+    } finally {
+      setLaborMinSaving(false);
+    }
+  };
+
+  const addLaborMinimum = () => {
+    setLaborMinimums([...laborMinimums, { partType: 'plate_roll', label: '', sizeField: 'thickness', minSize: '', maxSize: '', minimum: 0 }]);
+  };
+
+  const updateLaborMinimum = (index, field, value) => {
+    const updated = [...laborMinimums];
+    updated[index] = { ...updated[index], [field]: value };
+    setLaborMinimums(updated);
+  };
+
+  const removeLaborMinimum = (index) => {
+    setLaborMinimums(laborMinimums.filter((_, i) => i !== index));
   };
 
   const loadScheduleEmailSettings = async () => {
@@ -380,6 +441,13 @@ function AdminPage() {
           Tax & Rates
         </button>
         <button 
+          className={`tab ${activeTab === 'minimums' ? 'active' : ''}`}
+          onClick={() => setActiveTab('minimums')}
+        >
+          <Shield size={16} style={{ marginRight: 6 }} />
+          Labor Minimums
+        </button>
+        <button 
           className={`tab ${activeTab === 'schedule' ? 'active' : ''}`}
           onClick={() => setActiveTab('schedule')}
         >
@@ -509,6 +577,102 @@ function AdminPage() {
                   Government, non-profit, or other exempt organizations - no tax charged
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'minimums' ? (
+        <div>
+          <div className="card">
+            <h3 style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Shield size={20} />
+              Labor Minimum Charges
+            </h3>
+            <p style={{ color: '#666', marginBottom: 16, fontSize: '0.9rem' }}>
+              Set minimum labor charges by part type and size range. Estimates will warn when labor is below these thresholds.
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <button className="btn btn-primary btn-sm" onClick={addLaborMinimum}>
+                <Plus size={14} style={{ marginRight: 4 }} /> Add Rule
+              </button>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ background: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
+                    <th style={{ padding: '10px 8px', textAlign: 'left' }}>Part Type</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'left' }}>Label</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'left' }}>Size Field</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'center' }}>Min Size</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'center' }}>Max Size</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'right' }}>Minimum $</th>
+                    <th style={{ padding: '10px 8px', textAlign: 'center' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {laborMinimums.map((rule, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '6px 4px' }}>
+                        <select className="form-input" value={rule.partType} onChange={(e) => updateLaborMinimum(idx, 'partType', e.target.value)} style={{ padding: '4px', fontSize: '0.8rem' }}>
+                          <option value="plate_roll">Plate Roll</option>
+                          <option value="angle_roll">Angle Roll</option>
+                          <option value="pipe_roll">Pipe/Tube Roll</option>
+                          <option value="beam_roll">Beam Roll</option>
+                          <option value="channel_roll">Channel Roll</option>
+                          <option value="flat_bar">Flat Bar</option>
+                          <option value="flat_stock">Flat Stock</option>
+                          <option value="section_roll">Section Roll</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </td>
+                      <td style={{ padding: '6px 4px' }}>
+                        <input className="form-input" value={rule.label} onChange={(e) => updateLaborMinimum(idx, 'label', e.target.value)} placeholder="e.g. Plate ≤ 3/8&quot;" style={{ padding: '4px 6px', fontSize: '0.8rem' }} />
+                      </td>
+                      <td style={{ padding: '6px 4px' }}>
+                        <select className="form-input" value={rule.sizeField} onChange={(e) => updateLaborMinimum(idx, 'sizeField', e.target.value)} style={{ padding: '4px', fontSize: '0.8rem' }}>
+                          <option value="thickness">Thickness</option>
+                          <option value="angleSize">Angle Size (leg)</option>
+                          <option value="sectionSize">Section Size</option>
+                          <option value="outerDiameter">OD</option>
+                        </select>
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <input type="number" step="0.001" className="form-input" value={rule.minSize || ''} onChange={(e) => updateLaborMinimum(idx, 'minSize', e.target.value)} placeholder="—" style={{ width: 70, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <input type="number" step="0.001" className="form-input" value={rule.maxSize || ''} onChange={(e) => updateLaborMinimum(idx, 'maxSize', e.target.value)} placeholder="—" style={{ width: 70, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'right' }}>
+                        <input type="number" step="1" className="form-input" value={rule.minimum} onChange={(e) => updateLaborMinimum(idx, 'minimum', parseFloat(e.target.value) || 0)} style={{ width: 80, textAlign: 'right', padding: '4px', fontSize: '0.8rem' }} />
+                      </td>
+                      <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                        <button className="btn btn-sm btn-danger" onClick={() => removeLaborMinimum(idx)} style={{ padding: '3px 6px' }}>
+                          <Trash2 size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {laborMinimums.length === 0 && (
+              <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>
+                No minimum rules defined. Click "Add Rule" to create one.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-primary" onClick={handleSaveLaborMinimums} disabled={laborMinSaving}>
+                <Save size={16} style={{ marginRight: 6 }} />
+                {laborMinSaving ? 'Saving...' : 'Save Minimums'}
+              </button>
+            </div>
+
+            <div style={{ marginTop: 16, padding: 12, background: '#f5f5f5', borderRadius: 8, fontSize: '0.8rem', color: '#666' }}>
+              <strong>How it works:</strong> When creating an estimate, if total labor (labor ea × qty) for a part falls below the minimum for its type and size range, a warning will appear. 
+              You can override minimums per-estimate with the "Override Minimums" button. Leave min/max size blank to match all sizes for that part type.
             </div>
           </div>
         </div>
