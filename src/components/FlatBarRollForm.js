@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings } from '../services/api';
+import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 
 const FLAT_BAR_SIZES = [
   '1/2x1/4', '3/4x1/4', '3/4x3/8',
@@ -169,6 +170,13 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     return parts.join(' ');
   }, [partData._barSize, partData._customBarSize, partData.length, partData.material, partData._materialOrigin, partData.quantity, parsedSize]);
 
+  // Input diameter (raw user value, not CL-adjusted) — for developed diameter in pitch calc
+  const inputDiameter = useMemo(() => {
+    const rv = parseFloat(rollValue) || 0;
+    if (!rv) return 0;
+    return rollMeasureType === 'radius' ? rv * 2 : rv;
+  }, [rollValue, rollMeasureType]);
+
   const rollingDescription = useMemo(() => {
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return '';
@@ -180,12 +188,13 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     if (ewHw) rollLine += ` ${ewHw}`;
     lines.push(rollLine);
     if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
+    lines.push(...getPitchDescriptionLines(partData, clDiameter));
     if (completeRings && ringCalc && !ringCalc.error) {
       lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.pcsPerRing} pcs/ring, ${ringCalc.totalQty} pcs total`);
       lines.push(`Tangents: ${ringCalc.tangent}" each end`);
     }
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
 
   useEffect(() => {
     const updates = { materialDescription };
@@ -297,6 +306,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
             <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
               <option value="inside">Inside</option>
               <option value="outside">Outside</option>
+              <option value="centerline">Centerline</option>
             </select>
           </div>
         </div>
@@ -342,6 +352,15 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
             </pre>
           </div>
         )}
+
+        {/* Pitch / Helix */}
+        <PitchSection 
+          partData={partData} 
+          setPartData={setPartData} 
+          clDiameter={clDiameter} 
+          inputDiameter={inputDiameter} 
+          profileOD={profileSize} 
+        />
 
         {/* === COMPLETE RINGS === */}
         <div style={{ marginTop: 12, padding: 14, borderRadius: 8, background: completeRings ? '#e8f5e9' : '#f9f9f9', border: `2px solid ${completeRings ? '#4caf50' : '#e0e0e0'}`, transition: 'all 0.2s' }}>
