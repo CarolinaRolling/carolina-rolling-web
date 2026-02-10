@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Package, Truck, CheckCircle, Clock, FileText, Inbox, Image, AlertCircle } from 'lucide-react';
-import { getWorkOrders, getArchivedWorkOrders, getUnlinkedShipments, linkShipmentToWorkOrder } from '../services/api';
+import { getWorkOrders, getArchivedWorkOrders, getUnlinkedShipments, linkShipmentToWorkOrder, getRecentlyCompletedOrders } from '../services/api';
 
 // Status configuration
 const STATUSES = {
@@ -12,6 +12,7 @@ const STATUSES = {
   processing: { label: 'Processing', color: '#0288d1', bg: '#e1f5fe' },
   stored: { label: 'Stored', color: '#388e3c', bg: '#e8f5e9' },
   shipped: { label: 'Shipped', color: '#7b1fa2', bg: '#f3e5f5' },
+  picked_up: { label: 'Picked Up', color: '#7b1fa2', bg: '#f3e5f5' },
   archived: { label: 'Archived', color: '#616161', bg: '#eeeeee' },
   // Legacy status mappings
   draft: { label: 'Received', color: '#1976d2', bg: '#e3f2fd' },
@@ -23,6 +24,10 @@ function InventoryPage() {
   const navigate = useNavigate();
   const [workOrders, setWorkOrders] = useState([]);
   const [unlinkedShipments, setUnlinkedShipments] = useState([]);
+  const [recentlyCompleted, setRecentlyCompleted] = useState([]);
+  const [dismissedCompletions, setDismissedCompletions] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dismissed_completions') || '[]'); } catch { return []; }
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,6 +76,14 @@ function InventoryPage() {
       } catch (e) {
         console.error('Failed to load unlinked shipments:', e);
       }
+      
+      // Load recently completed orders (shop floor notifications)
+      try {
+        const completedRes = await getRecentlyCompletedOrders();
+        setRecentlyCompleted(completedRes.data.data || []);
+      } catch (e) {
+        console.error('Failed to load recently completed:', e);
+      }
     } catch (err) {
       setError('Failed to load inventory');
       console.error(err);
@@ -89,6 +102,14 @@ function InventoryPage() {
     }
   };
 
+  const dismissCompletion = (orderId) => {
+    const updated = [...dismissedCompletions, orderId];
+    setDismissedCompletions(updated);
+    localStorage.setItem('dismissed_completions', JSON.stringify(updated));
+  };
+
+  const visibleCompletions = recentlyCompleted.filter(o => !dismissedCompletions.includes(o.id));
+
   const getFilteredOrders = () => {
     let filtered = [...workOrders];
 
@@ -102,8 +123,8 @@ function InventoryPage() {
     } else if (statusFilter === 'stored') {
       filtered = filtered.filter(o => o.status === 'stored' || o.status === 'completed');
     } else if (statusFilter === 'active') {
-      // All non-archived, non-shipped
-      filtered = filtered.filter(o => o.status !== 'archived' && o.status !== 'shipped');
+      // All non-archived, non-shipped, non-picked-up
+      filtered = filtered.filter(o => o.status !== 'archived' && o.status !== 'shipped' && o.status !== 'picked_up');
     }
 
     // Filter by search query
@@ -313,6 +334,60 @@ function InventoryPage() {
       </div>
 
       {/* Waiting for Instructions - unlinked shipments */}
+      
+      {/* Shop Floor Completed Notifications */}
+      {visibleCompletions.length > 0 && statusFilter !== 'archived' && (
+        <div style={{ 
+          background: '#e8f5e9', 
+          border: '2px solid #4caf50', 
+          borderRadius: 8, 
+          padding: '14px 18px', 
+          marginBottom: 16 
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h3 style={{ margin: 0, color: '#2e7d32', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <CheckCircle size={18} />
+              Shop Floor — Order{visibleCompletions.length > 1 ? 's' : ''} Completed ({visibleCompletions.length})
+            </h3>
+          </div>
+          {visibleCompletions.map(order => (
+            <div key={order.id} style={{ 
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              background: '#fff', borderRadius: 6, padding: '10px 14px', marginBottom: 6
+            }}>
+              <div>
+                <span style={{ fontWeight: 700, color: '#1976d2', fontFamily: 'monospace', fontSize: '1.05rem' }}>
+                  DR-{order.drNumber}
+                </span>
+                <span style={{ marginLeft: 12, color: '#333' }}>{order.clientName}</span>
+                <span style={{ marginLeft: 12, color: '#888', fontSize: '0.85rem' }}>
+                  {order.parts?.length || 0} part{(order.parts?.length || 0) !== 1 ? 's' : ''}
+                </span>
+                {order.completedAt && (
+                  <span style={{ marginLeft: 12, color: '#666', fontSize: '0.8rem' }}>
+                    {new Date(order.completedAt).toLocaleString()}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button 
+                  onClick={() => navigate(`/workorder/${order.id}`)}
+                  style={{ padding: '6px 14px', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}
+                >
+                  View
+                </button>
+                <button 
+                  onClick={() => dismissCompletion(order.id)}
+                  style={{ padding: '6px 10px', background: 'none', color: '#999', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '0.85rem' }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {unlinkedShipments.length > 0 && statusFilter !== 'archived' && (
         <div style={{ 
           background: '#fff3e0', 
@@ -510,6 +585,24 @@ function InventoryPage() {
                     <Package size={14} />
                     <span>{order.parts?.length || 0} part{(order.parts?.length || 0) !== 1 ? 's' : ''}</span>
                   </div>
+
+                  {/* Shop completion badge */}
+                  {order.completedAt && (
+                    <div style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: '0.8rem',
+                      color: '#2e7d32',
+                      background: '#e8f5e9',
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      marginBottom: 6,
+                      fontWeight: 600
+                    }}>
+                      ✅ Shop Complete — {new Date(order.completedAt).toLocaleDateString()}
+                    </div>
+                  )}
 
                   {/* Date */}
                   <div style={{ 

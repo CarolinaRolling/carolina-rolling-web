@@ -432,7 +432,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
 
   useEffect(() => {
     if (rollingDescription) {
-      setPartData(prev => ({ ...prev, specialInstructions: rollingDescription, _rollingDescription: rollingDescription }));
+      setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
     }
   }, [rollingDescription]);
 
