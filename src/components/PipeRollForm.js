@@ -400,6 +400,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
         const devLabel = rollMeasureType === 'radius' ? 'Developed Radius' : 'Developed Diameter';
         lines.push(`${devLabel}: ${devValue}" ${specLabel}`);
       }
+      lines.push(`Direction: ${pitchDirection === 'clockwise' ? 'Clockwise' : 'Counter-Clockwise'} (going up)`);
     }
     if (completeRings && ringCalc && !ringCalc.error) {
       lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.pcsPerRing} pcs/ring, ${ringCalc.totalQty} pcs total`);
@@ -789,15 +790,37 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
 
           {pitchEnabled && (
             <div style={{ marginTop: 14 }}>
-              {/* Direction */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Direction (from ground floor)</label>
-                  <select className="form-select" value={pitchDirection} onChange={(e) => setPitchDirection(e.target.value)}>
-                    <option value="clockwise">↻ Clockwise (going up)</option>
-                    <option value="counterclockwise">↺ Counter-Clockwise (going up)</option>
-                  </select>
+              {/* Direction with images */}
+              <div style={{ marginBottom: 14 }}>
+                <label className="form-label">Direction (looking down, going up from ground floor)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <button type="button" onClick={() => setPitchDirection('clockwise')} style={{
+                    padding: 12, borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                    border: `3px solid ${pitchDirection === 'clockwise' ? '#1976d2' : '#ccc'}`,
+                    background: pitchDirection === 'clockwise' ? '#e3f2fd' : '#fff',
+                    transition: 'all 0.2s'
+                  }}>
+                    <img src="/images/Clockwise.png" alt="Clockwise helix" style={{ width: '100%', maxWidth: 180, height: 'auto', borderRadius: 6 }} />
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', marginTop: 6, color: pitchDirection === 'clockwise' ? '#1976d2' : '#666' }}>
+                      ↻ Clockwise
+                    </div>
+                  </button>
+                  <button type="button" onClick={() => setPitchDirection('counterclockwise')} style={{
+                    padding: 12, borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                    border: `3px solid ${pitchDirection === 'counterclockwise' ? '#1976d2' : '#ccc'}`,
+                    background: pitchDirection === 'counterclockwise' ? '#e3f2fd' : '#fff',
+                    transition: 'all 0.2s'
+                  }}>
+                    <img src="/images/CounterClockwise.png" alt="Counter-Clockwise helix" style={{ width: '100%', maxWidth: 180, height: 'auto', borderRadius: 6 }} />
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', marginTop: 6, color: pitchDirection === 'counterclockwise' ? '#1976d2' : '#666' }}>
+                      ↺ Counter-Clockwise
+                    </div>
+                  </button>
                 </div>
+              </div>
+
+              {/* Input Method */}
+              <div style={{ marginBottom: 14 }}>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Input Method</label>
                   <select className="form-select" value={pitchMethod} onChange={(e) => setPitchMethod(e.target.value)}>

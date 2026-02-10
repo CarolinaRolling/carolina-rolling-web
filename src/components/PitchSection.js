@@ -125,15 +125,37 @@ export default function PitchSection({ partData, setPartData, clDiameter, inputD
 
       {enabled && (
         <div style={{ marginTop: 14 }}>
-          {/* Direction & Method */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Direction (from ground floor)</label>
-              <select className="form-select" value={direction} onChange={(e) => setDirection(e.target.value)}>
-                <option value="clockwise">↻ Clockwise (going up)</option>
-                <option value="counterclockwise">↺ Counter-Clockwise (going up)</option>
-              </select>
+          {/* Direction with images */}
+          <div style={{ marginBottom: 14 }}>
+            <label className="form-label">Direction (looking down, going up from ground floor)</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <button type="button" onClick={() => setDirection('clockwise')} style={{
+                padding: 12, borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                border: `3px solid ${direction === 'clockwise' ? '#1976d2' : '#ccc'}`,
+                background: direction === 'clockwise' ? '#e3f2fd' : '#fff',
+                transition: 'all 0.2s'
+              }}>
+                <img src="/images/Clockwise.png" alt="Clockwise helix" style={{ width: '100%', maxWidth: 180, height: 'auto', borderRadius: 6 }} />
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', marginTop: 6, color: direction === 'clockwise' ? '#1976d2' : '#666' }}>
+                  ↻ Clockwise
+                </div>
+              </button>
+              <button type="button" onClick={() => setDirection('counterclockwise')} style={{
+                padding: 12, borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                border: `3px solid ${direction === 'counterclockwise' ? '#1976d2' : '#ccc'}`,
+                background: direction === 'counterclockwise' ? '#e3f2fd' : '#fff',
+                transition: 'all 0.2s'
+              }}>
+                <img src="/images/CounterClockwise.png" alt="Counter-Clockwise helix" style={{ width: '100%', maxWidth: 180, height: 'auto', borderRadius: 6 }} />
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', marginTop: 6, color: direction === 'counterclockwise' ? '#1976d2' : '#666' }}>
+                  ↺ Counter-Clockwise
+                </div>
+              </button>
             </div>
+          </div>
+
+          {/* Input Method */}
+          <div style={{ marginBottom: 14 }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Input Method</label>
               <select className="form-select" value={method} onChange={(e) => setMethod(e.target.value)}>
@@ -303,6 +325,10 @@ export function getPitchDescriptionLines(partData, clDiameter) {
     const devValue = measureType === 'radius' ? (partData._pitchDevelopedDia / 2).toFixed(4) : partData._pitchDevelopedDia.toFixed(4);
     const devLabel = measureType === 'radius' ? 'Developed Radius' : 'Developed Diameter';
     lines.push(`${devLabel}: ${devValue}" ${specLabel}`);
+  }
+  // Direction
+  if (partData._pitchDirection) {
+    lines.push(`Direction: ${partData._pitchDirection === 'clockwise' ? 'Clockwise' : 'Counter-Clockwise'} (going up)`);
   }
   return lines;
 }
