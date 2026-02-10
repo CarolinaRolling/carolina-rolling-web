@@ -21,7 +21,7 @@ import {
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
-  searchClients
+  searchClients, getSettings
 } from '../services/api';
 
 const PART_TYPES = {
@@ -81,10 +81,11 @@ function WorkOrderDetailsPage() {
   const [linkingEstimate, setLinkingEstimate] = useState(false);
   const [clientSuggestions, setClientSuggestions] = useState([]);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const [laborMinimums, setLaborMinimums] = useState([]);
   const fileInputRefs = useRef({});
   const docInputRef = useRef(null);
 
-  useEffect(() => { loadOrder(); }, [id]);
+  useEffect(() => { loadOrder(); loadLaborMinimums(); }, [id]);
 
   const loadOrder = async () => {
     try {
@@ -108,7 +109,10 @@ function WorkOrderDetailsPage() {
         // Pricing fields
         truckingDescription: data.truckingDescription || '',
         truckingCost: data.truckingCost || '',
-        taxRate: data.taxRate || '0.0975',
+        taxRate: data.taxRate || '9.75',
+        // Minimum charge override
+        minimumOverride: data.minimumOverride || false,
+        minimumOverrideReason: data.minimumOverrideReason || '',
       });
 
       // Load linked shipment
@@ -123,6 +127,128 @@ function WorkOrderDetailsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadLaborMinimums = async () => {
+    const defaults = [
+      { partType: 'plate_roll', label: 'Plate ≤ 3/8"', sizeField: 'thickness', maxSize: 0.375, minWidth: '', maxWidth: '', minimum: 125 },
+      { partType: 'plate_roll', label: 'Plate ≤ 3/8" (24-60" wide)', sizeField: 'thickness', maxSize: 0.375, minWidth: 24, maxWidth: 60, minimum: 150 },
+      { partType: 'plate_roll', label: 'Plate > 3/8"', sizeField: 'thickness', minSize: 0.376, minWidth: '', maxWidth: '', minimum: 200 },
+      { partType: 'angle_roll', label: 'Angle ≤ 2x2', sizeField: 'angleSize', maxSize: 2, minWidth: '', maxWidth: '', minimum: 150 },
+      { partType: 'angle_roll', label: 'Angle > 2x2', sizeField: 'angleSize', minSize: 2.01, minWidth: '', maxWidth: '', minimum: 250 },
+    ];
+    try {
+      const resp = await getSettings('labor_minimums');
+      setLaborMinimums(resp?.data?.data?.value || defaults);
+    } catch { setLaborMinimums(defaults); }
+  };
+
+  // Parse dimension string: "3/8"" → 0.375, "1-1/2"" → 1.5, "2.5" → 2.5, "24 ga" → 0.025, "2x2" → 2
+  const parseDimension = (val) => {
+    if (!val) return 0;
+    const s = String(val).trim().replace(/["\u2033]/g, '');
+    if (!isNaN(s) && s !== '') return parseFloat(s);
+    const gaugeMatch = s.match(/^(\d+)\s*ga/i);
+    if (gaugeMatch) {
+      const gaugeMap = { 24: 0.025, 22: 0.030, 20: 0.036, 18: 0.048, 16: 0.060, 14: 0.075, 12: 0.105, 11: 0.120, 10: 0.135 };
+      return gaugeMap[parseInt(gaugeMatch[1])] || 0;
+    }
+    const mixedMatch = s.match(/^(\d+)\s*[-\u2013]\s*(\d+)\s*\/\s*(\d+)/);
+    if (mixedMatch) return parseInt(mixedMatch[1]) + parseInt(mixedMatch[2]) / parseInt(mixedMatch[3]);
+    const fracMatch = s.match(/^(\d+)\s*\/\s*(\d+)/);
+    if (fracMatch) return parseInt(fracMatch[1]) / parseInt(fracMatch[2]);
+    const leadMatch = s.match(/^([\d.]+)/);
+    if (leadMatch) return parseFloat(leadMatch[1]);
+    return 0;
+  };
+
+  const getPartSize = (part) => {
+    const fd = part.formData || {};
+    if (part.partType === 'plate_roll' || part.partType === 'flat_stock') return parseDimension(part.thickness);
+    if (part.partType === 'angle_roll') return parseDimension(fd._angleSize || part.sectionSize || '');
+    if (part.partType === 'pipe_roll') return parseDimension(part.outerDiameter);
+    if (part.partType === 'tube_roll') return parseDimension(fd._tubeSize || part.sectionSize || '');
+    if (part.partType === 'flat_bar') return parseDimension(fd._barSize || part.sectionSize || '');
+    if (part.partType === 'channel_roll') return parseDimension(fd._channelSize || part.sectionSize || '');
+    if (part.partType === 'beam_roll') return parseDimension(fd._beamSize || part.sectionSize || '');
+    if (part.partType === 'tee_bar') return parseDimension(fd._teeSize || part.sectionSize || '');
+    if (part.partType === 'cone_roll') return parseFloat(fd._coneLargeDia) || parseDimension(part.sectionSize || '');
+    return parseDimension(part.sectionSize || part.thickness || '');
+  };
+
+  const getPartWidth = (part) => parseDimension(part.width);
+
+  const getLaborMinimum = (part) => {
+    if (!laborMinimums.length) return null;
+    const partSize = getPartSize(part);
+    const partWidth = getPartWidth(part);
+    let bestSpecificRule = null, bestGeneralRule = null, bestFallbackRule = null;
+
+    for (const rule of laborMinimums) {
+      if (rule.partType !== part.partType) continue;
+      if (!bestFallbackRule || parseFloat(rule.minimum) > parseFloat(bestFallbackRule.minimum)) bestFallbackRule = rule;
+
+      const hasMinSize = rule.minSize !== undefined && rule.minSize !== null && rule.minSize !== '' && parseFloat(rule.minSize) > 0;
+      const hasMaxSize = rule.maxSize !== undefined && rule.maxSize !== null && rule.maxSize !== '' && parseFloat(rule.maxSize) > 0;
+      const hasMinWidth = rule.minWidth !== undefined && rule.minWidth !== null && rule.minWidth !== '' && parseFloat(rule.minWidth) > 0;
+      const hasMaxWidth = rule.maxWidth !== undefined && rule.maxWidth !== null && rule.maxWidth !== '' && parseFloat(rule.maxWidth) > 0;
+      const hasSizeConstraints = hasMinSize || hasMaxSize;
+      const hasWidthConstraints = hasMinWidth || hasMaxWidth;
+
+      if (!hasSizeConstraints && !hasWidthConstraints) {
+        if (!bestGeneralRule || parseFloat(rule.minimum) > parseFloat(bestGeneralRule.minimum)) bestGeneralRule = rule;
+        continue;
+      }
+
+      let sizeOk = true;
+      if (hasSizeConstraints) {
+        if (partSize <= 0) { sizeOk = false; }
+        else {
+          if (hasMinSize && partSize < parseFloat(rule.minSize)) sizeOk = false;
+          if (hasMaxSize && partSize > parseFloat(rule.maxSize)) sizeOk = false;
+        }
+      }
+      let widthOk = true;
+      if (hasWidthConstraints) {
+        if (partWidth <= 0) { widthOk = false; }
+        else {
+          if (hasMinWidth && partWidth < parseFloat(rule.minWidth)) widthOk = false;
+          if (hasMaxWidth && partWidth > parseFloat(rule.maxWidth)) widthOk = false;
+        }
+      }
+      if (sizeOk && widthOk) {
+        if (!bestSpecificRule || parseFloat(rule.minimum) > parseFloat(bestSpecificRule.minimum)) bestSpecificRule = rule;
+      }
+    }
+    return bestSpecificRule || bestGeneralRule || bestFallbackRule;
+  };
+
+  const getMinimumInfo = () => {
+    let totalLabor = 0, totalMaterial = 0, highestMinimum = 0, highestMinRule = null;
+    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'];
+    const parts = order?.parts || [];
+
+    parts.forEach(part => {
+      if (!EA_PRICED.includes(part.partType)) return;
+      const laborEach = parseFloat(part.laborTotal) || 0;
+      const materialCost = parseFloat(part.materialTotal) || 0;
+      const materialMarkup = parseFloat(part.materialMarkupPercent) || (part.formData?.materialMarkupPercent ? parseFloat(part.formData.materialMarkupPercent) : 0);
+      const materialEach = materialCost * (1 + materialMarkup / 100);
+      const qty = parseInt(part.quantity) || 1;
+      totalLabor += laborEach * qty;
+      totalMaterial += materialEach * qty;
+
+      const rule = getLaborMinimum(part);
+      if (rule && parseFloat(rule.minimum) > highestMinimum) {
+        highestMinimum = parseFloat(rule.minimum);
+        highestMinRule = rule;
+      }
+    });
+
+    const minimumApplies = !editData.minimumOverride && highestMinimum > 0 && totalLabor > 0 && totalLabor < highestMinimum;
+    const adjustedLabor = minimumApplies ? highestMinimum : totalLabor;
+    const laborDifference = minimumApplies ? (highestMinimum - totalLabor) : 0;
+    return { totalLabor, totalMaterial, highestMinimum, highestMinRule, minimumApplies, adjustedLabor, laborDifference };
   };
 
   const handleSaveOrder = async () => {
@@ -595,11 +721,24 @@ function WorkOrderDetailsPage() {
   ${includePricing ? `
     <div style="margin-top:24px;padding:16px;background:#f0f7ff;border-radius:8px;border:1px solid #bbdefb">
       <h3 style="margin:0 0 12px;color:#1976d2">Order Totals</h3>
-      <div style="display:flex;justify-content:space-between;padding:4px 0"><span>Parts Subtotal</span><strong>${formatCurrency(order.subtotal || order.estimateTotal)}</strong></div>
+      ${(() => {
+        const totals = calculateTotals();
+        let minLine = '';
+        if (totals.minInfo.minimumApplies) {
+          minLine = `
+            <div style="padding:6px 0;border-bottom:1px solid #ddd;font-size:0.85em;color:#e65100;">
+              <div style="display:flex;justify-content:space-between"><span>Total Material</span><span>${formatCurrency(totals.minInfo.totalMaterial)}</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Total Labor <s style="color:#999">${formatCurrency(totals.minInfo.totalLabor)}</s></span><span style="font-weight:600">${formatCurrency(totals.minInfo.adjustedLabor)} (min: ${totals.minInfo.highestMinRule?.label || ''})</span></div>
+            </div>
+          `;
+        }
+        return minLine;
+      })()}
+      <div style="display:flex;justify-content:space-between;padding:4px 0"><span>Parts Subtotal</span><strong>${formatCurrency(calculateTotals().partsSubtotal)}</strong></div>
       ${parseFloat(order.truckingCost) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Trucking</span><strong>${formatCurrency(order.truckingCost)}</strong></div>` : ''}
       ${parseFloat(order.taxAmount) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax</span><strong>${formatCurrency(order.taxAmount)}</strong></div>` : ''}
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid #1976d2;margin-top:4px;font-size:1.2rem">
-        <strong>Grand Total</strong><strong style="color:#2e7d32">${formatCurrency(order.grandTotal || order.estimateTotal)}</strong>
+        <strong>Grand Total</strong><strong style="color:#2e7d32">${formatCurrency(calculateTotals().grandTotal)}</strong>
       </div>
     </div>
   ` : ''}
@@ -721,13 +860,34 @@ function WorkOrderDetailsPage() {
   // Calculate pricing totals
   const calculateTotals = () => {
     const parts = order?.parts || [];
-    const partsSubtotal = parts.reduce((sum, p) => sum + (parseFloat(p.partTotal) || 0), 0);
+    const minInfo = getMinimumInfo();
+    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'];
+    
+    let nonEaTotal = 0;
+    let eaPricedTotal = 0;
+    parts.forEach(p => {
+      const total = parseFloat(p.partTotal) || 0;
+      if (EA_PRICED.includes(p.partType)) {
+        eaPricedTotal += total;
+      } else {
+        nonEaTotal += total;
+      }
+    });
+    
+    // If minimum applies, replace ea-priced total with (material + adjusted labor)
+    let partsSubtotal;
+    if (minInfo.minimumApplies) {
+      partsSubtotal = nonEaTotal + minInfo.totalMaterial + minInfo.adjustedLabor;
+    } else {
+      partsSubtotal = nonEaTotal + eaPricedTotal;
+    }
+    
     const trucking = parseFloat(editData.truckingCost) || parseFloat(order?.truckingCost) || 0;
     const subtotal = partsSubtotal + trucking;
-    const taxRate = parseFloat(editData.taxRate) || parseFloat(order?.taxRate) || 0.0975;
-    const taxAmount = subtotal * taxRate;
+    const taxRate = parseFloat(editData.taxRate) || parseFloat(order?.taxRate) || 9.75;
+    const taxAmount = subtotal * (taxRate / 100);
     const grandTotal = subtotal + taxAmount;
-    return { partsSubtotal, trucking, subtotal, taxRate, taxAmount, grandTotal };
+    return { partsSubtotal, trucking, subtotal, taxRate, taxAmount, grandTotal, minInfo };
   };
   
   // Order Material functions
@@ -1374,6 +1534,18 @@ function WorkOrderDetailsPage() {
           {/* Totals */}
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <div style={{ width: 300 }}>
+              {/* Show labor/material breakdown when minimum applies */}
+              {calculateTotals().minInfo.minimumApplies && (
+                <div style={{ padding: '4px 0 8px', borderBottom: '1px solid #ff9800', fontSize: '0.8rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#555', padding: '2px 0' }}>
+                    <span>Total Material</span><span>{formatCurrency(calculateTotals().minInfo.totalMaterial)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#555', padding: '2px 0' }}>
+                    <span>Total Labor <s style={{ color: '#999' }}>{formatCurrency(calculateTotals().minInfo.totalLabor)}</s></span>
+                    <span style={{ color: '#e65100', fontWeight: 600 }}>{formatCurrency(calculateTotals().minInfo.adjustedLabor)} (min)</span>
+                  </div>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
                 <span>Parts Subtotal:</span>
                 <span>{formatCurrency(calculateTotals().partsSubtotal)}</span>
@@ -1425,7 +1597,7 @@ function WorkOrderDetailsPage() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                  <span>Tax ({((parseFloat(order.taxRate) || 0.0975) * 100).toFixed(2)}%):</span>
+                  <span>Tax ({(parseFloat(order.taxRate) || 9.75).toFixed(2)}%):</span>
                   <span>{formatCurrency(calculateTotals().taxAmount)}</span>
                 </div>
               )}
@@ -1436,6 +1608,68 @@ function WorkOrderDetailsPage() {
               </div>
             </div>
           </div>
+
+          {/* Minimum Charge Info */}
+          {calculateTotals().minInfo.minimumApplies && (
+            <div style={{ marginTop: 12, padding: 12, background: '#fff3e0', border: '1px solid #ff9800', borderRadius: 8 }}>
+              <div style={{ fontWeight: 600, color: '#e65100', marginBottom: 8, fontSize: '0.85rem' }}>⚠️ Minimum Charge Applied</div>
+              <div style={{ fontSize: '0.8rem', color: '#bf360c', marginBottom: 4 }}>
+                Total labor across all parts: {formatCurrency(calculateTotals().minInfo.totalLabor)}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#bf360c', marginBottom: 4 }}>
+                Minimum charge ({calculateTotals().minInfo.highestMinRule?.label}): {formatCurrency(calculateTotals().minInfo.highestMinimum)}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#bf360c', marginBottom: 8 }}>
+                Labor adjusted up by {formatCurrency(calculateTotals().minInfo.laborDifference)}
+              </div>
+              {isEditing && (
+                <button
+                  className="btn btn-sm"
+                  style={{ background: '#ff9800', color: '#fff', border: 'none', fontSize: '0.75rem' }}
+                  onClick={() => setEditData({ ...editData, minimumOverride: true })}
+                >
+                  Override Minimum
+                </button>
+              )}
+            </div>
+          )}
+
+          {!calculateTotals().minInfo.minimumApplies && calculateTotals().minInfo.highestMinimum > 0 && calculateTotals().minInfo.totalLabor > 0 && !editData.minimumOverride && (
+            <div style={{ marginTop: 12, padding: 8, background: '#e8f5e9', border: '1px solid #66bb6a', borderRadius: 8, fontSize: '0.8rem', color: '#2e7d32' }}>
+              ✅ Total labor {formatCurrency(calculateTotals().minInfo.totalLabor)} meets minimum {formatCurrency(calculateTotals().minInfo.highestMinimum)}
+            </div>
+          )}
+
+          {editData.minimumOverride && (
+            <div style={{ marginTop: 12, padding: 12, background: '#fce4ec', border: '1px solid #e91e63', borderRadius: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#c2185b' }}>🔓 Minimum Override Active</span>
+                {isEditing && (
+                  <button className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }}
+                    onClick={() => setEditData({ ...editData, minimumOverride: false, minimumOverrideReason: '' })}>
+                    Remove
+                  </button>
+                )}
+              </div>
+              {isEditing && (
+                <input type="text" className="form-input" placeholder="Override reason..."
+                  value={editData.minimumOverrideReason}
+                  onChange={(e) => setEditData({ ...editData, minimumOverrideReason: e.target.value })}
+                  style={{ fontSize: '0.8rem', padding: '4px 8px', marginTop: 6 }} />
+              )}
+              {!isEditing && editData.minimumOverrideReason && (
+                <div style={{ fontSize: '0.8rem', color: '#c2185b', marginTop: 4 }}>{editData.minimumOverrideReason}</div>
+              )}
+            </div>
+          )}
+
+          {/* Minimum Rules Status */}
+          {(order?.parts || []).length > 0 && (
+            <div style={{ marginTop: 8, fontSize: '0.7rem', color: '#999', padding: '4px 8px' }}>
+              Min rules: {laborMinimums.length} | Labor total: {formatCurrency(calculateTotals().minInfo.totalLabor)} | Highest min: {formatCurrency(calculateTotals().minInfo.highestMinimum)}
+              {calculateTotals().minInfo.highestMinRule ? ` (${calculateTotals().minInfo.highestMinRule.label})` : ' (no match)'}
+            </div>
+          )}
         </div>
       </div>
 
