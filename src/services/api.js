@@ -96,6 +96,12 @@ export const getDocumentSignedUrl = async (shipmentId, documentId) => {
 export const getLocations = () => api.get('/settings/locations');
 export const updateLocations = (locations) => api.put('/settings/locations', { locations });
 export const addLocation = (location) => api.post('/settings/locations', location);
+export const getWarehouseMapUrl = () => api.get('/settings/warehouse-map');
+export const uploadWarehouseMap = (file) => {
+  const formData = new FormData();
+  formData.append('image', file);
+  return api.post('/settings/warehouse-map', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
 export const deleteLocation = (id) => api.delete(`/settings/locations/${id}`);
 export const updateLocation = (id, location) => api.put(`/settings/locations/${id}`, location);
 

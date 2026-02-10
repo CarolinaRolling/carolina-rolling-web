@@ -46,12 +46,6 @@ function Layout({ children }) {
               </NavLink>
             </li>
             <li>
-              <NavLink to="/workorders" className={({ isActive }) => isActive ? 'active' : ''}>
-                <ClipboardList size={20} />
-                <span>Work Orders</span>
-              </NavLink>
-            </li>
-            <li>
               <NavLink to="/estimates" className={({ isActive }) => isActive ? 'active' : ''}>
                 <DollarSign size={20} />
                 <span>Estimates</span>

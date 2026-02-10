@@ -49,9 +49,16 @@ function InventoryPage() {
   const loadWorkOrders = async () => {
     try {
       setLoading(true);
+      setError(null);
       let response;
       if (statusFilter === 'archived') {
-        response = await getArchivedWorkOrders();
+        try {
+          response = await getArchivedWorkOrders();
+        } catch (archiveErr) {
+          console.error('Archived endpoint failed, trying fallback:', archiveErr);
+          // Fallback: get all work orders and filter client-side
+          response = await getWorkOrders({ archived: 'true' });
+        }
       } else {
         response = await getWorkOrders({ archived: 'false' });
       }

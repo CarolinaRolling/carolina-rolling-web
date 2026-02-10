@@ -5,6 +5,15 @@ import {
   Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink
 } from 'lucide-react';
 import PlateRollForm from '../components/PlateRollForm';
+import AngleRollForm from '../components/AngleRollForm';
+import PipeRollForm from '../components/PipeRollForm';
+import SquareTubeRollForm from '../components/SquareTubeRollForm';
+import FlatBarRollForm from '../components/FlatBarRollForm';
+import ChannelRollForm from '../components/ChannelRollForm';
+import BeamRollForm from '../components/BeamRollForm';
+import ConeRollForm from '../components/ConeRollForm';
+import TeeBarRollForm from '../components/TeeBarRollForm';
+import PressBrakeForm from '../components/PressBrakeForm';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
@@ -16,19 +25,18 @@ import {
 } from '../services/api';
 
 const PART_TYPES = {
-  plate_roll: { label: 'Plate Roll', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
-  section_roll: { label: 'Section Roll', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
-  angle_roll: { label: 'Angle Roll', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
-  beam_roll: { label: 'Beam Roll', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
-  pipe_roll: { label: 'Pipe/Tube Roll', fields: ['material', 'outerDiameter', 'wallThickness', 'length', 'radius', 'diameter', 'arcDegrees'] },
-  tube_roll: { label: 'Sq/Rect Tube Roll', fields: ['material', 'sectionSize', 'thickness', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
-  channel_roll: { label: 'Channel Roll', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
-  flat_bar: { label: 'Flat Bar', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
-  cone_roll: { label: 'Cone Roll', fields: ['material', 'thickness', 'width', 'length'] },
-  tee_bar: { label: 'Tee Bar', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
-  press_brake: { label: 'Press Brake', fields: ['material', 'thickness', 'width', 'length'] },
-  flat_stock: { label: 'Flat Stock', fields: ['material', 'thickness', 'width', 'length'] },
-  other: { label: 'Other', fields: ['material', 'thickness', 'width', 'length', 'sectionSize', 'outerDiameter', 'wallThickness', 'rollType', 'radius', 'diameter', 'arcDegrees'] }
+  plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
+  cone_roll: { label: 'Cone Layout', icon: '🔺', desc: 'Cone segment design with AutoCAD export', fields: ['material', 'thickness', 'width', 'length'] },
+  angle_roll: { label: 'Angle Roll', icon: '📐', desc: 'Angle iron rolling', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
+  flat_bar: { label: 'Flat Bar', icon: '▬', desc: 'Flat bar bending', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
+  pipe_roll: { label: 'Round Tube & Pipe', icon: '🔧', desc: 'Round pipe and tube bending', fields: ['material', 'outerDiameter', 'wallThickness', 'length', 'radius', 'diameter', 'arcDegrees'] },
+  tube_roll: { label: 'Square & Rect Tubing', icon: '⬜', desc: 'Square and rectangular tube rolling', fields: ['material', 'sectionSize', 'thickness', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
+  channel_roll: { label: 'Channel', icon: '🔲', desc: 'C-channel rolling', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
+  beam_roll: { label: 'Beam', icon: '🏗️', desc: 'I-beam and H-beam rolling', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
+  tee_bar: { label: 'Tee Bars', icon: '🇹', desc: 'Structural tee rolling', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
+  press_brake: { label: 'Press Brake', icon: '⏏️', desc: 'Press brake forming from print', fields: ['material', 'thickness', 'width', 'length'] },
+  flat_stock: { label: 'Flat Stock', icon: '📄', desc: 'Flat material cut to custom print', fields: ['material', 'thickness', 'width', 'length'] },
+  other: { label: 'Other', icon: '📦', desc: 'Custom or miscellaneous parts', fields: ['material', 'thickness', 'width', 'length', 'sectionSize', 'outerDiameter', 'wallThickness', 'rollType', 'radius', 'diameter', 'arcDegrees'] }
 };
 
 const formatPhone = (val) => {
@@ -51,10 +59,11 @@ function WorkOrderDetailsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
   const [showPartModal, setShowPartModal] = useState(false);
+  const [showPartTypePicker, setShowPartTypePicker] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
   const [partData, setPartData] = useState({});
   const [selectedPartType, setSelectedPartType] = useState('');
-  const [uploadingFiles, setUploadingFiles] = useState(null);
+  const [partFormError, setPartFormError] = useState(null);  const [uploadingFiles, setUploadingFiles] = useState(null);
   const [uploadingDocs, setUploadingDocs] = useState(false);
   const [showPickupModal, setShowPickupModal] = useState(false);
   const [pickupData, setPickupData] = useState({ pickedUpBy: '' });
@@ -198,39 +207,169 @@ function WorkOrderDetailsPage() {
   // Part functions
   const openAddPartModal = () => {
     setEditingPart(null);
-    setSelectedPartType('');
-    setPartData({ clientPartNumber: '', heatNumber: '', quantity: 1, material: '', thickness: '', width: '', length: '',
-      outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '', arcDegrees: '', sectionSize: '', flangeOut: false, specialInstructions: '',
-      laborRate: '', laborHours: '', laborTotal: '', materialUnitCost: '', materialTotal: '', setupCharge: '', otherCharges: '', partTotal: '',
-      materialSource: 'customer_supplied', vendorId: null, supplierName: '', materialDescription: '' });
+    setShowPartTypePicker(true);
+  };
+
+  const handleSelectPartType = (type) => {
+    setShowPartTypePicker(false);
+    setSelectedPartType(type);
+    setPartFormError(null);
+    setPartData({
+      partType: type, clientPartNumber: '', heatNumber: '', quantity: 1,
+      material: '', thickness: '', width: '', length: '',
+      outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '',
+      arcDegrees: '', sectionSize: '', flangeOut: false, specialInstructions: '',
+      laborRate: '', laborHours: '', laborTotal: '', materialUnitCost: '', materialTotal: '',
+      setupCharge: '', otherCharges: '', partTotal: '',
+      materialSource: 'customer_supplied', vendorId: null, supplierName: '', materialDescription: '',
+      weSupplyMaterial: false, materialMarkupPercent: 20, rollingCost: '',
+      _rollValue: '', _rollMeasurePoint: 'inside', _rollMeasureType: 'radius', _tangentLength: '',
+      _materialOrigin: '', _rollingDescription: '', _materialDescription: '',
+      _angleSize: '', _customAngleSize: '', _legOrientation: '',
+      _lengthOption: '', _customLength: '',
+      serviceDrilling: false, serviceDrillingCost: '', serviceDrillingVendor: '',
+      serviceCutting: false, serviceCuttingCost: '', serviceCuttingVendor: '',
+      serviceFitting: false, serviceFittingCost: '', serviceFittingVendor: '',
+      serviceWelding: false, serviceWeldingCost: '', serviceWeldingVendor: '', serviceWeldingPercent: 100,
+      otherServicesCost: '', otherServicesMarkupPercent: 15
+    });
     setShowPartModal(true);
   };
 
   const openEditPartModal = (part) => {
     setEditingPart(part);
     setSelectedPartType(part.partType);
-    setPartData({ ...part, quantity: part.quantity || 1 });
+    setPartFormError(null);
+    // Merge formData back into partData for editing
+    const editData = { ...part, quantity: part.quantity || 1 };
+    if (part.formData && typeof part.formData === 'object') {
+      Object.assign(editData, part.formData);
+    }
+    setPartData(editData);
     setShowPartModal(true);
   };
 
+  const validatePart = () => {
+    const warnings = [];
+    if (!selectedPartType) { warnings.push('Part type is required'); return warnings; }
+    
+    if (selectedPartType === 'plate_roll') {
+      if (!partData.thickness) warnings.push('Thickness is required');
+      if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+    }
+    if (selectedPartType === 'flat_stock') {
+      if (!partData.thickness) warnings.push('Thickness is required');
+    }
+    if (selectedPartType === 'angle_roll') {
+      if (!partData._angleSize) warnings.push('Angle size is required');
+      if (partData._angleSize === 'Custom' && !partData._customAngleSize) warnings.push('Custom angle size is required');
+      if (!partData.thickness) warnings.push('Thickness is required');
+      if (!partData.rollType) warnings.push('Roll Direction is required');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+      if (partData._angleSize && partData._angleSize !== 'Custom') {
+        const parts = partData._angleSize.split('x').map(Number);
+        if (parts.length === 2 && parts[0] !== parts[1] && partData.rollType && !partData._legOrientation) {
+          warnings.push('Leg orientation is required for unequal angle sizes');
+        }
+      }
+    }
+    if (selectedPartType === 'pipe_roll') {
+      if (!partData._pipeSize && !partData.outerDiameter) warnings.push('Pipe/tube size or OD is required');
+      if (partData._pipeSize === 'Custom' && !partData.outerDiameter) warnings.push('Outer diameter is required');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+    }
+    if (selectedPartType === 'tube_roll') {
+      if (!partData._tubeSize) warnings.push('Tube size is required');
+      if (partData._tubeSize === 'Custom' && !partData._customTubeSize) warnings.push('Custom tube size is required');
+      if (!partData.thickness) warnings.push('Wall thickness is required');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+      const tubeParts = (partData._tubeSize || '').split('x').map(Number);
+      if (tubeParts.length === 2 && tubeParts[0] !== tubeParts[1] && !partData.rollType) {
+        warnings.push('Roll Direction (Easy Way / Hard Way) is required');
+      }
+    }
+    if (selectedPartType === 'flat_bar') {
+      if (!partData._barSize) warnings.push('Flat bar size is required');
+      if (partData._barSize === 'Custom' && !partData._customBarSize) warnings.push('Custom flat bar size is required');
+      if (!partData.rollType) warnings.push('Roll Direction is required');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+    }
+    if (selectedPartType === 'channel_roll') {
+      if (!partData._channelSize) warnings.push('Channel size is required');
+      if (partData._channelSize === 'Custom' && !partData._customChannelSize) warnings.push('Custom channel size is required');
+      if (!partData.rollType) warnings.push('Roll Direction is required');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+    }
+    if (selectedPartType === 'beam_roll') {
+      if (!partData._beamSize) warnings.push('Beam size is required');
+      if (partData._beamSize === 'Custom' && !partData._customBeamSize) warnings.push('Custom beam size is required');
+      if (!partData.rollType) warnings.push('Roll Direction is required');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+    }
+    if (selectedPartType === 'tee_bar') {
+      if (!partData._teeSize) warnings.push('Tee size is required');
+      if (partData._teeSize === 'Custom' && !partData._customTeeSize) warnings.push('Custom tee size is required');
+      if (!partData.rollType) warnings.push('Roll Direction is required');
+      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+    }
+    if (selectedPartType === 'press_brake') {
+      if (!partData.thickness) warnings.push('Thickness is required');
+    }
+    if (selectedPartType === 'cone_roll') {
+      if (!partData.thickness) warnings.push('Thickness is required');
+      if (!partData._coneLargeDia) warnings.push('Large diameter is required');
+      if (!partData._coneSmallDia) warnings.push('Small diameter is required');
+      if (!partData._coneHeight) warnings.push('Cone height is required');
+      if (parseFloat(partData._coneLargeDia) <= parseFloat(partData._coneSmallDia)) warnings.push('Large diameter must be greater than small diameter');
+    }
+    if (!partData.quantity || parseInt(partData.quantity) < 1) warnings.push('Quantity must be at least 1');
+    return warnings;
+  };
+
   const handleSavePart = async () => {
-    if (!selectedPartType) { setError('Select a part type'); return; }
+    const warnings = validatePart();
+    if (warnings.length > 0) { setPartFormError(warnings); return; }
     try {
       setSaving(true);
+      setPartFormError(null);
       setError(null);
-      const data = { partType: selectedPartType, ...partData, quantity: parseInt(partData.quantity) || 1 };
-      console.log('Saving part data:', data);
+      
+      // Build data matching estimate save flow
+      const dataToSend = { partType: selectedPartType, ...partData, quantity: parseInt(partData.quantity) || 1 };
+      
+      // Sanitize ENUM fields - empty strings break Postgres ENUMs
+      if (!dataToSend.rollType) dataToSend.rollType = null;
+      if (!dataToSend.materialSource || !['we_order', 'customer_supplied'].includes(dataToSend.materialSource)) {
+        dataToSend.materialSource = 'customer_supplied';
+      }
+      
+      // Recalculate partTotal at save time for ea-priced parts
+      const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'];
+      if (EA_PRICED.includes(selectedPartType)) {
+        const qty = parseInt(dataToSend.quantity) || 1;
+        const matCost = parseFloat(dataToSend.materialTotal) || 0;
+        const matMarkup = parseFloat(dataToSend.materialMarkupPercent) || 0;
+        const matEach = matCost * (1 + matMarkup / 100);
+        const labEach = parseFloat(dataToSend.laborTotal) || 0;
+        dataToSend.partTotal = ((matEach + labEach) * qty).toFixed(2);
+      }
+      
+      console.log('Saving part data:', dataToSend);
       if (editingPart) {
-        await updateWorkOrderPart(id, editingPart.id, data);
+        await updateWorkOrderPart(id, editingPart.id, dataToSend);
       } else {
-        await addWorkOrderPart(id, data);
+        await addWorkOrderPart(id, dataToSend);
       }
       await loadOrder();
       setShowPartModal(false);
+      setEditingPart(null);
+      setPartData({});
+      setPartFormError(null);
       showMessage(editingPart ? 'Part updated' : 'Part added');
     } catch (err) {
       console.error('Save part error:', err.response?.data || err);
-      setError(err.response?.data?.error?.message || 'Failed to save part - check console');
+      setPartFormError([err.response?.data?.error?.message || 'Failed to save part']);
     } finally {
       setSaving(false);
     }
@@ -1300,142 +1439,125 @@ function WorkOrderDetailsPage() {
         </div>
       </div>
 
-      {/* Part Modal */}
+      {/* Part Type Picker Modal */}
+      {showPartTypePicker && (
+        <div className="modal-overlay" onClick={() => setShowPartTypePicker(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <h3>Select Part Type</h3>
+              <button className="btn btn-icon" onClick={() => setShowPartTypePicker(false)}><X size={20} /></button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                {Object.entries(PART_TYPES).map(([key, { label, icon, desc }]) => (
+                  <div
+                    key={key}
+                    onClick={() => handleSelectPartType(key)}
+                    style={{
+                      padding: 16, borderRadius: 12, border: '2px solid #e0e0e0', cursor: 'pointer',
+                      transition: 'all 0.15s', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      textAlign: 'center', gap: 8
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1976d2'; e.currentTarget.style.background = '#e3f2fd'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.background = 'white'; }}
+                  >
+                    <span style={{ fontSize: '2rem' }}>{icon}</span>
+                    <strong style={{ fontSize: '1rem' }}>{label}</strong>
+                    <span style={{ fontSize: '0.8rem', color: '#666' }}>{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Part Modal */}
       {showPartModal && (
         <div className="modal-overlay" onClick={() => setShowPartModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 800 }}>
             <div className="modal-header">
-              <h3>{editingPart ? 'Edit Part' : 'Add Part'}</h3>
+              <h3>
+                {editingPart ? 'Edit Part' : 'Add Part'} — {PART_TYPES[selectedPartType]?.icon} {PART_TYPES[selectedPartType]?.label || selectedPartType}
+              </h3>
               <button className="btn btn-icon" onClick={() => setShowPartModal(false)}><X size={20} /></button>
             </div>
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-              <div className="form-group">
-                <label className="form-label">Part Type *</label>
-                <select className="form-select" value={selectedPartType} onChange={(e) => setSelectedPartType(e.target.value)}>
-                  <option value="">Select type...</option>
-                  {Object.entries(PART_TYPES).map(([key, val]) => <option key={key} value={key}>{val.label}</option>)}
-                </select>
-              </div>
-              {selectedPartType && (
-                <div className="grid grid-2">
-                  <div className="form-group"><label className="form-label">Client Part#</label><input className="form-input" value={partData.clientPartNumber} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} /></div>
-                  <div className="form-group"><label className="form-label">Heat#</label><input className="form-input" value={partData.heatNumber} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} /></div>
-                  
-                  {/* Plate Roll gets custom form */}
-                  {selectedPartType === 'plate_roll' ? (
-                    <PlateRollForm 
-                      partData={partData} 
-                      setPartData={setPartData}
-                      vendorSuggestions={vendorSuggestions}
-                      setVendorSuggestions={setVendorSuggestions}
-                      showVendorSuggestions={showVendorSuggestions}
-                      setShowVendorSuggestions={setShowVendorSuggestions}
-                      showMessage={showMessage}
-                      setError={setError}
-                    />
-                  ) : (
-                    <>
-                      {/* Generic form for other part types */}
-                      <div className="form-group"><label className="form-label">Quantity *</label><input type="number" className="form-input" value={partData.quantity} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} min="1" /></div>
-                      {PART_TYPES[selectedPartType]?.fields.includes('material') && <div className="form-group"><label className="form-label">Material</label><input className="form-input" value={partData.material} onChange={(e) => setPartData({ ...partData, material: e.target.value })} /></div>}
-                      {PART_TYPES[selectedPartType]?.fields.includes('thickness') && <div className="form-group"><label className="form-label">Thickness</label><input className="form-input" value={partData.thickness} onChange={(e) => setPartData({ ...partData, thickness: e.target.value })} /></div>}
-                      {PART_TYPES[selectedPartType]?.fields.includes('width') && <div className="form-group"><label className="form-label">Width</label><input className="form-input" value={partData.width} onChange={(e) => setPartData({ ...partData, width: e.target.value })} /></div>}
-                      {PART_TYPES[selectedPartType]?.fields.includes('length') && <div className="form-group"><label className="form-label">Length</label><input className="form-input" value={partData.length} onChange={(e) => setPartData({ ...partData, length: e.target.value })} /></div>}
-                      {PART_TYPES[selectedPartType]?.fields.includes('sectionSize') && <div className="form-group"><label className="form-label">Section Size</label><input className="form-input" value={partData.sectionSize} onChange={(e) => setPartData({ ...partData, sectionSize: e.target.value })} placeholder="e.g. W8x31" /></div>}
-                      {PART_TYPES[selectedPartType]?.fields.includes('outerDiameter') && <div className="form-group"><label className="form-label">Outer Diameter</label><input className="form-input" value={partData.outerDiameter} onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} /></div>}
-                      {PART_TYPES[selectedPartType]?.fields.includes('wallThickness') && <div className="form-group"><label className="form-label">Wall Thickness</label><input className="form-input" value={partData.wallThickness} onChange={(e) => setPartData({ ...partData, wallThickness: e.target.value })} /></div>}
-                      {PART_TYPES[selectedPartType]?.fields.includes('rollType') && (
-                        <div className="form-group"><label className="form-label">Roll Type</label>
-                          <select className="form-select" value={partData.rollType} onChange={(e) => setPartData({ ...partData, rollType: e.target.value })}>
-                            <option value="">Select...</option><option value="easy_way">Easy Way</option><option value="hard_way">Hard Way</option>
-                          </select>
-                        </div>
-                      )}
-                      {PART_TYPES[selectedPartType]?.fields.includes('radius') && <div className="form-group"><label className="form-label">Radius</label><input className="form-input" value={partData.radius} onChange={(e) => setPartData({ ...partData, radius: e.target.value })} /></div>}
-                      {PART_TYPES[selectedPartType]?.fields.includes('diameter') && <div className="form-group"><label className="form-label">Diameter</label><input className="form-input" value={partData.diameter} onChange={(e) => setPartData({ ...partData, diameter: e.target.value })} /></div>}
-                      {PART_TYPES[selectedPartType]?.fields.includes('arcDegrees') && <div className="form-group"><label className="form-label">Arc (degrees)</label><input className="form-input" value={partData.arcDegrees} onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} /></div>}
-                      {PART_TYPES[selectedPartType]?.fields.includes('flangeOut') && (
-                        <div className="form-group"><label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <input type="checkbox" checked={partData.flangeOut} onChange={(e) => setPartData({ ...partData, flangeOut: e.target.checked })} /> Flange Out
-                        </label></div>
-                      )}
-                      <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Special Instructions</label><textarea className="form-textarea" value={partData.specialInstructions} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} /></div>
-                      
-                      {/* Material Source Section - for non-plate types */}
-                      <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 12, paddingTop: 12 }}>
-                        <h4 style={{ marginBottom: 12, color: '#e65100' }}>📦 Material Source</h4>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                          <div className="form-group">
-                            <label className="form-label">Material Source</label>
-                            <select className="form-select" value={partData.materialSource || 'customer'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
-                              <option value="customer">Customer Supplies</option>
-                              <option value="we_order">We Order</option>
-                              <option value="in_stock">In Stock</option>
-                            </select>
-                          </div>
-                          <div className="form-group" style={{ position: 'relative' }}>
-                            <label className="form-label">Vendor</label>
-                            <input className="form-input"
-                              value={partData._vendorSearch !== undefined ? partData._vendorSearch : (partData.vendor?.name || partData.supplierName || '')}
-                              onChange={async (e) => {
-                                const value = e.target.value;
-                                setPartData({ ...partData, _vendorSearch: value });
-                                if (value.length >= 1) {
-                                  try { const res = await searchVendors(value); setVendorSuggestions(res.data.data || []); setShowVendorSuggestions(true); } catch { setVendorSuggestions([]); }
-                                } else {
-                                  setPartData({ ...partData, _vendorSearch: value, vendorId: null, supplierName: '' }); setVendorSuggestions([]); setShowVendorSuggestions(false);
-                                }
-                              }}
-                              onFocus={async () => { try { const res = await searchVendors(''); setVendorSuggestions(res.data.data || []); setShowVendorSuggestions(true); } catch {} }}
-                              onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
-                              placeholder="Search or add vendor..." autoComplete="off"
-                            />
-                            {showVendorSuggestions && (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid #ddd', borderRadius: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-                                {vendorSuggestions.map(v => (
-                                  <div key={v.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                                    onMouseDown={() => { setPartData({ ...partData, vendorId: v.id, supplierName: v.name, _vendorSearch: undefined }); setShowVendorSuggestions(false); setVendorSuggestions([]); }}>
-                                    <strong>{v.name}</strong>
-                                    {v.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{v.contactPhone}</span>}
-                                  </div>
-                                ))}
-                                {partData._vendorSearch && partData._vendorSearch.length >= 2 && !vendorSuggestions.some(v => v.name.toLowerCase() === (partData._vendorSearch || '').toLowerCase()) && (
-                                  <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600 }}
-                                    onMouseDown={async () => {
-                                      try {
-                                        const res = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/vendors`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` }, body: JSON.stringify({ name: partData._vendorSearch }) });
-                                        const data = await res.json();
-                                        if (data.data) { setPartData({ ...partData, vendorId: data.data.id, supplierName: data.data.name, _vendorSearch: undefined }); showMessage(`Vendor "${data.data.name}" created`); }
-                                      } catch { setError('Failed to create vendor'); }
-                                      setShowVendorSuggestions(false);
-                                    }}>+ Add "{partData._vendorSearch}" as new vendor</div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                            <label className="form-label">Material Description (for ordering)</label>
-                            <input className="form-input" value={partData.materialDescription || ''} onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })} placeholder="e.g. 1/4 x 4 x 120 A36 Plate" />
-                          </div>
-                        </div>
-                      </div>
 
-                      {/* Pricing Section - for non-plate types */}
-                      <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 12, paddingTop: 12 }}>
-                        <h4 style={{ marginBottom: 12, color: '#1976d2' }}>💰 Pricing</h4>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                          <div className="form-group"><label className="form-label">Labor Rate ($/hr)</label><input type="number" step="0.01" className="form-input" value={partData.laborRate || ''} onChange={(e) => setPartData({ ...partData, laborRate: e.target.value })} /></div>
-                          <div className="form-group"><label className="form-label">Labor Hours</label><input type="number" step="0.25" className="form-input" value={partData.laborHours || ''} onChange={(e) => setPartData({ ...partData, laborHours: e.target.value })} /></div>
-                          <div className="form-group"><label className="form-label">Labor Total</label><input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} /></div>
-                          <div className="form-group"><label className="form-label">Material Unit Cost</label><input type="number" step="0.01" className="form-input" value={partData.materialUnitCost || ''} onChange={(e) => setPartData({ ...partData, materialUnitCost: e.target.value })} /></div>
-                          <div className="form-group"><label className="form-label">Material Total</label><input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} /></div>
-                          <div className="form-group"><label className="form-label">Setup Charge</label><input type="number" step="0.01" className="form-input" value={partData.setupCharge || ''} onChange={(e) => setPartData({ ...partData, setupCharge: e.target.value })} /></div>
-                          <div className="form-group"><label className="form-label">Other Charges</label><input type="number" step="0.01" className="form-input" value={partData.otherCharges || ''} onChange={(e) => setPartData({ ...partData, otherCharges: e.target.value })} /></div>
-                          <div className="form-group"><label className="form-label">Part Total</label><input type="number" step="0.01" className="form-input" value={partData.partTotal || ''} onChange={(e) => setPartData({ ...partData, partTotal: e.target.value })} style={{ fontWeight: 600 }} /></div>
-                        </div>
-                      </div>
-                    </>
-                  )}
+              {/* Validation errors */}
+              {partFormError && partFormError.length > 0 && (
+                <div className="alert alert-error" style={{ marginBottom: 16 }}>
+                  {partFormError.map((w, i) => <div key={i}>⚠️ {w}</div>)}
+                </div>
+              )}
+
+              {/* Common fields for types that have their own form */}
+              {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'cone_roll', 'tee_bar', 'press_brake'].includes(selectedPartType) && (
+              <div className="grid grid-2" style={{ marginBottom: 16 }}>
+                <div className="form-group">
+                  <label className="form-label">Client Part Number</label>
+                  <input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Heat Number</label>
+                  <input type="text" className="form-input" value={partData.heatNumber || ''} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} />
+                </div>
+              </div>
+              )}
+
+              {/* Type-specific form */}
+              {(selectedPartType === 'plate_roll' || selectedPartType === 'flat_stock') ? (
+                <div className="grid grid-2">
+                  <PlateRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'angle_roll' ? (
+                <div className="grid grid-2">
+                  <AngleRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'pipe_roll' ? (
+                <div className="grid grid-2">
+                  <PipeRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'tube_roll' ? (
+                <div className="grid grid-2">
+                  <SquareTubeRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'flat_bar' ? (
+                <div className="grid grid-2">
+                  <FlatBarRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'channel_roll' ? (
+                <div className="grid grid-2">
+                  <ChannelRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'beam_roll' ? (
+                <div className="grid grid-2">
+                  <BeamRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'tee_bar' ? (
+                <div className="grid grid-2">
+                  <TeeBarRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'press_brake' ? (
+                <div className="grid grid-2">
+                  <PressBrakeForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'cone_roll' ? (
+                <div className="grid grid-2">
+                  <ConeRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : (
+                /* Generic form for 'other' part type */
+                <div className="grid grid-2">
+                  <div className="form-group"><label className="form-label">Quantity *</label><input type="number" className="form-input" value={partData.quantity} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} min="1" /></div>
+                  {PART_TYPES[selectedPartType]?.fields.includes('material') && <div className="form-group"><label className="form-label">Material</label><input className="form-input" value={partData.material || ''} onChange={(e) => setPartData({ ...partData, material: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('thickness') && <div className="form-group"><label className="form-label">Thickness</label><input className="form-input" value={partData.thickness || ''} onChange={(e) => setPartData({ ...partData, thickness: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('width') && <div className="form-group"><label className="form-label">Width</label><input className="form-input" value={partData.width || ''} onChange={(e) => setPartData({ ...partData, width: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('length') && <div className="form-group"><label className="form-label">Length</label><input className="form-input" value={partData.length || ''} onChange={(e) => setPartData({ ...partData, length: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('sectionSize') && <div className="form-group"><label className="form-label">Section Size</label><input className="form-input" value={partData.sectionSize || ''} onChange={(e) => setPartData({ ...partData, sectionSize: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('outerDiameter') && <div className="form-group"><label className="form-label">Outer Diameter</label><input className="form-input" value={partData.outerDiameter || ''} onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} /></div>}
+                  {PART_TYPES[selectedPartType]?.fields.includes('wallThickness') && <div className="form-group"><label className="form-label">Wall Thickness</label><input className="form-input" value={partData.wallThickness || ''} onChange={(e) => setPartData({ ...partData, wallThickness: e.target.value })} /></div>}
+                  <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Special Instructions</label><textarea className="form-textarea" value={partData.specialInstructions || ''} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} /></div>
                 </div>
               )}
             </div>

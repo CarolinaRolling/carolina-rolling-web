@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Edit, Trash2, Save, X, GripVertical } from 'lucide-react';
-import { getLocations, addLocation, updateLocation, deleteLocation } from '../services/api';
+import { ArrowLeft, Plus, Edit, Trash2, Save, X, GripVertical, Upload, Image } from 'lucide-react';
+import { getLocations, addLocation, updateLocation, deleteLocation, getWarehouseMapUrl, uploadWarehouseMap } from '../services/api';
 
 function LocationSettingsPage() {
   const navigate = useNavigate();
@@ -14,10 +14,38 @@ function LocationSettingsPage() {
   const [editName, setEditName] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newLocationName, setNewLocationName] = useState('');
+  const [mapUrl, setMapUrl] = useState(null);
+  const [uploadingMap, setUploadingMap] = useState(false);
+  const mapInputRef = useRef(null);
 
   useEffect(() => {
     loadLocations();
+    loadMapUrl();
   }, []);
+
+  const loadMapUrl = async () => {
+    try {
+      const res = await getWarehouseMapUrl();
+      setMapUrl(res.data.data?.url || null);
+    } catch { }
+  };
+
+  const handleMapUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingMap(true);
+      setError(null);
+      const res = await uploadWarehouseMap(file);
+      setMapUrl(res.data.data?.url);
+      setSuccess('Warehouse map uploaded successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError('Failed to upload map image');
+    } finally {
+      setUploadingMap(false);
+    }
+  };
 
   const loadLocations = async () => {
     try {
@@ -126,6 +154,65 @@ function LocationSettingsPage() {
 
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
+
+      {/* Warehouse Map Image */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <h3 className="card-title" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Image size={20} /> Warehouse Map
+        </h3>
+        <p style={{ color: '#666', fontSize: '0.85rem', marginBottom: 12 }}>
+          Upload a photo or diagram of your shop floor. This image is shared across the web interface and Android app.
+        </p>
+        
+        {mapUrl ? (
+          <div style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid #ddd', marginBottom: 12 }}>
+            <img 
+              src={mapUrl} 
+              alt="Warehouse Map" 
+              style={{ width: '100%', maxHeight: 400, objectFit: 'contain', display: 'block', background: '#f5f5f5' }} 
+            />
+            {/* Overlay location markers */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+              {locations.map(loc => (
+                <div key={loc.id} style={{
+                  position: 'absolute',
+                  left: `${loc.xPercent * 100}%`,
+                  top: `${loc.yPercent * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                  background: 'rgba(25, 118, 210, 0.9)',
+                  color: 'white',
+                  padding: '3px 10px',
+                  borderRadius: 20,
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                }}>
+                  {loc.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{ 
+            border: '2px dashed #ccc', borderRadius: 8, padding: 40, textAlign: 'center', 
+            background: '#fafafa', marginBottom: 12 
+          }}>
+            <div style={{ fontSize: '2rem', marginBottom: 8 }}>📷</div>
+            <p style={{ color: '#999' }}>No warehouse map uploaded yet</p>
+          </div>
+        )}
+        
+        <input type="file" accept="image/*" ref={mapInputRef} style={{ display: 'none' }} onChange={handleMapUpload} />
+        <button 
+          className="btn btn-primary btn-sm" 
+          onClick={() => mapInputRef.current?.click()} 
+          disabled={uploadingMap}
+        >
+          <Upload size={16} />
+          {uploadingMap ? 'Uploading...' : mapUrl ? 'Replace Map Image' : 'Upload Map Image'}
+        </button>
+      </div>
 
       <div className="card">
         <h3 className="card-title" style={{ marginBottom: 16 }}>Warehouse Locations</h3>
