@@ -575,7 +575,7 @@ function WorkOrderDetailsPage() {
   // Helper: build work order print HTML
   const buildWorkOrderPrintHtml = (includePricing) => {
     const clientPO = order.clientPurchaseOrderNumber || shipment?.clientPurchaseOrderNumber;
-    const title = includePricing ? 'Work Order' : 'Shop Order';
+    const title = includePricing ? 'Work Order' : 'Production Order';
     const formatCurrency = (v) => '$' + (parseFloat(v) || 0).toFixed(2);
     
     const getSpecLabel = (p) => {
@@ -608,12 +608,58 @@ function WorkOrderDetailsPage() {
       if (rollVal) {
         const spec = getSpecLabel(part);
         const dir = getRollDir(part);
-        rollLine = `<div style="font-size:1.1rem;font-weight:bold;color:#1565c0;margin:8px 0">
-          Roll: ${rollVal}" ${spec}${dir ? ` (${dir})` : ''}${part.arcDegrees ? ` | Arc: ${part.arcDegrees}°` : ''}
-        </div>`;
+        rollLine = `Roll to ${rollVal}" ${spec}${dir ? ` (${dir})` : ''}${part.arcDegrees ? ` | Arc: ${part.arcDegrees}°` : ''}`;
       }
 
-      // Build specs grid
+      // Build material/size line: "Qty X, 3/8" x 48" x 96" A36 Plate" or "Qty X, 3" Sch 40 A53B Pipe"
+      const materialParts = [];
+      if (part.sectionSize) materialParts.push(part.sectionSize);
+      if (part.thickness) materialParts.push(part.thickness);
+      if (part.width) materialParts.push(`x ${part.width}"`);
+      if (part.length) materialParts.push(`x ${part.length}`);
+      if (part.outerDiameter) materialParts.push(`${part.outerDiameter}" OD`);
+      if (part.wallThickness) materialParts.push(`x ${part.wallThickness} wall`);
+      if (part.material) materialParts.push(part.material);
+      const partTypeLabel = PART_TYPES[part.partType]?.label || part.partType || '';
+      materialParts.push(partTypeLabel);
+      const materialLine = `Qty: ${part.quantity}  —  ${materialParts.join(' ')}`;
+
+      // Build full rolling description block (includes chord, developed dia, pitch from _rollingDescription)
+      const rollingDescFull = part._rollingDescription || '';
+      const rollDirDisplay = part._rollDirectionDisplay || '';
+      const developedDia = part._developedDiameter || '';
+      const completeRingsDisplay = part._completeRingsDisplay || '';
+      
+      let rollingBlock = '';
+      const rollingLines = [];
+      if (rollLine) rollingLines.push(rollLine);
+      if (rollingDescFull) {
+        // Split on real newlines or escaped \n from JSON
+        const descLines = rollingDescFull.split(/\n|\\n/).filter(l => l.trim());
+        // _rollingDescription may contain the roll spec already plus chord/rise/pitch lines
+        if (rollingDescFull.includes('Roll to')) {
+          rollingLines.length = 0; // clear rollLine since description has it
+          rollingLines.push(...descLines);
+        } else {
+          rollingLines.push(...descLines);
+        }
+      }
+      if (rollDirDisplay) rollingLines.push(`Direction: ${rollDirDisplay}`);
+      if (developedDia) rollingLines.push(`Developed Ø: ${developedDia}`);
+      if (completeRingsDisplay) rollingLines.push(completeRingsDisplay);
+      
+      if (rollingLines.length > 0) {
+        rollingBlock = `
+          <div style="background:#e8f5e9;padding:10px 12px;border-radius:4px;border-left:4px solid #2e7d32;margin-top:6px">
+            <pre style="white-space:pre-wrap;margin:0;font-family:'Courier New',monospace;font-size:0.95rem;font-weight:bold;color:#1B5E20;line-height:1.5">${rollingLines.join('\n')}</pre>
+          </div>
+        `;
+      }
+
+      // Checkbox for shop copy (production)
+      const checkboxHtml = !includePricing ? `<div style="position:absolute;top:12px;right:12px;width:22px;height:22px;border:2px solid #999;border-radius:3px;background:#fff"></div>` : '';
+
+      // Build specs grid (for office copy only)
       const specs = [];
       if (part.material) specs.push(['Grade', part.material]);
       if (part.sectionSize) specs.push(['Size', part.sectionSize]);
@@ -623,7 +669,7 @@ function WorkOrderDetailsPage() {
       if (part.outerDiameter) specs.push(['OD', part.outerDiameter + '"']);
       if (part.wallThickness) specs.push(['Wall', part.wallThickness]);
 
-      const specsHtml = specs.length ? `
+      const specsHtml = includePricing && specs.length ? `
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px;background:#f5f5f5;padding:10px;border-radius:4px;margin-bottom:8px">
           ${specs.map(([k,v]) => `<div><span style="font-size:0.75rem;color:#888;text-transform:uppercase">${k}</span><br/><strong>${v}</strong></div>`).join('')}
         </div>
@@ -648,26 +694,22 @@ function WorkOrderDetailsPage() {
       }
 
       return `
-        <div style="border:2px solid #1976d2;padding:14px;margin-bottom:14px;border-radius:8px;page-break-inside:avoid">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #1976d2">
-            <div style="font-size:1.1rem;font-weight:bold;color:#1976d2">Part #${part.partNumber} — ${PART_TYPES[part.partType]?.label || part.partType}</div>
-            <div style="background:#e3f2fd;padding:4px 12px;border-radius:4px;font-weight:bold;font-size:1.1rem">Qty: ${part.quantity}</div>
+        <div style="border:2px solid #1976d2;padding:14px;margin-bottom:14px;border-radius:8px;page-break-inside:avoid;position:relative">
+          ${checkboxHtml}
+          <div style="font-size:1.2rem;font-weight:bold;color:#1976d2;margin-bottom:4px;padding-bottom:6px;border-bottom:2px solid #1976d2">
+            Part #${part.partNumber} — ${PART_TYPES[part.partType]?.label || part.partType}
           </div>
+          <div style="font-size:1rem;font-weight:600;margin:6px 0;color:#333">${materialLine}</div>
           ${part.clientPartNumber ? `<div style="margin-bottom:4px;font-size:0.9rem"><strong>Client Part#:</strong> ${part.clientPartNumber}</div>` : ''}
           ${part.heatNumber ? `<div style="margin-bottom:4px;font-size:0.9rem"><strong>Heat#:</strong> ${part.heatNumber}</div>` : ''}
-          ${rollLine}
+          ${rollingBlock}
           ${specsHtml}
-          ${part.materialDescription ? `<div style="margin-bottom:6px;font-size:0.85rem;color:#555">📦 ${part.materialDescription}${part.materialSource === 'customer_supplied' ? ' <em>(Customer Supplied)</em>' : ''}${part.supplierName ? ` — from <strong>${part.supplierName}</strong>` : ''}</div>` : ''}
+          ${part.materialDescription && includePricing ? `<div style="margin-bottom:6px;font-size:0.85rem;color:#555">📦 ${part.materialDescription}${part.materialSource === 'customer_supplied' ? ' <em>(Customer Supplied)</em>' : ''}${part.supplierName ? ` — from <strong>${part.supplierName}</strong>` : ''}</div>` : ''}
+          ${!includePricing && part.materialSource === 'customer_supplied' ? '<div style="font-size:0.85rem;color:#666;margin:4px 0"><em>Customer Supplied Material</em></div>' : ''}
           ${part.specialInstructions ? `
             <div style="background:#fff3e0;padding:10px;border-radius:4px;border-left:4px solid #ff9800;margin-top:6px">
-              <strong style="color:#e65100">Special Instructions:</strong><br/>
+              <strong style="color:#e65100">⚠️ Special Instructions:</strong><br/>
               <div style="white-space:pre-wrap;margin-top:4px">${part.specialInstructions}</div>
-            </div>
-          ` : ''}
-          ${part._rollingDescription ? `
-            <div style="background:#f3e5f5;padding:10px;border-radius:4px;margin-top:6px">
-              <strong style="color:#6a1b9a">Rolling Description:</strong><br/>
-              <pre style="white-space:pre-wrap;margin:4px 0 0;font-family:monospace;font-size:0.85rem">${part._rollingDescription}</pre>
             </div>
           ` : ''}
           ${pdfFiles.length > 0 ? `
@@ -745,7 +787,7 @@ function WorkOrderDetailsPage() {
 
   <div style="margin-top:30px;padding-top:16px;border-top:2px solid #ddd;color:#666;font-size:0.8em">
     ${title} — ${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber} | Printed: ${new Date().toLocaleString()}
-    ${!includePricing ? '<br/><em>Shop copy — no pricing information</em>' : ''}
+    ${!includePricing ? '<br/><em>Production Copy</em>' : ''}
   </div>
 </body>
 </html>`;
@@ -771,7 +813,7 @@ function WorkOrderDetailsPage() {
     setShowPrintMenu(false);
   };
 
-  // Print Shop Order (no pricing, for production floor)
+  // Print Production Copy (no pricing, for production floor)
   const printShopOrder = () => {
     const { html, allPdfUrls } = buildWorkOrderPrintHtml(false);
     const printWindow = window.open('', '_blank');
@@ -1041,7 +1083,7 @@ function WorkOrderDetailsPage() {
                 </button>
                 <div style={{ borderTop: '1px solid #eee' }}></div>
                 <button onClick={printShopOrder} style={{ display: 'block', width: '100%', padding: '12px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  🔧 Shop Order<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>No pricing — for production</span>
+                  🔧 Production Copy<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>No pricing — for production</span>
                 </button>
                 <div style={{ borderTop: '1px solid #eee' }}></div>
                 <button onClick={() => { setShowPrintMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', color: '#666', fontSize: '0.9rem' }}>Cancel</button>
