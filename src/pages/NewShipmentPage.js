@@ -16,15 +16,12 @@ function NewShipmentPage() {
 
   const [formData, setFormData] = useState({
     clientName: '',
-    jobNumber: '',
     clientPurchaseOrderNumber: '',
     description: '',
     quantity: 1,
     location: '',
     notes: '',
     receivedBy: '',
-    requestedDueDate: '',
-    promisedDate: '',
   });
 
   const [photos, setPhotos] = useState([]);
@@ -186,15 +183,12 @@ function NewShipmentPage() {
               setCreatedData(null);
               setFormData({
                 clientName: '',
-                jobNumber: '',
                 clientPurchaseOrderNumber: '',
                 description: '',
                 quantity: 1,
                 location: '',
                 notes: '',
                 receivedBy: '',
-                requestedDueDate: '',
-                promisedDate: '',
               });
               setPhotos([]);
             }}
@@ -249,15 +243,6 @@ function NewShipmentPage() {
                     className="form-input"
                     value={formData.clientPurchaseOrderNumber}
                     onChange={(e) => setFormData({ ...formData, clientPurchaseOrderNumber: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Job Number</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formData.jobNumber}
-                    onChange={(e) => setFormData({ ...formData, jobNumber: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
@@ -317,24 +302,6 @@ function NewShipmentPage() {
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                     placeholder="e.g., Pallet damaged on corner, material appears OK&#10;Client dropped off, no BOL"
                     rows={2}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Requested Due Date</label>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={formData.requestedDueDate}
-                    onChange={(e) => setFormData({ ...formData, requestedDueDate: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Promised Date</label>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={formData.promisedDate}
-                    onChange={(e) => setFormData({ ...formData, promisedDate: e.target.value })}
                   />
                 </div>
               </div>
