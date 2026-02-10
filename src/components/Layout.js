@@ -119,6 +119,12 @@ function Layout({ children }) {
                     <span>AutoCAD Tools</span>
                   </NavLink>
                 </li>
+                <li>
+                  <NavLink to="/admin/shipments" className={({ isActive }) => isActive ? 'active' : ''}>
+                    <Package size={20} />
+                    <span>Shipments</span>
+                  </NavLink>
+                </li>
               </>
             )}
           </ul>

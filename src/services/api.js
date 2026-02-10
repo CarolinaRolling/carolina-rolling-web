@@ -49,7 +49,7 @@ export const getActivityLogs = (limit = 100, offset = 0) =>
   api.get(`/auth/logs?limit=${limit}&offset=${offset}`);
 
 // Shipments
-export const getShipments = () => api.get('/shipments');
+export const getShipments = (params) => api.get('/shipments', { params });
 export const getUnlinkedShipments = () => api.get('/shipments/unlinked');
 export const getShipmentById = (id) => api.get(`/shipments/${id}`);
 export const getShipmentByQRCode = (qrCode) => api.get(`/shipments/qr/${qrCode}`);
@@ -58,6 +58,9 @@ export const createShipment = (data) => api.post('/shipments', data);
 export const updateShipment = (id, data) => api.put(`/shipments/${id}`, data);
 export const deleteShipment = (id) => api.delete(`/shipments/${id}`);
 export const linkShipmentToWorkOrder = (shipmentId, workOrderId) => api.post(`/shipments/${shipmentId}/link-workorder`, { workOrderId });
+export const archiveShipment = (id) => api.put(`/shipments/${id}/archive`);
+export const bulkArchiveShipments = (ids) => api.post('/shipments/bulk-archive', { ids });
+export const bulkDeleteShipments = (ids) => api.post('/shipments/bulk-delete', { ids });
 
 // Photos
 export const uploadPhotos = (shipmentId, files) => {

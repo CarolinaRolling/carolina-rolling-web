@@ -23,6 +23,7 @@ import PurchaseOrdersPage from './pages/PurchaseOrdersPage';
 import EmailSettingsPage from './pages/EmailSettingsPage';
 import ClientsVendorsPage from './pages/ClientsVendorsPage';
 import AutoCADToolsPage from './pages/AutoCADToolsPage';
+import ShipmentsAdminPage from './pages/ShipmentsAdminPage';
 import './App.css';
 
 // Protected Route Component
@@ -193,6 +194,12 @@ function AppRoutes() {
       <Route path="/admin/autocad-tools" element={
         <AdminRoute>
           <Layout><AutoCADToolsPage /></Layout>
+        </AdminRoute>
+      } />
+      
+      <Route path="/admin/shipments" element={
+        <AdminRoute>
+          <Layout><ShipmentsAdminPage /></Layout>
         </AdminRoute>
       } />
       

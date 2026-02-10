@@ -539,6 +539,9 @@ function AdminPage() {
           <button className="btn btn-outline" onClick={() => navigate('/admin/email')}>
             📧 Email Settings
           </button>
+          <button className="btn btn-outline" onClick={() => navigate('/admin/shipments')}>
+            📦 Shipments
+          </button>
         </div>
       </div>
 
