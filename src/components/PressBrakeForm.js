@@ -30,12 +30,12 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
 
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
-    const parts = [`${qty}pc`];
+    const parts = [`${qty}pc:`];
     if (partData.thickness) parts.push(partData.thickness);
     if (partData.width) parts.push(`x ${partData.width}"`);
     if (partData.length) parts.push(`x ${partData.length}`);
     if (partData.material) parts.push(partData.material);
-    if (partData._materialOrigin) parts.push(`(${partData._materialOrigin})`);
+    if (partData._materialOrigin) parts.push(partData._materialOrigin);
     parts.push('— Press Brake');
     return parts.join(' ');
   }, [partData.thickness, partData.width, partData.length, partData.material, partData._materialOrigin, partData.quantity]);

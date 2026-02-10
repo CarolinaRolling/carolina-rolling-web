@@ -170,7 +170,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     const descParts = [];
     
     // Quantity
-    descParts.push(`${qty}pc`);
+    descParts.push(`${qty}pc:`);
     
     // Angle size
     if (partData._angleSize && partData._angleSize !== 'Custom') {
@@ -200,7 +200,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     
     // Origin
     const origin = partData._materialOrigin || '';
-    if (origin) descParts.push(`(${origin})`);
+    if (origin) descParts.push(origin);
     
     return descParts.join(' ');
   }, [partData._angleSize, partData._customAngleSize, partData.thickness, partData.length, partData.material, partData._materialOrigin, partData.quantity]);
@@ -224,7 +224,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     lines.push(rollLine);
     
     if (riseCalc) {
-      lines.push(`Rise: ${riseCalc.rise.toFixed(4)}" over ${riseCalc.chord}" chord`);
+      lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
     }
 
     if (completeRings && ringCalc && !ringCalc.error) {

@@ -138,15 +138,14 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
     const descParts = [];
-    if (qty > 1) descParts.push(`(${qty})`);
+    descParts.push(`${qty}pc:`);
     if (partData.thickness) descParts.push(partData.thickness);
-    if (partData.width) descParts.push(`x ${partData.width}`);
-    if (partData.length) descParts.push(`x ${partData.length}`);
+    if (partData.width) descParts.push(`x ${partData.width}"`);
+    if (partData.length) descParts.push(`x ${partData.length}"`);
     const grade = partData.material || '';
     if (grade) descParts.push(grade);
-    descParts.push('Plate');
     const origin = partData._materialOrigin || '';
-    if (origin) descParts.push(`(${origin})`);
+    if (origin) descParts.push(origin);
     return descParts.join(' ');
   }, [partData.thickness, partData.width, partData.length, partData.material, partData._materialOrigin, partData.quantity]);
 
@@ -173,7 +172,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     const lines = [];
     
     const spec = rollMeasurePoint === 'inside' ? (rollMeasureType === 'radius' ? 'ISR' : 'ID') : rollMeasurePoint === 'outside' ? (rollMeasureType === 'radius' ? 'OSR' : 'OD') : (rollMeasureType === 'radius' ? 'CLR' : 'CLD');
-    lines.push(`Roll to ${rv}" ${spec}`);
+    lines.push(`Roll to ${rv}" ${spec} EW`);
     if (showAngle && angleValue) lines.push(`Arc: ${angleValue}°`);
     lines.push(...getPitchDescriptionLines(partData, clDiameter));
     return lines.join('\n');

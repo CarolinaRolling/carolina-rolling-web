@@ -125,13 +125,13 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
 
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
-    const parts = [`${qty}pc`];
+    const parts = [`${qty}pc:`];
     if (partData._channelSize && partData._channelSize !== 'Custom') parts.push(partData._channelSize);
     else if (partData._customChannelSize) parts.push(partData._customChannelSize);
     parts.push('Channel');
     if (partData.length) parts.push(`x ${partData.length} long`);
     if (partData.material) parts.push(partData.material);
-    if (partData._materialOrigin) parts.push(`(${partData._materialOrigin})`);
+    if (partData._materialOrigin) parts.push(partData._materialOrigin);
     return parts.join(' ');
   }, [partData._channelSize, partData._customChannelSize, partData.length, partData.material, partData._materialOrigin, partData.quantity]);
 
@@ -145,7 +145,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
     let rollLine = `Roll to ${rv}" ${spec}`;
     if (ewHw) rollLine += ` ${ewHw} (${partData.rollType === 'easy_way' ? 'flanges out' : partData.rollType === 'hard_way' ? 'flanges in' : 'on edge'})`;
     lines.push(rollLine);
-    if (riseCalc) lines.push(`Rise: ${riseCalc.rise.toFixed(4)}" over ${riseCalc.chord}" chord`);
+    if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
     if (completeRings && ringCalc && !ringCalc.error) {
       lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.pcsPerRing} pcs/ring, ${ringCalc.totalQty} pcs total`);
       lines.push(`Tangents: ${ringCalc.tangent}" each end`);

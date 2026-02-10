@@ -602,51 +602,45 @@ function WorkOrderDetailsPage() {
       const pdfFiles = part.files?.filter(f => f.mimeType === 'application/pdf' || f.originalName?.toLowerCase().endsWith('.pdf')) || [];
       pdfFiles.forEach(f => allPdfUrls.push({ url: f.url, name: f.originalName, partNumber: part.partNumber }));
 
-      // Build rolling line
-      const rollVal = part.diameter || part.radius;
-      let rollLine = '';
-      if (rollVal) {
-        const spec = getSpecLabel(part);
-        const dir = getRollDir(part);
-        rollLine = `Roll to ${rollVal}" ${spec}${dir ? ` (${dir})` : ''}${part.arcDegrees ? ` | Arc: ${part.arcDegrees}°` : ''}`;
+      // Build material line - prefer formData description (matches write-up format)
+      const formMaterialDesc = part._materialDescription || part.materialDescription || '';
+      let materialLine = '';
+      if (formMaterialDesc) {
+        // Use the pre-formatted description; ensure qty is shown
+        const cleaned = formMaterialDesc.replace(/^\(\d+\)\s*/, '').replace(/^\d+pc:?\s*/, '');
+        materialLine = `${part.quantity}pc: ${cleaned}`;
+      } else {
+        // Fallback: build from raw fields
+        const materialParts = [];
+        if (part.sectionSize) materialParts.push(part.sectionSize);
+        if (part.thickness) materialParts.push(part.thickness);
+        if (part.width) materialParts.push(`x ${part.width}"`);
+        if (part.length) materialParts.push(`x ${part.length}`);
+        if (part.outerDiameter) materialParts.push(`${part.outerDiameter}" OD`);
+        if (part.wallThickness) materialParts.push(`x ${part.wallThickness} wall`);
+        if (part.material) materialParts.push(part.material);
+        const partTypeLabel = PART_TYPES[part.partType]?.label || part.partType || '';
+        materialParts.push(partTypeLabel);
+        materialLine = `${part.quantity}pc: ${materialParts.join(' ')}`;
       }
 
-      // Build material/size line: "Qty X, 3/8" x 48" x 96" A36 Plate" or "Qty X, 3" Sch 40 A53B Pipe"
-      const materialParts = [];
-      if (part.sectionSize) materialParts.push(part.sectionSize);
-      if (part.thickness) materialParts.push(part.thickness);
-      if (part.width) materialParts.push(`x ${part.width}"`);
-      if (part.length) materialParts.push(`x ${part.length}`);
-      if (part.outerDiameter) materialParts.push(`${part.outerDiameter}" OD`);
-      if (part.wallThickness) materialParts.push(`x ${part.wallThickness} wall`);
-      if (part.material) materialParts.push(part.material);
-      const partTypeLabel = PART_TYPES[part.partType]?.label || part.partType || '';
-      materialParts.push(partTypeLabel);
-      const materialLine = `Qty: ${part.quantity}  —  ${materialParts.join(' ')}`;
-
-      // Build full rolling description block (includes chord, developed dia, pitch from _rollingDescription)
+      // Build rolling description block from _rollingDescription (already formatted)
       const rollingDescFull = part._rollingDescription || '';
-      const rollDirDisplay = part._rollDirectionDisplay || '';
-      const developedDia = part._developedDiameter || '';
-      const completeRingsDisplay = part._completeRingsDisplay || '';
-      
       let rollingBlock = '';
       const rollingLines = [];
-      if (rollLine) rollingLines.push(rollLine);
+      
       if (rollingDescFull) {
-        // Split on real newlines or escaped \n from JSON
-        const descLines = rollingDescFull.split(/\n|\\n/).filter(l => l.trim());
-        // _rollingDescription may contain the roll spec already plus chord/rise/pitch lines
-        if (rollingDescFull.includes('Roll to')) {
-          rollingLines.length = 0; // clear rollLine since description has it
-          rollingLines.push(...descLines);
-        } else {
-          rollingLines.push(...descLines);
+        const descLines = rollingDescFull.split(/\n|\\n/).map(l => l.trim()).filter(l => l);
+        rollingLines.push(...descLines);
+      } else {
+        // Fallback: build roll line from raw fields
+        const rollVal = part.diameter || part.radius;
+        if (rollVal) {
+          const spec = getSpecLabel(part);
+          const dir = getRollDir(part);
+          rollingLines.push(`Roll to ${rollVal}" ${spec}${dir ? ` ${dir}` : ''}${part.arcDegrees ? ` | Arc: ${part.arcDegrees}°` : ''}`);
         }
       }
-      if (rollDirDisplay) rollingLines.push(`Direction: ${rollDirDisplay}`);
-      if (developedDia) rollingLines.push(`Developed Ø: ${developedDia}`);
-      if (completeRingsDisplay) rollingLines.push(completeRingsDisplay);
       
       if (rollingLines.length > 0) {
         rollingBlock = `
@@ -693,24 +687,25 @@ function WorkOrderDetailsPage() {
         `;
       }
 
+      // Special instructions - skip if it duplicates rolling description
+      const specialInstr = part.specialInstructions || '';
+      const hasUniqueInstructions = specialInstr && specialInstr.trim() !== rollingDescFull.trim();
+
       return `
         <div style="border:2px solid #1976d2;padding:14px;margin-bottom:14px;border-radius:8px;page-break-inside:avoid;position:relative">
           ${checkboxHtml}
           <div style="font-size:1.2rem;font-weight:bold;color:#1976d2;margin-bottom:4px;padding-bottom:6px;border-bottom:2px solid #1976d2">
             Part #${part.partNumber} — ${PART_TYPES[part.partType]?.label || part.partType}
           </div>
-          <div style="font-size:1rem;font-weight:600;margin:6px 0;color:#333">${materialLine}</div>
+          <div style="font-size:1rem;font-weight:700;margin:6px 0;color:#333">${materialLine}</div>
           ${part.clientPartNumber ? `<div style="margin-bottom:4px;font-size:0.9rem"><strong>Client Part#:</strong> ${part.clientPartNumber}</div>` : ''}
           ${part.heatNumber ? `<div style="margin-bottom:4px;font-size:0.9rem"><strong>Heat#:</strong> ${part.heatNumber}</div>` : ''}
           ${rollingBlock}
           ${specsHtml}
-          ${part.materialDescription && includePricing ? `<div style="margin-bottom:6px;font-size:0.85rem;color:#555">📦 ${part.materialDescription}${part.materialSource === 'customer_supplied' ? ' <em>(Customer Supplied)</em>' : ''}${part.supplierName ? ` — from <strong>${part.supplierName}</strong>` : ''}</div>` : ''}
-          ${!includePricing && part.materialSource === 'customer_supplied' ? '<div style="font-size:0.85rem;color:#666;margin:4px 0"><em>Customer Supplied Material</em></div>' : ''}
-          ${part.specialInstructions ? `
-            <div style="background:#fff3e0;padding:10px;border-radius:4px;border-left:4px solid #ff9800;margin-top:6px">
-              <strong style="color:#e65100">⚠️ Special Instructions:</strong><br/>
-              <div style="white-space:pre-wrap;margin-top:4px">${part.specialInstructions}</div>
-            </div>
+          ${includePricing && part.materialSource !== 'customer_supplied' && part.supplierName ? `<div style="margin-bottom:6px;font-size:0.85rem;color:#555">📦 Material from <strong>${part.supplierName}</strong></div>` : ''}
+          ${part.materialSource === 'customer_supplied' ? '<div style="font-size:0.85rem;color:#666;margin:4px 0"><em>Customer Supplied Material</em></div>' : ''}
+          ${hasUniqueInstructions ? `
+            <div style="margin-top:6px;white-space:pre-wrap;font-size:0.95rem;font-weight:600;color:#333">${specialInstr}</div>
           ` : ''}
           ${pdfFiles.length > 0 ? `
             <div style="margin-top:8px;padding:8px;background:#e8f5e9;border-radius:4px;font-size:0.85rem">

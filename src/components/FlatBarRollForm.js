@@ -156,7 +156,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
 
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
-    const parts = [`${qty}pc`];
+    const parts = [`${qty}pc:`];
     if (parsedSize) {
       parts.push(`${formatFraction(parsedSize.width)} x ${formatFraction(parsedSize.thickness)}`);
     } else if (partData._customBarSize) {
@@ -165,7 +165,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     parts.push('Flat Bar');
     if (partData.length) parts.push(`x ${partData.length} long`);
     if (partData.material) parts.push(partData.material);
-    if (partData._materialOrigin) parts.push(`(${partData._materialOrigin})`);
+    if (partData._materialOrigin) parts.push(partData._materialOrigin);
     return parts.join(' ');
   }, [partData._barSize, partData._customBarSize, partData.length, partData.material, partData._materialOrigin, partData.quantity, parsedSize]);
 
@@ -179,7 +179,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     let rollLine = `Roll to ${rv}" ${spec}`;
     if (ewHw) rollLine += ` ${ewHw}`;
     lines.push(rollLine);
-    if (riseCalc) lines.push(`Rise: ${riseCalc.rise.toFixed(4)}" over ${riseCalc.chord}" chord`);
+    if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
     if (completeRings && ringCalc && !ringCalc.error) {
       lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.pcsPerRing} pcs/ring, ${ringCalc.totalQty} pcs total`);
       lines.push(`Tangents: ${ringCalc.tangent}" each end`);

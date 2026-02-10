@@ -233,28 +233,27 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
     const parts = [];
-    parts.push(`${qty}pc`);
+    parts.push(`${qty}pc:`);
 
     if (selectedSize) {
       if (selectedSize.type === 'pipe') {
         parts.push(`${selectedSize.nominal}`);
         if (partData._schedule) parts.push(`Sch ${partData._schedule}`);
-        parts.push('Pipe');
-        parts.push(`(${selectedSize.od}" OD)`);
+        parts.push(`Pipe (${selectedSize.od}" OD)`);
       } else {
-        parts.push(`${selectedSize.od}" OD Tube`);
+        parts.push(`${selectedSize.od}" OD Round Tubing`);
       }
     } else if (partData.outerDiameter) {
-      parts.push(`${partData.outerDiameter}" OD`);
+      parts.push(`${partData.outerDiameter}" OD Round Tubing`);
     }
 
-    if (partData.wallThickness) parts.push(`x ${partData.wallThickness} wall`);
+    if (partData.wallThickness) parts.push(`x ${partData.wallThickness} Wall`);
     if (partData.length) parts.push(`x ${partData.length} long`);
 
     const grade = partData.material || '';
     if (grade) parts.push(grade);
     const origin = partData._materialOrigin || '';
-    if (origin) parts.push(`(${origin})`);
+    if (origin) parts.push(origin);
 
     return parts.join(' ');
   }, [partData._pipeSize, partData._schedule, partData.outerDiameter, partData.wallThickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, selectedSize]);
@@ -379,23 +378,27 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     const spec = rollMeasurePoint === 'inside' ? (rollMeasureType === 'radius' ? 'ISR' : 'ID') : rollMeasurePoint === 'outside' ? (rollMeasureType === 'radius' ? 'OSR' : 'OD') : (rollMeasureType === 'radius' ? 'CLR' : 'CLD');
     lines.push(`Roll to ${rv}" ${spec}`);
     if (riseCalc) {
-      lines.push(`Rise: ${riseCalc.rise.toFixed(4)}" over ${riseCalc.chord}" chord`);
+      lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
     }
     if (partData.arcDegrees) lines.push(`Arc: ${partData.arcDegrees}°`);
     if (pitchEnabled) {
-      lines.push(`Pitch: ${pitchDirection === 'clockwise' ? 'CW' : 'CCW'} (from ground floor)`);
-      if (pitchMethod === 'runrise') {
-        lines.push(`  Run: ${pitchRun}" / Rise: ${pitchRise}"`);
-      } else if (pitchMethod === 'degree') {
-        lines.push(`  Pitch Angle: ${pitchAngle}°`);
-      } else if (pitchMethod === 'space') {
-        lines.push(`  ${pitchSpaceType === 'center' ? 'Center-to-Center' : 'Between'} Spacing: ${pitchSpaceValue}"`);
-      }
       if (pitchCalc) {
-        lines.push(`  → Angle: ${pitchCalc.angle.toFixed(2)}° | Rise/Rev: ${pitchCalc.risePerRev.toFixed(2)}"`);
-        if (pitchCalc.developedDia > 0) {
-          lines.push(`  → Developed Ø: ${pitchCalc.developedDia.toFixed(4)}" (set rolls to this)`);
-        }
+        lines.push(`Pitch to ${pitchCalc.angle.toFixed(5)}°`);
+      }
+      if (pitchMethod === 'runrise') {
+        lines.push(`Run: ${pitchRun}" Rise: ${pitchRise}"`);
+      } else if (pitchMethod === 'degree') {
+        lines.push(`Pitch Angle: ${pitchAngle}°`);
+      } else if (pitchMethod === 'space') {
+        lines.push(`${pitchSpaceType === 'center' ? 'Center-to-Center' : 'Between'} Spacing: ${pitchSpaceValue}"`);
+      }
+      if (pitchCalc && pitchCalc.developedDia > 0) {
+        const specLabel = rollMeasureType === 'radius' ? 
+          (rollMeasurePoint === 'inside' ? 'ISR' : rollMeasurePoint === 'outside' ? 'OSR' : 'CLR') :
+          (rollMeasurePoint === 'inside' ? 'ID' : rollMeasurePoint === 'outside' ? 'OD' : 'CLD');
+        const devValue = rollMeasureType === 'radius' ? (pitchCalc.developedDia / 2).toFixed(4) : pitchCalc.developedDia.toFixed(4);
+        const devLabel = rollMeasureType === 'radius' ? 'Developed Radius' : 'Developed Diameter';
+        lines.push(`${devLabel}: ${devValue}" ${specLabel}`);
       }
     }
     if (completeRings && ringCalc && !ringCalc.error) {

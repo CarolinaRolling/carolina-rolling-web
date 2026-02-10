@@ -211,12 +211,12 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   useEffect(function() { var total = heightSegs.length * (parseInt(radialSegments) || 1); setPartData(function(p) { return Object.assign({}, p, { quantity: String(total) }); }); }, [radialSegments, heightSegs]);
 
   var materialDescription = useMemo(function() {
-    var qty = parseInt(partData.quantity) || 1, parts = [qty + 'pc'];
+    var qty = parseInt(partData.quantity) || 1, parts = [qty + 'pc:'];
     if (partData.thickness) parts.push(partData.thickness);
     parts.push('Plate \u2014 Cone Layout');
     if (coneData) parts.push('(\u2300' + parseFloat(largeDia).toFixed(1) + '" \u2192 \u2300' + parseFloat(smallDia).toFixed(1) + '" \u00d7 ' + parseFloat(coneHeight).toFixed(1) + '"H)');
     if (partData.material) parts.push(partData.material);
-    if (partData._materialOrigin) parts.push('(' + partData._materialOrigin + ')');
+    if (partData._materialOrigin) parts.push(partData._materialOrigin);
     return parts.join(' ');
   }, [partData.thickness, partData.material, partData._materialOrigin, partData.quantity, largeDia, smallDia, coneHeight, coneData]);
 

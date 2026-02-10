@@ -168,7 +168,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
     const descParts = [];
-    descParts.push(`${qty}pc`);
+    descParts.push(`${qty}pc:`);
 
     if (partData._tubeSize && partData._tubeSize !== 'Custom') {
       const parsed = parseTubeSize(partData._tubeSize);
@@ -180,13 +180,13 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     }
 
     if (partData.thickness) descParts.push(`x ${partData.thickness}`);
-    descParts.push(isRectangular ? 'Rect Tube' : 'Sq Tube');
+    descParts.push(isRectangular ? 'Rectangular Tubing' : 'Square Tubing');
     if (partData.length) descParts.push(`x ${partData.length} long`);
 
     const grade = partData.material || '';
     if (grade) descParts.push(grade);
     const origin = partData._materialOrigin || '';
-    if (origin) descParts.push(`(${origin})`);
+    if (origin) descParts.push(origin);
 
     return descParts.join(' ');
   }, [partData._tubeSize, partData._customTubeSize, partData.thickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, isRectangular]);
@@ -209,7 +209,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     lines.push(rollLine);
 
     if (riseCalc) {
-      lines.push(`Rise: ${riseCalc.rise.toFixed(4)}" over ${riseCalc.chord}" chord`);
+      lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
     }
 
     if (completeRings && ringCalc && !ringCalc.error) {

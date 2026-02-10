@@ -272,16 +272,37 @@ export default function PitchSection({ partData, setPartData, clDiameter, inputD
 export function getPitchDescriptionLines(partData, clDiameter) {
   if (!partData._pitchEnabled) return [];
   const lines = [];
-  lines.push(`Pitch: ${partData._pitchDirection === 'clockwise' ? 'CW' : 'CCW'} (from ground floor)`);
-  if (partData._pitchMethod === 'runrise') {
-    lines.push(`  Run: ${partData._pitchRun}" / Rise: ${partData._pitchRise}"`);
+  // Calculate pitch angle from stored values
+  const circumference = clDiameter > 0 ? Math.PI * clDiameter : 0;
+  let pitchAngle = 0;
+  if (partData._pitchMethod === 'runrise' && partData._pitchRun > 0) {
+    pitchAngle = Math.atan(parseFloat(partData._pitchRise) / parseFloat(partData._pitchRun)) * (180 / Math.PI);
   } else if (partData._pitchMethod === 'degree') {
-    lines.push(`  Pitch Angle: ${partData._pitchAngle}°`);
+    pitchAngle = parseFloat(partData._pitchAngle) || 0;
+  } else if (partData._pitchMethod === 'space' && circumference > 0) {
+    const spacing = parseFloat(partData._pitchSpaceValue) || 0;
+    if (spacing > 0) {
+      const risePerRev = partData._pitchSpaceType === 'center' ? spacing : spacing + (clDiameter > 0 ? Math.PI * clDiameter / 12 : 0);
+      pitchAngle = Math.atan(risePerRev / circumference) * (180 / Math.PI);
+    }
+  }
+  if (pitchAngle > 0) {
+    lines.push(`Pitch to ${pitchAngle.toFixed(5)}°`);
+  }
+  if (partData._pitchMethod === 'runrise') {
+    lines.push(`Run: ${partData._pitchRun}" Rise: ${partData._pitchRise}"`);
+  } else if (partData._pitchMethod === 'degree') {
+    lines.push(`Pitch Angle: ${partData._pitchAngle}°`);
   } else if (partData._pitchMethod === 'space') {
-    lines.push(`  ${partData._pitchSpaceType === 'center' ? 'Center-to-Center' : 'Between'} Spacing: ${partData._pitchSpaceValue}"`);
+    lines.push(`${partData._pitchSpaceType === 'center' ? 'Center-to-Center' : 'Between'} Spacing: ${partData._pitchSpaceValue}"`);
   }
   if (partData._pitchDevelopedDia > 0) {
-    lines.push(`  → Developed Ø: ${partData._pitchDevelopedDia.toFixed(4)}" (set rolls to this)`);
+    const measureType = partData._rollMeasureType || 'diameter';
+    const measurePoint = partData._rollMeasurePoint || 'inside';
+    const specLabel = measurePoint === 'inside' ? (measureType === 'radius' ? 'ISR' : 'ID') : measurePoint === 'outside' ? (measureType === 'radius' ? 'OSR' : 'OD') : (measureType === 'radius' ? 'CLR' : 'CLD');
+    const devValue = measureType === 'radius' ? (partData._pitchDevelopedDia / 2).toFixed(4) : partData._pitchDevelopedDia.toFixed(4);
+    const devLabel = measureType === 'radius' ? 'Developed Radius' : 'Developed Diameter';
+    lines.push(`${devLabel}: ${devValue}" ${specLabel}`);
   }
   return lines;
 }
