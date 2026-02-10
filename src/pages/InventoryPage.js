@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MapPin, Calendar, Package, Truck, CheckCircle, Clock, FileText, Inbox, Image } from 'lucide-react';
-import { getWorkOrders, getArchivedWorkOrders } from '../services/api';
+import { Search, MapPin, Calendar, Package, Truck, CheckCircle, Clock, FileText, Inbox, Image, AlertCircle } from 'lucide-react';
+import { getWorkOrders, getArchivedWorkOrders, getUnlinkedShipments, linkShipmentToWorkOrder } from '../services/api';
 
 // Status configuration
 const STATUSES = {
@@ -22,6 +22,7 @@ const STATUSES = {
 function InventoryPage() {
   const navigate = useNavigate();
   const [workOrders, setWorkOrders] = useState([]);
+  const [unlinkedShipments, setUnlinkedShipments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,11 +56,29 @@ function InventoryPage() {
         response = await getWorkOrders({ archived: 'false' });
       }
       setWorkOrders(response.data.data || []);
+      
+      // Also load unlinked shipments
+      try {
+        const unlinkedRes = await getUnlinkedShipments();
+        setUnlinkedShipments(unlinkedRes.data.data || []);
+      } catch (e) {
+        console.error('Failed to load unlinked shipments:', e);
+      }
     } catch (err) {
       setError('Failed to load inventory');
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateWorkOrder = async (shipmentId) => {
+    try {
+      const res = await linkShipmentToWorkOrder(shipmentId);
+      const workOrder = res.data.data.workOrder;
+      navigate(`/workorder/${workOrder.id}`);
+    } catch (err) {
+      console.error('Failed to create work order:', err);
     }
   };
 
@@ -285,6 +304,66 @@ function InventoryPage() {
       <div style={{ marginBottom: 12, color: '#666', fontSize: '0.9rem' }}>
         {filteredOrders.length} item{filteredOrders.length !== 1 ? 's' : ''}
       </div>
+
+      {/* Waiting for Instructions - unlinked shipments */}
+      {unlinkedShipments.length > 0 && statusFilter !== 'archived' && (
+        <div style={{ 
+          background: '#fff3e0', 
+          border: '1px solid #ffcc02', 
+          borderRadius: 8, 
+          padding: 16, 
+          marginBottom: 16 
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <AlertCircle size={20} color="#e65100" />
+            <strong style={{ color: '#e65100' }}>
+              Waiting for Instructions ({unlinkedShipments.length})
+            </strong>
+            <span style={{ color: '#bf360c', fontSize: '0.85rem' }}>
+              — Material received but no work order assigned
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {unlinkedShipments.map(s => (
+              <div key={s.id} style={{ 
+                background: 'white', 
+                borderRadius: 6, 
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12
+              }}>
+                <div style={{ flex: 1 }}>
+                  <strong>{s.clientName}</strong>
+                  {s.description && (
+                    <span style={{ color: '#666', fontSize: '0.85rem', marginLeft: 8 }}>
+                      — {s.description.length > 60 ? s.description.slice(0, 60) + '...' : s.description}
+                    </span>
+                  )}
+                  {s.clientPurchaseOrderNumber && (
+                    <span style={{ color: '#1976d2', fontSize: '0.8rem', marginLeft: 8 }}>
+                      PO# {s.clientPurchaseOrderNumber}
+                    </span>
+                  )}
+                  <div style={{ fontSize: '0.8rem', color: '#999', marginTop: 2 }}>
+                    Received {new Date(s.receivedAt || s.createdAt).toLocaleDateString()}
+                    {s.location && ` • ${s.location}`}
+                    {s.receivedBy && ` • by ${s.receivedBy}`}
+                  </div>
+                </div>
+                <button 
+                  className="btn btn-primary" 
+                  style={{ whiteSpace: 'nowrap', fontSize: '0.85rem', padding: '6px 14px' }}
+                  onClick={() => handleCreateWorkOrder(s.id)}
+                >
+                  Create Work Order
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Grid */}
       {filteredOrders.length === 0 ? (

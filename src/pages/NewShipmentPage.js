@@ -31,10 +31,10 @@ function NewShipmentPage() {
   }, []);
 
   useEffect(() => {
-    if (createdData?.drNumber) {
-      generateQRCode(`DR-${createdData.drNumber}`);
+    if (createdData?.shipment?.qrCode) {
+      generateQRCode(createdData.shipment.qrCode);
     }
-  }, [createdData?.drNumber]);
+  }, [createdData?.shipment?.qrCode]);
 
   const loadLocations = async () => {
     try {
@@ -83,11 +83,11 @@ function NewShipmentPage() {
       setSaving(true);
       setError(null);
 
-      // Create shipment with work order (backend will create both)
+      // Create shipment (receiving record only — no work order)
       const shipmentData = {
         ...formData,
-        createWorkOrder: true, // Flag to create linked work order
-        assignDRNumber: true,  // Assign DR# to work order
+        createWorkOrder: false,
+        assignDRNumber: false,
       };
 
       const response = await createShipment(shipmentData);
@@ -111,7 +111,7 @@ function NewShipmentPage() {
     }
   };
 
-  // Show success screen with DR# and QR code
+  // Show success screen
   if (createdData) {
     return (
       <div>
@@ -120,23 +120,39 @@ function NewShipmentPage() {
           <h2 style={{ marginBottom: 8 }}>Material Received!</h2>
           <p style={{ color: '#666', marginBottom: 16 }}>{createdData.shipment?.clientName}</p>
           
-          <div style={{ 
-            background: '#e3f2fd', 
-            padding: '16px 24px', 
-            borderRadius: 8, 
-            marginBottom: 24,
-            display: 'inline-block'
-          }}>
-            <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: 4 }}>Delivery Receipt Number</div>
+          {createdData.drNumber ? (
             <div style={{ 
-              fontFamily: 'Courier New, monospace', 
-              fontSize: '2rem', 
-              fontWeight: 700, 
-              color: '#1976d2' 
+              background: '#e3f2fd', 
+              padding: '16px 24px', 
+              borderRadius: 8, 
+              marginBottom: 24,
+              display: 'inline-block'
             }}>
-              DR-{createdData.drNumber}
+              <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: 4 }}>Linked to Work Order</div>
+              <div style={{ 
+                fontFamily: 'Courier New, monospace', 
+                fontSize: '2rem', 
+                fontWeight: 700, 
+                color: '#1976d2' 
+              }}>
+                DR-{createdData.drNumber}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ 
+              background: '#fff3e0', 
+              padding: '16px 24px', 
+              borderRadius: 8, 
+              marginBottom: 24,
+            }}>
+              <div style={{ fontSize: '1.2rem', fontWeight: 600, color: '#e65100', marginBottom: 4 }}>
+                ⏳ Waiting for Instructions
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#bf360c' }}>
+                Create or link a work order from the Inventory page when ready
+              </div>
+            </div>
+          )}
           
           {qrCodeUrl && (
             <div style={{ marginBottom: 24 }}>
@@ -144,35 +160,33 @@ function NewShipmentPage() {
             </div>
           )}
 
-          <div style={{ 
-            background: '#fff3e0', 
-            padding: 12, 
-            borderRadius: 8, 
-            marginBottom: 24,
-            fontSize: '0.9rem',
-            color: '#e65100'
-          }}>
-            <strong>Awaiting Instructions</strong><br/>
-            Add parts when the client calls with rolling/bending instructions
-          </div>
-
           <div className="actions-row" style={{ justifyContent: 'center' }}>
-            <button 
-              className="btn btn-outline"
-              onClick={() => {
-                const link = document.createElement('a');
-                link.download = `DR-${createdData.drNumber}.png`;
-                link.href = qrCodeUrl;
-                link.click();
-              }}
-            >
-              Download QR Code
-            </button>
+            {qrCodeUrl && (
+              <button 
+                className="btn btn-outline"
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.download = `shipment-${createdData.shipment?.id?.slice(0, 8)}.png`;
+                  link.href = qrCodeUrl;
+                  link.click();
+                }}
+              >
+                Download QR Code
+              </button>
+            )}
+            {createdData.workOrder?.id && (
+              <button 
+                className="btn btn-primary"
+                onClick={() => navigate(`/workorder/${createdData.workOrder.id}`)}
+              >
+                View Work Order
+              </button>
+            )}
             <button 
               className="btn btn-primary"
-              onClick={() => navigate(`/workorder/${createdData.workOrder?.id}`)}
+              onClick={() => navigate('/inventory')}
             >
-              View Work Order
+              Go to Inventory
             </button>
           </div>
           
@@ -362,7 +376,7 @@ function NewShipmentPage() {
                 marginBottom: 16,
                 fontSize: '0.85rem'
               }}>
-                <strong>✓ DR# will be assigned automatically</strong>
+                <strong>✓ QR code assigned automatically</strong>
               </div>
               
               <div style={{ marginBottom: 16 }}>
@@ -399,9 +413,12 @@ function NewShipmentPage() {
               }}>
                 <strong>This creates:</strong>
                 <ul style={{ margin: '8px 0 0 16px', padding: 0 }}>
-                  <li>Receiving record (shipment)</li>
-                  <li>Work order with DR#</li>
+                  <li>Receiving record with QR code</li>
+                  <li>Goes to Inventory</li>
                 </ul>
+                <div style={{ marginTop: 8, fontStyle: 'italic' }}>
+                  Work order & DR# assigned later from CR Admin
+                </div>
               </div>
 
               <button 

@@ -50,12 +50,14 @@ export const getActivityLogs = (limit = 100, offset = 0) =>
 
 // Shipments
 export const getShipments = () => api.get('/shipments');
+export const getUnlinkedShipments = () => api.get('/shipments/unlinked');
 export const getShipmentById = (id) => api.get(`/shipments/${id}`);
 export const getShipmentByQRCode = (qrCode) => api.get(`/shipments/qr/${qrCode}`);
 export const getShipmentByWorkOrderId = (workOrderId) => api.get(`/shipments/workorder/${workOrderId}`);
 export const createShipment = (data) => api.post('/shipments', data);
 export const updateShipment = (id, data) => api.put(`/shipments/${id}`, data);
 export const deleteShipment = (id) => api.delete(`/shipments/${id}`);
+export const linkShipmentToWorkOrder = (shipmentId, workOrderId) => api.post(`/shipments/${shipmentId}/link-workorder`, { workOrderId });
 
 // Photos
 export const uploadPhotos = (shipmentId, files) => {
