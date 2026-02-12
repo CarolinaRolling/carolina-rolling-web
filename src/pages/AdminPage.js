@@ -90,11 +90,6 @@ function AdminPage() {
   const [weldDefaultRate, setWeldDefaultRate] = useState('');
   const [weldRatesSaving, setWeldRatesSaving] = useState(false);
 
-  // No-tag clients
-  const [noTagClients, setNoTagClients] = useState([]);
-  const [noTagNewName, setNoTagNewName] = useState('');
-  const [noTagSaving, setNoTagSaving] = useState(false);
-
   useEffect(() => {
     if (!isAdmin()) {
       navigate('/inventory');
@@ -119,8 +114,6 @@ function AdminPage() {
       loadMaterialGrades();
     } else if (activeTab === 'weldrates') {
       loadWeldRates();
-    } else if (activeTab === 'notag') {
-      loadNoTagClients();
     } else if (activeTab === 'system') {
       setSystemLogs([...window.nasErrorLog]);
       setLoading(false);
@@ -337,46 +330,6 @@ function AdminPage() {
       setSuccess('Weld rates saved'); setTimeout(() => setSuccess(null), 3000);
     } catch { setError('Failed to save weld rates'); }
     finally { setWeldRatesSaving(false); }
-  };
-
-  // No-tag clients
-  const loadNoTagClients = async () => {
-    try {
-      setLoading(true);
-      const resp = await getSettings('no_tag_clients');
-      if (resp.data.data?.value?.clients) {
-        setNoTagClients(resp.data.data.value.clients);
-      }
-    } catch {}
-    finally { setLoading(false); }
-  };
-
-  const handleAddNoTagClient = async () => {
-    const name = noTagNewName.trim();
-    if (!name) return;
-    if (noTagClients.some(c => c.toLowerCase() === name.toLowerCase())) {
-      setError('Client already in list'); return;
-    }
-    try {
-      setNoTagSaving(true); setError(null);
-      const updated = [...noTagClients, name].sort((a, b) => a.localeCompare(b));
-      await updateSettings('no_tag_clients', { clients: updated });
-      setNoTagClients(updated);
-      setNoTagNewName('');
-      setSuccess(`"${name}" added to no-tag list`); setTimeout(() => setSuccess(null), 3000);
-    } catch { setError('Failed to add client'); }
-    finally { setNoTagSaving(false); }
-  };
-
-  const handleRemoveNoTagClient = async (name) => {
-    try {
-      setNoTagSaving(true); setError(null);
-      const updated = noTagClients.filter(c => c !== name);
-      await updateSettings('no_tag_clients', { clients: updated });
-      setNoTagClients(updated);
-      setSuccess(`"${name}" removed from no-tag list`); setTimeout(() => setSuccess(null), 3000);
-    } catch { setError('Failed to remove client'); }
-    finally { setNoTagSaving(false); }
   };
 
   const loadScheduleEmailSettings = async () => {
@@ -673,12 +626,6 @@ function AdminPage() {
           onClick={() => setActiveTab('weldrates')}
         >
           🔥 Weld Rates
-        </button>
-        <button 
-          className={`tab ${activeTab === 'notag' ? 'active' : ''}`}
-          onClick={() => setActiveTab('notag')}
-        >
-          🚫 No-Tag Clients
         </button>
         <button 
           className={`tab ${activeTab === 'schedule' ? 'active' : ''}`}
@@ -1204,58 +1151,6 @@ function AdminPage() {
             <div style={{ marginTop: 20, padding: 12, background: '#fff8e1', borderRadius: 8, fontSize: '0.85rem', color: '#666', border: '1px solid #ffe082' }}>
               <strong>Weld formula:</strong> (Thickness ÷ 0.125) × (Seam Length ÷ 2) × Price Per Foot<br/>
               <em>Example: 3/8" plate, 60" seam, $5.00/ft → (0.375 ÷ 0.125) × (60 ÷ 2) × $5.00 = 3 × 30 × $5 = $450.00</em>
-            </div>
-          </div>
-        </div>
-
-      ) : activeTab === 'notag' ? (
-        <div>
-          <div className="card">
-            <h3 style={{ marginBottom: 16 }}>🚫 No-Tag Client List</h3>
-            <p style={{ color: '#666', marginBottom: 20 }}>
-              Clients on this list will <strong>not</strong> get QR code tags printed on their material. 
-              When a shipment is received for one of these clients, the QR code page is bypassed and 
-              a warning is shown instead.
-            </p>
-
-            {/* Add new client */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-              <input type="text" className="form-input" value={noTagNewName}
-                onChange={(e) => setNoTagNewName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddNoTagClient()}
-                placeholder="Enter client name..." style={{ flex: 1 }} />
-              <button className="btn btn-primary" onClick={handleAddNoTagClient} disabled={noTagSaving || !noTagNewName.trim()}>
-                {noTagSaving ? 'Adding...' : '+ Add Client'}
-              </button>
-            </div>
-
-            {/* Client list */}
-            {noTagClients.length === 0 ? (
-              <div style={{ padding: 24, textAlign: 'center', color: '#999', background: '#fafafa', borderRadius: 8 }}>
-                No clients on the no-tag list yet. Add a client name above.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {noTagClients.map((name, idx) => (
-                  <div key={idx} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '10px 14px', background: idx % 2 === 0 ? '#fff' : '#fafafa',
-                    borderRadius: 6, border: '1px solid #eee'
-                  }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>🚫 {name}</span>
-                    <button onClick={() => handleRemoveNoTagClient(name)} disabled={noTagSaving}
-                      style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ marginTop: 20, padding: 12, background: '#e3f2fd', borderRadius: 8, fontSize: '0.85rem', color: '#555' }}>
-              <strong>How it works:</strong> When someone receives material (web or Android) and the client name 
-              matches a name on this list, the QR code print page is skipped. Instead, a warning is shown: 
-              "No QR code directly on material for this client." The name matching is case-insensitive.
             </div>
           </div>
         </div>

@@ -278,6 +278,7 @@ export const sendScheduleEmailNow = () => api.post('/settings/schedule-email/sen
 // Clients
 export const getClients = (params) => api.get('/clients', { params });
 export const searchClients = (q) => api.get('/clients/search', { params: { q } });
+export const checkClientNoTag = (name) => api.get('/clients/check-notag', { params: { name } });
 export const getClient = (id) => api.get(`/clients/${id}`);
 export const createClient = (data) => api.post('/clients', data);
 export const updateClient = (id, data) => api.put(`/clients/${id}`, data);

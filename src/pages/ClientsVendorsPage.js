@@ -285,6 +285,7 @@ const ClientsVendorsPage = () => {
                   <tr key={client.id} style={{ opacity: client.isActive ? 1 : 0.5 }}>
                     <td>
                       <strong>{client.name}</strong>
+                      {client.noTag && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: '#fff3e0', color: '#e65100', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>🚫 No Tag</span>}
                       {client.address && <div style={{ fontSize: '0.8rem', color: '#666' }}>{client.address}</div>}
                     </td>
                     <td>
@@ -447,6 +448,21 @@ const ClientsVendorsPage = () => {
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label">Notes</label>
                 <textarea className="form-textarea" value={formData.notes || ''} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={2} />
+              </div>
+
+              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 12, marginTop: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={formData.noTag || false} onChange={(e) => setFormData({ ...formData, noTag: e.target.checked })}
+                    style={{ width: 18, height: 18, accentColor: '#e65100' }} />
+                  <span style={{ fontWeight: 600, color: formData.noTag ? '#e65100' : '#333' }}>
+                    🚫 No QR Tag — Do not place QR stickers on this client's material
+                  </span>
+                </label>
+                {formData.noTag && (
+                  <div style={{ marginTop: 8, padding: 10, background: '#fff3e0', borderRadius: 8, fontSize: '0.85rem', color: '#bf360c' }}>
+                    When material is received for this client, the QR code print page will be skipped and a warning will be shown instead.
+                  </div>
+                )}
               </div>
             </div>
             <div className="modal-footer">

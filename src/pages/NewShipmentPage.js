@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, X, Save, Package } from 'lucide-react';
 import QRCode from 'qrcode';
-import { createShipment, uploadPhotos, getLocations, getSettings } from '../services/api';
+import { createShipment, uploadPhotos, getLocations, checkClientNoTag } from '../services/api';
 
 function NewShipmentPage() {
   const navigate = useNavigate();
@@ -14,7 +14,6 @@ function NewShipmentPage() {
   const [createdData, setCreatedData] = useState(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [isNoTagClient, setIsNoTagClient] = useState(false);
-  const [noTagClients, setNoTagClients] = useState([]);
 
   const [formData, setFormData] = useState({
     clientName: '',
@@ -30,7 +29,6 @@ function NewShipmentPage() {
 
   useEffect(() => {
     loadLocations();
-    loadNoTagClients();
   }, []);
 
   useEffect(() => {
@@ -46,15 +44,6 @@ function NewShipmentPage() {
     } catch (err) {
       console.error('Failed to load locations:', err);
     }
-  };
-
-  const loadNoTagClients = async () => {
-    try {
-      const resp = await getSettings('no_tag_clients');
-      if (resp.data.data?.value?.clients) {
-        setNoTagClients(resp.data.data.value.clients);
-      }
-    } catch {}
   };
 
   const generateQRCode = async (code) => {
@@ -116,10 +105,13 @@ function NewShipmentPage() {
         drNumber: result.workOrder?.drNumber
       });
 
-      // Check if client is on no-tag list
-      const clientLower = formData.clientName.trim().toLowerCase();
-      const isNoTag = noTagClients.some(c => c.toLowerCase() === clientLower);
-      setIsNoTagClient(isNoTag);
+      // Check if client has no-tag flag
+      try {
+        const noTagResp = await checkClientNoTag(formData.clientName.trim());
+        setIsNoTagClient(noTagResp.data.data?.noTag === true);
+      } catch {
+        setIsNoTagClient(false);
+      }
     } catch (err) {
       setError('Failed to create shipment');
       console.error(err);
