@@ -178,6 +178,7 @@ export const deleteEstimatePart = (estimateId, partId) => api.delete(`/estimates
 
 // Estimate Part Files
 export const getEstimatePartFiles = (estimateId, partId) => api.get(`/estimates/${estimateId}/parts/${partId}/files`);
+export const viewEstimatePartFile = (estimateId, partId, fileId) => api.get(`/estimates/${estimateId}/parts/${partId}/files/${fileId}/view`);
 export const uploadEstimatePartFile = (estimateId, partId, file, fileType = 'other') => {
   const formData = new FormData();
   formData.append('file', file);

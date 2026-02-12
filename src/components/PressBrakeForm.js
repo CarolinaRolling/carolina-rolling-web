@@ -41,7 +41,7 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
   }, [partData.thickness, partData.width, partData.length, partData.material, partData._materialOrigin, partData.quantity]);
 
   useEffect(() => {
-    setPartData(prev => ({ ...prev, materialDescription }));
+    setPartData(prev => ({ ...prev, materialDescription, _materialDescription: materialDescription }));
   }, [materialDescription]);
 
   const qty = parseInt(partData.quantity) || 1;

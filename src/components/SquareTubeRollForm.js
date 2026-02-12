@@ -224,7 +224,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
 
   // Auto-update material description + sectionSize
   useEffect(() => {
-    const updates = { materialDescription };
+    const updates = { materialDescription, _materialDescription: materialDescription };
     if (partData._tubeSize && partData._tubeSize !== 'Custom') {
       updates.sectionSize = partData._tubeSize;
     } else if (partData._customTubeSize) {

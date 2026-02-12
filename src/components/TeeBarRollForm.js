@@ -168,7 +168,7 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
   }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded]);
 
   useEffect(() => {
-    const updates = { materialDescription };
+    const updates = { materialDescription, _materialDescription: materialDescription };
     if (partData._teeSize && partData._teeSize !== 'Custom') updates.sectionSize = partData._teeSize;
     else if (partData._customTeeSize) updates.sectionSize = partData._customTeeSize;
     setPartData(prev => ({ ...prev, ...updates }));

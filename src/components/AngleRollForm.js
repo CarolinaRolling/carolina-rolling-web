@@ -237,7 +237,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
 
   // Auto-update material description + sectionSize
   useEffect(() => {
-    const updates = { materialDescription: materialDescription };
+    const updates = { materialDescription, _materialDescription: materialDescription };
     // Persist angle size to sectionSize (DB column) so minimum checks work on reload
     if (partData._angleSize && partData._angleSize !== 'Custom') {
       updates.sectionSize = partData._angleSize;

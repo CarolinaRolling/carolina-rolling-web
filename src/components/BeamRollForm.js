@@ -161,7 +161,7 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
   }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded]);
 
   useEffect(() => {
-    const updates = { materialDescription };
+    const updates = { materialDescription, _materialDescription: materialDescription };
     if (partData._beamSize && partData._beamSize !== 'Custom') updates.sectionSize = partData._beamSize;
     else if (partData._customBeamSize) updates.sectionSize = partData._customBeamSize;
     setPartData(prev => ({ ...prev, ...updates }));

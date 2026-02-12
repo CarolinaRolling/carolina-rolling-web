@@ -151,7 +151,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
 
   // Auto-update material description
   useEffect(() => {
-    setPartData(prev => ({ ...prev, materialDescription: materialDescription }));
+    setPartData(prev => ({ ...prev, materialDescription, _materialDescription: materialDescription }));
   }, [materialDescription]);
 
   // Centerline diameter for pitch calculations

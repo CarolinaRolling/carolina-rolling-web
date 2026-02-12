@@ -155,7 +155,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
   }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
 
   useEffect(() => {
-    const updates = { materialDescription };
+    const updates = { materialDescription, _materialDescription: materialDescription };
     if (partData._channelSize && partData._channelSize !== 'Custom') updates.sectionSize = partData._channelSize;
     else if (partData._customChannelSize) updates.sectionSize = partData._customChannelSize;
     setPartData(prev => ({ ...prev, ...updates }));

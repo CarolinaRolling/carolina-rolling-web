@@ -197,7 +197,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
   }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
 
   useEffect(() => {
-    const updates = { materialDescription };
+    const updates = { materialDescription, _materialDescription: materialDescription };
     if (partData._barSize && partData._barSize !== 'Custom') {
       updates.sectionSize = partData._barSize;
       if (parsedSize) { updates.width = String(parsedSize.width); updates.thickness = String(parsedSize.thickness); }

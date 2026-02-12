@@ -431,7 +431,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
 
   // Auto-update descriptions
   useEffect(() => {
-    setPartData(prev => ({ ...prev, materialDescription }));
+    setPartData(prev => ({ ...prev, materialDescription, _materialDescription: materialDescription }));
   }, [materialDescription]);
 
   useEffect(() => {
