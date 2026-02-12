@@ -179,9 +179,9 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
     const thickness = partInfo.thickness;
     if (thickness <= 0 || seamLength <= 0 || weldPricePerFoot <= 0) return null;
     const passes = thickness / 0.125;
-    const halfSeam = seamLength / 2;
-    const total = passes * halfSeam * weldPricePerFoot;
-    return { passes: passes, halfSeam: halfSeam, total: total, thickness: thickness, seamLength: seamLength, pricePerFoot: weldPricePerFoot };
+    const seamFeet = seamLength / 12;
+    const total = passes * seamFeet * weldPricePerFoot;
+    return { passes: passes, seamFeet: seamFeet, total: total, thickness: thickness, seamLength: seamLength, pricePerFoot: weldPricePerFoot };
   }, [serviceConfig, partInfo, seamLength, weldPricePerFoot]);
 
   // Description
@@ -384,8 +384,8 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
                   {weldCalc.thickness.toFixed(4)}" ÷ 0.125" = <strong>{weldCalc.passes.toFixed(2)} passes</strong>
                 </div>
                 <div>
-                  <span style={{ color: '#888' }}>Half Seam:</span>{' '}
-                  {weldCalc.seamLength.toFixed(2)}" ÷ 2 = <strong>{weldCalc.halfSeam.toFixed(2)}"</strong>
+                  <span style={{ color: '#888' }}>Seam (ft):</span>{' '}
+                  {weldCalc.seamLength.toFixed(2)}" ÷ 12 = <strong>{weldCalc.seamFeet.toFixed(2)} ft</strong>
                 </div>
                 <div>
                   <span style={{ color: '#888' }}>Rate:</span>{' '}
@@ -393,7 +393,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
                 </div>
                 <div style={{ borderTop: '1px solid #ef9a9a', marginTop: 8, paddingTop: 8, fontSize: '1rem' }}>
                   <span style={{ color: '#888' }}>Formula:</span>{' '}
-                  {weldCalc.passes.toFixed(2)} × {weldCalc.halfSeam.toFixed(2)} × ${weldCalc.pricePerFoot.toFixed(2)} ={' '}
+                  {weldCalc.passes.toFixed(2)} × {weldCalc.seamFeet.toFixed(2)} × ${weldCalc.pricePerFoot.toFixed(2)} ={' '}
                   <strong style={{ color: '#c62828', fontSize: '1.15rem' }}>${weldCalc.total.toFixed(2)}</strong>
                   <span style={{ color: '#888', fontSize: '0.8rem', marginLeft: 8 }}>(per piece)</span>
                 </div>
