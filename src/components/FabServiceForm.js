@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getSettings } from '../services/api';
 
 const SERVICE_TYPES = [
@@ -10,11 +10,9 @@ const SERVICE_TYPES = [
 ];
 
 /**
- * Extract dimensions from a part's formData or direct fields.
- * Returns { thickness, seamOptions: [{ label, lengthInches }], grade }
+ * Extract dimensions from a part's fields (formData is already merged by API).
  */
 function extractPartInfo(part) {
-  const fd = part.formData || {};
   const info = {
     thickness: 0,
     thicknessLabel: '',
@@ -24,71 +22,68 @@ function extractPartInfo(part) {
   };
 
   // Thickness
-  const thkStr = fd.thickness || part.thickness || '';
+  const thkStr = part.thickness || '';
   info.thicknessLabel = thkStr;
   info.thickness = parseThickness(thkStr);
 
   // Grade
-  info.grade = fd.material || part.material || '';
+  info.grade = part.material || '';
 
   // Part label
-  const matDesc = fd._materialDescription || fd.materialDescription || part.materialDescription || '';
-  info.partLabel = matDesc || `Part #${part.partNumber || '?'}`;
+  const matDesc = part._materialDescription || part.materialDescription || '';
+  info.partLabel = matDesc || ('Part #' + (part.partNumber || '?'));
 
   const ptype = part.partType;
 
   if (ptype === 'plate_roll') {
-    // Cylinder: longitudinal seam = width (height of cylinder)
-    const w = parseFloat(fd.width || part.width) || 0;
-    if (w > 0) info.seamOptions.push({ label: `Longitudinal Seam (${w}")`, lengthInches: w });
-    // Circumferential seam (for welding caps to cylinder) = π × diameter
-    const rollVal = parseFloat(fd._rollValue || part.diameter || part.radius) || 0;
-    const measureType = fd._rollMeasureType || 'diameter';
-    const measurePoint = fd._rollMeasurePoint || 'outside';
+    const w = parseFloat(part.width) || 0;
+    if (w > 0) info.seamOptions.push({ label: 'Longitudinal Seam (' + w + '")', lengthInches: w });
+    const rollVal = parseFloat(part._rollValue || part.diameter || part.radius) || 0;
+    const measureType = part._rollMeasureType || 'diameter';
+    const measurePoint = part._rollMeasurePoint || 'outside';
     let dia = rollVal;
     if (measureType === 'radius') dia = rollVal * 2;
     if (dia > 0) {
       const circ = Math.PI * dia;
-      info.seamOptions.push({ label: `Circumferential Seam (${measurePoint} Ø${dia}" = ${circ.toFixed(2)}")`, lengthInches: circ });
+      info.seamOptions.push({ label: 'Circumferential Seam (' + measurePoint + ' \u00d8' + dia + '" = ' + circ.toFixed(2) + '")', lengthInches: circ });
     }
   } else if (ptype === 'flat_stock') {
-    const shape = fd._plateShape || '';
-    const stockType = fd._stockType || '';
+    const shape = part._plateShape || '';
+    const stockType = part._stockType || '';
     if (stockType === 'plate' && shape === 'round') {
-      const plateDia = parseFloat(fd._plateDiameter) || 0;
+      const plateDia = parseFloat(part._plateDiameter) || 0;
       if (plateDia > 0) {
         const circ = Math.PI * plateDia;
-        info.seamOptions.push({ label: `Circumference (Ø${plateDia}" = ${circ.toFixed(2)}")`, lengthInches: circ });
+        info.seamOptions.push({ label: 'Circumference (\u00d8' + plateDia + '" = ' + circ.toFixed(2) + '")', lengthInches: circ });
       }
     } else if (stockType === 'plate' && shape === 'donut') {
-      const od = parseFloat(fd._plateOD) || 0;
-      const id = parseFloat(fd._plateID) || 0;
-      if (od > 0) info.seamOptions.push({ label: `OD Circumference (Ø${od}" = ${(Math.PI * od).toFixed(2)}")`, lengthInches: Math.PI * od });
-      if (id > 0) info.seamOptions.push({ label: `ID Circumference (Ø${id}" = ${(Math.PI * id).toFixed(2)}")`, lengthInches: Math.PI * id });
-    } else if (stockType === 'plate' && shape === 'rectangular') {
-      const w = parseFloat(fd.width || part.width) || 0;
-      const l = parseFloat(fd.length || part.length) || 0;
+      const od = parseFloat(part._plateOD) || 0;
+      const id = parseFloat(part._plateID) || 0;
+      if (od > 0) info.seamOptions.push({ label: 'OD Circumference (\u00d8' + od + '" = ' + (Math.PI * od).toFixed(2) + '")', lengthInches: Math.PI * od });
+      if (id > 0) info.seamOptions.push({ label: 'ID Circumference (\u00d8' + id + '" = ' + (Math.PI * id).toFixed(2) + '")', lengthInches: Math.PI * id });
+    } else if (stockType === 'plate') {
+      const w = parseFloat(part.width) || 0;
+      const l = parseFloat(part.length) || 0;
       if (w > 0 && l > 0) {
-        info.seamOptions.push({ label: `Width seam (${w}")`, lengthInches: w });
-        info.seamOptions.push({ label: `Length seam (${l}")`, lengthInches: l });
-        info.seamOptions.push({ label: `Perimeter (${(2 * (w + l)).toFixed(2)}")`, lengthInches: 2 * (w + l) });
+        info.seamOptions.push({ label: 'Width seam (' + w + '")', lengthInches: w });
+        info.seamOptions.push({ label: 'Length seam (' + l + '")', lengthInches: l });
+        info.seamOptions.push({ label: 'Perimeter (' + (2 * (w + l)).toFixed(2) + '")', lengthInches: 2 * (w + l) });
       }
     }
   } else if (ptype === 'pipe_roll' || ptype === 'tube_roll') {
-    const od = parseFloat(fd.outerDiameter || part.outerDiameter) || 0;
+    const od = parseFloat(part.outerDiameter) || 0;
     if (od > 0) {
       const circ = Math.PI * od;
-      info.seamOptions.push({ label: `Circumference (OD ${od}" = ${circ.toFixed(2)}")`, lengthInches: circ });
+      info.seamOptions.push({ label: 'Circumference (OD ' + od + '" = ' + circ.toFixed(2) + '")', lengthInches: circ });
     }
-  } else if (ptype === 'angle_roll' || ptype === 'channel_roll' || ptype === 'beam_roll' || ptype === 'flat_bar' || ptype === 'tee_bar') {
-    // For structural rolls, circumference from roll diameter
-    const rollVal = parseFloat(fd._rollValue || part.diameter || part.radius) || 0;
-    const measureType = fd._rollMeasureType || 'diameter';
+  } else if (['angle_roll', 'channel_roll', 'beam_roll', 'flat_bar', 'tee_bar'].includes(ptype)) {
+    const rollVal = parseFloat(part._rollValue || part.diameter || part.radius) || 0;
+    const measureType = part._rollMeasureType || 'diameter';
     let dia = rollVal;
     if (measureType === 'radius') dia = rollVal * 2;
     if (dia > 0) {
       const circ = Math.PI * dia;
-      info.seamOptions.push({ label: `Circumference (Ø${dia}" = ${circ.toFixed(2)}")`, lengthInches: circ });
+      info.seamOptions.push({ label: 'Circumference (\u00d8' + dia + '" = ' + circ.toFixed(2) + '")', lengthInches: circ });
     }
   }
 
@@ -107,116 +102,142 @@ function parseThickness(t) {
   if (gaugeMap[t]) return gaugeMap[t];
   const clean = t.replace(/"/g, '').trim();
   if (clean.includes('-')) {
-    const [whole, frac] = clean.split('-');
-    const [n, d] = frac.split('/').map(Number);
-    return Number(whole) + (n / d);
+    const parts = clean.split('-');
+    const frac = parts[1].split('/').map(Number);
+    return Number(parts[0]) + (frac[0] / frac[1]);
   }
   if (clean.includes('/')) {
-    const [n, d] = clean.split('/').map(Number);
-    return n / d;
+    const parts = clean.split('/').map(Number);
+    return parts[0] / parts[1];
   }
   return parseFloat(clean) || 0;
 }
 
 export default function FabServiceForm({ partData, setPartData, estimateParts = [], showMessage, setError }) {
   const [weldRates, setWeldRates] = useState({});
+  const prevSyncRef = useRef('');
 
   useEffect(() => {
     const loadRates = async () => {
       try {
         const resp = await getSettings('weld_rates');
         if (resp.data.data?.value) setWeldRates(resp.data.data.value);
-      } catch {}
+      } catch (e) { /* no rates configured yet */ }
     };
     loadRates();
   }, []);
 
   const serviceType = partData._serviceType || '';
   const serviceConfig = SERVICE_TYPES.find(s => s.key === serviceType);
-  const linkedPartId = partData._linkedPartId ? parseInt(partData._linkedPartId) : null;
+  
+  // Keep linkedPartId as string to match select values
+  const linkedPartIdStr = partData._linkedPartId ? String(partData._linkedPartId) : '';
 
-  // Available parts (exclude self and other fab services)
-  const availableParts = estimateParts.filter(p => p.partType !== 'fab_service' && p.id !== partData.id);
+  // Available parts (exclude fab services)
+  const availableParts = useMemo(() => {
+    return estimateParts.filter(p => p.partType !== 'fab_service');
+  }, [estimateParts]);
 
-  // Linked part info
-  const linkedPart = linkedPartId ? availableParts.find(p => p.id === linkedPartId) : null;
-  const partInfo = linkedPart ? extractPartInfo(linkedPart) : null;
+  // Find linked part using string comparison
+  const linkedPart = useMemo(() => {
+    if (!linkedPartIdStr) return null;
+    return availableParts.find(p => String(p.id) === linkedPartIdStr) || null;
+  }, [linkedPartIdStr, availableParts]);
+
+  const partInfo = useMemo(() => {
+    if (!linkedPart) return null;
+    try {
+      return extractPartInfo(linkedPart);
+    } catch (e) {
+      console.error('extractPartInfo error:', e);
+      return null;
+    }
+  }, [linkedPart]);
 
   // Selected seam
   const selectedSeamIdx = parseInt(partData._seamOptionIdx) || 0;
-  const selectedSeam = partInfo?.seamOptions[selectedSeamIdx] || null;
-  const isCustomSeam = selectedSeam?.label === 'Custom Length';
-  const seamLength = isCustomSeam ? (parseFloat(partData._customSeamLength) || 0) : (selectedSeam?.lengthInches || 0);
+  const selectedSeam = partInfo && partInfo.seamOptions ? partInfo.seamOptions[selectedSeamIdx] : null;
+  const isCustomSeam = selectedSeam ? selectedSeam.label === 'Custom Length' : false;
+  const seamLength = isCustomSeam ? (parseFloat(partData._customSeamLength) || 0) : (selectedSeam ? selectedSeam.lengthInches : 0);
 
-  // Auto-load weld rate when grade changes
+  // Auto weld rate lookup
   const autoRate = useMemo(() => {
-    if (!partInfo?.grade || !weldRates) return null;
-    // Try exact match, then partial
+    if (!partInfo || !partInfo.grade || !weldRates || Object.keys(weldRates).length === 0) return null;
     const grade = partInfo.grade;
-    if (weldRates[grade] !== undefined) return weldRates[grade];
-    const key = Object.keys(weldRates).find(k => grade.toLowerCase().includes(k.toLowerCase()));
-    return key ? weldRates[key] : weldRates['default'] || null;
-  }, [partInfo?.grade, weldRates]);
+    if (weldRates[grade] !== undefined) return Number(weldRates[grade]);
+    const key = Object.keys(weldRates).find(k => k !== 'default' && grade.toLowerCase().includes(k.toLowerCase()));
+    if (key) return Number(weldRates[key]);
+    if (weldRates['default'] !== undefined) return Number(weldRates['default']);
+    return null;
+  }, [partInfo, weldRates]);
 
-  // Weld price per foot (user can override)
   const weldPricePerFoot = parseFloat(partData._weldPricePerFoot) || 0;
 
-  // Auto-set price when linked part changes
-  useEffect(() => {
-    if (autoRate !== null && !partData._weldPriceManualOverride) {
-      setPartData(prev => ({ ...prev, _weldPricePerFoot: autoRate.toString() }));
-    }
-  }, [autoRate]);
-
-  // Weld calculation: (thickness / 0.125) × (seamLength / 2) × pricePerFoot
+  // Weld calc
   const weldCalc = useMemo(() => {
-    if (!serviceConfig?.hasWeldCalc || !partInfo) return null;
+    if (!serviceConfig || !serviceConfig.hasWeldCalc || !partInfo) return null;
     const thickness = partInfo.thickness;
     if (thickness <= 0 || seamLength <= 0 || weldPricePerFoot <= 0) return null;
     const passes = thickness / 0.125;
     const halfSeam = seamLength / 2;
     const total = passes * halfSeam * weldPricePerFoot;
-    return { passes, halfSeam, total, thickness, seamLength, pricePerFoot: weldPricePerFoot };
+    return { passes: passes, halfSeam: halfSeam, total: total, thickness: thickness, seamLength: seamLength, pricePerFoot: weldPricePerFoot };
   }, [serviceConfig, partInfo, seamLength, weldPricePerFoot]);
 
-  // Service description
+  // Description
   const serviceDescription = useMemo(() => {
-    const parts = [];
-    if (serviceConfig) parts.push(serviceConfig.label);
-    if (linkedPart) parts.push(`Part #${linkedPart.partNumber || '?'}`);
-    if (selectedSeam && !isCustomSeam) parts.push(selectedSeam.label);
-    if (isCustomSeam && partData._customSeamLength) parts.push(`Custom Seam: ${partData._customSeamLength}"`);
-    if (partData._serviceNotes) parts.push(partData._serviceNotes);
-    return parts.join(' — ');
-  }, [serviceConfig, linkedPart, selectedSeam, isCustomSeam, partData._customSeamLength, partData._serviceNotes]);
+    const d = [];
+    if (serviceConfig) d.push(serviceConfig.label);
+    if (linkedPart) d.push('Part #' + (linkedPart.partNumber || '?'));
+    if (selectedSeam && !isCustomSeam) d.push(selectedSeam.label);
+    if (isCustomSeam && partData._customSeamLength) d.push('Custom Seam: ' + partData._customSeamLength + '"');
+    if (partData._bevelNotes) d.push('Bevel: ' + partData._bevelNotes);
+    if (partData._serviceNotes) d.push(partData._serviceNotes);
+    return d.join(' \u2014 ');
+  }, [serviceConfig, linkedPart, selectedSeam, isCustomSeam, partData._customSeamLength, partData._bevelNotes, partData._serviceNotes]);
 
-  // Pricing - for weld use calc, for others use manual labor
+  // Pricing
   const qty = parseInt(partData.quantity) || 1;
   const laborEach = weldCalc ? weldCalc.total : (parseFloat(partData.laborTotal) || 0);
   const lineTotal = laborEach * qty;
 
-  // Sync to partData
+  // Auto-set weld rate on part link
   useEffect(() => {
-    setPartData(prev => ({
-      ...prev,
-      partTotal: lineTotal.toFixed(2),
-      laborTotal: laborEach.toFixed(2),
-      materialDescription: serviceDescription,
-      _materialDescription: serviceDescription,
-      _rollingDescription: serviceConfig ? serviceConfig.label : '',
-    }));
-  }, [lineTotal, serviceDescription, serviceConfig]);
+    if (autoRate !== null && linkedPartIdStr && !partData._weldPriceManualOverride && !partData._weldPricePerFoot) {
+      setPartData(prev => ({ ...prev, _weldPricePerFoot: autoRate.toString() }));
+    }
+  }, [autoRate, linkedPartIdStr]);
+
+  // Sync computed values — use ref to prevent infinite loops
+  useEffect(() => {
+    const syncKey = lineTotal.toFixed(2) + '|' + serviceDescription + '|' + (serviceConfig ? serviceConfig.label : '');
+    if (syncKey !== prevSyncRef.current) {
+      prevSyncRef.current = syncKey;
+      setPartData(prev => ({
+        ...prev,
+        partTotal: lineTotal.toFixed(2),
+        laborTotal: laborEach.toFixed(2),
+        materialDescription: serviceDescription,
+        _materialDescription: serviceDescription,
+        _rollingDescription: serviceConfig ? serviceConfig.label : '',
+      }));
+    }
+  }, [lineTotal, laborEach, serviceDescription, serviceConfig]);
+
+  const update = (fields) => {
+    setPartData(prev => ({ ...prev, ...fields }));
+  };
 
   const sectionStyle = { gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 8, paddingTop: 12 };
-  const sectionTitle = (icon, text, color) => <h4 style={{ marginBottom: 10, color, fontSize: '0.95rem' }}>{icon} {text}</h4>;
+  const sTitle = (icon, text, color) => <h4 style={{ marginBottom: 10, color: color, fontSize: '0.95rem' }}>{icon} {text}</h4>;
 
   return (
     <>
       {/* Quantity */}
       <div className="form-group">
         <label className="form-label">Quantity *</label>
-        <input type="number" className="form-input" value={partData.quantity}
-          onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} min="1" />
+        <input type="number" className="form-input" value={partData.quantity || '1'}
+          onChange={(e) => update({ quantity: e.target.value })} min="1" />
       </div>
 
       {/* Service Type */}
@@ -225,11 +246,11 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
           {SERVICE_TYPES.map(st => (
             <button key={st.key} type="button"
-              onClick={() => setPartData({ ...partData, _serviceType: st.key })}
+              onClick={() => update({ _serviceType: st.key })}
               style={{
                 padding: '10px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
-                border: `2px solid ${serviceType === st.key ? st.color : '#ccc'}`,
-                background: serviceType === st.key ? `${st.color}15` : '#fff',
+                border: '2px solid ' + (serviceType === st.key ? st.color : '#ccc'),
+                background: serviceType === st.key ? st.color + '15' : '#fff',
                 color: serviceType === st.key ? st.color : '#666',
                 fontWeight: serviceType === st.key ? 700 : 500, fontSize: '0.85rem',
                 transition: 'all 0.2s'
@@ -250,16 +271,23 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
               ⚠️ Add parts to the estimate first, then link a service to them.
             </div>
           ) : (
-            <select className="form-select" value={linkedPartId || ''}
-              onChange={(e) => setPartData({ ...partData, _linkedPartId: e.target.value, _seamOptionIdx: '0', _weldPriceManualOverride: false })}>
+            <select className="form-select" value={linkedPartIdStr}
+              onChange={(e) => update({ _linkedPartId: e.target.value, _seamOptionIdx: '0', _weldPriceManualOverride: false, _weldPricePerFoot: '' })}>
               <option value="">Select a part...</option>
               {availableParts.map(p => {
-                const fd = p.formData || {};
-                const desc = fd._materialDescription || fd.materialDescription || p.materialDescription || p.partType;
-                return <option key={p.id} value={p.id}>Part #{p.partNumber} — {desc}</option>;
+                const desc = p._materialDescription || p.materialDescription || (p.partType || '').replace(/_/g, ' ');
+                return <option key={p.id} value={String(p.id)}>Part #{p.partNumber} — {desc}</option>;
               })}
             </select>
           )}
+        </div>
+      )}
+
+      {/* Debug — remove after confirming */}
+      {serviceType && linkedPartIdStr && !linkedPart && (
+        <div style={{ gridColumn: 'span 2', padding: 12, background: '#ffebee', borderRadius: 8, fontSize: '0.8rem', color: '#c62828' }}>
+          ⚠️ Part ID "{linkedPartIdStr}" not found in {availableParts.length} available parts.
+          IDs available: [{availableParts.map(p => String(p.id)).join(', ')}]
         </div>
       )}
 
@@ -271,10 +299,17 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
               📋 Part #{linkedPart.partNumber} Details
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, fontSize: '0.85rem' }}>
-              <div><span style={{ color: '#666' }}>Thickness:</span> <strong>{partInfo.thicknessLabel || '—'}</strong> ({partInfo.thickness.toFixed(4)}")</div>
+              <div><span style={{ color: '#666' }}>Thickness:</span> <strong>{partInfo.thicknessLabel || '—'}</strong>{partInfo.thickness > 0 ? ' (' + partInfo.thickness.toFixed(4) + '")' : ''}</div>
               <div><span style={{ color: '#666' }}>Grade:</span> <strong>{partInfo.grade || '—'}</strong></div>
-              <div><span style={{ color: '#666' }}>Type:</span> <strong>{linkedPart.partType.replace(/_/g, ' ')}</strong></div>
+              <div><span style={{ color: '#666' }}>Type:</span> <strong>{(linkedPart.partType || '').replace(/_/g, ' ')}</strong></div>
             </div>
+            {partInfo.seamOptions.length > 1 && (
+              <div style={{ marginTop: 8, fontSize: '0.8rem', color: '#666' }}>
+                {partInfo.seamOptions.filter(s => s.label !== 'Custom Length').map((s, i) => (
+                  <span key={i} style={{ marginRight: 12 }}>📏 {s.label}: <strong>{s.lengthInches.toFixed(2)}"</strong></span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -282,13 +317,13 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
       {/* Seam Selection (for weld services) */}
       {linkedPart && partInfo && (serviceType === 'weld_100' || serviceType === 'tack_weld') && (
         <div style={{ ...sectionStyle }}>
-          {sectionTitle('📏', 'Seam / Weld Length', '#283593')}
+          {sTitle('📏', 'Seam / Weld Length', '#283593')}
           <div className="form-group">
             <label className="form-label">Seam Type</label>
             <select className="form-select" value={selectedSeamIdx}
-              onChange={(e) => setPartData({ ...partData, _seamOptionIdx: e.target.value })}>
+              onChange={(e) => update({ _seamOptionIdx: e.target.value })}>
               {partInfo.seamOptions.map((opt, idx) => (
-                <option key={idx} value={idx}>{opt.label}{opt.lengthInches > 0 ? ` — ${opt.lengthInches.toFixed(2)}"` : ''}</option>
+                <option key={idx} value={idx}>{opt.label}{opt.lengthInches > 0 ? ' — ' + opt.lengthInches.toFixed(2) + '"' : ''}</option>
               ))}
             </select>
           </div>
@@ -296,7 +331,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
             <div className="form-group">
               <label className="form-label">Custom Seam Length (inches)</label>
               <input type="number" step="0.01" className="form-input" value={partData._customSeamLength || ''}
-                onChange={(e) => setPartData({ ...partData, _customSeamLength: e.target.value })} placeholder="Enter length in inches" />
+                onChange={(e) => update({ _customSeamLength: e.target.value })} placeholder="Enter length in inches" />
             </div>
           )}
           {seamLength > 0 && (
@@ -311,13 +346,13 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
       {/* Weld Pricing (100% Weld) */}
       {serviceType === 'weld_100' && linkedPart && partInfo && (
         <div style={{ ...sectionStyle }}>
-          {sectionTitle('💰', 'Weld Pricing', '#c62828')}
+          {sTitle('💰', 'Weld Pricing', '#c62828')}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
               <label className="form-label">Weld Price Per Foot</label>
               <div style={{ position: 'relative' }}>
                 <input type="number" step="0.01" className="form-input" value={partData._weldPricePerFoot || ''}
-                  onChange={(e) => setPartData({ ...partData, _weldPricePerFoot: e.target.value, _weldPriceManualOverride: true })}
+                  onChange={(e) => update({ _weldPricePerFoot: e.target.value, _weldPriceManualOverride: true })}
                   placeholder="0.00" style={{ paddingLeft: 20 }} />
                 <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
               </div>
@@ -325,7 +360,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
                 <div style={{ fontSize: '0.75rem', color: '#666', marginTop: 2 }}>
                   Default for {partInfo.grade}: ${autoRate.toFixed(2)}/ft
                   {partData._weldPriceManualOverride && (
-                    <button type="button" onClick={() => setPartData({ ...partData, _weldPricePerFoot: autoRate.toString(), _weldPriceManualOverride: false })}
+                    <button type="button" onClick={() => update({ _weldPricePerFoot: autoRate.toString(), _weldPriceManualOverride: false })}
                       style={{ marginLeft: 8, fontSize: '0.7rem', color: '#1976d2', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                       Reset to default
                     </button>
@@ -336,11 +371,10 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
             <div className="form-group">
               <label className="form-label">Bevel / Weld Notes</label>
               <input type="text" className="form-input" value={partData._bevelNotes || ''}
-                onChange={(e) => setPartData({ ...partData, _bevelNotes: e.target.value })} placeholder="e.g. 37.5° bevel, V-groove, etc." />
+                onChange={(e) => update({ _bevelNotes: e.target.value })} placeholder="e.g. 37.5° bevel, V-groove, etc." />
             </div>
           </div>
 
-          {/* Formula breakdown */}
           {weldCalc && (
             <div style={{ background: '#fce4ec', padding: 14, borderRadius: 8, marginTop: 12, border: '1px solid #ef9a9a' }}>
               <div style={{ fontWeight: 700, color: '#c62828', marginBottom: 10, fontSize: '0.9rem' }}>🔥 Weld Cost Calculation</div>
@@ -370,14 +404,17 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
       )}
 
       {/* Manual Pricing (Tack Weld, Fit, Cut, Other) */}
-      {serviceType && !serviceConfig?.hasWeldCalc && linkedPart && (
+      {serviceType && serviceConfig && !serviceConfig.hasWeldCalc && linkedPart && (
         <div style={{ ...sectionStyle }}>
-          {sectionTitle('💰', 'Pricing', serviceConfig?.color || '#1976d2')}
+          {sTitle('💰', 'Pricing', serviceConfig.color || '#1976d2')}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
               <label className="form-label">Labor Cost (per piece)</label>
-              <input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''}
-                onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" />
+              <div style={{ position: 'relative' }}>
+                <input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''}
+                  onChange={(e) => update({ laborTotal: e.target.value })} placeholder="0.00" style={{ paddingLeft: 20 }} />
+                <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
+              </div>
             </div>
           </div>
         </div>
@@ -389,7 +426,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
           <div className="form-group">
             <label className="form-label">Service Notes / Special Instructions</label>
             <textarea className="form-textarea" value={partData._serviceNotes || ''}
-              onChange={(e) => setPartData({ ...partData, _serviceNotes: e.target.value, specialInstructions: e.target.value })}
+              onChange={(e) => update({ _serviceNotes: e.target.value, specialInstructions: e.target.value })}
               rows={3} placeholder="Bevel details, weld symbols, fit-up requirements, etc." />
           </div>
         </div>
@@ -400,7 +437,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
         <div style={{ ...sectionStyle }}>
           <div style={{ background: '#f0f7ff', padding: 14, borderRadius: 8, border: '1px solid #bbdefb' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
-              <span>{serviceConfig?.label || 'Service'} (per piece)</span>
+              <span>{serviceConfig ? serviceConfig.label : 'Service'} (per piece)</span>
               <span>${laborEach.toFixed(2)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9', marginTop: 4 }}>
@@ -414,12 +451,12 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
       {/* Tracking */}
       {serviceType && (
         <div style={{ ...sectionStyle }}>
-          {sectionTitle('🏷️', 'Tracking', '#616161')}
+          {sTitle('🏷️', 'Tracking', '#616161')}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
               <label className="form-label">Client Part Number</label>
               <input type="text" className="form-input" value={partData.clientPartNumber || ''}
-                onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" />
+                onChange={(e) => update({ clientPartNumber: e.target.value })} placeholder="Optional" />
             </div>
           </div>
         </div>

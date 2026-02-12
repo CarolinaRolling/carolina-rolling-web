@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, X, Save, Package } from 'lucide-react';
 import QRCode from 'qrcode';
-import { createShipment, uploadPhotos, getLocations } from '../services/api';
+import { createShipment, uploadPhotos, getLocations, getSettings } from '../services/api';
 
 function NewShipmentPage() {
   const navigate = useNavigate();
@@ -13,6 +13,8 @@ function NewShipmentPage() {
   const [error, setError] = useState(null);
   const [createdData, setCreatedData] = useState(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [isNoTagClient, setIsNoTagClient] = useState(false);
+  const [noTagClients, setNoTagClients] = useState([]);
 
   const [formData, setFormData] = useState({
     clientName: '',
@@ -28,13 +30,14 @@ function NewShipmentPage() {
 
   useEffect(() => {
     loadLocations();
+    loadNoTagClients();
   }, []);
 
   useEffect(() => {
-    if (createdData?.shipment?.qrCode) {
+    if (createdData?.shipment?.qrCode && !isNoTagClient) {
       generateQRCode(createdData.shipment.qrCode);
     }
-  }, [createdData?.shipment?.qrCode]);
+  }, [createdData?.shipment?.qrCode, isNoTagClient]);
 
   const loadLocations = async () => {
     try {
@@ -43,6 +46,15 @@ function NewShipmentPage() {
     } catch (err) {
       console.error('Failed to load locations:', err);
     }
+  };
+
+  const loadNoTagClients = async () => {
+    try {
+      const resp = await getSettings('no_tag_clients');
+      if (resp.data.data?.value?.clients) {
+        setNoTagClients(resp.data.data.value.clients);
+      }
+    } catch {}
   };
 
   const generateQRCode = async (code) => {
@@ -103,6 +115,11 @@ function NewShipmentPage() {
         workOrder: result.workOrder,
         drNumber: result.workOrder?.drNumber
       });
+
+      // Check if client is on no-tag list
+      const clientLower = formData.clientName.trim().toLowerCase();
+      const isNoTag = noTagClients.some(c => c.toLowerCase() === clientLower);
+      setIsNoTagClient(isNoTag);
     } catch (err) {
       setError('Failed to create shipment');
       console.error(err);
@@ -154,14 +171,31 @@ function NewShipmentPage() {
             </div>
           )}
           
-          {qrCodeUrl && (
+          {isNoTagClient ? (
+            <div style={{ 
+              background: '#fff3e0', 
+              padding: '16px 24px', 
+              borderRadius: 8, 
+              marginBottom: 24,
+              border: '2px solid #ff9800'
+            }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: 6 }}>🚫</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#e65100', marginBottom: 4 }}>
+                No QR code directly on material for this client
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#bf360c' }}>
+                {createdData.shipment?.clientName} is on the no-tag list. 
+                Do not place QR stickers on this material.
+              </div>
+            </div>
+          ) : qrCodeUrl ? (
             <div style={{ marginBottom: 24 }}>
               <img src={qrCodeUrl} alt="QR Code" style={{ maxWidth: '100%' }} />
             </div>
-          )}
+          ) : null}
 
           <div className="actions-row" style={{ justifyContent: 'center' }}>
-            {qrCodeUrl && (
+            {qrCodeUrl && !isNoTagClient && (
               <button 
                 className="btn btn-outline"
                 onClick={() => {

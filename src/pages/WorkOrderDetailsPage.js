@@ -36,6 +36,7 @@ const PART_TYPES = {
   tee_bar: { label: 'Tee Bars', icon: '🇹', desc: 'Structural tee rolling', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
   press_brake: { label: 'Press Brake', icon: '⏏️', desc: 'Press brake forming from print', fields: ['material', 'thickness', 'width', 'length'] },
   flat_stock: { label: 'Flat Stock', icon: '📄', desc: 'Flat material cut to custom print', fields: ['material', 'thickness', 'width', 'length'] },
+  fab_service: { label: 'Fabrication Service', icon: '🔥', desc: 'Welding, fitting, cut-to-fit services', fields: [] },
   other: { label: 'Other', icon: '📦', desc: 'Custom or miscellaneous parts', fields: ['material', 'thickness', 'width', 'length', 'sectionSize', 'outerDiameter', 'wallThickness', 'rollType', 'radius', 'diameter', 'arcDegrees'] }
 };
 
