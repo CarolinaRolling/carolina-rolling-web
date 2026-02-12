@@ -703,7 +703,7 @@ function WorkOrderDetailsPage() {
           ${part.heatNumber ? `<div style="margin-bottom:4px;font-size:0.9rem"><strong>Heat#:</strong> ${part.heatNumber}</div>` : ''}
           ${rollingBlock}
           ${specsHtml}
-          ${includePricing && part.materialSource !== 'customer_supplied' && part.supplierName ? `<div style="margin-bottom:6px;font-size:0.85rem;color:#555">📦 Material from <strong>${part.supplierName}</strong></div>` : ''}
+          ${includePricing && part.partType !== 'fab_service' ? `<div style="margin-bottom:6px;font-size:0.85rem;color:#555">📦 Material supplied by: <strong>${part.materialSource === 'customer_supplied' ? (order.clientName || 'Customer') : 'Carolina Rolling Company'}</strong></div>` : ''}
           ${part.materialSource === 'customer_supplied' ? '<div style="font-size:0.85rem;color:#666;margin:4px 0"><em>Customer Supplied Material</em></div>' : ''}
           ${hasUniqueInstructions ? `
             <div style="margin-top:6px;white-space:pre-wrap;font-size:0.95rem;font-weight:600;color:#333">${specialInstr}</div>
