@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Upload, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
-import { searchVendors, getSettings } from '../services/api';
+import { searchVendors, getSettings, createVendor } from '../services/api';
 
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
@@ -443,7 +443,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid #ddd', borderRadius: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
                 {vendorSuggestions.map(function(v) { return <div key={v.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }} onMouseDown={function() { setPartData(Object.assign({}, partData, { vendorId: v.id, supplierName: v.name, _vendorSearch: undefined })); setShowVendorSuggestions(false); }}><strong>{v.name}</strong>{v.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{v.contactPhone}</span>}</div>; })}
                 {partData._vendorSearch && partData._vendorSearch.length >= 2 && !vendorSuggestions.some(function(v) { return v.name.toLowerCase() === (partData._vendorSearch || '').toLowerCase(); }) && (
-                  <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600 }} onMouseDown={async function() { try { var r = await fetch((process.env.REACT_APP_API_URL || '') + '/api/vendors', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') }, body: JSON.stringify({ name: partData._vendorSearch }) }); var d = await r.json(); if (d.data) { setPartData(Object.assign({}, partData, { vendorId: d.data.id, supplierName: d.data.name, _vendorSearch: undefined })); showMessage('Vendor "' + d.data.name + '" created'); } } catch(x) { setError('Failed to create vendor'); } setShowVendorSuggestions(false); }}>+ Add "{partData._vendorSearch}" as new vendor</div>
+                  <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600 }} onMouseDown={async function() { try { var resp = await createVendor({ name: partData._vendorSearch }); if (resp.data.data) { setPartData(Object.assign({}, partData, { vendorId: resp.data.data.id, supplierName: resp.data.data.name, _vendorSearch: undefined })); showMessage('Vendor "' + resp.data.data.name + '" created'); } } catch(x) { setError('Failed to create vendor'); } setShowVendorSuggestions(false); }}>+ Add "{partData._vendorSearch}" as new vendor</div>
                 )}
               </div>
             )}

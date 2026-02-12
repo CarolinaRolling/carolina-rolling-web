@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Upload } from 'lucide-react';
-import { searchVendors, getSettings } from '../services/api';
+import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 
 const THICKNESS_OPTIONS = [
@@ -446,9 +446,8 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
                   <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600 }}
                     onMouseDown={async () => {
                       try {
-                        const res = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/vendors`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` }, body: JSON.stringify({ name: partData._vendorSearch }) });
-                        const data = await res.json();
-                        if (data.data) { setPartData({ ...partData, vendorId: data.data.id, supplierName: data.data.name, _vendorSearch: undefined }); showMessage(`Vendor "${data.data.name}" created`); }
+                        const resp = await createVendor({ name: partData._vendorSearch });
+                        if (resp.data.data) { setPartData({ ...partData, vendorId: resp.data.data.id, supplierName: resp.data.data.name, _vendorSearch: undefined }); showMessage(`Vendor "${resp.data.data.name}" created`); }
                       } catch { setError('Failed to create vendor'); }
                       setShowVendorSuggestions(false);
                     }}>

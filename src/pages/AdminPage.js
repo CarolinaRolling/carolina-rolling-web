@@ -85,6 +85,11 @@ function AdminPage() {
   const [materialGrades, setMaterialGrades] = useState([]);
   const [materialGradesSaving, setMaterialGradesSaving] = useState(false);
 
+  // Weld rates
+  const [weldRates, setWeldRates] = useState([{ grade: 'A36', rate: '' }, { grade: '304 S/S', rate: '' }, { grade: '316 S/S', rate: '' }]);
+  const [weldDefaultRate, setWeldDefaultRate] = useState('');
+  const [weldRatesSaving, setWeldRatesSaving] = useState(false);
+
   useEffect(() => {
     if (!isAdmin()) {
       navigate('/inventory');
@@ -107,6 +112,8 @@ function AdminPage() {
       loadMandrelDies();
     } else if (activeTab === 'grades') {
       loadMaterialGrades();
+    } else if (activeTab === 'weldrates') {
+      loadWeldRates();
     } else if (activeTab === 'system') {
       setSystemLogs([...window.nasErrorLog]);
       setLoading(false);
@@ -295,6 +302,34 @@ function AdminPage() {
       setSuccess('Material grades saved'); setTimeout(() => setSuccess(null), 3000);
     } catch { setError('Failed to save material grades'); }
     finally { setMaterialGradesSaving(false); }
+  };
+
+  const loadWeldRates = async () => {
+    try {
+      setLoading(true);
+      const resp = await getSettings('weld_rates');
+      if (resp.data.data?.value) {
+        const val = resp.data.data.value;
+        // Convert from { grade: rate, ... } to array format
+        const defaultRate = val['default'] || '';
+        const entries = Object.entries(val).filter(([k]) => k !== 'default').map(([grade, rate]) => ({ grade, rate: rate.toString() }));
+        if (entries.length > 0) setWeldRates(entries);
+        setWeldDefaultRate(defaultRate.toString());
+      }
+    } catch {}
+    finally { setLoading(false); }
+  };
+
+  const handleSaveWeldRates = async () => {
+    try {
+      setWeldRatesSaving(true); setError(null);
+      const rateObj = {};
+      weldRates.forEach(r => { if (r.grade && r.rate) rateObj[r.grade] = parseFloat(r.rate); });
+      if (weldDefaultRate) rateObj['default'] = parseFloat(weldDefaultRate);
+      await updateSettings('weld_rates', rateObj);
+      setSuccess('Weld rates saved'); setTimeout(() => setSuccess(null), 3000);
+    } catch { setError('Failed to save weld rates'); }
+    finally { setWeldRatesSaving(false); }
   };
 
   const loadScheduleEmailSettings = async () => {
@@ -585,6 +620,12 @@ function AdminPage() {
           onClick={() => setActiveTab('grades')}
         >
           📊 Material Grades
+        </button>
+        <button 
+          className={`tab ${activeTab === 'weldrates' ? 'active' : ''}`}
+          onClick={() => setActiveTab('weldrates')}
+        >
+          🔥 Weld Rates
         </button>
         <button 
           className={`tab ${activeTab === 'schedule' ? 'active' : ''}`}
@@ -1047,6 +1088,69 @@ function AdminPage() {
               <strong>How it works:</strong> Material grades defined here will appear as dropdown options in the part forms.
               Each grade can be assigned to specific part types. Yield and tensile strength are stored as reference data.
               The grade dropdown in each form will show only grades assigned to that part type, plus a "Custom" option.
+            </div>
+          </div>
+        </div>
+
+      ) : activeTab === 'weldrates' ? (
+        <div>
+          <div className="card">
+            <h3 style={{ marginBottom: 16 }}>🔥 Weld Rates (Price Per Foot)</h3>
+            <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: 16 }}>
+              Set default welding price per foot by material grade. These rates auto-fill when creating Fabrication Service line items.
+            </p>
+            <div style={{ marginBottom: 16, padding: 12, background: '#f0f7ff', borderRadius: 8, border: '1px solid #bbdefb' }}>
+              <label style={{ fontWeight: 600, fontSize: '0.9rem', display: 'block', marginBottom: 6 }}>Default Rate (fallback for unlisted grades)</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontWeight: 600 }}>$</span>
+                <input type="number" step="0.01" className="form-input" style={{ maxWidth: 120 }}
+                  value={weldDefaultRate} onChange={(e) => setWeldDefaultRate(e.target.value)} placeholder="0.00" />
+                <span style={{ color: '#666', fontSize: '0.85rem' }}>/ ft</span>
+              </div>
+            </div>
+            <table className="data-table" style={{ marginBottom: 16 }}>
+              <thead>
+                <tr>
+                  <th>Material Grade</th>
+                  <th>Price Per Foot</th>
+                  <th style={{ width: 60 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {weldRates.map((row, idx) => (
+                  <tr key={idx}>
+                    <td>
+                      <input className="form-input" value={row.grade} style={{ fontSize: '0.9rem' }}
+                        onChange={(e) => { const nr = [...weldRates]; nr[idx].grade = e.target.value; setWeldRates(nr); }}
+                        placeholder="e.g. A36" />
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontWeight: 600 }}>$</span>
+                        <input type="number" step="0.01" className="form-input" value={row.rate} style={{ fontSize: '0.9rem' }}
+                          onChange={(e) => { const nr = [...weldRates]; nr[idx].rate = e.target.value; setWeldRates(nr); }}
+                          placeholder="0.00" />
+                        <span style={{ color: '#666', fontSize: '0.85rem' }}>/ft</span>
+                      </div>
+                    </td>
+                    <td>
+                      <button onClick={() => setWeldRates(weldRates.filter((_, i) => i !== idx))}
+                        style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button className="btn btn-sm" style={{ background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7' }}
+                onClick={() => setWeldRates([...weldRates, { grade: '', rate: '' }])}>+ Add Grade</button>
+              <button className="btn btn-primary" onClick={handleSaveWeldRates} disabled={weldRatesSaving}>
+                {weldRatesSaving ? 'Saving...' : 'Save Weld Rates'}
+              </button>
+            </div>
+            <div style={{ marginTop: 20, padding: 12, background: '#fff8e1', borderRadius: 8, fontSize: '0.85rem', color: '#666', border: '1px solid #ffe082' }}>
+              <strong>Weld formula:</strong> (Thickness ÷ 0.125) × (Seam Length ÷ 2) × Price Per Foot<br/>
+              <em>Example: 3/8" plate, 60" seam, $5.00/ft → (0.375 ÷ 0.125) × (60 ÷ 2) × $5.00 = 3 × 30 × $5 = $450.00</em>
             </div>
           </div>
         </div>

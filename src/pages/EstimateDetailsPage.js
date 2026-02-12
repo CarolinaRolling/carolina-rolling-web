@@ -11,6 +11,8 @@ import {
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
+import FlatStockForm from '../components/FlatStockForm';
+import FabServiceForm from '../components/FabServiceForm';
 import PipeRollForm from '../components/PipeRollForm';
 import SquareTubeRollForm from '../components/SquareTubeRollForm';
 import FlatBarRollForm from '../components/FlatBarRollForm';
@@ -31,7 +33,8 @@ const PART_TYPES = {
   beam_roll: { label: 'Beam', icon: '🏗️', desc: 'I-beam and H-beam rolling' },
   tee_bar: { label: 'Tee Bars', icon: '🇹', desc: 'Structural tee rolling' },
   press_brake: { label: 'Press Brake', icon: '⏏️', desc: 'Press brake forming from print' },
-  flat_stock: { label: 'Flat Stock', icon: '📄', desc: 'Flat material cut to custom print' },
+  flat_stock: { label: 'Flat Stock', icon: '📄', desc: 'Ship flat — plate, angle, tube, channel, beam (no rolling)' },
+  fab_service: { label: 'Fabrication Service', icon: '🔥', desc: 'Welding, fitting, cut-to-fit — links to another part' },
   other: { label: 'Other', icon: '📦', desc: 'Custom or miscellaneous parts' }
 };
 
@@ -180,7 +183,7 @@ function EstimateDetailsPage() {
 
   const calculatePartTotal = (part) => {
     // Per-each pricing: (mat cost × markup + labor) × qty
-    if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'].includes(part.partType)) {
+    if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType)) {
       const qty = parseInt(part.quantity) || 1;
       const materialCost = parseFloat(part.materialTotal) || 0;
       const materialMarkup = parseFloat(part.materialMarkupPercent) || 0;
@@ -355,7 +358,7 @@ function EstimateDetailsPage() {
     let highestMinimum = 0;
     let highestMinRule = null;
 
-    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'];
+    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'];
 
     parts.forEach(part => {
       if (!EA_PRICED.includes(part.partType)) return;
@@ -390,7 +393,7 @@ function EstimateDetailsPage() {
     
     parts.forEach(part => {
       const calc = calculatePartTotal(part);
-      if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'].includes(part.partType)) {
+      if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType)) {
         eaPricedTotal += calc.partTotal;
       } else {
         partsSubtotal += calc.partTotal;
@@ -576,7 +579,12 @@ function EstimateDetailsPage() {
     }
 
     if (partData.partType === 'flat_stock') {
-      if (!partData.thickness) warnings.push('Thickness is required');
+      if (!partData._stockType) warnings.push('Stock type is required');
+      if (partData._stockType === 'plate' && !partData.thickness) warnings.push('Thickness is required');
+      if (partData._stockType === 'angle' && !partData._angleSize) warnings.push('Angle size is required');
+      if (partData._stockType === 'square_tube' && !partData._tubeSize) warnings.push('Tube size is required');
+      if (partData._stockType === 'channel' && !partData._channelSize) warnings.push('Channel size is required');
+      if (partData._stockType === 'beam' && !partData._beamSize) warnings.push('Beam size is required');
     }
     
     if (partData.partType === 'angle_roll') {
@@ -652,6 +660,11 @@ function EstimateDetailsPage() {
       if (!partData._coneHeight) warnings.push('Cone height is required');
       if (parseFloat(partData._coneLargeDia) <= parseFloat(partData._coneSmallDia)) warnings.push('Large diameter must be greater than small diameter');
     }
+
+    if (partData.partType === 'fab_service') {
+      if (!partData._serviceType) warnings.push('Service type is required');
+      if (!partData._linkedPartId) warnings.push('A linked part must be selected');
+    }
     
     // Generic validations for all types
     if (!partData.quantity || parseInt(partData.quantity) < 1) warnings.push('Quantity must be at least 1');
@@ -679,7 +692,7 @@ function EstimateDetailsPage() {
       if (!dataToSend.rollType) dataToSend.rollType = null;
       
       // Recalculate partTotal at save time to avoid useEffect timing issues
-      const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'];
+      const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'];
       if (EA_PRICED.includes(dataToSend.partType)) {
         const qty = parseInt(dataToSend.quantity) || 1;
         const matCost = parseFloat(dataToSend.materialTotal) || 0;
@@ -808,7 +821,7 @@ function EstimateDetailsPage() {
     const totals = calculateTotals();
     const partsHtml = parts.map(part => {
       const calc = calculatePartTotal(part);
-      const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'].includes(part.partType);
+      const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType);
       const markup = parseFloat(part.materialMarkupPercent) || 0;
       const pricingHtml = isEaPricing
         ? `<table style="width:100%;margin-top:8px;">
@@ -1136,7 +1149,7 @@ function EstimateDetailsPage() {
                   </div>
 
                   {/* Material Section - only show if we supply material (old part types) */}
-                  {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'].includes(part.partType) && part.weSupplyMaterial && part.materialDescription && (
+                  {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType) && part.weSupplyMaterial && part.materialDescription && (
                     <div style={{ background: '#fff3e0', borderRadius: 8, padding: 12, marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <strong>📦 We Supply Material</strong>
@@ -1155,7 +1168,7 @@ function EstimateDetailsPage() {
                   )}
 
                   {/* Costs Section - ea pricing */}
-                  {['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'].includes(part.partType) ? (
+                  {['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType) ? (
                     <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
                       {part.materialDescription && (
                         <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
@@ -1591,7 +1604,7 @@ function EstimateDetailsPage() {
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
 
               {/* Common fields for all part types (plate_roll, angle_roll, flat_stock have their own) */}
-              {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'cone_roll', 'tee_bar', 'press_brake'].includes(partData.partType) && (
+              {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'cone_roll', 'tee_bar', 'press_brake', 'fab_service'].includes(partData.partType) && (
               <div className="grid grid-2" style={{ marginBottom: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Client Part Number</label>
@@ -1607,7 +1620,20 @@ function EstimateDetailsPage() {
               )}
 
               {/* Type-specific form */}
-              {(partData.partType === 'plate_roll' || partData.partType === 'flat_stock') ? (
+              {partData.partType === 'flat_stock' ? (
+                <div className="grid grid-2">
+                  <FlatStockForm
+                    partData={partData}
+                    setPartData={setPartData}
+                    vendorSuggestions={vendorSuggestions}
+                    setVendorSuggestions={setVendorSuggestions}
+                    showVendorSuggestions={showVendorSuggestions}
+                    setShowVendorSuggestions={setShowVendorSuggestions}
+                    showMessage={showMessage}
+                    setError={setError}
+                  />
+                </div>
+              ) : partData.partType === 'plate_roll' ? (
                 <div className="grid grid-2">
                   <PlateRollForm
                     partData={partData}
@@ -1737,8 +1763,17 @@ function EstimateDetailsPage() {
                     setError={setError}
                   />
                 </div>
+              ) : partData.partType === 'fab_service' ? (
+                <div className="grid grid-2">
+                  <FabServiceForm
+                    partData={partData}
+                    setPartData={setPartData}
+                    estimateParts={parts}
+                    showMessage={showMessage}
+                    setError={setError}
+                  />
+                </div>
               ) : (
-                /* Generic form for all other part types */
                 <div>
             <div className="grid grid-2">
               <div className="form-group">
