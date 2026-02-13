@@ -143,6 +143,7 @@ const ClientsVendorsPage = () => {
             permitLastVerified: result.verifiedDate,
             permitRawResponse: result.rawResponse,
             permitOwnerName: result.ownerName || '',
+            permitDbaName: result.dbaName || '',
             _permitRawFields: result.rawFields || {},
             _permitLabelMap: result.labelMap || {}
           }));
@@ -524,20 +525,34 @@ const ClientsVendorsPage = () => {
                           "{formData.permitRawResponse}"
                         </div>
                       )}
-                      {formData.permitOwnerName && (
+                      {(formData.permitOwnerName || formData.permitDbaName) && (
                         <div style={{ marginTop: 6 }}>
-                          <div style={{ fontSize: '0.8rem', color: '#555' }}>
-                            <strong>CDTFA Owner:</strong> {formData.permitOwnerName}
-                          </div>
+                          {formData.permitOwnerName && (
+                            <div style={{ fontSize: '0.8rem', color: '#555' }}>
+                              <strong>CDTFA Owner:</strong> {formData.permitOwnerName}
+                            </div>
+                          )}
+                          {formData.permitDbaName && (
+                            <div style={{ fontSize: '0.8rem', color: '#555', marginTop: 2 }}>
+                              <strong>DBA:</strong> {formData.permitDbaName}
+                            </div>
+                          )}
                           {(() => {
-                            const ownerLower = (formData.permitOwnerName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                            const clientLower = (formData.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                            const mismatch = ownerLower && clientLower && !ownerLower.includes(clientLower) && !clientLower.includes(ownerLower);
-                            return mismatch ? (
-                              <div style={{ marginTop: 4, padding: '4px 8px', background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 4, fontSize: '0.75rem', color: '#e65100', fontWeight: 600 }}>
-                                ⚠️ Name mismatch — Client: "{formData.name}" vs CDTFA Owner: "{formData.permitOwnerName}"
-                              </div>
-                            ) : null;
+                            const clean = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                            const clientLower = clean(formData.name);
+                            const ownerLower = clean(formData.permitOwnerName);
+                            const dbaLower = clean(formData.permitDbaName);
+                            if (!clientLower) return null;
+                            const matchesOwner = ownerLower && (ownerLower.includes(clientLower) || clientLower.includes(ownerLower));
+                            const matchesDba = dbaLower && (dbaLower.includes(clientLower) || clientLower.includes(dbaLower));
+                            if (!matchesOwner && !matchesDba && (ownerLower || dbaLower)) {
+                              return (
+                                <div style={{ marginTop: 4, padding: '4px 8px', background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 4, fontSize: '0.75rem', color: '#e65100', fontWeight: 600 }}>
+                                  ⚠️ Name mismatch — Client: "{formData.name}"{ownerLower ? ` vs Owner: "${formData.permitOwnerName}"` : ''}{dbaLower ? ` vs DBA: "${formData.permitDbaName}"` : ''}
+                                </div>
+                              );
+                            }
+                            return null;
                           })()}
                         </div>
                       )}

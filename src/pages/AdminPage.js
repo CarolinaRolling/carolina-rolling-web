@@ -1559,13 +1559,19 @@ function AdminPage() {
                           {r.rawResponse || r.error || '—'}
                         </td>
                         <td style={{ padding: '8px', fontSize: '0.8rem' }}>
-                          {r.ownerName ? (
+                          {(r.ownerName || r.dbaName) ? (
                             <div>
-                              <span>{r.ownerName}</span>
+                              {r.ownerName && <div>{r.ownerName}</div>}
+                              {r.dbaName && <div style={{ color: '#888', fontSize: '0.75rem' }}>DBA: {r.dbaName}</div>}
                               {(() => {
-                                const oLow = (r.ownerName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                                const cLow = (r.clientName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                                return oLow && cLow && !oLow.includes(cLow) && !cLow.includes(oLow) ? (
+                                const clean = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                                const cLow = clean(r.clientName);
+                                const oLow = clean(r.ownerName);
+                                const dLow = clean(r.dbaName);
+                                if (!cLow) return null;
+                                const matchesOwner = oLow && (oLow.includes(cLow) || cLow.includes(oLow));
+                                const matchesDba = dLow && (dLow.includes(cLow) || cLow.includes(dLow));
+                                return (!matchesOwner && !matchesDba && (oLow || dLow)) ? (
                                   <div style={{ color: '#e65100', fontWeight: 600, fontSize: '0.75rem', marginTop: 2 }}>⚠️ Name mismatch</div>
                                 ) : null;
                               })()}
