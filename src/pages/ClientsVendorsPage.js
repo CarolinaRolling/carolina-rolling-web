@@ -142,7 +142,8 @@ const ClientsVendorsPage = () => {
             permitStatus: result.status,
             permitLastVerified: result.verifiedDate,
             permitRawResponse: result.rawResponse,
-            permitOwnerName: result.ownerName || ''
+            permitOwnerName: result.ownerName || '',
+            _permitRawFields: result.rawFields || {}
           }));
         }
         showMessage(`Permit verified: ${result.status.toUpperCase()}${result.rawResponse ? ' — ' + result.rawResponse : ''}`);
@@ -546,6 +547,15 @@ const ClientsVendorsPage = () => {
                       {verifying ? '⏳ Verifying...' : '🔍 Verify Now'}
                     </button>
                   </div>
+                  {/* DEBUG: Raw CDTFA fields — remove after fixing owner name */}
+                  {formData._permitRawFields && Object.keys(formData._permitRawFields).length > 0 && (
+                    <details style={{ marginTop: 8, fontSize: '0.7rem', color: '#888' }}>
+                      <summary style={{ cursor: 'pointer', fontWeight: 600 }}>🔧 Debug: Raw CDTFA Fields (click to expand)</summary>
+                      <pre style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', marginTop: 4 }}>
+                        {JSON.stringify(formData._permitRawFields, null, 2)}
+                      </pre>
+                    </details>
+                  )}
                 </div>
               )}
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
