@@ -1184,48 +1184,11 @@ function EstimateDetailsPage() {
                           )}
                         </div>
                       )}
-                      {/* Material line (after markup) */}
+                      {/* Material line (after markup + rounding) */}
                       {(calc.materialEach || 0) > 0 && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
                           <span>Material</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            {calc.materialEachRaw !== calc.materialEach && (
-                              <span style={{ textDecoration: 'line-through', color: '#999', fontSize: '0.8rem' }}>{formatCurrency(calc.materialEachRaw)}</span>
-                            )}
-                            <strong>{formatCurrency(calc.materialEach)}</strong>
-                          </div>
-                        </div>
-                      )}
-                      {/* Rounding buttons */}
-                      {(calc.materialEach || 0) > 0 && part.partType !== 'fab_service' && (
-                        <div style={{ display: 'flex', gap: 4, padding: '4px 0 6px', borderBottom: '1px solid #eee' }}>
-                          {[
-                            { key: 'none', label: 'No Round', color: '#757575' },
-                            { key: 'dollar', label: '↑ $1', color: '#1976d2' },
-                            { key: 'five', label: '↑ $5', color: '#7b1fa2' }
-                          ].map(opt => {
-                            const isActive = (part._materialRounding || 'none') === opt.key;
-                            return (
-                              <button key={opt.key} onClick={async () => {
-                                try {
-                                  const updatedPart = { ...part, _materialRounding: opt.key };
-                                  const recalcEach = roundUpMaterial(calc.materialEachRaw, opt.key);
-                                  const recalcTotal = ((recalcEach + calc.laborEach) * calc.qty).toFixed(2);
-                                  await updateEstimatePart(id, part.id, { _materialRounding: opt.key, partTotal: recalcTotal });
-                                  await loadEstimate();
-                                } catch (e) { console.error(e); }
-                              }}
-                              style={{
-                                padding: '2px 8px', fontSize: '0.7rem', borderRadius: 4, cursor: 'pointer',
-                                border: isActive ? `2px solid ${opt.color}` : '1px solid #ccc',
-                                background: isActive ? (opt.color + '18') : '#fff',
-                                color: isActive ? opt.color : '#666',
-                                fontWeight: isActive ? 700 : 400
-                              }}>
-                                {opt.label}
-                              </button>
-                            );
-                          })}
+                          <strong>{formatCurrency(calc.materialEach)}</strong>
                         </div>
                       )}
                       {/* Rolling/Labor line */}

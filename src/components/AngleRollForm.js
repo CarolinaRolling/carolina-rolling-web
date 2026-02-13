@@ -258,7 +258,9 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
   const qty = parseInt(partData.quantity) || 1;
   const materialCost = parseFloat(partData.materialTotal) || 0;
   const materialMarkup = parseFloat(partData.materialMarkupPercent) || 0;
-  const materialEach = materialCost * (1 + materialMarkup / 100);
+  const materialEachRaw = materialCost * (1 + materialMarkup / 100);
+  const rounding = partData._materialRounding || 'none';
+  const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
   const laborEach = parseFloat(partData.laborTotal) || 0;
   const unitPrice = materialEach + laborEach;
   const lineTotal = unitPrice * qty;
@@ -697,11 +699,22 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
           </div>
           {materialMarkup > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#e65100' }}>
             <span>+ Markup ({materialMarkup}%)</span>
-            <span>${(materialEach - materialCost).toFixed(2)}</span>
+            <span>${(materialEachRaw - materialCost).toFixed(2)}</span>
           </div>}
           {materialMarkup > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555', fontWeight: 600 }}>
             <span>Material w/ Markup</span>
-            <span>${materialEach.toFixed(2)}</span>
+            <span>{materialEachRaw !== materialEach && <span style={{ textDecoration: 'line-through', color: '#999', marginRight: 4, fontSize: '0.8rem' }}>${materialEachRaw.toFixed(2)}</span>}${materialEach.toFixed(2)}</span>
+          </div>}
+          {materialMarkup > 0 && <div style={{ display: 'flex', gap: 4, padding: '4px 0 2px' }}>
+            <span style={{ fontSize: '0.75rem', color: '#888', alignSelf: 'center' }}>Round up:</span>
+            {[{k:'none',l:'None'},{k:'dollar',l:'↑ $1'},{k:'five',l:'↑ $5'}].map(o => (
+              <button key={o.k} type="button" onClick={() => setPartData(prev => ({ ...prev, _materialRounding: o.k }))}
+                style={{ padding: '2px 8px', fontSize: '0.7rem', borderRadius: 4, cursor: 'pointer',
+                  border: (partData._materialRounding || 'none') === o.k ? '2px solid #1976d2' : '1px solid #ccc',
+                  background: (partData._materialRounding || 'none') === o.k ? '#e3f2fd' : '#fff',
+                  color: (partData._materialRounding || 'none') === o.k ? '#1976d2' : '#666',
+                  fontWeight: (partData._materialRounding || 'none') === o.k ? 700 : 400 }}>{o.l}</button>
+            ))}
           </div>}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
             <span>Labor (ea)</span>
