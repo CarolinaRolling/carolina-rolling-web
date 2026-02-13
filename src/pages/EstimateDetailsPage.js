@@ -181,17 +181,26 @@ function EstimateDetailsPage() {
     }
   };
 
+  // Round up material cost after markup
+  const roundUpMaterial = (value, rounding) => {
+    if (!rounding || rounding === 'none' || value <= 0) return value;
+    if (rounding === 'dollar') return Math.ceil(value);
+    if (rounding === 'five') return Math.ceil(value / 5) * 5;
+    return value;
+  };
+
   const calculatePartTotal = (part) => {
     // Per-each pricing: (mat cost × markup + labor) × qty
     if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType)) {
       const qty = parseInt(part.quantity) || 1;
       const materialCost = parseFloat(part.materialTotal) || 0;
       const materialMarkup = parseFloat(part.materialMarkupPercent) || 0;
-      const materialEach = materialCost * (1 + materialMarkup / 100);
+      const materialEachRaw = materialCost * (1 + materialMarkup / 100);
+      const materialEach = roundUpMaterial(materialEachRaw, part._materialRounding);
       const laborEach = parseFloat(part.laborTotal) || 0;
       const unitPrice = materialEach + laborEach;
       const partTotal = unitPrice * qty;
-      return { materialCost, materialMarkup, materialEach, laborEach, unitPrice, qty, partTotal };
+      return { materialCost, materialMarkup, materialEachRaw, materialEach, laborEach, unitPrice, qty, partTotal };
     }
     
     const qty = parseInt(part.quantity) || 1;
@@ -365,7 +374,8 @@ function EstimateDetailsPage() {
       const laborEach = parseFloat(part.laborTotal) || 0;
       const materialCost = parseFloat(part.materialTotal) || 0;
       const materialMarkup = parseFloat(part.materialMarkupPercent) || 0;
-      const materialEach = materialCost * (1 + materialMarkup / 100);
+      const materialEachRaw = materialCost * (1 + materialMarkup / 100);
+      const materialEach = roundUpMaterial(materialEachRaw, part._materialRounding);
       const qty = parseInt(part.quantity) || 1;
       totalLabor += laborEach * qty;
       totalMaterial += materialEach * qty;
@@ -697,7 +707,8 @@ function EstimateDetailsPage() {
         const qty = parseInt(dataToSend.quantity) || 1;
         const matCost = parseFloat(dataToSend.materialTotal) || 0;
         const matMarkup = parseFloat(dataToSend.materialMarkupPercent) || 0;
-        const matEach = matCost * (1 + matMarkup / 100);
+        const matEachRaw = matCost * (1 + matMarkup / 100);
+        const matEach = roundUpMaterial(matEachRaw, dataToSend._materialRounding);
         const labEach = parseFloat(dataToSend.laborTotal) || 0;
         dataToSend.partTotal = ((matEach + labEach) * qty).toFixed(2);
       }
@@ -822,12 +833,10 @@ function EstimateDetailsPage() {
     const partsHtml = parts.map(part => {
       const calc = calculatePartTotal(part);
       const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType);
-      const markup = parseFloat(part.materialMarkupPercent) || 0;
       const pricingHtml = isEaPricing
         ? `<table style="width:100%;margin-top:8px;">
-            <tr><td>Material Cost (ea):</td><td style="text-align:right;">${formatCurrency(part.materialTotal)}</td></tr>
-            ${markup > 0 ? `<tr style="color:#e65100;"><td>+ Markup (${markup}%):</td><td style="text-align:right;">${formatCurrency(calc.materialEach - (parseFloat(part.materialTotal) || 0))}</td></tr>` : ''}
-            <tr><td>Labor (ea):</td><td style="text-align:right;">${formatCurrency(part.laborTotal)}</td></tr>
+            ${calc.materialEach > 0 ? `<tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialEach)}</td></tr>` : ''}
+            <tr><td>${part.partType === 'fab_service' ? 'Service' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}:</td><td style="text-align:right;">${formatCurrency(calc.laborEach)}</td></tr>
             <tr style="border-top:1px solid #ddd;"><td><strong>Unit Price:</strong></td><td style="text-align:right;"><strong>${formatCurrency(calc.unitPrice)}</strong></td></tr>
             <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Line Total (${part.quantity} × ${formatCurrency(calc.unitPrice)}):</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`
         : `<table style="width:100%;margin-top:8px;"><tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialTotal)}</td></tr>
@@ -1169,25 +1178,60 @@ function EstimateDetailsPage() {
                         <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
                           📦 {part.materialDescription}
                           {part.partType !== 'fab_service' && (
-                            <span style={{ marginLeft: 8, background: '#e8f5e9', padding: '2px 6px', borderRadius: 4, fontSize: '0.75rem', color: '#2e7d32' }}>
+                            <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>
                               {part._materialSource === 'we_order' || part.weSupplyMaterial ? 'Material supplied by: Carolina Rolling Company' : `Material supplied by: ${formData.clientName || 'Customer'}`}
-                            </span>
+                            </div>
                           )}
                         </div>
                       )}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
-                        <span>Material Cost (ea)</span>
-                        <span>{formatCurrency(calc.materialCost || part.materialTotal)}</span>
-                      </div>
-                      {(calc.materialMarkup || parseFloat(part.materialMarkupPercent) || 0) > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#e65100' }}>
-                          <span>+ Markup ({calc.materialMarkup || part.materialMarkupPercent}%)</span>
-                          <span>{formatCurrency((calc.materialEach || 0) - (calc.materialCost || parseFloat(part.materialTotal) || 0))}</span>
+                      {/* Material line (after markup) */}
+                      {(calc.materialEach || 0) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
+                          <span>Material</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {calc.materialEachRaw !== calc.materialEach && (
+                              <span style={{ textDecoration: 'line-through', color: '#999', fontSize: '0.8rem' }}>{formatCurrency(calc.materialEachRaw)}</span>
+                            )}
+                            <strong>{formatCurrency(calc.materialEach)}</strong>
+                          </div>
                         </div>
                       )}
+                      {/* Rounding buttons */}
+                      {(calc.materialEach || 0) > 0 && part.partType !== 'fab_service' && (
+                        <div style={{ display: 'flex', gap: 4, padding: '4px 0 6px', borderBottom: '1px solid #eee' }}>
+                          {[
+                            { key: 'none', label: 'No Round', color: '#757575' },
+                            { key: 'dollar', label: '↑ $1', color: '#1976d2' },
+                            { key: 'five', label: '↑ $5', color: '#7b1fa2' }
+                          ].map(opt => {
+                            const isActive = (part._materialRounding || 'none') === opt.key;
+                            return (
+                              <button key={opt.key} onClick={async () => {
+                                try {
+                                  const updatedPart = { ...part, _materialRounding: opt.key };
+                                  const recalcEach = roundUpMaterial(calc.materialEachRaw, opt.key);
+                                  const recalcTotal = ((recalcEach + calc.laborEach) * calc.qty).toFixed(2);
+                                  await updateEstimatePart(id, part.id, { _materialRounding: opt.key, partTotal: recalcTotal });
+                                  await loadEstimate();
+                                } catch (e) { console.error(e); }
+                              }}
+                              style={{
+                                padding: '2px 8px', fontSize: '0.7rem', borderRadius: 4, cursor: 'pointer',
+                                border: isActive ? `2px solid ${opt.color}` : '1px solid #ccc',
+                                background: isActive ? (opt.color + '18') : '#fff',
+                                color: isActive ? opt.color : '#666',
+                                fontWeight: isActive ? 700 : 400
+                              }}>
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {/* Rolling/Labor line */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
-                        <span>Labor (ea)</span>
-                        <span>{formatCurrency(part.laborTotal)}</span>
+                        <span>{part.partType === 'fab_service' ? 'Service' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}</span>
+                        <strong>{formatCurrency(calc.laborEach)}</strong>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #ddd', marginTop: 4, fontWeight: 600 }}>
                         <span>Unit Price</span>
