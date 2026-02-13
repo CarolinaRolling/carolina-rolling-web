@@ -143,7 +143,8 @@ const ClientsVendorsPage = () => {
             permitLastVerified: result.verifiedDate,
             permitRawResponse: result.rawResponse,
             permitOwnerName: result.ownerName || '',
-            _permitRawFields: result.rawFields || {}
+            _permitRawFields: result.rawFields || {},
+            _permitLabelMap: result.labelMap || {}
           }));
         }
         showMessage(`Permit verified: ${result.status.toUpperCase()}${result.rawResponse ? ' — ' + result.rawResponse : ''}`);
@@ -551,6 +552,14 @@ const ClientsVendorsPage = () => {
                   {formData._permitRawFields && Object.keys(formData._permitRawFields).length > 0 && (
                     <details style={{ marginTop: 8, fontSize: '0.7rem', color: '#888' }}>
                       <summary style={{ cursor: 'pointer', fontWeight: 600 }}>🔧 Debug: Raw CDTFA Fields (click to expand)</summary>
+                      {formData._permitLabelMap && Object.keys(formData._permitLabelMap).length > 0 && (
+                        <div style={{ background: '#e8f5e9', padding: 8, borderRadius: 4, marginTop: 4, marginBottom: 4 }}>
+                          <strong>Label → Value Map:</strong>
+                          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>
+                            {JSON.stringify(formData._permitLabelMap, null, 2)}
+                          </pre>
+                        </div>
+                      )}
                       <pre style={{ background: '#f5f5f5', padding: 8, borderRadius: 4, maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', marginTop: 4 }}>
                         {JSON.stringify(formData._permitRawFields, null, 2)}
                       </pre>
