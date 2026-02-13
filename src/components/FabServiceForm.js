@@ -178,10 +178,12 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
     if (!serviceConfig || !serviceConfig.hasWeldCalc || !partInfo) return null;
     const thickness = partInfo.thickness;
     if (thickness <= 0 || seamLength <= 0 || weldPricePerFoot <= 0) return null;
-    const passes = thickness / 0.125;
-    const seamFeet = seamLength / 12;
+    const passesRaw = thickness / 0.125;
+    const passes = Math.ceil(passesRaw);
+    const seamFeetRaw = seamLength / 12;
+    const seamFeet = Math.ceil(seamFeetRaw);
     const total = passes * seamFeet * weldPricePerFoot;
-    return { passes: passes, seamFeet: seamFeet, total: total, thickness: thickness, seamLength: seamLength, pricePerFoot: weldPricePerFoot };
+    return { passesRaw: passesRaw, passes: passes, seamFeetRaw: seamFeetRaw, seamFeet: seamFeet, total: total, thickness: thickness, seamLength: seamLength, pricePerFoot: weldPricePerFoot };
   }, [serviceConfig, partInfo, seamLength, weldPricePerFoot]);
 
   // Description
@@ -381,11 +383,11 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
               <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: '#333', lineHeight: 1.8 }}>
                 <div>
                   <span style={{ color: '#888' }}>Passes:</span>{' '}
-                  {weldCalc.thickness.toFixed(4)}" ÷ 0.125" = <strong>{weldCalc.passes.toFixed(2)} passes</strong>
+                  {weldCalc.thickness.toFixed(4)}" ÷ 0.125" = {weldCalc.passesRaw % 1 !== 0 ? <>{weldCalc.passesRaw.toFixed(2)} → <strong>↑ {weldCalc.passes} passes</strong></> : <strong>{weldCalc.passes} passes</strong>}
                 </div>
                 <div>
                   <span style={{ color: '#888' }}>Seam (ft):</span>{' '}
-                  {weldCalc.seamLength.toFixed(2)}" ÷ 12 = <strong>{weldCalc.seamFeet.toFixed(2)} ft</strong>
+                  {weldCalc.seamLength.toFixed(2)}" ÷ 12 = {weldCalc.seamFeetRaw.toFixed(2)} ft → <strong>↑ {weldCalc.seamFeet} ft</strong>
                 </div>
                 <div>
                   <span style={{ color: '#888' }}>Rate:</span>{' '}
@@ -393,7 +395,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
                 </div>
                 <div style={{ borderTop: '1px solid #ef9a9a', marginTop: 8, paddingTop: 8, fontSize: '1rem' }}>
                   <span style={{ color: '#888' }}>Formula:</span>{' '}
-                  {weldCalc.passes.toFixed(2)} × {weldCalc.seamFeet.toFixed(2)} × ${weldCalc.pricePerFoot.toFixed(2)} ={' '}
+                  {weldCalc.passes} × {weldCalc.seamFeet} × ${weldCalc.pricePerFoot.toFixed(2)} ={' '}
                   <strong style={{ color: '#c62828', fontSize: '1.15rem' }}>${weldCalc.total.toFixed(2)}</strong>
                   <span style={{ color: '#888', fontSize: '0.8rem', marginLeft: 8 }}>(per piece)</span>
                 </div>

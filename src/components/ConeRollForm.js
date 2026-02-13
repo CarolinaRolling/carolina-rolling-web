@@ -139,8 +139,10 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   var [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
   var [largeDia, setLargeDia] = useState(partData._coneLargeDia || '');
   var [largeDiaType, setLargeDiaType] = useState(partData._coneLargeDiaType || 'inside');
+  var [largeDiaMeasure, setLargeDiaMeasure] = useState(partData._coneLargeDiaMeasure || 'diameter');
   var [smallDia, setSmallDia] = useState(partData._coneSmallDia || '');
   var [smallDiaType, setSmallDiaType] = useState(partData._coneSmallDiaType || 'inside');
+  var [smallDiaMeasure, setSmallDiaMeasure] = useState(partData._coneSmallDiaMeasure || 'diameter');
   var [coneHeight, setConeHeight] = useState(partData._coneHeight || '');
   var [showAdvanced, setShowAdvanced] = useState(!!(partData._coneShowAdvanced));
   var [radialSegments, setRadialSegments] = useState(partData._coneRadialSegments || 1);
@@ -158,10 +160,12 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
 
   var coneData = useMemo(function() {
     var t = thicknessToDecimal(partData.thickness);
-    var ld = parseFloat(largeDia) || 0, sd = parseFloat(smallDia) || 0, h = parseFloat(coneHeight) || 0;
+    var ldRaw = parseFloat(largeDia) || 0, sdRaw = parseFloat(smallDia) || 0, h = parseFloat(coneHeight) || 0;
+    var ld = largeDiaMeasure === 'radius' ? ldRaw * 2 : ldRaw;
+    var sd = smallDiaMeasure === 'radius' ? sdRaw * 2 : sdRaw;
     if (ld <= 0 || sd <= 0 || h <= 0) return null;
     try { var c = new ConeCalculator(t, ld, largeDiaType, sd, smallDiaType, h); return c.largeDia > c.smallDia ? c : null; } catch(e) { return null; }
-  }, [partData.thickness, largeDia, largeDiaType, smallDia, smallDiaType, coneHeight]);
+  }, [partData.thickness, largeDia, largeDiaType, largeDiaMeasure, smallDia, smallDiaType, smallDiaMeasure, coneHeight]);
 
   var heightSegs = useMemo(function() {
     var h = parseFloat(coneHeight) || 0;
@@ -205,8 +209,8 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   useEffect(function() { segmentSpecs.forEach(function(sp) { var cv = blankRefs.current[sp.layer]; if (cv && sp.blank) drawBlank(cv, sp.blank, sp.segmentAngle, sp.layer); }); }, [segmentSpecs]);
 
   useEffect(function() {
-    setPartData(function(p) { return Object.assign({}, p, { _coneLargeDia: largeDia, _coneLargeDiaType: largeDiaType, _coneSmallDia: smallDia, _coneSmallDiaType: smallDiaType, _coneHeight: coneHeight, _coneRadialSegments: radialSegments, _coneShowAdvanced: showAdvanced, _coneHeightCutMethod: heightCutMethod, _coneHeightSegments: heightSegments, _coneCustomCuts: customCuts }); });
-  }, [largeDia, largeDiaType, smallDia, smallDiaType, coneHeight, radialSegments, showAdvanced, heightCutMethod, heightSegments, customCuts]);
+    setPartData(function(p) { return Object.assign({}, p, { _coneLargeDia: largeDia, _coneLargeDiaType: largeDiaType, _coneLargeDiaMeasure: largeDiaMeasure, _coneSmallDia: smallDia, _coneSmallDiaType: smallDiaType, _coneSmallDiaMeasure: smallDiaMeasure, _coneHeight: coneHeight, _coneRadialSegments: radialSegments, _coneShowAdvanced: showAdvanced, _coneHeightCutMethod: heightCutMethod, _coneHeightSegments: heightSegments, _coneCustomCuts: customCuts }); });
+  }, [largeDia, largeDiaType, largeDiaMeasure, smallDia, smallDiaType, smallDiaMeasure, coneHeight, radialSegments, showAdvanced, heightCutMethod, heightSegments, customCuts]);
 
   useEffect(function() { var total = heightSegs.length * (parseInt(radialSegments) || 1); setPartData(function(p) { return Object.assign({}, p, { quantity: String(total) }); }); }, [radialSegments, heightSegs]);
 
@@ -277,13 +281,15 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       {/* CONE DIMENSIONS */}
       <div style={secStyle}>
         {secHead('🔺', 'Cone Dimensions', '#764ba2')}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8, marginBottom: 10 }}>
-          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Large Diameter *</label><input type="number" step="0.001" className="form-input" value={largeDia} onChange={function(e) { setLargeDia(e.target.value); }} placeholder="e.g. 24" /></div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8, marginBottom: 10 }}>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">Measured At</label><select className="form-select" value={largeDiaType} onChange={function(e) { setLargeDiaType(e.target.value); }}><option value="inside">Inside</option><option value="centerline">Centerline</option><option value="outside">Outside</option></select></div>
+          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Type</label><select className="form-select" value={largeDiaMeasure} onChange={function(e) { setLargeDiaMeasure(e.target.value); }}><option value="diameter">Diameter</option><option value="radius">Radius</option></select></div>
+          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Large {largeDiaMeasure === 'radius' ? 'Radius' : 'Diameter'} *</label><input type="number" step="0.001" className="form-input" value={largeDia} onChange={function(e) { setLargeDia(e.target.value); }} placeholder="e.g. 24" /></div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8, marginBottom: 10 }}>
-          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Small Diameter *</label><input type="number" step="0.001" className="form-input" value={smallDia} onChange={function(e) { setSmallDia(e.target.value); }} placeholder="e.g. 12" /></div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8, marginBottom: 10 }}>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">Measured At</label><select className="form-select" value={smallDiaType} onChange={function(e) { setSmallDiaType(e.target.value); }}><option value="inside">Inside</option><option value="centerline">Centerline</option><option value="outside">Outside</option></select></div>
+          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Type</label><select className="form-select" value={smallDiaMeasure} onChange={function(e) { setSmallDiaMeasure(e.target.value); }}><option value="diameter">Diameter</option><option value="radius">Radius</option></select></div>
+          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Small {smallDiaMeasure === 'radius' ? 'Radius' : 'Diameter'} *</label><input type="number" step="0.001" className="form-input" value={smallDia} onChange={function(e) { setSmallDia(e.target.value); }} placeholder="e.g. 12" /></div>
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">Cone Height *</label><input type="number" step="0.001" className="form-input" value={coneHeight} onChange={function(e) { setConeHeight(e.target.value); }} placeholder="e.g. 18" /></div>
 

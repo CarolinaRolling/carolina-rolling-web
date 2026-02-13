@@ -617,12 +617,25 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
         {/* Length */}
         <div className="form-group" style={{ marginTop: 8 }}>
           <label className="form-label">Length</label>
-          <input className="form-input" value={partData.length || ''} onChange={(e) => setPartData({ ...partData, length: e.target.value })}
-            placeholder={selectedSize ? selectedSize.defaultLength : "e.g. 20'"} />
-          {selectedSize && (
-            <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 2 }}>
-              Standard length: {selectedSize.type === 'tube' ? "20'" : "21'"}
-            </div>
+          <select className="form-select" value={partData._lengthOption || ''} onChange={(e) => {
+            const val = e.target.value;
+            if (val === 'Custom') {
+              setPartData({ ...partData, _lengthOption: 'Custom', length: partData._customLength || '' });
+            } else {
+              setPartData({ ...partData, _lengthOption: val, length: val, _customLength: '' });
+            }
+          }}>
+            <option value="">Select...</option>
+            <option value="20'">20'</option>
+            <option value="21'">21'</option>
+            <option value="30'">30'</option>
+            <option value="40'">40'</option>
+            <option value="Custom">Custom</option>
+          </select>
+          {(partData._lengthOption === 'Custom') && (
+            <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter length"
+              value={partData._customLength || ''}
+              onChange={(e) => { setPartData({ ...partData, _customLength: e.target.value, length: e.target.value }); }} />
           )}
         </div>
       </div>
@@ -632,13 +645,6 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
         {sectionTitle('🎯', 'Rolling Specifications', '#6a1b9a')}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <div className="form-group">
-            <label className="form-label">Measurement</label>
-            <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
-              <option value="diameter">Diameter</option>
-              <option value="radius">Radius</option>
-            </select>
-          </div>
-          <div className="form-group">
             <label className="form-label">Measured At</label>
             <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
               <option value="centerline">Centerline</option>
@@ -647,7 +653,14 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">{rollMeasureType === 'radius' ? 'Radius' : 'Diameter'} (inches)</label>
+            <label className="form-label">Type</label>
+            <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
+              <option value="diameter">Diameter</option>
+              <option value="radius">Radius</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Roll to: *</label>
             <input type="number" step="0.1" className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" />
           </div>
         </div>

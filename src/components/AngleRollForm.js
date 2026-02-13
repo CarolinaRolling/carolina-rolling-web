@@ -367,10 +367,13 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
       {/* === ROLL INFO === */}
       <div style={sectionStyle}>
         {sectionTitle('🔄', 'Roll Information', '#1565c0')}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8, marginBottom: 12 }}>
           <div className="form-group">
-            <label className="form-label">Roll Value *</label>
-            <input className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" type="number" step="0.001" />
+            <label className="form-label">Measured At</label>
+            <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
+              <option value="inside">Inside</option>
+              <option value="outside">Outside</option>
+            </select>
           </div>
           <div className="form-group">
             <label className="form-label">Type</label>
@@ -380,11 +383,8 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Measured At</label>
-            <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
-              <option value="inside">Inside</option>
-              <option value="outside">Outside</option>
-            </select>
+            <label className="form-label">Roll to: *</label>
+            <input className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" type="number" step="0.001" />
           </div>
         </div>
 

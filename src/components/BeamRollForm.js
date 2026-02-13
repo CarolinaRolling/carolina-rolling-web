@@ -55,6 +55,8 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
   const [completeRings, setCompleteRings] = useState(!!(partData._completeRings));
   const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
   const [tangentLength, setTangentLength] = useState(partData._tangentLength || '12');
+  const [isCamber, setIsCamber] = useState(!!(partData._isCamber));
+  const [camberDepth, setCamberDepth] = useState(partData._camberDepth || '');
 
   useEffect(() => {
     const loadGrades = async () => {
@@ -77,11 +79,12 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
   }, []);
 
   useEffect(() => {
-    const updates = { _rollValue: rollValue, _rollMeasureType: rollMeasureType, _rollMeasurePoint: rollMeasurePoint };
-    if (rollMeasureType === 'radius') { updates.radius = rollValue; updates.diameter = ''; }
+    const updates = { _rollValue: rollValue, _rollMeasureType: rollMeasureType, _rollMeasurePoint: rollMeasurePoint, _isCamber: isCamber, _camberDepth: camberDepth };
+    if (isCamber) { updates.diameter = ''; updates.radius = ''; }
+    else if (rollMeasureType === 'radius') { updates.radius = rollValue; updates.diameter = ''; }
     else { updates.diameter = rollValue; updates.radius = ''; }
     setPartData(prev => ({ ...prev, ...updates }));
-  }, [rollValue, rollMeasureType, rollMeasurePoint]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, isCamber, camberDepth]);
 
   const parsedSize = useMemo(() => parseBeamSize(partData._beamSize), [partData._beamSize]);
   const profileSize = useMemo(() => parsedSize ? parsedSize.depth : 0, [parsedSize]);
@@ -143,6 +146,12 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
   }, [partData._beamSize, partData._customBeamSize, partData.length, partData.material, partData._materialOrigin, partData.quantity]);
 
   const rollingDescription = useMemo(() => {
+    if (isCamber) {
+      const depth = camberDepth || '';
+      const len = partData.length || '';
+      if (!depth) return '';
+      return `Camber ${depth}" on ${len}`;
+    }
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return '';
     const lines = [];
@@ -158,7 +167,7 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
       lines.push(`Tangents: ${ringCalc.tangent}" each end`);
     }
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded]);
+  }, [isCamber, camberDepth, partData.length, rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded]);
 
   useEffect(() => {
     const updates = { materialDescription, _materialDescription: materialDescription };
@@ -252,12 +261,42 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
       {/* === ROLL INFO === */}
       <div style={sectionStyle}>
         {sectionTitle('🔄', 'Roll Information', '#1565c0')}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
-          <div className="form-group"><label className="form-label">Roll Value *</label><input className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" type="number" step="0.001" /></div>
-          <div className="form-group"><label className="form-label">Type</label>
-            <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}><option value="diameter">Diameter</option><option value="radius">Radius</option></select></div>
+        
+        {/* Roll vs Camber toggle */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button type="button" onClick={() => setIsCamber(false)}
+            style={{ flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer',
+              border: `2px solid ${!isCamber ? '#1565c0' : '#ccc'}`, background: !isCamber ? '#e3f2fd' : '#fff', color: !isCamber ? '#1565c0' : '#666' }}>
+            🔄 Roll
+          </button>
+          <button type="button" onClick={() => setIsCamber(true)}
+            style={{ flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer',
+              border: `2px solid ${isCamber ? '#e65100' : '#ccc'}`, background: isCamber ? '#fff3e0' : '#fff', color: isCamber ? '#e65100' : '#666' }}>
+            📐 Camber
+          </button>
+        </div>
+
+        {isCamber ? (
+          <>
+            <div className="form-group">
+              <label className="form-label">Camber Depth *</label>
+              <input className="form-input" value={camberDepth} onChange={(e) => setCamberDepth(e.target.value)} placeholder='e.g. 2"' type="number" step="0.001" />
+            </div>
+            {camberDepth && partData.length && (
+              <div style={{ background: '#fff3e0', padding: 12, borderRadius: 8, border: '1px solid #ffcc80', marginTop: 8 }}>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#e65100', marginBottom: 6 }}>📐 Camber Instruction:</div>
+                <pre style={{ margin: 0, fontSize: '0.95rem', fontFamily: 'monospace', color: '#333' }}>Camber {camberDepth}" on {partData.length}</pre>
+              </div>
+            )}
+          </>
+        ) : (
+        <>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8, marginBottom: 12 }}>
           <div className="form-group"><label className="form-label">Measured At</label>
             <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}><option value="inside">Inside</option><option value="outside">Outside</option></select></div>
+          <div className="form-group"><label className="form-label">Type</label>
+            <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}><option value="diameter">Diameter</option><option value="radius">Radius</option></select></div>
+          <div className="form-group"><label className="form-label">Roll to: *</label><input className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" type="number" step="0.001" /></div>
         </div>
 
         {/* Easy Way / Hard Way for beams */}
@@ -280,14 +319,14 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
           )}
         </div>
 
-        {riseCalc && (
+        {riseCalc && !isCamber && (
           <div style={{ background: '#e8f5e9', padding: 12, borderRadius: 8, marginBottom: 12 }}>
             <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#2e7d32', marginBottom: 4 }}>📐 Chord & Rise</div>
             <div style={{ fontSize: '0.9rem' }}><span style={{ color: '#666' }}>Over {riseCalc.chord}" chord: </span><span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{riseCalc.rise.toFixed(4)}"</span><span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm)</span></div>
           </div>
         )}
 
-        {rollingDescription && (
+        {!isCamber && rollingDescription && (
           <div style={{ background: '#f3e5f5', padding: 12, borderRadius: 8 }}>
             <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6a1b9a', marginBottom: 6 }}>Rolling Description Preview:</div>
             <pre style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: '#333' }}>{materialDescription}{'\n'}{rollingDescription}</pre>
@@ -295,6 +334,7 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
         )}
 
         {/* === COMPLETE RINGS === */}
+        {!isCamber && (
         <div style={{ marginTop: 12, padding: 14, borderRadius: 8, background: completeRings ? '#e8f5e9' : '#f9f9f9', border: `2px solid ${completeRings ? '#4caf50' : '#e0e0e0'}`, transition: 'all 0.2s' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600 }}>
             <input type="checkbox" checked={completeRings} onChange={(e) => setCompleteRings(e.target.checked)} style={{ width: 18, height: 18 }} />
@@ -325,6 +365,9 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
             </div>
           )}
         </div>
+        )}
+        </>
+        )}
       </div>
 
       <div style={sectionStyle}><div className="form-group"><label className="form-label">Custom Shape / Drawing (PDF)</label><label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px dashed #bbb', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}><Upload size={16} /> Upload drawing...<input type="file" accept=".pdf,.png,.jpg" style={{ display: 'none' }} onChange={(e) => { if (e.target.files[0]) setPartData({ ...partData, _shapeFile: e.target.files[0] }); }} /></label>{partData._shapeFile && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile.name}</div>}</div></div>

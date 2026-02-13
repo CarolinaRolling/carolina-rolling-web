@@ -648,8 +648,12 @@ function EstimateDetailsPage() {
     if (partData.partType === 'beam_roll') {
       if (!partData._beamSize) warnings.push('Beam size is required');
       if (partData._beamSize === 'Custom' && !partData._customBeamSize) warnings.push('Custom beam size is required');
-      if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      if (partData._isCamber) {
+        if (!partData._camberDepth) warnings.push('Camber depth is required');
+      } else {
+        if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
+        if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      }
     }
 
     if (partData.partType === 'tee_bar') {

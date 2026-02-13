@@ -1149,8 +1149,8 @@ function AdminPage() {
               </button>
             </div>
             <div style={{ marginTop: 20, padding: 12, background: '#fff8e1', borderRadius: 8, fontSize: '0.85rem', color: '#666', border: '1px solid #ffe082' }}>
-              <strong>Weld formula:</strong> (Thickness ÷ 0.125) × (Seam Length ÷ 12) × Price Per Foot<br/>
-              <em>Example: 3/8" plate, 60" seam, $5.00/ft → (0.375 ÷ 0.125) × (60 ÷ 12) × $5.00 = 3 × 5 × $5 = $75.00</em>
+              <strong>Weld formula:</strong> ⌈Thickness ÷ 0.125⌉ × ⌈Seam Length ÷ 12⌉ × Price Per Foot<br/>
+              <em>Passes and seam length both round up. Example: 3/16" plate, 50" seam, $5.00/ft → ⌈1.5⌉ × ⌈4.17⌉ × $5.00 = 2 × 5 × $5 = $50.00</em>
             </div>
           </div>
         </div>
