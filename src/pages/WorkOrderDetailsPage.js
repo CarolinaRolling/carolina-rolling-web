@@ -21,7 +21,7 @@ import {
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
-  searchClients, getSettings
+  searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, duplicateWorkOrderToEstimate
 } from '../services/api';
 
 const PART_TYPES = {
@@ -87,6 +87,11 @@ function WorkOrderDetailsPage() {
   const fileInputRefs = useRef({});
   const docInputRef = useRef(null);
   const [defaultTaxRate, setDefaultTaxRate] = useState(9.75);
+  const [showLinkShipmentModal, setShowLinkShipmentModal] = useState(false);
+  const [unlinkedShipments, setUnlinkedShipments] = useState([]);
+  const [shipmentSearchQuery, setShipmentSearchQuery] = useState('');
+  const [shipmentLinking, setShipmentLinking] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   useEffect(() => { loadOrder(); loadLaborMinimums(); }, [id]);
 
@@ -361,6 +366,59 @@ function WorkOrderDetailsPage() {
       showMessage('Document deleted');
     } catch (err) {
       setError('Failed to delete document');
+    }
+  };
+
+  // Link Shipment functions
+  const openLinkShipmentModal = async () => {
+    setShowLinkShipmentModal(true);
+    setShipmentSearchQuery('');
+    try {
+      const res = await getUnlinkedShipments();
+      setUnlinkedShipments(res.data.data || []);
+    } catch (err) {
+      console.error('Failed to load unlinked shipments:', err);
+      setUnlinkedShipments([]);
+    }
+  };
+
+  const handleLinkShipment = async (shipmentId) => {
+    try {
+      setShipmentLinking(true);
+      await linkShipmentToWorkOrder(shipmentId, id);
+      setShowLinkShipmentModal(false);
+      showMessage('Shipment linked successfully');
+      await loadOrder();
+    } catch (err) {
+      setError('Failed to link shipment: ' + (err.response?.data?.error?.message || err.message));
+    } finally {
+      setShipmentLinking(false);
+    }
+  };
+
+  const filteredUnlinkedShipments = unlinkedShipments.filter(s => {
+    if (!shipmentSearchQuery) return true;
+    const q = shipmentSearchQuery.toLowerCase();
+    return (s.clientName || '').toLowerCase().includes(q) ||
+           (s.jobNumber || '').toLowerCase().includes(q) ||
+           (s.qrCode || '').toLowerCase().includes(q) ||
+           (s.description || '').toLowerCase().includes(q);
+  });
+
+  // Reorder — duplicate WO to new estimate with cleared material pricing
+  const handleReorder = async () => {
+    if (!window.confirm('Create a new estimate from this work order?\n\nAll part specs and labor will be copied. Material pricing will be cleared so you can get updated quotes.')) return;
+    try {
+      setReordering(true);
+      const res = await duplicateWorkOrderToEstimate(id);
+      const est = res.data.data;
+      showMessage(res.data.message || 'Estimate created');
+      // Navigate to the new estimate
+      navigate(`/estimates/${est.id}`);
+    } catch (err) {
+      setError('Failed to create reorder estimate: ' + (err.response?.data?.error?.message || err.message));
+    } finally {
+      setReordering(false);
     }
   };
 
@@ -1124,6 +1182,12 @@ function WorkOrderDetailsPage() {
               </div>
             )}
           </div>
+          <button className="btn" onClick={handleReorder} disabled={reordering}
+            style={{ background: '#7b1fa2', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 6, opacity: reordering ? 0.6 : 1 }}
+            title="Create new estimate from this order (for repeat orders)"
+          >
+            <Package size={16} />{reordering ? 'Creating...' : 'Reorder'}
+          </button>
           <button className="btn btn-danger" onClick={handleDelete}><Trash2 size={18} /></button>
         </div>
       </div>
@@ -1132,7 +1196,7 @@ function WorkOrderDetailsPage() {
       {success && <div className="alert alert-success">{success}</div>}
 
       {/* Toggle for Receiving Info */}
-      {shipment && (
+      {shipment ? (
         <div style={{ marginBottom: 16 }}>
           <button 
             className={`btn ${showReceivingInfo ? 'btn-primary' : 'btn-outline'}`}
@@ -1142,6 +1206,18 @@ function WorkOrderDetailsPage() {
             <Truck size={18} />
             {showReceivingInfo ? 'Hide Receiving Info' : 'Show Receiving Info'}
             {shipment.photos?.length > 0 && <span style={{ background: '#4caf50', color: 'white', borderRadius: 10, padding: '2px 6px', fontSize: '0.7rem' }}>{shipment.photos.length} 📷</span>}
+          </button>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 16 }}>
+          <button 
+            className="btn btn-outline"
+            onClick={openLinkShipmentModal}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, borderColor: '#ff9800', color: '#e65100' }}
+          >
+            <Truck size={18} />
+            Link Shipment
+            <span style={{ fontSize: '0.75rem', color: '#888' }}>(No shipment linked)</span>
           </button>
         </div>
       )}
@@ -2058,6 +2134,84 @@ function WorkOrderDetailsPage() {
                   Linking estimate and copying parts...
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link Shipment Modal */}
+      {showLinkShipmentModal && (
+        <div className="modal-overlay" onClick={() => setShowLinkShipmentModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: '90vw', maxWidth: 650, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Truck size={18} /> Link Unlinked Shipment
+              </h3>
+              <button className="modal-close" onClick={() => setShowLinkShipmentModal(false)}>&times;</button>
+            </div>
+            <div style={{ padding: 16 }}>
+              <div style={{ marginBottom: 12 }}>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="Filter by client name, job number, or QR code..."
+                  value={shipmentSearchQuery}
+                  onChange={(e) => setShipmentSearchQuery(e.target.value)}
+                  autoFocus
+                  style={{ width: '100%', padding: '10px 14px', fontSize: '0.95rem' }}
+                />
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: 8 }}>
+                {filteredUnlinkedShipments.length} unlinked shipment{filteredUnlinkedShipments.length !== 1 ? 's' : ''} waiting for instructions
+              </div>
+              <div style={{ maxHeight: '50vh', overflowY: 'auto' }}>
+                {filteredUnlinkedShipments.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: 20, color: '#888' }}>No unlinked shipments found</div>
+                )}
+                {filteredUnlinkedShipments.map(s => (
+                  <div
+                    key={s.id}
+                    onClick={() => !shipmentLinking && handleLinkShipment(s.id)}
+                    style={{
+                      padding: '12px 14px', borderBottom: '1px solid #eee', cursor: shipmentLinking ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                      transition: 'background 0.15s', borderRadius: 6,
+                      background: (s.clientName || '').toLowerCase() === (order?.clientName || '').toLowerCase() ? '#f0f7ff' : 'transparent'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f0f7ff'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = (s.clientName || '').toLowerCase() === (order?.clientName || '').toLowerCase() ? '#f0f7ff' : 'transparent'}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, color: '#333' }}>{s.clientName}</span>
+                        {(s.clientName || '').toLowerCase() === (order?.clientName || '').toLowerCase() && (
+                          <span style={{ padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700, background: '#e8f5e9', color: '#2e7d32' }}>
+                            SAME CLIENT
+                          </span>
+                        )}
+                        <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#888' }}>{s.qrCode}</span>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#888', marginTop: 2 }}>
+                        {s.quantity && <span>{s.quantity}pc</span>}
+                        {s.jobNumber && <span> · Job: {s.jobNumber}</span>}
+                        {s.clientPurchaseOrderNumber && <span> · PO: {s.clientPurchaseOrderNumber}</span>}
+                        {s.location && <span> · 📍 {s.location}</span>}
+                        {s.receivedAt && <span> · {new Date(s.receivedAt).toLocaleDateString()}</span>}
+                      </div>
+                      {s.description && (
+                        <div style={{ fontSize: '0.75rem', color: '#555', marginTop: 2, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {s.description}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ flexShrink: 0 }}>
+                      <span style={{ padding: '4px 10px', background: '#1565c0', color: '#fff', borderRadius: 4, fontSize: '0.8rem', fontWeight: 600 }}>
+                        Link
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Trash2, Archive, Package, ArrowLeft, CheckSquare, Square, Link, AlertCircle, Edit2, X, Save } from 'lucide-react';
-import { getShipments, deleteShipment, archiveShipment, bulkArchiveShipments, bulkDeleteShipments, updateShipment, linkShipmentToWorkOrder } from '../services/api';
+import { Search, Trash2, Archive, Package, ArrowLeft, CheckSquare, Square, Link, AlertCircle, Edit2, X, Save, FileText } from 'lucide-react';
+import { getShipments, deleteShipment, archiveShipment, bulkArchiveShipments, bulkDeleteShipments, updateShipment, linkShipmentToWorkOrder, getWorkOrders } from '../services/api';
 
 const STATUS_CONFIG = {
   received: { label: 'Received', color: '#1976d2', bg: '#e3f2fd' },
@@ -22,6 +22,12 @@ function ShipmentsAdminPage() {
   const [editData, setEditData] = useState({});
   const [confirmDelete, setConfirmDelete] = useState(null); // id or 'bulk'
   const [message, setMessage] = useState(null);
+  const [linkingShipmentId, setLinkingShipmentId] = useState(null);
+  const [woSearchQuery, setWoSearchQuery] = useState('');
+  const [woSearchResults, setWoSearchResults] = useState([]);
+  const [woSearchLoading, setWoSearchLoading] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const woSearchTimeout = useRef(null);
 
   const loadShipments = useCallback(async () => {
     try {
@@ -113,6 +119,43 @@ function ShipmentsAdminPage() {
       loadShipments();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const openLinkModal = (shipmentId) => {
+    setLinkingShipmentId(shipmentId);
+    setWoSearchQuery('');
+    setWoSearchResults([]);
+  };
+
+  const searchWorkOrders = (query) => {
+    setWoSearchQuery(query);
+    if (woSearchTimeout.current) clearTimeout(woSearchTimeout.current);
+    if (!query || query.length < 1) { setWoSearchResults([]); return; }
+    woSearchTimeout.current = setTimeout(async () => {
+      try {
+        setWoSearchLoading(true);
+        const isDR = /^\d+$/.test(query.trim());
+        const params = isDR ? { drNumber: query.trim(), limit: 20 } : { clientName: query.trim(), limit: 20 };
+        const response = await getWorkOrders(params);
+        setWoSearchResults(response.data.data || []);
+      } catch (err) { console.error('WO search failed:', err); }
+      finally { setWoSearchLoading(false); }
+    }, 300);
+  };
+
+  const handleLinkToExistingWO = async (workOrderId) => {
+    if (!linkingShipmentId) return;
+    try {
+      setLinking(true);
+      await linkShipmentToWorkOrder(linkingShipmentId, workOrderId);
+      showMessage('Shipment linked to work order');
+      setLinkingShipmentId(null);
+      loadShipments();
+    } catch (err) {
+      showMessage('Failed to link: ' + (err.response?.data?.error?.message || err.message));
+    } finally {
+      setLinking(false);
     }
   };
 
@@ -380,13 +423,23 @@ function ShipmentsAdminPage() {
                           <Link size={12} /> Linked
                         </span>
                       ) : s.status !== 'archived' ? (
-                        <button 
-                          className="btn btn-primary"
-                          onClick={() => handleCreateWorkOrder(s.id)}
-                          style={{ fontSize: '0.75rem', padding: '3px 8px' }}
-                        >
-                          Create WO
-                        </button>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button 
+                            className="btn btn-primary"
+                            onClick={() => handleCreateWorkOrder(s.id)}
+                            style={{ fontSize: '0.7rem', padding: '3px 6px' }}
+                            title="Create a new work order"
+                          >
+                            + New WO
+                          </button>
+                          <button 
+                            onClick={() => openLinkModal(s.id)}
+                            style={{ fontSize: '0.7rem', padding: '3px 6px', background: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9', borderRadius: 4, cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 2 }}
+                            title="Link to existing work order"
+                          >
+                            <Link size={10} /> Link
+                          </button>
+                        </div>
                       ) : (
                         <span style={{ color: '#999', fontSize: '0.8rem' }}>—</span>
                       )}
@@ -422,6 +475,82 @@ function ShipmentsAdminPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Link to Existing Work Order Modal */}
+      {linkingShipmentId && (
+        <div className="modal-overlay" onClick={() => setLinkingShipmentId(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: '90vw', maxWidth: 600, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Link size={18} /> Link Shipment to Work Order
+              </h3>
+              <button className="modal-close" onClick={() => setLinkingShipmentId(null)}>&times;</button>
+            </div>
+            <div style={{ padding: 16 }}>
+              <div style={{ marginBottom: 12 }}>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="Search by client name or DR number..."
+                  value={woSearchQuery}
+                  onChange={(e) => searchWorkOrders(e.target.value)}
+                  autoFocus
+                  style={{ width: '100%', padding: '10px 14px', fontSize: '0.95rem' }}
+                />
+              </div>
+              <div style={{ maxHeight: '50vh', overflowY: 'auto' }}>
+                {woSearchLoading && (
+                  <div style={{ textAlign: 'center', padding: 20, color: '#888' }}>Searching...</div>
+                )}
+                {!woSearchLoading && woSearchQuery && woSearchResults.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: 20, color: '#888' }}>No work orders found</div>
+                )}
+                {woSearchResults.map(wo => (
+                  <div
+                    key={wo.id}
+                    onClick={() => !linking && handleLinkToExistingWO(wo.id)}
+                    style={{
+                      padding: '12px 14px', borderBottom: '1px solid #eee', cursor: linking ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                      transition: 'background 0.15s', borderRadius: 6
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f0f7ff'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        {wo.drNumber && (
+                          <span style={{ fontWeight: 700, color: '#1565c0', fontSize: '0.95rem' }}>
+                            DR-{wo.drNumber}
+                          </span>
+                        )}
+                        <span style={{ fontWeight: 600, color: '#333' }}>{wo.clientName}</span>
+                        <span style={{
+                          padding: '1px 6px', borderRadius: 3, fontSize: '0.7rem', fontWeight: 600,
+                          background: wo.status === 'in_progress' ? '#fff3e0' : wo.status === 'received' ? '#e3f2fd' : wo.status === 'ready' ? '#e8f5e9' : '#f5f5f5',
+                          color: wo.status === 'in_progress' ? '#e65100' : wo.status === 'received' ? '#1565c0' : wo.status === 'ready' ? '#2e7d32' : '#888'
+                        }}>
+                          {wo.status?.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#888', marginTop: 2 }}>
+                        {wo.orderNumber}
+                        {wo.clientPurchaseOrderNumber && <span> · PO: {wo.clientPurchaseOrderNumber}</span>}
+                        {wo.parts && wo.parts.length > 0 && <span> · {wo.parts.length} part{wo.parts.length > 1 ? 's' : ''}</span>}
+                      </div>
+                    </div>
+                    <div style={{ flexShrink: 0 }}>
+                      <span style={{ padding: '4px 10px', background: '#1565c0', color: '#fff', borderRadius: 4, fontSize: '0.8rem', fontWeight: 600 }}>
+                        Link
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
