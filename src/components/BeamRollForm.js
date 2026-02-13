@@ -150,7 +150,8 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
       const depth = camberDepth || '';
       const len = partData.length || '';
       if (!depth) return '';
-      return `Camber ${depth}" on ${len}`;
+      const dir = partData.rollType === 'easy_way' ? ' EW' : partData.rollType === 'hard_way' ? ' HW' : '';
+      return `Camber ${depth}" on ${len}${dir}`;
     }
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return '';
@@ -282,21 +283,33 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
               <label className="form-label">Camber Depth *</label>
               <input className="form-input" value={camberDepth} onChange={(e) => setCamberDepth(e.target.value)} placeholder='e.g. 2"' type="number" step="0.001" />
             </div>
+            {/* Roll Direction for Camber */}
+            <div style={{ marginBottom: 12, marginTop: 8 }}>
+              <label className="form-label">Roll Direction *</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" style={{ flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem',
+                    border: `2px solid ${partData.rollType === 'easy_way' ? '#2e7d32' : '#ccc'}`, background: partData.rollType === 'easy_way' ? '#e8f5e9' : '#fff', color: partData.rollType === 'easy_way' ? '#2e7d32' : '#666', cursor: 'pointer' }}
+                  onClick={() => setPartData({ ...partData, rollType: 'easy_way' })}>Easy Way (EW) — Web Horizontal</button>
+                <button type="button" style={{ flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem',
+                    border: `2px solid ${partData.rollType === 'hard_way' ? '#c62828' : '#ccc'}`, background: partData.rollType === 'hard_way' ? '#ffebee' : '#fff', color: partData.rollType === 'hard_way' ? '#c62828' : '#666', cursor: 'pointer' }}
+                  onClick={() => setPartData({ ...partData, rollType: 'hard_way' })}>Hard Way (HW) — Web Vertical</button>
+              </div>
+            </div>
             {camberDepth && partData.length && (
               <div style={{ background: '#fff3e0', padding: 12, borderRadius: 8, border: '1px solid #ffcc80', marginTop: 8 }}>
                 <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#e65100', marginBottom: 6 }}>📐 Camber Instruction:</div>
-                <pre style={{ margin: 0, fontSize: '0.95rem', fontFamily: 'monospace', color: '#333' }}>Camber {camberDepth}" on {partData.length}</pre>
+                <pre style={{ margin: 0, fontSize: '0.95rem', fontFamily: 'monospace', color: '#333' }}>Camber {camberDepth}" on {partData.length}{partData.rollType === 'easy_way' ? ' EW' : partData.rollType === 'hard_way' ? ' HW' : ''}</pre>
               </div>
             )}
           </>
         ) : (
         <>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8, marginBottom: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+          <div className="form-group"><label className="form-label">Roll to: *</label><input className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" type="number" step="0.001" /></div>
           <div className="form-group"><label className="form-label">Measured At</label>
             <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}><option value="inside">Inside</option><option value="outside">Outside</option></select></div>
           <div className="form-group"><label className="form-label">Type</label>
             <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}><option value="diameter">Diameter</option><option value="radius">Radius</option></select></div>
-          <div className="form-group"><label className="form-label">Roll to: *</label><input className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" type="number" step="0.001" /></div>
         </div>
 
         {/* Easy Way / Hard Way for beams */}

@@ -643,7 +643,11 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       {/* === ROLLING SPECS === */}
       <div style={sectionStyle}>
         {sectionTitle('🎯', 'Rolling Specifications', '#6a1b9a')}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Roll to: *</label>
+            <input type="number" step="0.1" className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" />
+          </div>
           <div className="form-group">
             <label className="form-label">Measured At</label>
             <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
@@ -658,10 +662,6 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
               <option value="diameter">Diameter</option>
               <option value="radius">Radius</option>
             </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Roll to: *</label>
-            <input type="number" step="0.1" className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" />
           </div>
         </div>
 
