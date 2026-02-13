@@ -42,6 +42,8 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   const [angleValue, setAngleValue] = useState(partData.arcDegrees || '');
   const [showTangent, setShowTangent] = useState(!!(partData._tangentLength));
   const [tangentLength, setTangentLength] = useState(partData._tangentLength || '');
+  const [nestingEnabled, setNestingEnabled] = useState(!!(partData._nestingEnabled));
+  const [stockLength, setStockLength] = useState(partData._stockLength || '');
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
 
   // Load grades from admin settings
@@ -76,6 +78,10 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       setShowTangent(true);
       setTangentLength(partData._tangentLength);
     }
+    if (partData._nestingEnabled) {
+      setNestingEnabled(true);
+      if (partData._stockLength) setStockLength(partData._stockLength);
+    }
   }, []);
 
   // Update partData when roll fields change
@@ -85,6 +91,8 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       _rollMeasurePoint: rollMeasurePoint,
       _rollMeasureType: rollMeasureType,
       _tangentLength: tangentLength,
+      _nestingEnabled: nestingEnabled,
+      _stockLength: stockLength,
       arcDegrees: showAngle ? angleValue : ''
     };
     if (rollMeasureType === 'radius') {
@@ -95,7 +103,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       updates.radius = '';
     }
     setPartData(prev => ({ ...prev, ...updates }));
-  }, [rollValue, rollMeasurePoint, rollMeasureType, showAngle, angleValue, tangentLength]);
+  }, [rollValue, rollMeasurePoint, rollMeasureType, showAngle, angleValue, tangentLength, nestingEnabled, stockLength]);
 
   // Arc length calculation
   const calcResult = useMemo(() => {
@@ -134,20 +142,52 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     };
   }, [partData.thickness, rollValue, rollMeasurePoint, rollMeasureType, showAngle, angleValue, showTangent, tangentLength]);
 
+  // Complete rings nesting calculation
+  const isCompleteRing = !showAngle || !angleValue || parseFloat(angleValue) === 360;
+  const nestingCalc = useMemo(() => {
+    if (!nestingEnabled || !isCompleteRing || !calcResult || !stockLength) return null;
+    const ringLength = calcResult.totalLength;
+    const stock = parseFloat(stockLength) || 0;
+    if (ringLength <= 0 || stock <= 0 || stock < ringLength) return null;
+    
+    const ringsPerLength = Math.floor(stock / ringLength);
+    const totalRings = parseInt(partData.quantity) || 1;
+    const stockLengthsNeeded = Math.ceil(totalRings / ringsPerLength);
+    const totalRingsFromStock = stockLengthsNeeded * ringsPerLength;
+    const waste = totalRingsFromStock - totalRings;
+    const usedPerLength = (ringLength * ringsPerLength).toFixed(2);
+    const wastePerLength = (stock - ringLength * ringsPerLength).toFixed(2);
+    
+    return { ringsPerLength, stockLengthsNeeded, totalRingsFromStock, waste, ringLength, stock, usedPerLength, wastePerLength };
+  }, [nestingEnabled, isCompleteRing, calcResult, stockLength, partData.quantity]);
+
   // Build material description string — includes quantity
   const materialDescription = useMemo(() => {
-    const qty = parseInt(partData.quantity) || 1;
     const descParts = [];
-    descParts.push(`${qty}pc:`);
-    if (partData.thickness) descParts.push(partData.thickness);
-    if (partData.width) descParts.push(`x ${partData.width}"`);
-    if (partData.length) descParts.push(`x ${partData.length}"`);
+    
+    if (nestingCalc) {
+      // Nesting mode: show stock lengths needed instead of ring qty
+      descParts.push(`${nestingCalc.stockLengthsNeeded}pc:`);
+      if (partData.thickness) descParts.push(partData.thickness);
+      if (partData.width) descParts.push(`x ${partData.width}"`);
+      descParts.push(`x ${nestingCalc.stock}"`);
+    } else {
+      const qty = parseInt(partData.quantity) || 1;
+      descParts.push(`${qty}pc:`);
+      if (partData.thickness) descParts.push(partData.thickness);
+      if (partData.width) descParts.push(`x ${partData.width}"`);
+      if (partData.length) descParts.push(`x ${partData.length}"`);
+    }
+    
     const grade = partData.material || '';
     if (grade) descParts.push(grade);
     const origin = partData._materialOrigin || '';
     if (origin) descParts.push(origin);
+    if (nestingCalc) {
+      descParts.push(`(${nestingCalc.ringsPerLength} rings/pc × ${nestingCalc.stockLengthsNeeded}pc = ${nestingCalc.totalRingsFromStock} rings for ${parseInt(partData.quantity) || 1} needed)`);
+    }
     return descParts.join(' ');
-  }, [partData.thickness, partData.width, partData.length, partData.material, partData._materialOrigin, partData.quantity]);
+  }, [partData.thickness, partData.width, partData.length, partData.material, partData._materialOrigin, partData.quantity, nestingCalc]);
 
   // Auto-update material description
   useEffect(() => {
@@ -178,9 +218,12 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       const sideLabel = partData._protectivePaperSide === 'double' ? 'Double Sided' : partData._protectivePaperSide === 'inside' ? 'Inside' : 'Outside';
       lines.push(`Protective Paper: ${sideLabel}`);
     }
+    if (nestingCalc) {
+      lines.push(`Complete Rings: ${nestingCalc.ringsPerLength}/pc from ${nestingCalc.stock}" stock, ${nestingCalc.stockLengthsNeeded} lengths`);
+    }
     lines.push(...getPitchDescriptionLines(partData, clDiameter));
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, clDiameter, showAngle, angleValue, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia, partData._protectivePaper, partData._protectivePaperSide]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, clDiameter, showAngle, angleValue, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia, partData._protectivePaper, partData._protectivePaperSide, nestingCalc]);
 
   useEffect(() => {
     if (rollingDescription) setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
@@ -326,10 +369,118 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
                     length: totalLen.toFixed(2),
                     ...(autoDirection ? { rollType: autoDirection } : {})
                   }));
+                  // Disable nesting if setting ring length directly
+                  if (nestingEnabled) setNestingEnabled(false);
                 }}>
-                → Set as Length
+                → Set as Ring Length
               </button>
             </div>
+
+            {/* Complete Rings — Multiple from Stock */}
+            {isCompleteRing && (
+              <div style={{ borderTop: '1px solid #bbdefb', marginTop: 8, paddingTop: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', color: nestingEnabled ? '#2e7d32' : '#555' }}>
+                  <input type="checkbox" checked={nestingEnabled}
+                    onChange={(e) => {
+                      setNestingEnabled(e.target.checked);
+                      if (!e.target.checked) setStockLength('');
+                    }}
+                    style={{ width: 16, height: 16, accentColor: '#2e7d32' }} />
+                  🔗 Multiple Rings from Stock Length
+                </label>
+                {nestingEnabled && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                      {[
+                        { label: "8'", val: '96' },
+                        { label: "10'", val: '120' },
+                        { label: "12'", val: '144' },
+                        { label: "16'", val: '192' },
+                        { label: "20'", val: '240' },
+                        { label: "24'", val: '288' },
+                      ].map(opt => (
+                        <button key={opt.val} type="button"
+                          onClick={() => setStockLength(opt.val)}
+                          style={{
+                            padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '0.8rem',
+                            border: '2px solid ' + (stockLength === opt.val ? '#2e7d32' : '#ccc'),
+                            background: stockLength === opt.val ? '#e8f5e9' : '#fff',
+                            color: stockLength === opt.val ? '#2e7d32' : '#666',
+                            fontWeight: stockLength === opt.val ? 700 : 500,
+                          }}>
+                          {opt.label} ({opt.val}")
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: '0.8rem', color: '#666' }}>Custom:</span>
+                      <input className="form-input" type="number" step="0.01" style={{ width: 100 }}
+                        value={stockLength} onChange={(e) => setStockLength(e.target.value)} placeholder='e.g. 240"' />
+                      <span style={{ fontSize: '0.8rem', color: '#666' }}>inches</span>
+                    </div>
+
+                    {nestingCalc && (
+                      <div style={{ background: '#e8f5e9', padding: 12, borderRadius: 8, marginTop: 10, border: '1px solid #a5d6a7' }}>
+                        <div style={{ fontWeight: 700, color: '#2e7d32', marginBottom: 8, fontSize: '0.9rem' }}>🔗 Ring Nesting Summary</div>
+                        <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#333', lineHeight: 1.8 }}>
+                          <div>
+                            <span style={{ color: '#888' }}>Ring circumference:</span>{' '}
+                            <strong>{nestingCalc.ringLength.toFixed(2)}"</strong>
+                          </div>
+                          <div>
+                            <span style={{ color: '#888' }}>Stock length:</span>{' '}
+                            <strong>{nestingCalc.stock}"</strong>
+                            <span style={{ color: '#888', marginLeft: 4 }}>({(nestingCalc.stock / 12).toFixed(1)}')</span>
+                          </div>
+                          <div>
+                            <span style={{ color: '#888' }}>Rings per stock piece:</span>{' '}
+                            <strong style={{ color: '#2e7d32', fontSize: '1rem' }}>{nestingCalc.ringsPerLength}</strong>
+                            <span style={{ color: '#888', marginLeft: 8 }}>
+                              (uses {nestingCalc.usedPerLength}" / waste {nestingCalc.wastePerLength}" per piece)
+                            </span>
+                          </div>
+                          <div style={{ borderTop: '1px solid #a5d6a7', marginTop: 6, paddingTop: 6 }}>
+                            <span style={{ color: '#888' }}>Rings needed:</span>{' '}
+                            <strong>{parseInt(partData.quantity) || 1}</strong>
+                          </div>
+                          <div style={{ fontSize: '1.05rem' }}>
+                            <span style={{ color: '#888' }}>Stock pieces to order:</span>{' '}
+                            <strong style={{ color: '#2e7d32', fontSize: '1.15rem' }}>
+                              {nestingCalc.stockLengthsNeeded} pc × {nestingCalc.stock}" ({(nestingCalc.stock / 12).toFixed(1)}')
+                            </strong>
+                          </div>
+                          {nestingCalc.waste > 0 && (
+                            <div style={{ fontSize: '0.8rem', color: '#888', marginTop: 2 }}>
+                              ({nestingCalc.totalRingsFromStock} rings total, {nestingCalc.waste} extra)
+                            </div>
+                          )}
+                        </div>
+                        <button type="button" className="btn btn-sm" style={{ background: '#2e7d32', color: 'white', marginTop: 10 }}
+                          onClick={() => {
+                            const widthVal = parseFloat(partData.width) || 0;
+                            const autoDirection = (nestingCalc.stock > 0 && widthVal > 0) 
+                              ? (nestingCalc.stock >= widthVal ? 'easy_way' : 'hard_way') 
+                              : '';
+                            setPartData(prev => ({ 
+                              ...prev, 
+                              length: nestingCalc.stock.toString(),
+                              ...(autoDirection ? { rollType: autoDirection } : {})
+                            }));
+                          }}>
+                          → Set Stock Length ({nestingCalc.stock}") as Material Length
+                        </button>
+                      </div>
+                    )}
+
+                    {nestingEnabled && stockLength && !nestingCalc && calcResult && (
+                      <div style={{ background: '#fff3e0', padding: 8, borderRadius: 6, marginTop: 8, fontSize: '0.8rem', color: '#e65100' }}>
+                        ⚠️ Stock length ({stockLength}") is shorter than ring circumference ({calcResult.totalLength.toFixed(2)}") — can't nest
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

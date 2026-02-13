@@ -141,7 +141,8 @@ const ClientsVendorsPage = () => {
             ...prev,
             permitStatus: result.status,
             permitLastVerified: result.verifiedDate,
-            permitRawResponse: result.rawResponse
+            permitRawResponse: result.rawResponse,
+            permitOwnerName: result.ownerName || ''
           }));
         }
         showMessage(`Permit verified: ${result.status.toUpperCase()}${result.rawResponse ? ' — ' + result.rawResponse : ''}`);
@@ -519,6 +520,23 @@ const ClientsVendorsPage = () => {
                       {formData.permitRawResponse && (
                         <div style={{ fontSize: '0.75rem', color: '#666', marginTop: 4, fontStyle: 'italic' }}>
                           "{formData.permitRawResponse}"
+                        </div>
+                      )}
+                      {formData.permitOwnerName && (
+                        <div style={{ marginTop: 6 }}>
+                          <div style={{ fontSize: '0.8rem', color: '#555' }}>
+                            <strong>CDTFA Owner:</strong> {formData.permitOwnerName}
+                          </div>
+                          {(() => {
+                            const ownerLower = (formData.permitOwnerName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                            const clientLower = (formData.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                            const mismatch = ownerLower && clientLower && !ownerLower.includes(clientLower) && !clientLower.includes(ownerLower);
+                            return mismatch ? (
+                              <div style={{ marginTop: 4, padding: '4px 8px', background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 4, fontSize: '0.75rem', color: '#e65100', fontWeight: 600 }}>
+                                ⚠️ Name mismatch — Client: "{formData.name}" vs CDTFA Owner: "{formData.permitOwnerName}"
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                       )}
                     </div>

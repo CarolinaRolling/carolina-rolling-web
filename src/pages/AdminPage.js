@@ -1535,6 +1535,7 @@ function AdminPage() {
                       <th style={{ padding: '10px 8px', textAlign: 'left' }}>Permit #</th>
                       <th style={{ padding: '10px 8px', textAlign: 'center' }}>Status</th>
                       <th style={{ padding: '10px 8px', textAlign: 'left' }}>CDTFA Response</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left' }}>CDTFA Owner</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1556,6 +1557,20 @@ function AdminPage() {
                         </td>
                         <td style={{ padding: '8px', fontSize: '0.8rem', color: '#666', fontStyle: 'italic', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {r.rawResponse || r.error || '—'}
+                        </td>
+                        <td style={{ padding: '8px', fontSize: '0.8rem' }}>
+                          {r.ownerName ? (
+                            <div>
+                              <span>{r.ownerName}</span>
+                              {(() => {
+                                const oLow = (r.ownerName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                                const cLow = (r.clientName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                                return oLow && cLow && !oLow.includes(cLow) && !cLow.includes(oLow) ? (
+                                  <div style={{ color: '#e65100', fontWeight: 600, fontSize: '0.75rem', marginTop: 2 }}>⚠️ Name mismatch</div>
+                                ) : null;
+                              })()}
+                            </div>
+                          ) : <span style={{ color: '#ccc' }}>—</span>}
                         </td>
                       </tr>
                     ))}
