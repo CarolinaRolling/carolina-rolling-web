@@ -350,7 +350,7 @@ function WorkOrderDetailsPage() {
       setupCharge: '', otherCharges: '', partTotal: '',
       materialSource: 'customer_supplied', vendorId: null, supplierName: '', materialDescription: '',
       weSupplyMaterial: false, materialMarkupPercent: 20, rollingCost: '',
-      _rollValue: '', _rollMeasurePoint: 'inside', _rollMeasureType: 'radius', _tangentLength: '',
+      _rollValue: '', _rollMeasurePoint: 'inside', _rollMeasureType: 'diameter', _tangentLength: '',
       _materialOrigin: '', _rollingDescription: '', _materialDescription: '',
       _angleSize: '', _customAngleSize: '', _legOrientation: '',
       _lengthOption: '', _customLength: '',

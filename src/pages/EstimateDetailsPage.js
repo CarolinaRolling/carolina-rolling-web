@@ -509,7 +509,7 @@ function EstimateDetailsPage() {
       // PlateRollForm fields
       materialTotal: '', laborTotal: '', setupCharge: '', otherCharges: '', partTotal: '',
       materialSource: 'customer_supplied', _materialOrigin: '', _rollValue: '', _rollMeasurePoint: 'inside',
-      _rollMeasureType: 'radius', _tangentLength: '',
+      _rollMeasureType: 'diameter', _tangentLength: '',
       // AngleRollForm fields
       _angleSize: '', _customAngleSize: '', _legOrientation: '', _rollingDescription: '',
       _lengthOption: '', _customLength: ''

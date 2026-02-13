@@ -525,39 +525,36 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
 
   return (
     <>
-      {/* === SIZE & QUANTITY === */}
-      <div style={sectionStyle}>
-        {sectionTitle('🔧', 'Pipe/Tube Size', '#1565c0')}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="form-group">
-            <label className="form-label">Quantity *</label>
-            <input type="number" className="form-input" value={partData.quantity || 1}
-              onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })}
-              min="1" disabled={completeRings}
-              style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
-            {completeRings && ringCalc && !ringCalc.error && (
-              <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>
-                ⭕ Auto: {ringsNeeded} ring(s) × {ringCalc.pcsPerRing} pcs = {ringCalc.totalQty}
-              </div>
-            )}
+      {/* === QUANTITY === */}
+      <div className="form-group">
+        <label className="form-label">Quantity *</label>
+        <input type="number" className="form-input" value={partData.quantity || 1}
+          onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })}
+          min="1" disabled={completeRings}
+          style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
+        {completeRings && ringCalc && !ringCalc.error && (
+          <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>
+            ⭕ Auto: {ringsNeeded} ring(s) × {ringCalc.pcsPerRing} pcs = {ringCalc.totalQty}
           </div>
-          <div className="form-group">
-            <label className="form-label">Size *</label>
-            <select className="form-select" value={partData._pipeSize || ''}
-              onChange={(e) => handleSizeSelect(e.target.value)}>
-              <option value="">Select size...</option>
-              <optgroup label="Round Tube">
-                {TUBE_SIZES.map(s => <option key={s.label} value={s.label}>{s.label}</option>)}
-              </optgroup>
-              <optgroup label="Pipe">
-                {PIPE_SIZES.map(s => (
-                  <option key={s.label} value={s.label}>{s.label} ({s.od}" OD)</option>
-                ))}
-              </optgroup>
-              <option value="Custom">Custom Size</option>
-            </select>
-          </div>
-        </div>
+        )}
+      </div>
+
+      {/* === SIZE === */}
+      <div className="form-group">
+        <label className="form-label">Size *</label>
+        <select className="form-select" value={partData._pipeSize || ''}
+          onChange={(e) => handleSizeSelect(e.target.value)}>
+          <option value="">Select size...</option>
+          <optgroup label="Round Tube">
+            {TUBE_SIZES.map(s => <option key={s.label} value={s.label}>{s.label}</option>)}
+          </optgroup>
+          <optgroup label="Pipe">
+            {PIPE_SIZES.map(s => (
+              <option key={s.label} value={s.label}>{s.label} ({s.od}" OD)</option>
+            ))}
+          </optgroup>
+          <option value="Custom">Custom Size</option>
+        </select>
 
         {/* Show OD info for selected pipe */}
         {selectedSize && selectedSize.type === 'pipe' && (
@@ -566,83 +563,83 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
             {selectedSize.nominal} Pipe = <strong>{selectedSize.od}" OD</strong>
           </div>
         )}
+      </div>
 
-        {/* Custom OD input */}
-        {partData._pipeSize === 'Custom' && (
-          <div className="form-group" style={{ marginTop: 8 }}>
-            <label className="form-label">Outer Diameter (inches) *</label>
-            <input type="number" step="0.001" className="form-input" value={partData.outerDiameter || ''}
-              onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} placeholder="e.g. 2.375" />
-          </div>
-        )}
+      {/* Custom OD input */}
+      {partData._pipeSize === 'Custom' && (
+        <div className="form-group">
+          <label className="form-label">Outer Diameter (inches) *</label>
+          <input type="number" step="0.001" className="form-input" value={partData.outerDiameter || ''}
+            onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} placeholder="e.g. 2.375" />
+        </div>
+      )}
 
-        {/* Schedule selector for pipes */}
-        {selectedSize && selectedSize.type === 'pipe' && (
-          <div className="form-group" style={{ marginTop: 8 }}>
-            <label className="form-label">Schedule</label>
-            <select className="form-select" value={partData._schedule || ''}
-              onChange={(e) => handleScheduleSelect(e.target.value)}>
-              <option value="">Select schedule...</option>
-              {availableSchedules.map(s => (
-                <option key={s.schedule} value={s.schedule}>{s.label}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Wall thickness for tubes */}
-        {(!selectedSize || selectedSize.type === 'tube' || partData._pipeSize === 'Custom') && (
-          <div className="form-group" style={{ marginTop: 8 }}>
-            <label className="form-label">Wall Thickness</label>
-            <select className="form-select" value={TUBE_WALL_OPTIONS.includes(partData.wallThickness) ? partData.wallThickness : (partData.wallThickness ? 'Custom' : '')}
-              onChange={(e) => {
-                if (e.target.value === 'Custom') {
-                  setPartData({ ...partData, wallThickness: customWall || '' });
-                } else {
-                  setPartData({ ...partData, wallThickness: e.target.value });
-                  setCustomWall('');
-                }
-              }}>
-              <option value="">Select...</option>
-              {TUBE_WALL_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
-            </select>
-            {(partData.wallThickness === 'Custom' || isCustomWall) && (
-              <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter wall thickness"
-                value={isCustomWall ? partData.wallThickness : customWall}
-                onChange={(e) => { setCustomWall(e.target.value); setPartData({ ...partData, wallThickness: e.target.value }); }} />
-            )}
-          </div>
-        )}
-
-        {/* Length */}
-        <div className="form-group" style={{ marginTop: 8 }}>
-          <label className="form-label">Length</label>
-          <select className="form-select" value={partData._lengthOption || ''} onChange={(e) => {
-            const val = e.target.value;
-            if (val === 'Custom') {
-              setPartData({ ...partData, _lengthOption: 'Custom', length: partData._customLength || '' });
-            } else {
-              setPartData({ ...partData, _lengthOption: val, length: val, _customLength: '' });
-            }
-          }}>
-            <option value="">Select...</option>
-            <option value="20'">20'</option>
-            <option value="21'">21'</option>
-            <option value="30'">30'</option>
-            <option value="40'">40'</option>
-            <option value="Custom">Custom</option>
+      {/* Schedule selector for pipes */}
+      {selectedSize && selectedSize.type === 'pipe' && (
+        <div className="form-group">
+          <label className="form-label">Schedule</label>
+          <select className="form-select" value={partData._schedule || ''}
+            onChange={(e) => handleScheduleSelect(e.target.value)}>
+            <option value="">Select schedule...</option>
+            {availableSchedules.map(s => (
+              <option key={s.schedule} value={s.schedule}>{s.label}</option>
+            ))}
           </select>
-          {(partData._lengthOption === 'Custom') && (
-            <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter length"
-              value={partData._customLength || ''}
-              onChange={(e) => { setPartData({ ...partData, _customLength: e.target.value, length: e.target.value }); }} />
+        </div>
+      )}
+
+      {/* Wall thickness for tubes */}
+      {(!selectedSize || selectedSize.type === 'tube' || partData._pipeSize === 'Custom') && (
+        <div className="form-group">
+          <label className="form-label">Wall Thickness</label>
+          <select className="form-select" value={TUBE_WALL_OPTIONS.includes(partData.wallThickness) ? partData.wallThickness : (partData.wallThickness ? 'Custom' : '')}
+            onChange={(e) => {
+              if (e.target.value === 'Custom') {
+                setPartData({ ...partData, wallThickness: customWall || '' });
+              } else {
+                setPartData({ ...partData, wallThickness: e.target.value });
+                setCustomWall('');
+              }
+            }}>
+            <option value="">Select...</option>
+            {TUBE_WALL_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
+          </select>
+          {(partData.wallThickness === 'Custom' || isCustomWall) && (
+            <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter wall thickness"
+              value={isCustomWall ? partData.wallThickness : customWall}
+              onChange={(e) => { setCustomWall(e.target.value); setPartData({ ...partData, wallThickness: e.target.value }); }} />
           )}
         </div>
+      )}
+
+      {/* Length */}
+      <div className="form-group">
+        <label className="form-label">Length</label>
+        <select className="form-select" value={partData._lengthOption || ''} onChange={(e) => {
+          const val = e.target.value;
+          if (val === 'Custom') {
+            setPartData({ ...partData, _lengthOption: 'Custom', length: partData._customLength || '' });
+          } else {
+            setPartData({ ...partData, _lengthOption: val, length: val, _customLength: '' });
+          }
+        }}>
+          <option value="">Select...</option>
+          <option value="20'">20'</option>
+          <option value="21'">21'</option>
+          <option value="30'">30'</option>
+          <option value="40'">40'</option>
+          <option value="Custom">Custom</option>
+        </select>
+        {(partData._lengthOption === 'Custom') && (
+          <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter length"
+            value={partData._customLength || ''}
+            onChange={(e) => { setPartData({ ...partData, _customLength: e.target.value, length: e.target.value }); }} />
+        )}
       </div>
 
       {/* === ROLLING SPECS === */}
       <div style={sectionStyle}>
-        {sectionTitle('🎯', 'Rolling Specifications', '#6a1b9a')}
+        {sectionTitle('🔄', 'Roll Information', '#1565c0')}
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
           <div className="form-group">
             <label className="form-label">Roll to: *</label>
