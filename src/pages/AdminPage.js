@@ -5,7 +5,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -90,6 +90,10 @@ function AdminPage() {
   const [weldDefaultRate, setWeldDefaultRate] = useState('');
   const [weldRatesSaving, setWeldRatesSaving] = useState(false);
 
+  // Permit verification batch
+  const [batchStatus, setBatchStatus] = useState(null);
+  const [batchPolling, setBatchPolling] = useState(false);
+
   useEffect(() => {
     if (!isAdmin()) {
       navigate('/inventory');
@@ -117,6 +121,8 @@ function AdminPage() {
     } else if (activeTab === 'system') {
       setSystemLogs([...window.nasErrorLog]);
       setLoading(false);
+    } else if (activeTab === 'permits') {
+      loadBatchStatus();
     }
   }, [activeTab, logsPage]);
 
@@ -330,6 +336,55 @@ function AdminPage() {
       setSuccess('Weld rates saved'); setTimeout(() => setSuccess(null), 3000);
     } catch { setError('Failed to save weld rates'); }
     finally { setWeldRatesSaving(false); }
+  };
+
+  const loadBatchStatus = async () => {
+    try {
+      setLoading(true);
+      const res = await getBatchStatus();
+      setBatchStatus(res.data?.data || null);
+      // If running, start polling
+      if (res.data?.data?.status === 'running') {
+        startBatchPolling();
+      }
+    } catch (err) {
+      console.error('Failed to load batch status:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startBatchPolling = () => {
+    if (batchPolling) return;
+    setBatchPolling(true);
+    const interval = setInterval(async () => {
+      try {
+        const res = await getBatchStatus();
+        const data = res.data?.data;
+        setBatchStatus(data);
+        if (data?.status !== 'running') {
+          clearInterval(interval);
+          setBatchPolling(false);
+        }
+      } catch {
+        clearInterval(interval);
+        setBatchPolling(false);
+      }
+    }, 5000); // Poll every 5 seconds
+  };
+
+  const handleStartBatch = async () => {
+    if (!window.confirm('Start batch verification of all client seller\'s permits? This may take several minutes (1 minute per client).')) return;
+    try {
+      setError(null);
+      const res = await startBatchVerification();
+      setBatchStatus({ status: 'running', total: res.data?.data?.total || 0, completed: 0, results: [] });
+      setSuccess(res.data?.message || 'Batch started');
+      setTimeout(() => setSuccess(null), 3000);
+      startBatchPolling();
+    } catch (err) {
+      setError('Failed to start batch: ' + (err.response?.data?.error?.message || err.message));
+    }
   };
 
   const loadScheduleEmailSettings = async () => {
@@ -626,6 +681,12 @@ function AdminPage() {
           onClick={() => setActiveTab('weldrates')}
         >
           🔥 Weld Rates
+        </button>
+        <button 
+          className={`tab ${activeTab === 'permits' ? 'active' : ''}`}
+          onClick={() => setActiveTab('permits')}
+        >
+          🔐 Permit Verify
         </button>
         <button 
           className={`tab ${activeTab === 'schedule' ? 'active' : ''}`}
@@ -942,7 +1003,7 @@ function AdminPage() {
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>⚙️ Mandrel Bending Dies</h3>
-              <button className="btn btn-primary btn-sm" onClick={() => setMandrelDies([...mandrelDies, { od: '', minDiameter: '', label: '', notes: '' }])}>
+              <button className="btn btn-primary btn-sm" onClick={() => setMandrelDies([...mandrelDies, { od: '', wallThickness: '', minDiameter: '', label: '', notes: '' }])}>
                 + Add Die
               </button>
             </div>
@@ -958,7 +1019,8 @@ function AdminPage() {
                     <tr style={{ background: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
                       <th style={{ padding: '10px 6px', textAlign: 'left' }}>Label</th>
                       <th style={{ padding: '10px 6px', textAlign: 'center' }}>Tube/Pipe OD</th>
-                      <th style={{ padding: '10px 6px', textAlign: 'center' }}>Min CL Diameter</th>
+                      <th style={{ padding: '10px 6px', textAlign: 'center' }}>Wall Thickness</th>
+                      <th style={{ padding: '10px 6px', textAlign: 'center' }}>Min CLR</th>
                       <th style={{ padding: '10px 6px', textAlign: 'left' }}>Notes</th>
                       <th style={{ padding: '10px 4px', textAlign: 'center' }}></th>
                     </tr>
@@ -971,6 +1033,9 @@ function AdminPage() {
                         </td>
                         <td style={{ padding: '6px 4px', textAlign: 'center' }}>
                           <input type="number" step="0.001" className="form-input" value={die.od || ''} onChange={(e) => { const u = [...mandrelDies]; u[idx] = { ...u[idx], od: e.target.value }; setMandrelDies(u); }} style={{ width: 70, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
+                        </td>
+                        <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                          <input className="form-input" value={die.wallThickness || ''} onChange={(e) => { const u = [...mandrelDies]; u[idx] = { ...u[idx], wallThickness: e.target.value }; setMandrelDies(u); }} placeholder='e.g. .120"' style={{ width: 80, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
                         </td>
                         <td style={{ padding: '6px 4px', textAlign: 'center' }}>
                           <input type="number" step="0.1" className="form-input" value={die.minDiameter || ''} onChange={(e) => { const u = [...mandrelDies]; u[idx] = { ...u[idx], minDiameter: e.target.value }; setMandrelDies(u); }} style={{ width: 80, textAlign: 'center', padding: '4px', fontSize: '0.8rem' }} />
@@ -1039,9 +1104,13 @@ function AdminPage() {
                             { key: 'angle_roll', label: 'Angle' },
                             { key: 'pipe_roll', label: 'Pipe/Tube' },
                             { key: 'tube_roll', label: 'Sq/Rect Tube' },
+                            { key: 'flat_bar', label: 'Flat Bar' },
                             { key: 'beam_roll', label: 'Beam' },
                             { key: 'channel_roll', label: 'Channel' },
-                            { key: 'flat_stock', label: 'Flat' },
+                            { key: 'tee_bar', label: 'Tee Bar' },
+                            { key: 'flat_stock', label: 'Flat Stock' },
+                            { key: 'press_brake', label: 'Press Brake' },
+                            { key: 'cone_roll', label: 'Cone' },
                           ].map(pt => (
                             <label key={pt.key} style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.75rem', cursor: 'pointer',
                               background: (grade.partTypes || []).includes(pt.key) ? '#e3f2fd' : '#f5f5f5',
@@ -1406,6 +1475,106 @@ function AdminPage() {
       )}
 
       {/* System Logs Tab Content */}
+      {activeTab === 'permits' && !loading && (
+        <div>
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>🔐 CDTFA Seller's Permit Verification</h3>
+              <button className="btn btn-primary" onClick={handleStartBatch}
+                disabled={batchStatus?.status === 'running'}
+                style={{ fontWeight: 600 }}>
+                {batchStatus?.status === 'running' ? '⏳ Running...' : '🔍 Verify All Permits'}
+              </button>
+            </div>
+
+            <div style={{ padding: 12, background: '#f5f5f5', borderRadius: 8, fontSize: '0.85rem', color: '#666', marginBottom: 16 }}>
+              <strong>How it works:</strong> This checks each client's resale certificate number against the California CDTFA website.
+              Each lookup takes about 1 minute (with a delay between requests to be respectful of the government server).
+              You can also verify individual clients from the Clients & Vendors page.
+              <div style={{ marginTop: 8, padding: 8, background: '#e8f5e9', borderRadius: 4, color: '#2e7d32' }}>
+                🗓️ <strong>Auto-runs annually</strong> on January 2nd at 3:00 AM Eastern. Use the button above for on-demand checks.
+              </div>
+            </div>
+
+            {/* Batch Progress */}
+            {batchStatus && batchStatus.status === 'running' && (
+              <div style={{ marginBottom: 16, padding: 16, background: '#e3f2fd', borderRadius: 8, border: '1px solid #90caf9' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <strong style={{ color: '#1565c0' }}>⏳ Batch Verification In Progress</strong>
+                  <span style={{ fontWeight: 600, color: '#1565c0' }}>{batchStatus.completed}/{batchStatus.total}</span>
+                </div>
+                <div style={{ background: '#bbdefb', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                  <div style={{ background: '#1976d2', height: '100%', width: `${batchStatus.total > 0 ? (batchStatus.completed / batchStatus.total * 100) : 0}%`, borderRadius: 4, transition: 'width 0.5s' }} />
+                </div>
+                <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#666' }}>
+                  Estimated time remaining: ~{Math.max(0, (batchStatus.total - batchStatus.completed))} minutes
+                </div>
+              </div>
+            )}
+
+            {batchStatus && batchStatus.status === 'complete' && (
+              <div style={{ marginBottom: 16, padding: 12, background: '#e8f5e9', borderRadius: 8, border: '1px solid #a5d6a7', fontSize: '0.9rem', color: '#2e7d32' }}>
+                ✅ Batch verification complete — {batchStatus.completed}/{batchStatus.total} clients verified
+                {batchStatus.completedAt && <span style={{ marginLeft: 8, color: '#888', fontSize: '0.8rem' }}>({new Date(batchStatus.completedAt).toLocaleString()})</span>}
+              </div>
+            )}
+
+            {batchStatus && batchStatus.status === 'error' && (
+              <div style={{ marginBottom: 16, padding: 12, background: '#ffebee', borderRadius: 8, border: '1px solid #ef9a9a', fontSize: '0.9rem', color: '#c62828' }}>
+                ❌ Batch error: {batchStatus.error}
+              </div>
+            )}
+
+            {/* Results Table */}
+            {batchStatus && batchStatus.results && batchStatus.results.length > 0 && (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
+                      <th style={{ padding: '10px 8px', textAlign: 'left' }}>Client</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left' }}>Permit #</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'center' }}>Status</th>
+                      <th style={{ padding: '10px 8px', textAlign: 'left' }}>CDTFA Response</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Sort: non-active first, then by name */}
+                    {[...batchStatus.results].sort((a, b) => {
+                      if (a.status === 'active' && b.status !== 'active') return 1;
+                      if (a.status !== 'active' && b.status === 'active') return -1;
+                      return (a.clientName || '').localeCompare(b.clientName || '');
+                    }).map((r, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #eee', background: r.status !== 'active' && r.status !== 'unknown' ? '#fff8f8' : undefined }}>
+                        <td style={{ padding: '8px' }}><strong>{r.clientName}</strong></td>
+                        <td style={{ padding: '8px', fontFamily: 'monospace' }}>{r.permitNumber}</td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>
+                          {r.status === 'active' && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700, background: '#e8f5e9', color: '#2e7d32' }}>✅ Active</span>}
+                          {r.status === 'closed' && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700, background: '#ffebee', color: '#c62828' }}>❌ Closed</span>}
+                          {r.status === 'not_found' && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700, background: '#ffebee', color: '#c62828' }}>❌ Not Found</span>}
+                          {r.status === 'error' && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700, background: '#fff3e0', color: '#e65100' }}>⚠️ Error</span>}
+                          {r.status === 'unknown' && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700, background: '#fff3e0', color: '#e65100' }}>⚠️ Unknown</span>}
+                        </td>
+                        <td style={{ padding: '8px', fontSize: '0.8rem', color: '#666', fontStyle: 'italic', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {r.rawResponse || r.error || '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {(!batchStatus || !batchStatus.results || batchStatus.results.length === 0) && batchStatus?.status !== 'running' && (
+              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
+                <div style={{ fontSize: '2rem', marginBottom: 8 }}>🔐</div>
+                <p>No batch verification results yet. Click "Verify All Permits" to check all client resale certificates.</p>
+                <p style={{ fontSize: '0.8rem' }}>You can also verify individual clients from the <strong>Clients & Vendors</strong> page.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {activeTab === 'system' && !loading && (
         <div>
           <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>

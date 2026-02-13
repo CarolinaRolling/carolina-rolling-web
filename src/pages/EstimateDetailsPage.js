@@ -13,6 +13,7 @@ import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
 import FlatStockForm from '../components/FlatStockForm';
 import FabServiceForm from '../components/FabServiceForm';
+import ShopRateForm from '../components/ShopRateForm';
 import PipeRollForm from '../components/PipeRollForm';
 import SquareTubeRollForm from '../components/SquareTubeRollForm';
 import FlatBarRollForm from '../components/FlatBarRollForm';
@@ -35,6 +36,7 @@ const PART_TYPES = {
   press_brake: { label: 'Press Brake', icon: '⏏️', desc: 'Press brake forming from print' },
   flat_stock: { label: 'Flat Stock', icon: '📄', desc: 'Ship flat — plate, angle, tube, channel, beam (no rolling)' },
   fab_service: { label: 'Fabrication Service', icon: '🔥', desc: 'Welding, fitting, cut-to-fit — links to another part' },
+  shop_rate: { label: 'Shop Rate', icon: '⏱️', desc: 'Hourly rate — flattening, art projects, custom work' },
   other: { label: 'Other', icon: '📦', desc: 'Custom or miscellaneous parts' }
 };
 
@@ -191,7 +193,7 @@ function EstimateDetailsPage() {
 
   const calculatePartTotal = (part) => {
     // Per-each pricing: (mat cost × markup + labor) × qty
-    if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType)) {
+    if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType)) {
       const qty = parseInt(part.quantity) || 1;
       const materialCost = parseFloat(part.materialTotal) || 0;
       const materialMarkup = parseFloat(part.materialMarkupPercent) || 0;
@@ -367,7 +369,7 @@ function EstimateDetailsPage() {
     let highestMinimum = 0;
     let highestMinRule = null;
 
-    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'];
+    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
 
     parts.forEach(part => {
       if (!EA_PRICED.includes(part.partType)) return;
@@ -403,7 +405,7 @@ function EstimateDetailsPage() {
     
     parts.forEach(part => {
       const calc = calculatePartTotal(part);
-      if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType)) {
+      if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType)) {
         eaPricedTotal += calc.partTotal;
       } else {
         partsSubtotal += calc.partTotal;
@@ -679,6 +681,11 @@ function EstimateDetailsPage() {
       if (!partData._serviceType) warnings.push('Service type is required');
       if (!partData._linkedPartId) warnings.push('A linked part must be selected');
     }
+
+    if (partData.partType === 'shop_rate') {
+      if (!partData._shopDescription) warnings.push('Job description is required');
+      if (!partData._shopHours || parseFloat(partData._shopHours) <= 0) warnings.push('Estimated hours is required');
+    }
     
     // Generic validations for all types
     if (!partData.quantity || parseInt(partData.quantity) < 1) warnings.push('Quantity must be at least 1');
@@ -706,7 +713,7 @@ function EstimateDetailsPage() {
       if (!dataToSend.rollType) dataToSend.rollType = null;
       
       // Recalculate partTotal at save time to avoid useEffect timing issues
-      const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'];
+      const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
       if (EA_PRICED.includes(dataToSend.partType)) {
         const qty = parseInt(dataToSend.quantity) || 1;
         const matCost = parseFloat(dataToSend.materialTotal) || 0;
@@ -836,11 +843,11 @@ function EstimateDetailsPage() {
     const totals = calculateTotals();
     const partsHtml = parts.map(part => {
       const calc = calculatePartTotal(part);
-      const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType);
+      const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
       const pricingHtml = isEaPricing
         ? `<table style="width:100%;margin-top:8px;">
             ${calc.materialEach > 0 ? `<tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialEach)}</td></tr>` : ''}
-            <tr><td>${part.partType === 'fab_service' ? 'Service' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}:</td><td style="text-align:right;">${formatCurrency(calc.laborEach)}</td></tr>
+            <tr><td>${part.partType === 'fab_service' ? 'Service' : part.partType === 'shop_rate' ? 'Shop Rate' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}:</td><td style="text-align:right;">${formatCurrency(calc.laborEach)}</td></tr>
             <tr style="border-top:1px solid #ddd;"><td><strong>Unit Price:</strong></td><td style="text-align:right;"><strong>${formatCurrency(calc.unitPrice)}</strong></td></tr>
             <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Line Total (${part.quantity} × ${formatCurrency(calc.unitPrice)}):</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`
         : `<table style="width:100%;margin-top:8px;"><tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialTotal)}</td></tr>
@@ -855,8 +862,9 @@ function EstimateDetailsPage() {
         ${(part.diameter || part.radius) ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">🔄 ${part.diameter || part.radius}" ${(() => { const mp = part._rollMeasurePoint || 'inside'; const isRad = !!part.radius && !part.diameter; if (mp === 'inside') return isRad ? 'ISR' : 'ID'; if (mp === 'outside') return isRad ? 'OSR' : 'OD'; return isRad ? 'CLR' : 'CLD'; })()}${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}${part.arcDegrees ? ' | Arc: ' + part.arcDegrees + '°' : ''}</p>` : ''}
         ${(() => { const desc = part._rollingDescription || part.specialInstructions || ''; const lines = desc.split('\n').filter(l => l.includes('Rise:') || l.includes('Complete Ring') || l.includes('Cone:') || l.includes('Sheet Size:')); return lines.length ? `<p style="margin:0 0 4px;color:#6a1b9a;font-size:0.85em;">📐 ${lines.map(l => l.trim()).join(' | ')}</p>` : ''; })()}
         ${part._pitchEnabled ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;">🌀 Pitch: ${part._pitchDirection === 'clockwise' ? 'CW' : 'CCW'}${part._pitchMethod === 'runrise' && part._pitchRise ? ' | Run: ' + part._pitchRun + '" / Rise: ' + part._pitchRise + '"' : ''}${part._pitchMethod === 'degree' && part._pitchAngle ? ' | Angle: ' + part._pitchAngle + '°' : ''}${part._pitchMethod === 'space' && part._pitchSpaceValue ? ' | ' + (part._pitchSpaceType === 'center' ? 'C-C' : 'Between') + ': ' + part._pitchSpaceValue + '"' : ''}${part._pitchDevelopedDia > 0 ? ' | <strong style="color:#2e7d32;">Dev Ø: ' + parseFloat(part._pitchDevelopedDia).toFixed(4) + '"</strong>' : ''}</p>` : ''}
-        ${part.partType !== 'fab_service' ? (part.materialSource === 'customer_supplied' || !part.weSupplyMaterial ? `<p style="color:#388e3c;">Material supplied by: ${formData.clientName || 'Customer'}</p>` : `<p style="color:#388e3c;">Material supplied by: Carolina Rolling Company</p>`) : ''}
+        ${!['fab_service', 'shop_rate'].includes(part.partType) ? (part.materialSource === 'customer_supplied' || !part.weSupplyMaterial ? `<p style="color:#388e3c;">Material supplied by: ${formData.clientName || 'Customer'}</p>` : `<p style="color:#388e3c;">Material supplied by: Carolina Rolling Company</p>`) : ''}
         ${pricingHtml}
+        ${part.partType === 'shop_rate' ? '<p style="margin:8px 0 0;padding:8px;background:#fff3e0;border:1px solid #ffcc80;border-radius:6px;font-size:0.85em;color:#e65100;">⚠️ Pricing is an estimate based on predicted hours. Actual cost may vary depending on hours required to complete the job.</p>' : ''}
       </div>`;
     }).join('');
     
@@ -1162,7 +1170,7 @@ function EstimateDetailsPage() {
                   </div>
 
                   {/* Material Section - only show if we supply material (old part types) */}
-                  {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType) && part.weSupplyMaterial && part.materialDescription && (
+                  {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType) && part.weSupplyMaterial && part.materialDescription && (
                     <div style={{ background: '#fff3e0', borderRadius: 8, padding: 12, marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <strong>📦 Material supplied by: Carolina Rolling Company</strong>
@@ -1176,12 +1184,12 @@ function EstimateDetailsPage() {
                   )}
 
                   {/* Costs Section - ea pricing */}
-                  {['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service'].includes(part.partType) ? (
+                  {['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType) ? (
                     <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
                       {part.materialDescription && (
                         <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
                           📦 {part.materialDescription}
-                          {part.partType !== 'fab_service' && (
+                          {!['fab_service', 'shop_rate'].includes(part.partType) && (
                             <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>
                               {part._materialSource === 'we_order' || part.weSupplyMaterial ? 'Material supplied by: Carolina Rolling Company' : `Material supplied by: ${formData.clientName || 'Customer'}`}
                             </div>
@@ -1197,7 +1205,7 @@ function EstimateDetailsPage() {
                       )}
                       {/* Rolling/Labor line */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
-                        <span>{part.partType === 'fab_service' ? 'Service' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}</span>
+                        <span>{part.partType === 'fab_service' ? 'Service' : part.partType === 'shop_rate' ? 'Shop Rate' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}</span>
                         <strong>{formatCurrency(calc.laborEach)}</strong>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #ddd', marginTop: 4, fontWeight: 600 }}>
@@ -1208,6 +1216,11 @@ function EstimateDetailsPage() {
                         <strong>Line Total ({part.quantity} × {formatCurrency(calc.unitPrice)})</strong>
                         <strong style={{ color: '#2e7d32' }}>{formatCurrency(calc.partTotal)}</strong>
                       </div>
+                      {part.partType === 'shop_rate' && (
+                        <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 6, padding: 8, marginTop: 8, fontSize: '0.8rem', color: '#e65100' }}>
+                          ⚠️ Pricing is an estimate based on predicted hours. Actual cost may vary depending on hours required to complete the job.
+                        </div>
+                      )}
                     </div>
                   ) : (
                   /* Costs Section - old part types */
@@ -1781,6 +1794,13 @@ function EstimateDetailsPage() {
                     estimateParts={parts}
                     showMessage={showMessage}
                     setError={setError}
+                  />
+                </div>
+              ) : partData.partType === 'shop_rate' ? (
+                <div className="grid grid-2">
+                  <ShopRateForm
+                    partData={partData}
+                    setPartData={setPartData}
                   />
                 </div>
               ) : (

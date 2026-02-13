@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, Users, Building2, Search, Check, X } from 'lucide-react';
-import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor } from '../services/api';
+import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit } from '../services/api';
 
 const formatPhone = (val) => {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -26,6 +26,7 @@ const ClientsVendorsPage = () => {
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState({});
   const [saving, setSaving] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -110,6 +111,35 @@ const ClientsVendorsPage = () => {
       loadData();
     } catch (err) {
       setError('Failed to reactivate client');
+    }
+  };
+
+  const handleVerifyPermit = async (clientId, permitNumber) => {
+    if (!permitNumber || !permitNumber.trim()) {
+      setError('No resale certificate number to verify');
+      return;
+    }
+    try {
+      setVerifying(true);
+      const res = await verifySinglePermit({ clientId, permitNumber: permitNumber.trim() });
+      const result = res.data?.data;
+      if (result) {
+        // Update local formData if editing this client
+        if (editing && editing.id === clientId) {
+          setFormData(prev => ({
+            ...prev,
+            permitStatus: result.status,
+            permitLastVerified: result.verifiedDate,
+            permitRawResponse: result.rawResponse
+          }));
+        }
+        showMessage(`Permit verified: ${result.status.toUpperCase()}${result.rawResponse ? ' — ' + result.rawResponse : ''}`);
+        loadData();
+      }
+    } catch (err) {
+      setError('Failed to verify permit: ' + (err.response?.data?.error?.message || err.message));
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -286,6 +316,10 @@ const ClientsVendorsPage = () => {
                     <td>
                       <strong>{client.name}</strong>
                       {client.noTag && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: '#fff3e0', color: '#e65100', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>🚫 No Tag</span>}
+                      {client.resaleCertificate && client.permitStatus === 'active' && <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#e8f5e9', color: '#2e7d32', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>✅ Permit</span>}
+                      {client.resaleCertificate && client.permitStatus === 'closed' && <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#ffebee', color: '#c62828', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>❌ Permit Closed</span>}
+                      {client.resaleCertificate && client.permitStatus === 'not_found' && <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#ffebee', color: '#c62828', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>❌ Permit Not Found</span>}
+                      {client.resaleCertificate && (!client.permitStatus || client.permitStatus === 'unverified') && <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#fff3e0', color: '#e65100', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>⚠️ Unverified</span>}
                       {client.address && <div style={{ fontSize: '0.8rem', color: '#666' }}>{client.address}</div>}
                     </td>
                     <td>
@@ -443,6 +477,38 @@ const ClientsVendorsPage = () => {
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label className="form-label">Resale Certificate #</label>
                   <input className="form-input" value={formData.resaleCertificate || ''} onChange={(e) => setFormData({ ...formData, resaleCertificate: e.target.value })} />
+                </div>
+              )}
+              {formData.taxStatus === 'resale' && formData.resaleCertificate && (
+                <div style={{ gridColumn: 'span 2', padding: 12, background: '#f5f5f5', borderRadius: 8, border: '1px solid #e0e0e0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: 2 }}>CDTFA Permit Status</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {formData.permitStatus === 'active' && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700, background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7' }}>✅ Active</span>}
+                        {formData.permitStatus === 'closed' && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700, background: '#ffebee', color: '#c62828', border: '1px solid #ef9a9a' }}>❌ Closed</span>}
+                        {formData.permitStatus === 'not_found' && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700, background: '#ffebee', color: '#c62828', border: '1px solid #ef9a9a' }}>❌ Not Found</span>}
+                        {formData.permitStatus === 'error' && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700, background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80' }}>⚠️ Error</span>}
+                        {formData.permitStatus === 'unknown' && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700, background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80' }}>⚠️ Unknown</span>}
+                        {(!formData.permitStatus || formData.permitStatus === 'unverified') && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 600, background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80' }}>Never verified</span>}
+                        {formData.permitLastVerified && (
+                          <span style={{ fontSize: '0.75rem', color: '#888' }}>
+                            Last verified: {new Date(formData.permitLastVerified).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      {formData.permitRawResponse && (
+                        <div style={{ fontSize: '0.75rem', color: '#666', marginTop: 4, fontStyle: 'italic' }}>
+                          "{formData.permitRawResponse}"
+                        </div>
+                      )}
+                    </div>
+                    <button type="button" className="btn btn-sm" disabled={verifying}
+                      onClick={() => handleVerifyPermit(editing?.id, formData.resaleCertificate)}
+                      style={{ padding: '6px 14px', background: verifying ? '#bbb' : '#1565c0', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.8rem', cursor: verifying ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                      {verifying ? '⏳ Verifying...' : '🔍 Verify Now'}
+                    </button>
+                  </div>
                 </div>
               )}
               <div className="form-group" style={{ gridColumn: 'span 2' }}>

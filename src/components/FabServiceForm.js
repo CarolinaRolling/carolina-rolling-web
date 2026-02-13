@@ -6,7 +6,21 @@ const SERVICE_TYPES = [
   { key: 'tack_weld', label: 'Tack Weld', icon: '⚡', color: '#e65100', hasWeldCalc: false },
   { key: 'fit', label: 'Fit Only', icon: '🔧', color: '#1565c0', hasWeldCalc: false },
   { key: 'cut_to_fit', label: 'Cut to Fit', icon: '✂️', color: '#2e7d32', hasWeldCalc: false },
+  { key: 'finishing', label: 'Finishing', icon: '✨', color: '#6a1b9a', hasWeldCalc: false },
   { key: 'other', label: 'Other Service', icon: '🛠️', color: '#616161', hasWeldCalc: false },
+];
+
+const FINISH_TYPES = [
+  '#1 Finish (Hot Rolled)',
+  '#2B Finish (Cold Rolled)',
+  '#3 Finish (Intermediate Polish)',
+  '#4 Finish (Brushed/Satin)',
+  '#6 Finish (Fine Satin)',
+  '#7 Finish (Reflective)',
+  '#8 Finish (Mirror)',
+  'Bead Blast',
+  'Grain Finish',
+  'Custom',
 ];
 
 /**
@@ -135,7 +149,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
 
   // Available parts (exclude fab services)
   const availableParts = useMemo(() => {
-    return estimateParts.filter(p => p.partType !== 'fab_service');
+    return estimateParts.filter(p => p.partType !== 'fab_service' && p.partType !== 'shop_rate');
   }, [estimateParts]);
 
   // Find linked part using string comparison
@@ -191,12 +205,20 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
     const d = [];
     if (serviceConfig) d.push(serviceConfig.label);
     if (linkedPart) d.push('Part #' + (linkedPart.partNumber || '?'));
-    if (selectedSeam && !isCustomSeam) d.push(selectedSeam.label);
-    if (isCustomSeam && partData._customSeamLength) d.push('Custom Seam: ' + partData._customSeamLength + '"');
-    if (partData._bevelNotes) d.push('Bevel: ' + partData._bevelNotes);
+    if (serviceType === 'finishing') {
+      if (partData._finishType) d.push(partData._finishType === 'Custom' ? (partData._finishTypeCustom || 'Custom Finish') : partData._finishType);
+      if (partData._finishSide) {
+        const sideLabel = partData._finishSide === 'one' ? 'One Side' : 'Both Sides';
+        d.push(sideLabel);
+      }
+    } else {
+      if (selectedSeam && !isCustomSeam) d.push(selectedSeam.label);
+      if (isCustomSeam && partData._customSeamLength) d.push('Custom Seam: ' + partData._customSeamLength + '"');
+      if (partData._bevelNotes) d.push('Bevel: ' + partData._bevelNotes);
+    }
     if (partData._serviceNotes) d.push(partData._serviceNotes);
     return d.join(' \u2014 ');
-  }, [serviceConfig, linkedPart, selectedSeam, isCustomSeam, partData._customSeamLength, partData._bevelNotes, partData._serviceNotes]);
+  }, [serviceConfig, serviceType, linkedPart, selectedSeam, isCustomSeam, partData._customSeamLength, partData._bevelNotes, partData._serviceNotes, partData._finishType, partData._finishTypeCustom, partData._finishSide]);
 
   // Pricing
   const qty = parseInt(partData.quantity) || 1;
@@ -340,6 +362,59 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
             <div style={{ background: '#e8f5e9', padding: 10, borderRadius: 8, fontSize: '0.85rem', marginTop: 8 }}>
               <strong style={{ color: '#2e7d32' }}>Seam Length: {seamLength.toFixed(2)}"</strong>
               <span style={{ color: '#666', marginLeft: 12 }}>({(seamLength / 12).toFixed(4)} ft)</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Finishing Options */}
+      {linkedPart && serviceType === 'finishing' && (
+        <div style={{ ...sectionStyle }}>
+          {sTitle('✨', 'Finish Details', '#6a1b9a')}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label className="form-label">Finish Type *</label>
+              <select className="form-select" value={partData._finishType || ''}
+                onChange={(e) => update({ _finishType: e.target.value })}>
+                <option value="">Select finish...</option>
+                {FINISH_TYPES.map(ft => <option key={ft} value={ft}>{ft}</option>)}
+              </select>
+              {partData._finishType === 'Custom' && (
+                <input className="form-input" style={{ marginTop: 6 }}
+                  value={partData._finishTypeCustom || ''}
+                  onChange={(e) => update({ _finishTypeCustom: e.target.value })}
+                  placeholder="Describe custom finish..." />
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label">Apply To *</label>
+              <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                {[
+                  { key: 'one', label: 'One Side', icon: '▬' },
+                  { key: 'both', label: 'Both Sides', icon: '▣' },
+                ].map(opt => (
+                  <button key={opt.key} type="button"
+                    onClick={() => update({ _finishSide: opt.key })}
+                    style={{
+                      flex: 1, padding: '10px 12px', borderRadius: 6, cursor: 'pointer',
+                      border: '2px solid ' + (partData._finishSide === opt.key ? '#6a1b9a' : '#ccc'),
+                      background: partData._finishSide === opt.key ? '#f3e5f5' : '#fff',
+                      color: partData._finishSide === opt.key ? '#6a1b9a' : '#666',
+                      fontWeight: partData._finishSide === opt.key ? 700 : 500,
+                      fontSize: '0.85rem'
+                    }}>
+                    {opt.icon} {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {partData._finishType && partData._finishSide && (
+            <div style={{ background: '#f3e5f5', padding: 10, borderRadius: 8, fontSize: '0.85rem', marginTop: 8, border: '1px solid #ce93d8' }}>
+              <strong style={{ color: '#6a1b9a' }}>
+                ✨ {partData._finishType === 'Custom' ? (partData._finishTypeCustom || 'Custom Finish') : partData._finishType} — {partData._finishSide === 'one' ? 'One Side' : 'Both Sides'}
+              </strong>
+              <span style={{ color: '#888', marginLeft: 8 }}>(Part #{linkedPart.partNumber})</span>
             </div>
           )}
         </div>

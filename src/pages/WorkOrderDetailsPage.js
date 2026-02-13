@@ -37,6 +37,7 @@ const PART_TYPES = {
   press_brake: { label: 'Press Brake', icon: '⏏️', desc: 'Press brake forming from print', fields: ['material', 'thickness', 'width', 'length'] },
   flat_stock: { label: 'Flat Stock', icon: '📄', desc: 'Flat material cut to custom print', fields: ['material', 'thickness', 'width', 'length'] },
   fab_service: { label: 'Fabrication Service', icon: '🔥', desc: 'Welding, fitting, cut-to-fit services', fields: [] },
+  shop_rate: { label: 'Shop Rate', icon: '⏱️', desc: 'Hourly rate — custom work', fields: [] },
   other: { label: 'Other', icon: '📦', desc: 'Custom or miscellaneous parts', fields: ['material', 'thickness', 'width', 'length', 'sectionSize', 'outerDiameter', 'wallThickness', 'rollType', 'radius', 'diameter', 'arcDegrees'] }
 };
 
@@ -85,15 +86,47 @@ function WorkOrderDetailsPage() {
   const [laborMinimums, setLaborMinimums] = useState([]);
   const fileInputRefs = useRef({});
   const docInputRef = useRef(null);
+  const [defaultTaxRate, setDefaultTaxRate] = useState(9.75);
 
   useEffect(() => { loadOrder(); loadLaborMinimums(); }, [id]);
+
+  const loadDefaultTaxRate = async () => {
+    try {
+      const res = await getSettings('tax_settings');
+      if (res.data?.data?.value?.defaultTaxRate) {
+        const rate = parseFloat(res.data.data.value.defaultTaxRate);
+        setDefaultTaxRate(rate);
+        return rate;
+      }
+    } catch (e) { /* use default */ }
+    return 9.75;
+  };
 
   const loadOrder = async () => {
     try {
       setLoading(true);
+      // Load admin default tax rate first
+      const adminTaxRate = await loadDefaultTaxRate();
       const response = await getWorkOrderById(id);
       const data = response.data.data;
       setOrder(data);
+
+      // Determine correct tax rate: WO stored > client-specific > admin default
+      let effectiveTaxRate = adminTaxRate;
+      if (data.taxRate) {
+        effectiveTaxRate = parseFloat(data.taxRate);
+      } else if (data.clientId) {
+        // Try to get client-specific tax rate
+        try {
+          const clientRes = await searchClients(data.clientName || '');
+          const clients = clientRes.data?.data || [];
+          const client = clients.find(c => c.id === data.clientId);
+          if (client?.customTaxRate) {
+            effectiveTaxRate = parseFloat(client.customTaxRate) * 100;
+          }
+        } catch (e) { /* use admin default */ }
+      }
+
       setEditData({
         clientId: data.clientId || null,
         clientName: data.clientName || '',
@@ -110,7 +143,7 @@ function WorkOrderDetailsPage() {
         // Pricing fields
         truckingDescription: data.truckingDescription || '',
         truckingCost: data.truckingCost || '',
-        taxRate: data.taxRate || '9.75',
+        taxRate: effectiveTaxRate.toString(),
         // Minimum charge override
         minimumOverride: data.minimumOverride || false,
         minimumOverrideReason: data.minimumOverrideReason || '',
@@ -708,6 +741,11 @@ function WorkOrderDetailsPage() {
           ${hasUniqueInstructions ? `
             <div style="margin-top:6px;white-space:pre-wrap;font-size:0.95rem;font-weight:600;color:#333">${specialInstr}</div>
           ` : ''}
+          ${part.partType === 'press_brake' && part._pressBrakeFileName ? `
+            <div style="margin-top:6px;padding:6px 10px;background:#e3f2fd;border:1px solid #90caf9;border-radius:4px;font-size:0.9rem">
+              🗂️ <strong>Brake File:</strong> ${part._pressBrakeFileName}
+            </div>
+          ` : ''}
           ${pdfFiles.length > 0 ? `
             <div style="margin-top:8px;padding:8px;background:#e8f5e9;border-radius:4px;font-size:0.85rem">
               📎 <strong>Attached Prints:</strong> ${pdfFiles.map(f => f.originalName).join(', ')}
@@ -922,7 +960,7 @@ function WorkOrderDetailsPage() {
     
     const trucking = parseFloat(editData.truckingCost) || parseFloat(order?.truckingCost) || 0;
     const subtotal = partsSubtotal + trucking;
-    const taxRate = parseFloat(editData.taxRate) || parseFloat(order?.taxRate) || 9.75;
+    const taxRate = parseFloat(editData.taxRate) || parseFloat(order?.taxRate) || defaultTaxRate;
     const taxAmount = subtotal * (taxRate / 100);
     const grandTotal = subtotal + taxAmount;
     return { partsSubtotal, trucking, subtotal, taxRate, taxAmount, grandTotal, minInfo };
@@ -1233,11 +1271,19 @@ function WorkOrderDetailsPage() {
                   {clientSuggestions.map(client => (
                     <div key={client.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
                       onMouseDown={() => {
-                        setEditData({ ...editData, clientId: client.id, clientName: client.name, _clientSearch: undefined,
+                        const updates = {
+                          ...editData, clientId: client.id, clientName: client.name, _clientSearch: undefined,
                           contactName: client.contactName || editData.contactName,
                           contactPhone: client.contactPhone || editData.contactPhone,
                           contactEmail: client.contactEmail || editData.contactEmail
-                        });
+                        };
+                        // Apply client-specific tax rate if they have one
+                        if (client.customTaxRate) {
+                          updates.taxRate = (parseFloat(client.customTaxRate) * 100).toFixed(2);
+                        } else {
+                          updates.taxRate = defaultTaxRate.toString();
+                        }
+                        setEditData(updates);
                         setShowClientSuggestions(false);
                       }}>
                       <strong>{client.name}</strong>
@@ -1635,7 +1681,7 @@ function WorkOrderDetailsPage() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                  <span>Tax ({(parseFloat(order.taxRate) || 9.75).toFixed(2)}%):</span>
+                  <span>Tax ({(parseFloat(order.taxRate) || defaultTaxRate).toFixed(2)}%):</span>
                   <span>{formatCurrency(calculateTotals().taxAmount)}</span>
                 </div>
               )}

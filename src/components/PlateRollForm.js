@@ -174,9 +174,13 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     const spec = rollMeasurePoint === 'inside' ? (rollMeasureType === 'radius' ? 'ISR' : 'ID') : rollMeasurePoint === 'outside' ? (rollMeasureType === 'radius' ? 'OSR' : 'OD') : (rollMeasureType === 'radius' ? 'CLR' : 'CLD');
     lines.push(`Roll to ${rv}" ${spec} EW`);
     if (showAngle && angleValue) lines.push(`Arc: ${angleValue}°`);
+    if (partData._protectivePaper && partData._protectivePaperSide) {
+      const sideLabel = partData._protectivePaperSide === 'double' ? 'Double Sided' : partData._protectivePaperSide === 'inside' ? 'Inside' : 'Outside';
+      lines.push(`Protective Paper: ${sideLabel}`);
+    }
     lines.push(...getPitchDescriptionLines(partData, clDiameter));
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, clDiameter, showAngle, angleValue, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, clDiameter, showAngle, angleValue, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia, partData._protectivePaper, partData._protectivePaperSide]);
 
   useEffect(() => {
     if (rollingDescription) setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
@@ -366,6 +370,40 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       {/* === PITCH / HELIX === */}
       <div style={sectionStyle}>
         <PitchSection partData={partData} setPartData={setPartData} clDiameter={clDiameter} inputDiameter={rollMeasureType === 'radius' ? (parseFloat(rollValue) || 0) * 2 : (parseFloat(rollValue) || 0)} profileOD={thicknessToDecimal(partData.thickness)} />
+      </div>
+
+      {/* === PROTECTIVE PAPER === */}
+      <div style={sectionStyle}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+          <input type="checkbox" checked={partData._protectivePaper || false}
+            onChange={(e) => setPartData({ ...partData, _protectivePaper: e.target.checked, ...(!e.target.checked ? { _protectivePaperSide: '' } : {}) })}
+            style={{ width: 18, height: 18, accentColor: '#1565c0' }} />
+          <span style={{ fontWeight: 600, color: partData._protectivePaper ? '#1565c0' : '#555' }}>
+            📄 Protective Paper
+          </span>
+        </label>
+        {partData._protectivePaper && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            {[
+              { key: 'inside', label: 'Inside', icon: '⬇️' },
+              { key: 'outside', label: 'Outside', icon: '⬆️' },
+              { key: 'double', label: 'Double Sided', icon: '↕️' },
+            ].map(opt => (
+              <button key={opt.key} type="button"
+                onClick={() => setPartData({ ...partData, _protectivePaperSide: opt.key })}
+                style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 6, cursor: 'pointer',
+                  border: '2px solid ' + (partData._protectivePaperSide === opt.key ? '#1565c0' : '#ccc'),
+                  background: partData._protectivePaperSide === opt.key ? '#e3f2fd' : '#fff',
+                  color: partData._protectivePaperSide === opt.key ? '#1565c0' : '#666',
+                  fontWeight: partData._protectivePaperSide === opt.key ? 700 : 500,
+                  fontSize: '0.85rem'
+                }}>
+                {opt.icon} {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* === SPECIAL INSTRUCTIONS === */}

@@ -961,11 +961,9 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
             </div>
           )}
         </div>
-      </div>
 
-      {/* === SPECIAL INSTRUCTIONS === */}
-      <div style={sectionStyle}>
-        <div className="form-group">
+        {/* Special Instructions - inside rolling section */}
+        <div className="form-group" style={{ marginTop: 12 }}>
           <label className="form-label">Special Instructions</label>
           <textarea className="form-textarea" value={partData.specialInstructions || ''} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} rows={2} />
         </div>

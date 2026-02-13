@@ -126,6 +126,13 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
           <textarea className="form-textarea" value={partData.specialInstructions || ''}
             onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} rows={2} />
         </div>
+        <div className="form-group" style={{ marginTop: 8 }}>
+          <label className="form-label">Press Brake File Name</label>
+          <input type="text" className="form-input" value={partData._pressBrakeFileName || ''}
+            onChange={(e) => setPartData({ ...partData, _pressBrakeFileName: e.target.value })}
+            placeholder="e.g. BRAKE-001.bp" />
+          <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Internal only — pre-programmed file name for the press brake (not shown to client)</div>
+        </div>
       </div>
 
       {/* === MATERIAL INFO === */}

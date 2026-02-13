@@ -281,15 +281,15 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       {/* CONE DIMENSIONS */}
       <div style={secStyle}>
         {secHead('🔺', 'Cone Dimensions', '#764ba2')}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8, marginBottom: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
+          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Large {largeDiaMeasure === 'radius' ? 'Radius' : 'Diameter'} *</label><input type="number" step="0.001" className="form-input" value={largeDia} onChange={function(e) { setLargeDia(e.target.value); }} placeholder="e.g. 24" /></div>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">Measured At</label><select className="form-select" value={largeDiaType} onChange={function(e) { setLargeDiaType(e.target.value); }}><option value="inside">Inside</option><option value="centerline">Centerline</option><option value="outside">Outside</option></select></div>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">Type</label><select className="form-select" value={largeDiaMeasure} onChange={function(e) { setLargeDiaMeasure(e.target.value); }}><option value="diameter">Diameter</option><option value="radius">Radius</option></select></div>
-          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Large {largeDiaMeasure === 'radius' ? 'Radius' : 'Diameter'} *</label><input type="number" step="0.001" className="form-input" value={largeDia} onChange={function(e) { setLargeDia(e.target.value); }} placeholder="e.g. 24" /></div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8, marginBottom: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
+          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Small {smallDiaMeasure === 'radius' ? 'Radius' : 'Diameter'} *</label><input type="number" step="0.001" className="form-input" value={smallDia} onChange={function(e) { setSmallDia(e.target.value); }} placeholder="e.g. 12" /></div>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">Measured At</label><select className="form-select" value={smallDiaType} onChange={function(e) { setSmallDiaType(e.target.value); }}><option value="inside">Inside</option><option value="centerline">Centerline</option><option value="outside">Outside</option></select></div>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">Type</label><select className="form-select" value={smallDiaMeasure} onChange={function(e) { setSmallDiaMeasure(e.target.value); }}><option value="diameter">Diameter</option><option value="radius">Radius</option></select></div>
-          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Small {smallDiaMeasure === 'radius' ? 'Radius' : 'Diameter'} *</label><input type="number" step="0.001" className="form-input" value={smallDia} onChange={function(e) { setSmallDia(e.target.value); }} placeholder="e.g. 12" /></div>
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">Cone Height *</label><input type="number" step="0.001" className="form-input" value={coneHeight} onChange={function(e) { setConeHeight(e.target.value); }} placeholder="e.g. 18" /></div>
 

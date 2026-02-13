@@ -293,4 +293,10 @@ export const createVendor = (data) => api.post('/vendors', data);
 export const updateVendor = (id, data) => api.put(`/vendors/${id}`, data);
 export const deleteVendor = (id) => api.delete(`/vendors/${id}`);
 
+// Permit Verification
+export const verifySinglePermit = (data) => api.post('/verify-permit', data);
+export const startBatchVerification = () => api.post('/verify-permits/batch');
+export const getBatchStatus = () => api.get('/verify-permits/batch/status');
+export const cancelBatchVerification = () => api.post('/verify-permits/batch/cancel');
+
 export default api;
