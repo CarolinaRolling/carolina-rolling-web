@@ -10,6 +10,17 @@ const formatPhone = (val) => {
   return `(${digits.slice(0,3)})${digits.slice(3,6)}-${digits.slice(6)}`;
 };
 
+const formatResale = (val) => {
+  const digits = val.replace(/\D/g, '').slice(0, 9);
+  if (digits.length <= 3) return digits;
+  return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+};
+
+const isValidResale = (val) => {
+  if (!val) return false;
+  return /^\d{3}-\d{6}$/.test(val.trim());
+};
+
 const ClientsVendorsPage = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('clients');
@@ -475,8 +486,16 @@ const ClientsVendorsPage = () => {
               </div>
               {formData.taxStatus === 'resale' && (
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Resale Certificate #</label>
-                  <input className="form-input" value={formData.resaleCertificate || ''} onChange={(e) => setFormData({ ...formData, resaleCertificate: e.target.value })} />
+                  <label className="form-label">Resale Certificate # <span style={{ fontWeight: 400, color: '#999', fontSize: '0.8rem' }}>(format: 123-456789)</span></label>
+                  <input className="form-input" value={formData.resaleCertificate || ''} 
+                    onChange={(e) => setFormData({ ...formData, resaleCertificate: formatResale(e.target.value) })}
+                    placeholder="000-000000" maxLength={10}
+                    style={{ fontFamily: 'monospace', fontSize: '1rem', letterSpacing: 1, borderColor: formData.resaleCertificate && !isValidResale(formData.resaleCertificate) ? '#e65100' : undefined }} />
+                  {formData.resaleCertificate && !isValidResale(formData.resaleCertificate) && (
+                    <div style={{ fontSize: '0.75rem', color: '#e65100', marginTop: 4 }}>
+                      ⚠️ Must be 9 digits in format: 123-456789
+                    </div>
+                  )}
                 </div>
               )}
               {formData.taxStatus === 'resale' && formData.resaleCertificate && (
@@ -503,9 +522,9 @@ const ClientsVendorsPage = () => {
                         </div>
                       )}
                     </div>
-                    <button type="button" className="btn btn-sm" disabled={verifying}
+                    <button type="button" className="btn btn-sm" disabled={verifying || !isValidResale(formData.resaleCertificate)}
                       onClick={() => handleVerifyPermit(editing?.id, formData.resaleCertificate)}
-                      style={{ padding: '6px 14px', background: verifying ? '#bbb' : '#1565c0', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.8rem', cursor: verifying ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+                      style={{ padding: '6px 14px', background: (verifying || !isValidResale(formData.resaleCertificate)) ? '#bbb' : '#1565c0', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.8rem', cursor: (verifying || !isValidResale(formData.resaleCertificate)) ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}>
                       {verifying ? '⏳ Verifying...' : '🔍 Verify Now'}
                     </button>
                   </div>
