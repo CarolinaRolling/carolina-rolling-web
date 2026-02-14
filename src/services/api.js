@@ -118,7 +118,7 @@ export const getWorkOrderById = (id) => api.get(`/workorders/${id}`);
 export const createWorkOrder = (data) => api.post('/workorders', data);
 export const updateWorkOrder = (id, data) => api.put(`/workorders/${id}`, data);
 export const deleteWorkOrder = (id) => api.delete(`/workorders/${id}`);
-export const getWorkOrderPrintPackage = (id, mode) => api.get(`/workorders/${id}/print-package?mode=${mode}`, { responseType: 'blob' });
+export const getWorkOrderPrintPackage = (id, mode, html) => api.post(`/workorders/${id}/print-package`, { mode, html }, { responseType: 'blob', timeout: 60000 });
 
 // Work Order Parts
 export const addWorkOrderPart = (workOrderId, data) => api.post(`/workorders/${workOrderId}/parts`, data);

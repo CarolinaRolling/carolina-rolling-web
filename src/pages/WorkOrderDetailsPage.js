@@ -899,7 +899,7 @@ function WorkOrderDetailsPage() {
     ${!includePricing ? '<br/><em>Production Copy</em>' : ''}
     ${allPdfUrls.length > 0 ? `
       <div style="margin-top:8px;padding:8px 10px;background:#f5f5f5;border-radius:4px;font-size:0.85rem;color:#333">
-        <strong>Attached prints (merged into separate PDF download):</strong>
+        <strong>Attached prints (included in this document):</strong>
         <ul style="margin:4px 0 0;padding-left:18px">
           ${allPdfUrls.map(f => `<li>Part #${f.partNumber}: ${f.name}</li>`).join('')}
           ${includePricing ? purchaseOrderUrls.map(f => `<li>🛒 ${f.name}</li>`).join('') : ''}
@@ -913,25 +913,27 @@ function WorkOrderDetailsPage() {
     return { html, hasPdfs: allPdfUrls.length > 0 || (includePricing && purchaseOrderUrls.length > 0) };
   };
 
-  // Helper to download merged PDF package from backend
-  const downloadMergedPdf = async (mode, saveToFile = false) => {
+  // Generate complete print package (work order details + attached PDFs merged into one)
+  const generatePrintPackage = async (mode, saveToFile = false) => {
     try {
-      const res = await getWorkOrderPrintPackage(id, mode);
+      setShowPrintMenu(false);
+      const includePricing = mode === 'full';
+      const { html } = buildWorkOrderPrintHtml(includePricing);
+      
+      // Send HTML to backend — it renders to PDF via Chrome, merges with part prints/POs
+      const res = await getWorkOrderPrintPackage(id, mode, html);
       const blob = new Blob([res.data], { type: 'application/pdf' });
       
-      // Verify it's actually a PDF (not an error JSON returned as blob)
-      // Check first few bytes for %PDF- header
+      // Verify it's actually a PDF
       const header = await blob.slice(0, 5).text();
       if (header !== '%PDF-') {
         const text = await blob.text();
-        console.warn('Merge did not return a valid PDF:', text.substring(0, 200));
-        if (saveToFile) {
-          try {
-            const errData = JSON.parse(text);
-            setError(errData.error?.message || 'Failed to generate merged PDF');
-          } catch { setError('No attached PDFs found to merge.'); }
-        }
-        return false;
+        console.warn('Print package did not return a valid PDF:', text.substring(0, 200));
+        try {
+          const errData = JSON.parse(text);
+          setError(errData.error?.message || 'Failed to generate print package');
+        } catch { setError('Failed to generate print package'); }
+        return;
       }
       
       const url = URL.createObjectURL(blob);
@@ -940,54 +942,28 @@ function WorkOrderDetailsPage() {
         const drLabel = order.drNumber ? `DR-${order.drNumber}` : order.orderNumber;
         const filename = mode === 'full' 
           ? `${drLabel}_Full_Package.pdf`
-          : `${drLabel}_Part_Prints.pdf`;
+          : `${drLabel}_Production_Package.pdf`;
         const a = document.createElement('a');
         a.href = url;
         a.download = filename;
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
       } else {
+        // Open in new tab — user can print from browser's PDF viewer
         window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        setTimeout(() => URL.revokeObjectURL(url), 120000);
       }
-      return true;
     } catch (err) {
-      // Don't show errors for merge failures during printing — the work order already printed
-      console.warn('Merged PDF not available:', err.response?.status || err.message);
-      if (saveToFile) {
-        setError('No attached PDFs found to merge. Upload part prints first.');
-      }
-      return false;
+      console.error('Print package error:', err);
+      setError('Failed to generate print package. Check Heroku logs for details.');
     }
   };
 
-  // Print Full Work Order (with pricing) — merged PDF includes part prints + order docs + purchase orders
-  const printFullWorkOrder = async () => {
-    const { html, hasPdfs } = buildWorkOrderPrintHtml(true);
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(html);
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 500);
-    // Open merged PDF in new tab for printing
-    if (hasPdfs) {
-      await downloadMergedPdf('full', false);
-    }
-    setShowPrintMenu(false);
-  };
+  // Print Full Work Order (with pricing + part prints + docs + POs)
+  const printFullWorkOrder = () => generatePrintPackage('full', false);
 
-  // Print Production Copy (no pricing) — merged PDF includes part prints ONLY
-  const printShopOrder = async () => {
-    const { html, hasPdfs } = buildWorkOrderPrintHtml(false);
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(html);
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 500);
-    // Open merged PDF in new tab for printing
-    if (hasPdfs) {
-      await downloadMergedPdf('production', false);
-    }
-    setShowPrintMenu(false);
-  };
+  // Print Production Copy (no pricing + part prints only)
+  const printShopOrder = () => generatePrintPackage('production', false);
 
   const printPartLabel = (part) => {
     const printWindow = window.open('', '_blank');
@@ -1236,20 +1212,20 @@ function WorkOrderDetailsPage() {
             <button className="btn btn-primary" onClick={() => setShowPrintMenu(!showPrintMenu)}><Printer size={18} />Print</button>
             {showPrintMenu && (
               <div style={{ position: 'absolute', top: '100%', right: 0, background: 'white', border: '1px solid #ddd', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 100, minWidth: 280 }}>
-                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Print</div>
+                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Open in Browser (Print)</div>
                 <button onClick={printFullWorkOrder} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  📋 Full Work Order<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>With pricing + all attached PDFs</span>
+                  📋 Full Work Order<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Details + pricing + prints + POs</span>
                 </button>
                 <button onClick={printShopOrder} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  🔧 Production Copy<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>No pricing + part prints only</span>
+                  🔧 Production Copy<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Details (no pricing) + part prints only</span>
                 </button>
                 <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
-                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Download Merged PDFs</div>
-                <button onClick={async () => { setShowPrintMenu(false); await downloadMergedPdf('full', true); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  ⬇️ Full Package PDF<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Part prints + docs + purchase orders</span>
+                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Save to File</div>
+                <button onClick={() => generatePrintPackage('full', true)} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
+                  ⬇️ Full Package PDF<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Same as above, saves to downloads</span>
                 </button>
-                <button onClick={async () => { setShowPrintMenu(false); await downloadMergedPdf('production', true); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  ⬇️ Part Prints PDF<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Part prints only — no POs or docs</span>
+                <button onClick={() => generatePrintPackage('production', true)} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
+                  ⬇️ Production Package PDF<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Same as above, saves to downloads</span>
                 </button>
                 <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
                 <button onClick={() => { setShowPrintMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', color: '#666', fontSize: '0.9rem' }}>Cancel</button>
