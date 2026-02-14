@@ -29,7 +29,7 @@ const PART_TYPES = {
   cone_roll: { label: 'Cone Layout', icon: '🔺', desc: 'Cone segment design with AutoCAD export', fields: ['material', 'thickness', 'width', 'length'] },
   angle_roll: { label: 'Angle Roll', icon: '📐', desc: 'Angle iron rolling', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
   flat_bar: { label: 'Flat Bar', icon: '▬', desc: 'Flat bar bending', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
-  pipe_roll: { label: 'Round Tube & Pipe', icon: '🔧', desc: 'Round pipe and tube bending', fields: ['material', 'outerDiameter', 'wallThickness', 'length', 'radius', 'diameter', 'arcDegrees'] },
+  pipe_roll: { label: 'Pipes/Tubes/Round', icon: '🔧', desc: 'Pipe, tube, and solid round bar bending', fields: ['material', 'outerDiameter', 'wallThickness', 'length', 'radius', 'diameter', 'arcDegrees'] },
   tube_roll: { label: 'Square & Rect Tubing', icon: '⬜', desc: 'Square and rectangular tube rolling', fields: ['material', 'sectionSize', 'thickness', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
   channel_roll: { label: 'Channel', icon: '🔲', desc: 'C-channel rolling', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
   beam_roll: { label: 'Beam', icon: '🏗️', desc: 'I-beam and H-beam rolling', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
@@ -709,7 +709,8 @@ function WorkOrderDetailsPage() {
         if (part.width) materialParts.push(`x ${part.width}"`);
         if (part.length) materialParts.push(`x ${part.length}`);
         if (part.outerDiameter) materialParts.push(`${part.outerDiameter}" OD`);
-        if (part.wallThickness) materialParts.push(`x ${part.wallThickness} wall`);
+        if (part.wallThickness && part.wallThickness !== 'SOLID') materialParts.push(`x ${part.wallThickness} wall`);
+        if (part.wallThickness === 'SOLID') materialParts.push('Solid');
         if (part.material) materialParts.push(part.material);
         const partTypeLabel = PART_TYPES[part.partType]?.label || part.partType || '';
         materialParts.push(partTypeLabel);
@@ -753,7 +754,8 @@ function WorkOrderDetailsPage() {
       if (part.width) specs.push(['Width', part.width + '"']);
       if (part.length) specs.push(['Length', part.length]);
       if (part.outerDiameter) specs.push(['OD', part.outerDiameter + '"']);
-      if (part.wallThickness) specs.push(['Wall', part.wallThickness]);
+      if (part.wallThickness && part.wallThickness !== 'SOLID') specs.push(['Wall', part.wallThickness]);
+      if (part.wallThickness === 'SOLID') specs.push(['Type', 'Solid Bar']);
 
       const specsHtml = includePricing && specs.length ? `
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px;background:#f5f5f5;padding:10px;border-radius:4px;margin-bottom:8px">
@@ -1605,7 +1607,8 @@ function WorkOrderDetailsPage() {
                   {part.length && <div><strong>Length:</strong> {part.length}</div>}
                   {part.sectionSize && <div><strong>Section:</strong> {part.sectionSize}</div>}
                   {part.outerDiameter && <div><strong>OD:</strong> {part.outerDiameter}</div>}
-                  {part.wallThickness && <div><strong>Wall:</strong> {part.wallThickness}</div>}
+                  {part.wallThickness && part.wallThickness !== 'SOLID' && <div><strong>Wall:</strong> {part.wallThickness}</div>}
+                  {part.wallThickness === 'SOLID' && <div><strong style={{ color: '#e65100' }}>Solid Round Bar</strong></div>}
                   {part.rollType && <div><strong>Roll:</strong> {part.rollType === 'easy_way' ? 'Easy Way' : 'Hard Way'}</div>}
                   {part.radius && <div><strong>Radius:</strong> {part.radius}</div>}
                   {part.diameter && <div><strong>Diameter:</strong> {part.diameter}</div>}

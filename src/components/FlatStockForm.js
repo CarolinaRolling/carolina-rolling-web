@@ -76,7 +76,7 @@ const DEFAULT_GRADE_OPTIONS = ['A36', 'A500 Gr B', 'A513', '304 S/S', '316 S/S',
 const STOCK_TYPES = [
   { key: 'plate', label: 'Plate', icon: '🔲' },
   { key: 'angle', label: 'Angle', icon: '📐' },
-  { key: 'round_tube', label: 'Round Tube / Pipe', icon: '⭕' },
+  { key: 'round_tube', label: 'Pipe / Tube / Round Bar', icon: '⭕' },
   { key: 'square_tube', label: 'Square / Rect Tube', icon: '⬜' },
   { key: 'channel', label: 'Channel', icon: '🔩' },
   { key: 'beam', label: 'I-Beam', icon: '🏗️' },

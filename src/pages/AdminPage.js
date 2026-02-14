@@ -860,7 +860,7 @@ function AdminPage() {
                         <select className="form-input" value={rule.partType} onChange={(e) => updateLaborMinimum(idx, 'partType', e.target.value)} style={{ padding: '4px', fontSize: '0.8rem' }}>
                           <option value="plate_roll">Plate Roll</option>
                           <option value="angle_roll">Angle Roll</option>
-                          <option value="pipe_roll">Pipe/Tube Roll</option>
+                          <option value="pipe_roll">Pipes/Tubes/Round</option>
                           <option value="tube_roll">Sq/Rect Tube Roll</option>
                           <option value="beam_roll">Beam Roll</option>
                           <option value="channel_roll">Channel Roll</option>
@@ -1102,7 +1102,7 @@ function AdminPage() {
                           {[
                             { key: 'plate_roll', label: 'Plate' },
                             { key: 'angle_roll', label: 'Angle' },
-                            { key: 'pipe_roll', label: 'Pipe/Tube' },
+                            { key: 'pipe_roll', label: 'Pipes/Tubes/Round' },
                             { key: 'tube_roll', label: 'Sq/Rect Tube' },
                             { key: 'flat_bar', label: 'Flat Bar' },
                             { key: 'beam_roll', label: 'Beam' },

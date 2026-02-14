@@ -28,7 +28,7 @@ const PART_TYPES = {
   cone_roll: { label: 'Cone Layout', icon: '🔺', desc: 'Cone segment design with AutoCAD export' },
   angle_roll: { label: 'Angle Roll', icon: '📐', desc: 'Angle iron rolling' },
   flat_bar: { label: 'Flat Bar', icon: '▬', desc: 'Flat bar bending' },
-  pipe_roll: { label: 'Round Tube & Pipe', icon: '🔧', desc: 'Round pipe and tube bending' },
+  pipe_roll: { label: 'Pipes/Tubes/Round', icon: '🔧', desc: 'Pipe, tube, and solid round bar bending' },
   tube_roll: { label: 'Square & Rect Tubing', icon: '⬜', desc: 'Square and rectangular tube rolling' },
   channel_roll: { label: 'Channel', icon: '🔲', desc: 'C-channel rolling' },
   beam_roll: { label: 'Beam', icon: '🏗️', desc: 'I-beam and H-beam rolling' },
@@ -1124,7 +1124,8 @@ function EstimateDetailsPage() {
                       {part.sectionSize && <span style={{ color: '#555' }}>| <strong>Size:</strong> {part.sectionSize}</span>}
                       {part.thickness && <span style={{ color: '#555' }}>| <strong>Thk:</strong> {part.thickness}</span>}
                       {part.outerDiameter && <span style={{ color: '#555' }}>| <strong>OD:</strong> {part.outerDiameter}"</span>}
-                      {part.wallThickness && <span style={{ color: '#555' }}>| <strong>Wall:</strong> {part.wallThickness}</span>}
+                      {part.wallThickness && part.wallThickness !== 'SOLID' && <span style={{ color: '#555' }}>| <strong>Wall:</strong> {part.wallThickness}</span>}
+                      {part.wallThickness === 'SOLID' && <span style={{ color: '#e65100', fontWeight: 600 }}>| Solid Bar</span>}
                       {part.width && <span style={{ color: '#555' }}>| <strong>Width:</strong> {part.width}"</span>}
                       {part.length && <span style={{ color: '#555' }}>| <strong>Len:</strong> {part.length}</span>}
                       {part.material && <span style={{ color: '#555' }}>| <strong>Grade:</strong> {part.material}</span>}

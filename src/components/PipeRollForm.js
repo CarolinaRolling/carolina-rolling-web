@@ -31,7 +31,23 @@ const PIPE_SIZES = [
   { label: '4" Pipe', nominal: '4"', od: 4.500, type: 'pipe', defaultLength: '21\'' },
 ];
 
-const ALL_SIZES = [...TUBE_SIZES, ...PIPE_SIZES];
+const SOLID_BAR_SIZES = [
+  { label: '.500" Solid Round', od: 0.500, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '.625" Solid Round', od: 0.625, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '.750" Solid Round', od: 0.750, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '.875" Solid Round', od: 0.875, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '1" Solid Round', od: 1.0, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '1.25" Solid Round', od: 1.25, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '1.5" Solid Round', od: 1.5, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '1.75" Solid Round', od: 1.75, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '2" Solid Round', od: 2.0, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '2.5" Solid Round', od: 2.5, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '3" Solid Round', od: 3.0, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '3.5" Solid Round', od: 3.5, type: 'solid_bar', defaultLength: '20\'' },
+  { label: '4" Solid Round', od: 4.0, type: 'solid_bar', defaultLength: '20\'' },
+];
+
+const ALL_SIZES = [...TUBE_SIZES, ...PIPE_SIZES, ...SOLID_BAR_SIZES];
 
 // Schedule data: { schedule: wallThickness } for each pipe nominal size
 const PIPE_SCHEDULES = {
@@ -48,7 +64,7 @@ const TUBE_WALL_OPTIONS = [
   '.035"', '.049"', '.058"', '.065"', '.083"', '.095"', '.109"', '.120"', '.134"', '.156"', '.188"', '.250"', '.375"', '.500"', 'Custom'
 ];
 
-const DEFAULT_GRADES = ['A500 Gr B', 'A513', 'DOM', '304 S/S', '316 S/S', '6061-T6 Alum', '5052 Alum', 'Custom'];
+const DEFAULT_GRADES = ['A500 Gr B', 'A513', 'DOM', 'A36', '1018', '1045', '4140', '304 S/S', '316 S/S', '6061-T6 Alum', '5052 Alum', 'Custom'];
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
 function wallToDecimal(w) {
@@ -240,6 +256,8 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
         parts.push(`${selectedSize.nominal}`);
         if (partData._schedule) parts.push(`Sch ${partData._schedule}`);
         parts.push(`Pipe (${selectedSize.od}" OD)`);
+      } else if (selectedSize.type === 'solid_bar') {
+        parts.push(`${selectedSize.od}" Solid Round Bar`);
       } else {
         parts.push(`${selectedSize.od}" OD Round Tubing`);
       }
@@ -247,7 +265,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       parts.push(`${partData.outerDiameter}" OD Round Tubing`);
     }
 
-    if (partData.wallThickness) parts.push(`x ${partData.wallThickness} Wall`);
+    if (partData.wallThickness && partData.wallThickness !== 'SOLID') parts.push(`x ${partData.wallThickness} Wall`);
     if (partData.length) parts.push(`x ${partData.length} long`);
 
     const grade = partData.material || '';
@@ -458,7 +476,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const handleSizeSelect = (sizeLabel) => {
     const size = ALL_SIZES.find(s => s.label === sizeLabel);
     if (!size) {
-      setPartData(prev => ({ ...prev, _pipeSize: sizeLabel, _pipeType: '', outerDiameter: '', _schedule: '' }));
+      setPartData(prev => ({ ...prev, _pipeSize: sizeLabel, _pipeType: '', outerDiameter: '', _schedule: '', wallThickness: '' }));
       return;
     }
     const updates = {
@@ -469,8 +487,12 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     };
     // Set default length if not already set
     if (!partData.length) updates.length = size.defaultLength;
-    // Clear schedule for tubes
-    if (size.type === 'tube') updates._schedule = '';
+    // Clear schedule for tubes and solid bars
+    if (size.type === 'tube' || size.type === 'solid_bar') updates._schedule = '';
+    // Solid bar: set wall = 'SOLID' and clear schedule
+    if (size.type === 'solid_bar') {
+      updates.wallThickness = 'SOLID';
+    }
     // Auto set stainless markup
     if (isStainless(partData.material) && partData.materialSource === 'we_order') {
       updates.materialMarkupPercent = 30;
@@ -553,6 +575,9 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
               <option key={s.label} value={s.label}>{s.label} ({s.od}" OD)</option>
             ))}
           </optgroup>
+          <optgroup label="Solid Round Bar">
+            {SOLID_BAR_SIZES.map(s => <option key={s.label} value={s.label}>{s.label}</option>)}
+          </optgroup>
           <option value="Custom">Custom Size</option>
         </select>
 
@@ -561,6 +586,14 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
           <div style={{ background: '#e3f2fd', padding: 10, borderRadius: 6, marginTop: 8, fontSize: '0.85rem' }}>
             <Info size={14} style={{ display: 'inline', marginRight: 6 }} />
             {selectedSize.nominal} Pipe = <strong>{selectedSize.od}" OD</strong>
+          </div>
+        )}
+
+        {/* Show solid bar info */}
+        {selectedSize && selectedSize.type === 'solid_bar' && (
+          <div style={{ background: '#fff3e0', padding: 10, borderRadius: 6, marginTop: 8, fontSize: '0.85rem' }}>
+            <Info size={14} style={{ display: 'inline', marginRight: 6 }} />
+            Solid Round Bar — <strong>{selectedSize.od}" OD</strong> (no wall thickness)
           </div>
         )}
       </div>
@@ -588,8 +621,8 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
         </div>
       )}
 
-      {/* Wall thickness for tubes */}
-      {(!selectedSize || selectedSize.type === 'tube' || partData._pipeSize === 'Custom') && (
+      {/* Wall thickness for tubes (hidden for solid bars) */}
+      {(!selectedSize || selectedSize.type === 'tube' || partData._pipeSize === 'Custom') && (!selectedSize || selectedSize.type !== 'solid_bar') && (
         <div className="form-group">
           <label className="form-label">Wall Thickness</label>
           <select className="form-select" value={TUBE_WALL_OPTIONS.includes(partData.wallThickness) ? partData.wallThickness : (partData.wallThickness ? 'Custom' : '')}
