@@ -298,5 +298,6 @@ export const verifySinglePermit = (data) => api.post('/verify-permit', data);
 export const startBatchVerification = () => api.post('/verify-permits/batch');
 export const getBatchStatus = () => api.get('/verify-permits/batch/status');
 export const cancelBatchVerification = () => api.post('/verify-permits/batch/cancel');
+export const downloadResaleReport = () => api.get('/verify-permits/report-pdf', { responseType: 'blob' });
 
 export default api;

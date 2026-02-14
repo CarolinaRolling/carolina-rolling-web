@@ -5,7 +5,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -1480,11 +1480,30 @@ function AdminPage() {
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h3 style={{ margin: 0 }}>🔐 CDTFA Seller's Permit Verification</h3>
-              <button className="btn btn-primary" onClick={handleStartBatch}
-                disabled={batchStatus?.status === 'running'}
-                style={{ fontWeight: 600 }}>
-                {batchStatus?.status === 'running' ? '⏳ Running...' : '🔍 Verify All Permits'}
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn" onClick={async () => {
+                  try {
+                    const res = await downloadResaleReport();
+                    const blob = new Blob([res.data], { type: 'application/pdf' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Resale_Verification_Report_${new Date().toISOString().slice(0, 10)}.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch (err) {
+                    setError('Failed to generate report');
+                  }
+                }}
+                  style={{ fontWeight: 600, background: '#fff', border: '1px solid #1976d2', color: '#1976d2' }}>
+                  📄 Download PDF Report
+                </button>
+                <button className="btn btn-primary" onClick={handleStartBatch}
+                  disabled={batchStatus?.status === 'running'}
+                  style={{ fontWeight: 600 }}>
+                  {batchStatus?.status === 'running' ? '⏳ Running...' : '🔍 Verify All Permits'}
+                </button>
+              </div>
             </div>
 
             <div style={{ padding: 12, background: '#f5f5f5', borderRadius: 8, fontSize: '0.85rem', color: '#666', marginBottom: 16 }}>
@@ -1492,7 +1511,7 @@ function AdminPage() {
               Each lookup takes about 1 minute (with a delay between requests to be respectful of the government server).
               You can also verify individual clients from the Clients & Vendors page.
               <div style={{ marginTop: 8, padding: 8, background: '#e8f5e9', borderRadius: 4, color: '#2e7d32' }}>
-                🗓️ <strong>Auto-runs annually</strong> on January 2nd at 3:00 AM Eastern. Use the button above for on-demand checks.
+                🗓️ <strong>Auto-runs annually</strong> on January 2nd at 3:00 AM Pacific. Use the button above for on-demand checks.
               </div>
             </div>
 

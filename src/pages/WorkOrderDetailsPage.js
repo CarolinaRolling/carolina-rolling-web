@@ -1839,28 +1839,28 @@ function WorkOrderDetailsPage() {
       {/* Part Type Picker Modal */}
       {showPartTypePicker && (
         <div className="modal-overlay" onClick={() => setShowPartTypePicker(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 860 }}>
             <div className="modal-header">
               <h3>Select Part Type</h3>
               <button className="btn btn-icon" onClick={() => setShowPartTypePicker(false)}><X size={20} /></button>
             </div>
             <div style={{ padding: 20 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                 {Object.entries(PART_TYPES).map(([key, { label, icon, desc }]) => (
                   <div
                     key={key}
                     onClick={() => handleSelectPartType(key)}
                     style={{
-                      padding: 16, borderRadius: 12, border: '2px solid #e0e0e0', cursor: 'pointer',
+                      padding: '12px 8px', borderRadius: 10, border: '2px solid #e0e0e0', cursor: 'pointer',
                       transition: 'all 0.15s', display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      textAlign: 'center', gap: 8
+                      textAlign: 'center', gap: 4
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1976d2'; e.currentTarget.style.background = '#e3f2fd'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e0e0e0'; e.currentTarget.style.background = 'white'; }}
                   >
-                    <span style={{ fontSize: '2rem' }}>{icon}</span>
-                    <strong style={{ fontSize: '1rem' }}>{label}</strong>
-                    <span style={{ fontSize: '0.8rem', color: '#666' }}>{desc}</span>
+                    <span style={{ fontSize: '1.6rem' }}>{icon}</span>
+                    <strong style={{ fontSize: '0.85rem', lineHeight: 1.2 }}>{label}</strong>
+                    <span style={{ fontSize: '0.7rem', color: '#888', lineHeight: 1.2 }}>{desc}</span>
                   </div>
                 ))}
               </div>
