@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
@@ -36,6 +37,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   const [customThickness, setCustomThickness] = useState('');
   const [customGrade, setCustomGrade] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
+  const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');
   const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'inside');
   const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'diameter');
   const [showAngle, setShowAngle] = useState(!!(partData.arcDegrees));
@@ -88,6 +90,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   useEffect(() => {
     const updates = {
       _rollValue: rollValue,
+      _rollToMethod: rollToMethod,
       _rollMeasurePoint: rollMeasurePoint,
       _rollMeasureType: rollMeasureType,
       _tangentLength: tangentLength,
@@ -103,7 +106,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       updates.radius = '';
     }
     setPartData(prev => ({ ...prev, ...updates }));
-  }, [rollValue, rollMeasurePoint, rollMeasureType, showAngle, angleValue, tangentLength, nestingEnabled, stockLength]);
+  }, [rollToMethod, rollValue, rollMeasurePoint, rollMeasureType, showAngle, angleValue, tangentLength, nestingEnabled, stockLength]);
 
   // Arc length calculation
   const calcResult = useMemo(() => {
@@ -207,6 +210,8 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
 
   // Rolling description (includes pitch info)
   const rollingDescription = useMemo(() => {
+    if (rollToMethod === 'template') return 'Roll Per Template / Sample';
+    if (rollToMethod === 'print') return 'Roll Per Print (see attached)';
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return '';
     const lines = [];
@@ -223,10 +228,10 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     }
     lines.push(...getPitchDescriptionLines(partData, clDiameter));
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, clDiameter, showAngle, angleValue, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia, partData._protectivePaper, partData._protectivePaperSide, nestingCalc]);
+  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, clDiameter, showAngle, angleValue, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia, partData._protectivePaper, partData._protectivePaperSide, nestingCalc]);
 
   useEffect(() => {
-    if (rollingDescription) setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
+    setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
   }, [rollingDescription]);
 
   // Calculate pricing: material ea + labor ea = unit price, unit price × qty = line total
@@ -295,14 +300,15 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       {/* === ROLL INFO === */}
       <div style={sectionStyle}>
         {sectionTitle('🔄', 'Roll Information', '#1565c0')}
+        <RollToOverride rollToMethod={rollToMethod} onMethodChange={setRollToMethod} />
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
           <div className="form-group">
             <label className="form-label">Roll to: *</label>
-            <input className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" type="number" step="0.001" />
+            <input className="form-input" value={rollToMethod ? '' : rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder={rollToMethod === 'template' ? 'Per Template/Sample' : rollToMethod === 'print' ? 'Per Print' : 'Enter value'} type="number" step="0.001" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} />
           </div>
           <div className="form-group">
             <label className="form-label">Measured At</label>
-            <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
               <option value="inside">Inside</option>
               <option value="outside">Outside</option>
               <option value="centerline">Centerline</option>
@@ -310,7 +316,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
           </div>
           <div className="form-group">
             <label className="form-label">Type</label>
-            <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
               <option value="diameter">Diameter</option>
               <option value="radius">Radius</option>
             </select>

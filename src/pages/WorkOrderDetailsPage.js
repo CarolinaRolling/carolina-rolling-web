@@ -442,7 +442,7 @@ function WorkOrderDetailsPage() {
       setupCharge: '', otherCharges: '', partTotal: '',
       materialSource: 'customer_supplied', vendorId: null, supplierName: '', materialDescription: '',
       weSupplyMaterial: false, materialMarkupPercent: 20, rollingCost: '',
-      _rollValue: '', _rollMeasurePoint: 'inside', _rollMeasureType: 'diameter', _tangentLength: '',
+      _rollToMethod: '', _rollValue: '', _rollMeasurePoint: 'inside', _rollMeasureType: 'diameter', _tangentLength: '',
       _materialOrigin: '', _rollingDescription: '', _materialDescription: '',
       _angleSize: '', _customAngleSize: '', _legOrientation: '',
       _lengthOption: '', _customLength: '',
@@ -475,7 +475,7 @@ function WorkOrderDetailsPage() {
     if (selectedPartType === 'plate_roll') {
       if (!partData.thickness) warnings.push('Thickness is required');
       if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
     }
     if (selectedPartType === 'flat_stock') {
       if (!partData.thickness) warnings.push('Thickness is required');
@@ -485,7 +485,7 @@ function WorkOrderDetailsPage() {
       if (partData._angleSize === 'Custom' && !partData._customAngleSize) warnings.push('Custom angle size is required');
       if (!partData.thickness) warnings.push('Thickness is required');
       if (!partData.rollType) warnings.push('Roll Direction is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
       if (partData._angleSize && partData._angleSize !== 'Custom') {
         const parts = partData._angleSize.split('x').map(Number);
         if (parts.length === 2 && parts[0] !== parts[1] && partData.rollType && !partData._legOrientation) {
@@ -496,13 +496,13 @@ function WorkOrderDetailsPage() {
     if (selectedPartType === 'pipe_roll') {
       if (!partData._pipeSize && !partData.outerDiameter) warnings.push('Pipe/tube size or OD is required');
       if (partData._pipeSize === 'Custom' && !partData.outerDiameter) warnings.push('Outer diameter is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
     }
     if (selectedPartType === 'tube_roll') {
       if (!partData._tubeSize) warnings.push('Tube size is required');
       if (partData._tubeSize === 'Custom' && !partData._customTubeSize) warnings.push('Custom tube size is required');
       if (!partData.thickness) warnings.push('Wall thickness is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
       const tubeParts = (partData._tubeSize || '').split('x').map(Number);
       if (tubeParts.length === 2 && tubeParts[0] !== tubeParts[1] && !partData.rollType) {
         warnings.push('Roll Direction (Easy Way / Hard Way) is required');
@@ -512,25 +512,25 @@ function WorkOrderDetailsPage() {
       if (!partData._barSize) warnings.push('Flat bar size is required');
       if (partData._barSize === 'Custom' && !partData._customBarSize) warnings.push('Custom flat bar size is required');
       if (!partData.rollType) warnings.push('Roll Direction is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
     }
     if (selectedPartType === 'channel_roll') {
       if (!partData._channelSize) warnings.push('Channel size is required');
       if (partData._channelSize === 'Custom' && !partData._customChannelSize) warnings.push('Custom channel size is required');
       if (!partData.rollType) warnings.push('Roll Direction is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
     }
     if (selectedPartType === 'beam_roll') {
       if (!partData._beamSize) warnings.push('Beam size is required');
       if (partData._beamSize === 'Custom' && !partData._customBeamSize) warnings.push('Custom beam size is required');
       if (!partData.rollType) warnings.push('Roll Direction is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
     }
     if (selectedPartType === 'tee_bar') {
       if (!partData._teeSize) warnings.push('Tee size is required');
       if (partData._teeSize === 'Custom' && !partData._customTeeSize) warnings.push('Custom tee size is required');
       if (!partData.rollType) warnings.push('Roll Direction is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
     }
     if (selectedPartType === 'press_brake') {
       if (!partData.thickness) warnings.push('Thickness is required');
@@ -739,6 +739,10 @@ function WorkOrderDetailsPage() {
       if (rollingDescFull) {
         const descLines = rollingDescFull.split(/\n|\\n/).map(l => l.trim()).filter(l => l);
         rollingLines.push(...descLines);
+      } else if (part._rollToMethod === 'template') {
+        rollingLines.push('Roll Per Template / Sample');
+      } else if (part._rollToMethod === 'print') {
+        rollingLines.push('Roll Per Print (see attached)');
       } else {
         // Fallback: build roll line from raw fields
         const rollVal = part.diameter || part.radius;
@@ -1674,8 +1678,13 @@ function WorkOrderDetailsPage() {
                   {part.wallThickness && part.wallThickness !== 'SOLID' && <div><strong>Wall:</strong> {part.wallThickness}</div>}
                   {part.wallThickness === 'SOLID' && <div><strong style={{ color: '#e65100' }}>Solid Round Bar</strong></div>}
                   {part.rollType && <div><strong>Roll:</strong> {part.rollType === 'easy_way' ? 'Easy Way' : 'Hard Way'}</div>}
-                  {part.radius && <div><strong>Radius:</strong> {part.radius}</div>}
-                  {part.diameter && <div><strong>Diameter:</strong> {part.diameter}</div>}
+                  {part.radius && !(part.formData || {})._rollToMethod && <div><strong>Radius:</strong> {part.radius}</div>}
+                  {part.diameter && !(part.formData || {})._rollToMethod && <div><strong>Diameter:</strong> {part.diameter}</div>}
+                  {(part.formData || {})._rollToMethod === 'template' && <div style={{ color: '#e65100' }}><strong>📐 Per Template/Sample</strong></div>}
+                  {(part.formData || {})._rollToMethod === 'print' && <div style={{ color: '#1565c0' }}><strong>📄 Per Print (see attached)</strong></div>}
+                  {(part.formData || {})._rollToMethod === 'print' && !(part.files || []).some(f => f.mimeType === 'application/pdf' || f.originalName?.toLowerCase().endsWith('.pdf')) && (
+                    <div style={{ color: '#c62828', fontSize: '0.8rem', fontWeight: 600, marginTop: 4 }}>⚠️ Roll instruction PDF required — upload below</div>
+                  )}
                   {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
                 </div>
                 {part.specialInstructions && <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: '0.875rem' }}><strong>Instructions:</strong> {part.specialInstructions}</div>}

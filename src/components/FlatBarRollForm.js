@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
@@ -61,6 +62,7 @@ function calculateRise(radiusInches, chordInches) {
 export default function FlatBarRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const [customGrade, setCustomGrade] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
+  const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');
   const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'diameter');
   const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'inside');
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
@@ -94,11 +96,12 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
   }, []);
 
   useEffect(() => {
-    const updates = { _rollValue: rollValue, _rollMeasureType: rollMeasureType, _rollMeasurePoint: rollMeasurePoint };
+    const updates = { _rollValue: rollValue,
+      _rollToMethod: rollToMethod, _rollMeasureType: rollMeasureType, _rollMeasurePoint: rollMeasurePoint };
     if (rollMeasureType === 'radius') { updates.radius = rollValue; updates.diameter = ''; }
     else { updates.diameter = rollValue; updates.radius = ''; }
     setPartData(prev => ({ ...prev, ...updates }));
-  }, [rollValue, rollMeasureType, rollMeasurePoint]);
+  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint]);
 
   const parsedSize = useMemo(() => parseFlatBarSize(partData._barSize), [partData._barSize]);
 
@@ -116,7 +119,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     if (rollMeasurePoint === 'inside') return dia + profileSize;
     if (rollMeasurePoint === 'outside') return dia - profileSize;
     return dia;
-  }, [rollValue, rollMeasureType, rollMeasurePoint, profileSize]);
+  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, profileSize]);
 
   const riseCalc = useMemo(() => {
     const r = clDiameter > 0 ? clDiameter / 2 : 0;
@@ -178,6 +181,8 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
   }, [rollValue, rollMeasureType]);
 
   const rollingDescription = useMemo(() => {
+    if (rollToMethod === 'template') return 'Roll Per Template / Sample';
+    if (rollToMethod === 'print') return 'Roll Per Print (see attached)';
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return '';
     const lines = [];
@@ -208,7 +213,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
   }, [materialDescription]);
 
   useEffect(() => {
-    if (rollingDescription) setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
+    setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
   }, [rollingDescription]);
 
   const qty = parseInt(partData.quantity) || 1;
@@ -291,14 +296,15 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
       {/* === ROLL INFO === */}
       <div style={sectionStyle}>
         {sectionTitle('🔄', 'Roll Information', '#1565c0')}
+        <RollToOverride rollToMethod={rollToMethod} onMethodChange={setRollToMethod} />
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
           <div className="form-group">
             <label className="form-label">Roll to: *</label>
-            <input className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" type="number" step="0.001" />
+            <input className="form-input" value={rollToMethod ? '' : rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder={rollToMethod === 'template' ? 'Per Template/Sample' : rollToMethod === 'print' ? 'Per Print' : 'Enter value'} type="number" step="0.001" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} />
           </div>
           <div className="form-group">
             <label className="form-label">Measured At</label>
-            <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
               <option value="inside">Inside</option>
               <option value="outside">Outside</option>
               <option value="centerline">Centerline</option>
@@ -306,7 +312,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
           </div>
           <div className="form-group">
             <label className="form-label">Type</label>
-            <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
               <option value="diameter">Diameter</option>
               <option value="radius">Radius</option>
             </select>

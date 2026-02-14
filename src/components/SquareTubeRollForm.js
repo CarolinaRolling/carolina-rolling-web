@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
@@ -46,6 +47,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   const [customGrade, setCustomGrade] = useState('');
   const [customTubeSize, setCustomTubeSize] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
+  const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');
   const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'diameter');
   const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'inside');
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
@@ -84,6 +86,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   useEffect(() => {
     const updates = {
       _rollValue: rollValue,
+      _rollToMethod: rollToMethod,
       _rollMeasureType: rollMeasureType,
       _rollMeasurePoint: rollMeasurePoint,
     };
@@ -95,7 +98,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
       updates.radius = '';
     }
     setPartData(prev => ({ ...prev, ...updates }));
-  }, [rollValue, rollMeasureType, rollMeasurePoint]);
+  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint]);
 
   // Parse size
   const parsedSize = useMemo(() => parseTubeSize(partData._tubeSize), [partData._tubeSize]);
@@ -115,7 +118,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     if (rollMeasurePoint === 'inside') return dia + profileSize;
     if (rollMeasurePoint === 'outside') return dia - profileSize;
     return dia;
-  }, [rollValue, rollMeasureType, rollMeasurePoint, profileSize]);
+  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, profileSize]);
 
   // Calculate chord and rise using CL radius
   const riseCalc = useMemo(() => {
@@ -193,6 +196,8 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
 
   // Build rolling description
   const rollingDescription = useMemo(() => {
+    if (rollToMethod === 'template') return 'Roll Per Template / Sample';
+    if (rollToMethod === 'print') return 'Roll Per Print (see attached)';
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return '';
     const lines = [];
@@ -361,21 +366,22 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
       {/* === ROLL INFO === */}
       <div style={sectionStyle}>
         {sectionTitle('🔄', 'Roll Information', '#1565c0')}
+        <RollToOverride rollToMethod={rollToMethod} onMethodChange={setRollToMethod} />
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
           <div className="form-group">
             <label className="form-label">Roll to: *</label>
-            <input className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" type="number" step="0.001" />
+            <input className="form-input" value={rollToMethod ? '' : rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder={rollToMethod === 'template' ? 'Per Template/Sample' : rollToMethod === 'print' ? 'Per Print' : 'Enter value'} type="number" step="0.001" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} />
           </div>
           <div className="form-group">
             <label className="form-label">Measured At</label>
-            <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
               <option value="inside">Inside</option>
               <option value="outside">Outside</option>
             </select>
           </div>
           <div className="form-group">
             <label className="form-label">Type</label>
-            <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
               <option value="diameter">Diameter</option>
               <option value="radius">Radius</option>
             </select>

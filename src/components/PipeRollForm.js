@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import RollToOverride from './RollToOverride';
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 
@@ -102,6 +103,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const [customGrade, setCustomGrade] = useState('');
   const [customWall, setCustomWall] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
+  const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');
   const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'diameter');
   const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'centerline');
   const [rollLimits, setRollLimits] = useState([]);   // admin: min rollable diameters
@@ -195,7 +197,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       else centerlineDia = rv; // centerline
     }
     return { centerlineDia, od, wall };
-  }, [rollValue, rollMeasureType, rollMeasurePoint, selectedSize, partData.outerDiameter, partData.wallThickness]);
+  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, selectedSize, partData.outerDiameter, partData.wallThickness]);
 
   // Check minimum rollable diameter
   const rollCheck = useMemo(() => {
@@ -390,6 +392,8 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
 
   // Build rolling description
   const rollingDescription = useMemo(() => {
+    if (rollToMethod === 'template') return 'Roll Per Template / Sample';
+    if (rollToMethod === 'print') return 'Roll Per Print (see attached)';
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return '';
     const lines = [];
@@ -425,7 +429,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       lines.push(`Tangents: ${ringCalc.tangent}" each end`);
     }
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, rollCalc, riseCalc, partData.arcDegrees, pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, pitchDirection, pitchCalc, completeRings, ringCalc, ringsNeeded]);
+  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, rollCalc, riseCalc, partData.arcDegrees, pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, pitchDirection, pitchCalc, completeRings, ringCalc, ringsNeeded]);
 
   // Sync pitch fields to partData
   useEffect(() => {
@@ -461,7 +465,8 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   // Sync roll fields to partData
   useEffect(() => {
     const rv = parseFloat(rollValue) || 0;
-    const updates = { _rollValue: rollValue, _rollMeasureType: rollMeasureType, _rollMeasurePoint: rollMeasurePoint };
+    const updates = { _rollValue: rollValue,
+      _rollToMethod: rollToMethod, _rollMeasureType: rollMeasureType, _rollMeasurePoint: rollMeasurePoint };
     if (rollMeasureType === 'radius') {
       updates.radius = rv ? String(rv) : '';
       updates.diameter = '';
@@ -670,14 +675,15 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       {/* === ROLLING SPECS === */}
       <div style={sectionStyle}>
         {sectionTitle('🔄', 'Roll Information', '#1565c0')}
+        <RollToOverride rollToMethod={rollToMethod} onMethodChange={setRollToMethod} />
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
           <div className="form-group">
             <label className="form-label">Roll to: *</label>
-            <input type="number" step="0.1" className="form-input" value={rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder="Enter value" />
+            <input type="number" step="0.1" className="form-input" value={rollToMethod ? '' : rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder={rollToMethod === 'template' ? 'Per Template/Sample' : rollToMethod === 'print' ? 'Per Print' : 'Enter value'} disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} />
           </div>
           <div className="form-group">
             <label className="form-label">Measured At</label>
-            <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
               <option value="centerline">Centerline</option>
               <option value="inside">Inside</option>
               <option value="outside">Outside</option>
@@ -685,7 +691,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
           </div>
           <div className="form-group">
             <label className="form-label">Type</label>
-            <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
               <option value="diameter">Diameter</option>
               <option value="radius">Radius</option>
             </select>

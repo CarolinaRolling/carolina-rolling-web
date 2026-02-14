@@ -510,7 +510,7 @@ function EstimateDetailsPage() {
       arcDegrees: '', flangeOut: false, specialInstructions: '',
       // PlateRollForm fields
       materialTotal: '', laborTotal: '', setupCharge: '', otherCharges: '', partTotal: '',
-      materialSource: 'customer_supplied', _materialOrigin: '', _rollValue: '', _rollMeasurePoint: 'inside',
+      materialSource: 'customer_supplied', _materialOrigin: '', _rollToMethod: '', _rollValue: '', _rollMeasurePoint: 'inside',
       _rollMeasureType: 'diameter', _tangentLength: '',
       // AngleRollForm fields
       _angleSize: '', _customAngleSize: '', _legOrientation: '', _rollingDescription: '',
@@ -587,7 +587,7 @@ function EstimateDetailsPage() {
     if (partData.partType === 'plate_roll') {
       if (!partData.thickness) warnings.push('Thickness is required');
       if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
     }
 
     if (partData.partType === 'flat_stock') {
@@ -604,7 +604,7 @@ function EstimateDetailsPage() {
       if (partData._angleSize === 'Custom' && !partData._customAngleSize) warnings.push('Custom angle size is required');
       if (!partData.thickness) warnings.push('Thickness is required');
       if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
       
       // Check unequal legs orientation
       if (partData._angleSize && partData._angleSize !== 'Custom') {
@@ -618,14 +618,14 @@ function EstimateDetailsPage() {
     if (partData.partType === 'pipe_roll') {
       if (!partData._pipeSize && !partData.outerDiameter) warnings.push('Pipe/tube size or OD is required');
       if (partData._pipeSize === 'Custom' && !partData.outerDiameter) warnings.push('Outer diameter is required for custom size');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
     }
 
     if (partData.partType === 'tube_roll') {
       if (!partData._tubeSize) warnings.push('Tube size is required');
       if (partData._tubeSize === 'Custom' && !partData._customTubeSize) warnings.push('Custom tube size is required');
       if (!partData.thickness) warnings.push('Wall thickness is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
       // Only require EW/HW for rectangular tubes
       const tubeParts = (partData._tubeSize || '').split('x').map(Number);
       if (tubeParts.length === 2 && tubeParts[0] !== tubeParts[1] && !partData.rollType) {
@@ -637,14 +637,14 @@ function EstimateDetailsPage() {
       if (!partData._barSize) warnings.push('Flat bar size is required');
       if (partData._barSize === 'Custom' && !partData._customBarSize) warnings.push('Custom flat bar size is required');
       if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
     }
 
     if (partData.partType === 'channel_roll') {
       if (!partData._channelSize) warnings.push('Channel size is required');
       if (partData._channelSize === 'Custom' && !partData._customChannelSize) warnings.push('Custom channel size is required');
       if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
     }
 
     if (partData.partType === 'beam_roll') {
@@ -654,7 +654,7 @@ function EstimateDetailsPage() {
         if (!partData._camberDepth) warnings.push('Camber depth is required');
       } else {
         if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
-        if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+        if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
       }
     }
 
@@ -662,7 +662,7 @@ function EstimateDetailsPage() {
       if (!partData._teeSize) warnings.push('Tee size is required');
       if (partData._teeSize === 'Custom' && !partData._customTeeSize) warnings.push('Custom tee size is required');
       if (!partData.rollType) warnings.push('Roll Direction (Stem In / Stem Out / Stem Up) is required');
-      if (!partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
+      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
     }
 
     if (partData.partType === 'press_brake') {
@@ -859,7 +859,7 @@ function EstimateDetailsPage() {
         <p style="margin:0 0 4px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''} ${part.cutFileReference ? `<span style="color:#1565c0">Cut File: ${part.cutFileReference}</span>` : ''}</p>
         <p style="margin:0 0 4px;"><strong>Qty:</strong> ${part.quantity}${part.sectionSize ? ` | <strong>Size:</strong> ${part.sectionSize}` : ''}${part.thickness ? ` | <strong>Thk:</strong> ${part.thickness}` : ''}${part.material ? ` | <strong>Grade:</strong> ${part.material}` : ''}</p>
         ${part.materialDescription ? `<p style="margin:0 0 4px;font-size:0.9em;color:#555;">📦 ${part.materialDescription}</p>` : ''}
-        ${(part.diameter || part.radius) ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">🔄 ${part.diameter || part.radius}" ${(() => { const mp = part._rollMeasurePoint || 'inside'; const isRad = !!part.radius && !part.diameter; if (mp === 'inside') return isRad ? 'ISR' : 'ID'; if (mp === 'outside') return isRad ? 'OSR' : 'OD'; return isRad ? 'CLR' : 'CLD'; })()}${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}${part.arcDegrees ? ' | Arc: ' + part.arcDegrees + '°' : ''}</p>` : ''}
+        ${part._rollToMethod === 'template' ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;font-weight:bold;">📐 Roll Per Template / Sample${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}</p>` : part._rollToMethod === 'print' ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;font-weight:bold;">📄 Roll Per Print (see attached)${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}</p>` : (part.diameter || part.radius) ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">🔄 ${part.diameter || part.radius}" ${(() => { const mp = part._rollMeasurePoint || 'inside'; const isRad = !!part.radius && !part.diameter; if (mp === 'inside') return isRad ? 'ISR' : 'ID'; if (mp === 'outside') return isRad ? 'OSR' : 'OD'; return isRad ? 'CLR' : 'CLD'; })()}${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}${part.arcDegrees ? ' | Arc: ' + part.arcDegrees + '°' : ''}</p>` : ''}
         ${(() => { const desc = part._rollingDescription || part.specialInstructions || ''; const lines = desc.split('\n').filter(l => l.includes('Rise:') || l.includes('Complete Ring') || l.includes('Cone:') || l.includes('Sheet Size:')); return lines.length ? `<p style="margin:0 0 4px;color:#6a1b9a;font-size:0.85em;">📐 ${lines.map(l => l.trim()).join(' | ')}</p>` : ''; })()}
         ${part._pitchEnabled ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;">🌀 Pitch: ${part._pitchDirection === 'clockwise' ? 'CW' : 'CCW'}${part._pitchMethod === 'runrise' && part._pitchRise ? ' | Run: ' + part._pitchRun + '" / Rise: ' + part._pitchRise + '"' : ''}${part._pitchMethod === 'degree' && part._pitchAngle ? ' | Angle: ' + part._pitchAngle + '°' : ''}${part._pitchMethod === 'space' && part._pitchSpaceValue ? ' | ' + (part._pitchSpaceType === 'center' ? 'C-C' : 'Between') + ': ' + part._pitchSpaceValue + '"' : ''}${part._pitchDevelopedDia > 0 ? ' | <strong style="color:#2e7d32;">Dev Ø: ' + parseFloat(part._pitchDevelopedDia).toFixed(4) + '"</strong>' : ''}</p>` : ''}
         ${!['fab_service', 'shop_rate'].includes(part.partType) ? (part.materialSource === 'customer_supplied' || !part.weSupplyMaterial ? `<p style="color:#388e3c;">Material supplied by: ${formData.clientName || 'Customer'}</p>` : `<p style="color:#388e3c;">Material supplied by: Carolina Rolling Company</p>`) : ''}
@@ -1127,7 +1127,19 @@ function EstimateDetailsPage() {
                       {part.material && <span style={{ color: '#555' }}>| <strong>Grade:</strong> {part.material}</span>}
                     </div>
                     {/* Line 2: Roll info */}
-                    {(part.diameter || part.radius) && (
+                    {(part.formData || {})._rollToMethod === 'template' && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, color: '#e65100', fontSize: '0.82rem', fontWeight: 600 }}>
+                        📐 Per Template / Sample
+                        {part.rollType && <span>({part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')})</span>}
+                      </div>
+                    )}
+                    {(part.formData || {})._rollToMethod === 'print' && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, color: '#1565c0', fontSize: '0.82rem', fontWeight: 600 }}>
+                        📄 Per Print (see attached)
+                        {part.rollType && <span>({part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')})</span>}
+                      </div>
+                    )}
+                    {!(part.formData || {})._rollToMethod && (part.diameter || part.radius) && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, color: '#1565c0', fontSize: '0.82rem' }}>
                         🔄 {part.diameter || part.radius}" {(() => {
                           const mp = part._rollMeasurePoint || 'inside';
