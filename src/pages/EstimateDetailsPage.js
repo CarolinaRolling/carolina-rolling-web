@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, Send, Upload, Eye, X, Printer, Check, FileDown, Package, FileText } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Upload, Eye, X, Printer, Check, FileDown, Package, FileText } from 'lucide-react';
 import {
   getEstimateById, createEstimate, updateEstimate,
   addEstimatePart, updateEstimatePart, deleteEstimatePart,
@@ -932,11 +932,6 @@ function EstimateDetailsPage() {
           <button className="btn btn-secondary" onClick={() => handleSave(false)} disabled={saving}>
             <Save size={18} /> {saving ? 'Saving...' : isNew ? 'Generate New Estimate' : 'Save'}
           </button>
-          {(isNew || estimate?.status === 'draft') && (
-            <button className="btn btn-primary" onClick={() => handleSave(true)} disabled={saving}>
-              <Send size={18} /> Send
-            </button>
-          )}
           {!isNew && !estimate?.workOrderId && (
             <button className="btn" onClick={openConvertModal} disabled={converting}
               style={{ background: '#2e7d32', color: 'white' }}>

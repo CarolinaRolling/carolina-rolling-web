@@ -29,7 +29,7 @@ export const logNasError = (error, details = {}) => {
 function AdminPage() {
   const navigate = useNavigate();
   const { user: currentUser, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState('users');
+  const [activeTab, setActiveTab] = useState('tax');
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
   const [logsTotal, setLogsTotal] = useState(0);
@@ -102,7 +102,7 @@ function AdminPage() {
     
     if (activeTab === 'users') {
       loadUsers();
-    } else if (activeTab === 'activity') {
+    } else if (activeTab === 'logs') {
       loadLogs();
     } else if (activeTab === 'schedule') {
       loadScheduleEmailSettings();
@@ -636,14 +636,9 @@ function AdminPage() {
       </div>
 
       {/* Tabs */}
-      <div className="tabs">
-        <button 
-          className={`tab ${activeTab === 'users' ? 'active' : ''}`}
-          onClick={() => setActiveTab('users')}
-        >
-          <Users size={16} style={{ marginRight: 6 }} />
-          Users
-        </button>
+      <div className="tabs" style={{ flexWrap: 'wrap', gap: '2px 0' }}>
+        {/* ── SHOP CONFIGURATION ── */}
+        <span style={{ fontSize: '0.65rem', color: '#999', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 10px 4px', fontWeight: 700, userSelect: 'none' }}>Shop Config</span>
         <button 
           className={`tab ${activeTab === 'tax' ? 'active' : ''}`}
           onClick={() => setActiveTab('tax')}
@@ -682,18 +677,43 @@ function AdminPage() {
         >
           🔥 Weld Rates
         </button>
+
+        {/* ── DIVIDER ── */}
+        <span style={{ borderLeft: '2px solid #ddd', height: 24, margin: '6px 8px', alignSelf: 'center' }} />
+
+        {/* ── COMPLIANCE ── */}
+        <span style={{ fontSize: '0.65rem', color: '#999', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 10px 4px', fontWeight: 700, userSelect: 'none' }}>Compliance</span>
         <button 
           className={`tab ${activeTab === 'permits' ? 'active' : ''}`}
           onClick={() => setActiveTab('permits')}
         >
           🔐 Permit Verify
         </button>
+
+        {/* ── DIVIDER ── */}
+        <span style={{ borderLeft: '2px solid #ddd', height: 24, margin: '6px 8px', alignSelf: 'center' }} />
+
+        {/* ── NOTIFICATIONS ── */}
+        <span style={{ fontSize: '0.65rem', color: '#999', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 10px 4px', fontWeight: 700, userSelect: 'none' }}>Notifications</span>
         <button 
           className={`tab ${activeTab === 'schedule' ? 'active' : ''}`}
           onClick={() => setActiveTab('schedule')}
         >
           <Clock size={16} style={{ marginRight: 6 }} />
-          Schedule Email
+          Daily Digest
+        </button>
+
+        {/* ── DIVIDER ── */}
+        <span style={{ borderLeft: '2px solid #ddd', height: 24, margin: '6px 8px', alignSelf: 'center' }} />
+
+        {/* ── USERS & LOGS ── */}
+        <span style={{ fontSize: '0.65rem', color: '#999', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 10px 4px', fontWeight: 700, userSelect: 'none' }}>Users & Logs</span>
+        <button 
+          className={`tab ${activeTab === 'users' ? 'active' : ''}`}
+          onClick={() => setActiveTab('users')}
+        >
+          <Users size={16} style={{ marginRight: 6 }} />
+          Users
         </button>
         <button 
           className={`tab ${activeTab === 'logs' ? 'active' : ''}`}
@@ -708,6 +728,7 @@ function AdminPage() {
         >
           <AlertTriangle size={16} style={{ marginRight: 6 }} />
           System Logs
+        </button>
           {window.nasErrorLog?.length > 0 && (
             <span style={{ 
               marginLeft: 6, 
@@ -1392,9 +1413,13 @@ function AdminPage() {
             </table>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'logs' ? (
         <div>
           <div className="card">
+            <h3 style={{ margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Activity size={20} />
+              Activity Logs
+            </h3>
             <table className="table">
               <thead>
                 <tr>
@@ -1472,7 +1497,7 @@ function AdminPage() {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* System Logs Tab Content */}
       {activeTab === 'permits' && !loading && (

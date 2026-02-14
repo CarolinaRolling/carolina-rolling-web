@@ -21,7 +21,8 @@ import {
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
-  searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, duplicateWorkOrderToEstimate
+  searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, duplicateWorkOrderToEstimate,
+  getWorkOrderPrintPackage
 } from '../services/api';
 
 const PART_TYPES = {
@@ -686,6 +687,19 @@ function WorkOrderDetailsPage() {
     // Collect all PDF files for printing later
     const allPdfUrls = [];
 
+    // Collect order-level documents (non-PO: customer POs, specs, drawings, etc.)
+    const orderDocUrls = [];
+    const purchaseOrderUrls = [];
+    if (order.documents) {
+      order.documents.forEach(doc => {
+        if (doc.documentType === 'purchase_order') {
+          purchaseOrderUrls.push({ url: doc.url, name: doc.originalName });
+        } else {
+          orderDocUrls.push({ url: doc.url, name: doc.originalName });
+        }
+      });
+    }
+
     const partsHtml = order.parts?.sort((a, b) => a.partNumber - b.partNumber).map(p => {
       // Merge formData if present
       const part = { ...p };
@@ -882,46 +896,65 @@ function WorkOrderDetailsPage() {
   <div style="margin-top:30px;padding-top:16px;border-top:2px solid #ddd;color:#666;font-size:0.8em">
     ${title} — ${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber} | Printed: ${new Date().toLocaleString()}
     ${!includePricing ? '<br/><em>Production Copy</em>' : ''}
+    ${allPdfUrls.length > 0 ? `
+      <div style="margin-top:8px;padding:8px 10px;background:#f5f5f5;border-radius:4px;font-size:0.85rem;color:#333">
+        <strong>Attached prints (merged into separate PDF download):</strong>
+        <ul style="margin:4px 0 0;padding-left:18px">
+          ${allPdfUrls.map(f => `<li>Part #${f.partNumber}: ${f.name}</li>`).join('')}
+          ${includePricing ? purchaseOrderUrls.map(f => `<li>🛒 ${f.name}</li>`).join('') : ''}
+        </ul>
+      </div>
+    ` : ''}
   </div>
 </body>
 </html>`;
 
-    return { html, allPdfUrls };
+    return { html, hasPdfs: allPdfUrls.length > 0 || (includePricing && purchaseOrderUrls.length > 0) };
   };
 
-  // Print Full Work Order (with pricing)
-  const printFullWorkOrder = () => {
-    const { html, allPdfUrls } = buildWorkOrderPrintHtml(true);
+  // Helper to download merged PDF package from backend
+  const downloadMergedPdf = async (mode) => {
+    try {
+      const res = await getWorkOrderPrintPackage(id, mode);
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank');
+      // Clean up blob URL after a delay
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return printWindow;
+    } catch (err) {
+      // 404 means no PDFs to merge — that's OK
+      if (err.response?.status === 404) return null;
+      console.error('Failed to generate print package:', err);
+      return null;
+    }
+  };
+
+  // Print Full Work Order (with pricing) — merged PDF includes part prints + order docs + purchase orders
+  const printFullWorkOrder = async () => {
+    const { html, hasPdfs } = buildWorkOrderPrintHtml(true);
     const printWindow = window.open('', '_blank');
     printWindow.document.write(html);
     printWindow.document.close();
-    setTimeout(() => {
-      printWindow.print();
-      // Open attached PDFs for separate printing
-      if (allPdfUrls.length > 0) {
-        setTimeout(() => {
-          allPdfUrls.forEach(f => window.open(f.url, '_blank'));
-        }, 1000);
-      }
-    }, 500);
+    setTimeout(() => printWindow.print(), 500);
+    // Download merged PDF package (part prints + docs + POs)
+    if (hasPdfs) {
+      await downloadMergedPdf('full');
+    }
     setShowPrintMenu(false);
   };
 
-  // Print Production Copy (no pricing, for production floor)
-  const printShopOrder = () => {
-    const { html, allPdfUrls } = buildWorkOrderPrintHtml(false);
+  // Print Production Copy (no pricing) — merged PDF includes part prints ONLY (no customer POs, no order docs)
+  const printShopOrder = async () => {
+    const { html, hasPdfs } = buildWorkOrderPrintHtml(false);
     const printWindow = window.open('', '_blank');
     printWindow.document.write(html);
     printWindow.document.close();
-    setTimeout(() => {
-      printWindow.print();
-      // Open attached PDFs for separate printing
-      if (allPdfUrls.length > 0) {
-        setTimeout(() => {
-          allPdfUrls.forEach(f => window.open(f.url, '_blank'));
-        }, 1000);
-      }
-    }, 500);
+    setTimeout(() => printWindow.print(), 500);
+    // Download merged PDF with part prints only
+    if (hasPdfs) {
+      await downloadMergedPdf('production');
+    }
     setShowPrintMenu(false);
   };
 
