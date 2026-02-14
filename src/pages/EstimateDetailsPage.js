@@ -490,7 +490,7 @@ function EstimateDetailsPage() {
   const handleSelectPartType = (type) => {
     setShowPartTypePicker(false);
     setPartData({
-      partType: type, clientPartNumber: '', heatNumber: '', quantity: 1,
+      partType: type, clientPartNumber: '', heatNumber: '', cutFileReference: '', quantity: 1,
       // Material - controlled by weSupplyMaterial checkbox
       weSupplyMaterial: false,
       materialDescription: '', supplierName: '', materialUnitCost: '', 
@@ -856,7 +856,7 @@ function EstimateDetailsPage() {
             <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Part Total:</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`;
       return `<div style="border:1px solid #ddd;border-radius:8px;padding:16px;margin-bottom:12px;">
         <h4 style="margin:0 0 8px;color:#1976d2;">Part #${part.partNumber} - ${PART_TYPES[part.partType]?.label || part.partType}</h4>
-        <p style="margin:0 0 4px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''}</p>
+        <p style="margin:0 0 4px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''} ${part.cutFileReference ? `<span style="color:#1565c0">Cut File: ${part.cutFileReference}</span>` : ''}</p>
         <p style="margin:0 0 4px;"><strong>Qty:</strong> ${part.quantity}${part.sectionSize ? ` | <strong>Size:</strong> ${part.sectionSize}` : ''}${part.thickness ? ` | <strong>Thk:</strong> ${part.thickness}` : ''}${part.material ? ` | <strong>Grade:</strong> ${part.material}` : ''}</p>
         ${part.materialDescription ? `<p style="margin:0 0 4px;font-size:0.9em;color:#555;">📦 ${part.materialDescription}</p>` : ''}
         ${(part.diameter || part.radius) ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">🔄 ${part.diameter || part.radius}" ${(() => { const mp = part._rollMeasurePoint || 'inside'; const isRad = !!part.radius && !part.diameter; if (mp === 'inside') return isRad ? 'ISR' : 'ID'; if (mp === 'outside') return isRad ? 'OSR' : 'OD'; return isRad ? 'CLR' : 'CLD'; })()}${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}${part.arcDegrees ? ' | Arc: ' + part.arcDegrees + '°' : ''}</p>` : ''}
@@ -1099,6 +1099,7 @@ function EstimateDetailsPage() {
                       <div style={{ color: '#666', fontSize: '0.85rem' }}>
                         {part.clientPartNumber && `Client Part#: ${part.clientPartNumber}`}
                         {part.heatNumber && ` • Heat#: ${part.heatNumber}`}
+                        {part.cutFileReference && ` • Cut File: ${part.cutFileReference}`}
                       </div>
                     </div>
                     <div className="actions-row">
@@ -1635,6 +1636,12 @@ function EstimateDetailsPage() {
                   <input type="text" className="form-input" value={partData.heatNumber || ''}
                     onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} />
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Cut File Reference</label>
+                  <input type="text" className="form-input" value={partData.cutFileReference || ''}
+                    onChange={(e) => setPartData({ ...partData, cutFileReference: e.target.value })}
+                    placeholder="e.g. Part2_cutout.dxf" />
+                </div>
               </div>
               )}
 
@@ -2059,6 +2066,14 @@ function EstimateDetailsPage() {
             </div>
                 </div>
               )}
+            </div>
+
+            {/* Cut File Reference — always visible for all part types */}
+            <div style={{ margin: '0 20px 12px', padding: '12px 0', borderTop: '1px solid #eee' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">📐 Cut File Reference <span style={{ fontWeight: 400, color: '#999' }}>(DXF/STEP filename to send to vendor)</span></label>
+                <input type="text" className="form-input" value={partData.cutFileReference || ''} onChange={(e) => setPartData({ ...partData, cutFileReference: e.target.value })} placeholder="e.g. Part2_cutout.dxf — will appear on purchase order" />
+              </div>
             </div>
 
             {partFormError && (

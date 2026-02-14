@@ -434,7 +434,7 @@ function WorkOrderDetailsPage() {
     setSelectedPartType(type);
     setPartFormError(null);
     setPartData({
-      partType: type, clientPartNumber: '', heatNumber: '', quantity: 1,
+      partType: type, clientPartNumber: '', heatNumber: '', cutFileReference: '', quantity: 1,
       material: '', thickness: '', width: '', length: '',
       outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '',
       arcDegrees: '', sectionSize: '', flangeOut: false, specialInstructions: '',
@@ -808,6 +808,7 @@ function WorkOrderDetailsPage() {
           <div style="font-size:1rem;font-weight:700;margin:6px 0;color:#333">${materialLine}</div>
           ${part.clientPartNumber ? `<div style="margin-bottom:4px;font-size:0.9rem"><strong>Client Part#:</strong> ${part.clientPartNumber}</div>` : ''}
           ${part.heatNumber ? `<div style="margin-bottom:4px;font-size:0.9rem"><strong>Heat#:</strong> ${part.heatNumber}</div>` : ''}
+          ${part.cutFileReference ? `<div style="margin-bottom:4px;font-size:0.9rem;color:#1565c0"><strong>📐 Cut File:</strong> ${part.cutFileReference}</div>` : ''}
           ${rollingBlock}
           ${specsHtml}
           ${includePricing && part.partType !== 'fab_service' ? `<div style="margin-bottom:6px;font-size:0.85rem;color:#555">📦 Material supplied by: <strong>${part.materialSource === 'customer_supplied' ? (order.clientName || 'Customer') : 'Carolina Rolling Company'}</strong></div>` : ''}
@@ -917,10 +918,25 @@ function WorkOrderDetailsPage() {
     try {
       const res = await getWorkOrderPrintPackage(id, mode);
       const blob = new Blob([res.data], { type: 'application/pdf' });
+      
+      // Verify it's actually a PDF (not an error JSON returned as blob)
+      // Check first few bytes for %PDF- header
+      const header = await blob.slice(0, 5).text();
+      if (header !== '%PDF-') {
+        const text = await blob.text();
+        console.warn('Merge did not return a valid PDF:', text.substring(0, 200));
+        if (saveToFile) {
+          try {
+            const errData = JSON.parse(text);
+            setError(errData.error?.message || 'Failed to generate merged PDF');
+          } catch { setError('No attached PDFs found to merge.'); }
+        }
+        return false;
+      }
+      
       const url = URL.createObjectURL(blob);
       
       if (saveToFile) {
-        // Trigger browser download
         const drLabel = order.drNumber ? `DR-${order.drNumber}` : order.orderNumber;
         const filename = mode === 'full' 
           ? `${drLabel}_Full_Package.pdf`
@@ -931,18 +947,16 @@ function WorkOrderDetailsPage() {
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
       } else {
-        // Open in new tab for printing
         window.open(url, '_blank');
         setTimeout(() => URL.revokeObjectURL(url), 60000);
       }
       return true;
     } catch (err) {
-      if (err.response?.status === 404) {
-        setError('No PDF files attached to merge');
-        return false;
+      // Don't show errors for merge failures during printing — the work order already printed
+      console.warn('Merged PDF not available:', err.response?.status || err.message);
+      if (saveToFile) {
+        setError('No attached PDFs found to merge. Upload part prints first.');
       }
-      console.error('Failed to generate print package:', err);
-      setError('Failed to generate merged PDF');
       return false;
     }
   };
@@ -1631,6 +1645,7 @@ function WorkOrderDetailsPage() {
                     </div>
                     {part.clientPartNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Client Part#: {part.clientPartNumber}</div>}
                     {part.heatNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Heat#: {part.heatNumber}</div>}
+                    {part.cutFileReference && <div style={{ color: '#1565c0', fontSize: '0.875rem' }}>📐 Cut File: {part.cutFileReference}</div>}
                   </div>
                   <div className="actions-row">
                     <select className="form-select" value={part.status} onChange={(e) => handlePartStatusChange(part.id, e.target.value)} style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
@@ -1972,6 +1987,10 @@ function WorkOrderDetailsPage() {
                   <label className="form-label">Heat Number</label>
                   <input type="text" className="form-input" value={partData.heatNumber || ''} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} />
                 </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Cut File Reference <span style={{ fontWeight: 400, color: '#999' }}>(DXF/STEP filename for vendor)</span></label>
+                  <input type="text" className="form-input" value={partData.cutFileReference || ''} onChange={(e) => setPartData({ ...partData, cutFileReference: e.target.value })} placeholder="e.g. Part2_cutout.dxf" />
+                </div>
               </div>
               )}
 
@@ -2030,6 +2049,14 @@ function WorkOrderDetailsPage() {
                   <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Special Instructions</label><textarea className="form-textarea" value={partData.specialInstructions || ''} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} /></div>
                 </div>
               )}
+
+              {/* Cut File Reference — always visible for all part types */}
+              <div style={{ marginTop: 12, padding: '12px 0', borderTop: '1px solid #eee' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">📐 Cut File Reference <span style={{ fontWeight: 400, color: '#999' }}>(DXF/STEP filename to send to vendor)</span></label>
+                  <input type="text" className="form-input" value={partData.cutFileReference || ''} onChange={(e) => setPartData({ ...partData, cutFileReference: e.target.value })} placeholder="e.g. Part2_cutout.dxf — will appear on purchase order" />
+                </div>
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowPartModal(false)}>Cancel</button>
