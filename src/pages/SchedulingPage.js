@@ -377,7 +377,7 @@ function SchedulingPage() {
                     transition: 'background 0.2s',
                     alignItems: 'center'
                   }}
-                  onClick={() => navigate(`/work-order/${order.id}`)}
+                  onClick={() => navigate(`/workorders/${order.id}`)}
                   onMouseEnter={(e) => e.currentTarget.style.background = '#f0f7ff'}
                   onMouseLeave={(e) => e.currentTarget.style.background = index % 2 === 0 ? 'white' : '#fafafa'}
                 >
