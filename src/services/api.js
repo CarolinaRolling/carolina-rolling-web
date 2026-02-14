@@ -152,6 +152,8 @@ export const getWorkOrderDocumentSignedUrl = (workOrderId, documentId) =>
   api.get(`/workorders/${workOrderId}/documents/${documentId}/signed-url`);
 export const deleteWorkOrderDocument = (workOrderId, documentId) => 
   api.delete(`/workorders/${workOrderId}/documents/${documentId}`);
+export const regeneratePODocument = (workOrderId, documentId) => 
+  api.post(`/workorders/${workOrderId}/documents/${documentId}/regenerate`);
 
 // Work Order Material Ordering
 export const orderWorkOrderMaterial = (workOrderId, data) => 

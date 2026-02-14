@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
-  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink
+  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink, RefreshCw
 } from 'lucide-react';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
@@ -18,7 +18,7 @@ import {
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
   uploadPartFiles, getPartFileSignedUrl, deletePartFile,
-  uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument,
+  uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument, regeneratePODocument,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, duplicateWorkOrderToEstimate,
@@ -913,20 +913,37 @@ function WorkOrderDetailsPage() {
   };
 
   // Helper to download merged PDF package from backend
-  const downloadMergedPdf = async (mode) => {
+  const downloadMergedPdf = async (mode, saveToFile = false) => {
     try {
       const res = await getWorkOrderPrintPackage(id, mode);
       const blob = new Blob([res.data], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
-      const printWindow = window.open(url, '_blank');
-      // Clean up blob URL after a delay
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      return printWindow;
+      
+      if (saveToFile) {
+        // Trigger browser download
+        const drLabel = order.drNumber ? `DR-${order.drNumber}` : order.orderNumber;
+        const filename = mode === 'full' 
+          ? `${drLabel}_Full_Package.pdf`
+          : `${drLabel}_Part_Prints.pdf`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      } else {
+        // Open in new tab for printing
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+      return true;
     } catch (err) {
-      // 404 means no PDFs to merge — that's OK
-      if (err.response?.status === 404) return null;
+      if (err.response?.status === 404) {
+        setError('No PDF files attached to merge');
+        return false;
+      }
       console.error('Failed to generate print package:', err);
-      return null;
+      setError('Failed to generate merged PDF');
+      return false;
     }
   };
 
@@ -937,23 +954,23 @@ function WorkOrderDetailsPage() {
     printWindow.document.write(html);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
-    // Download merged PDF package (part prints + docs + POs)
+    // Open merged PDF in new tab for printing
     if (hasPdfs) {
-      await downloadMergedPdf('full');
+      await downloadMergedPdf('full', false);
     }
     setShowPrintMenu(false);
   };
 
-  // Print Production Copy (no pricing) — merged PDF includes part prints ONLY (no customer POs, no order docs)
+  // Print Production Copy (no pricing) — merged PDF includes part prints ONLY
   const printShopOrder = async () => {
     const { html, hasPdfs } = buildWorkOrderPrintHtml(false);
     const printWindow = window.open('', '_blank');
     printWindow.document.write(html);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
-    // Download merged PDF with part prints only
+    // Open merged PDF in new tab for printing
     if (hasPdfs) {
-      await downloadMergedPdf('production');
+      await downloadMergedPdf('production', false);
     }
     setShowPrintMenu(false);
   };
@@ -1204,15 +1221,23 @@ function WorkOrderDetailsPage() {
           <div style={{ position: 'relative' }}>
             <button className="btn btn-primary" onClick={() => setShowPrintMenu(!showPrintMenu)}><Printer size={18} />Print</button>
             {showPrintMenu && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, background: 'white', border: '1px solid #ddd', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 100, minWidth: 240 }}>
-                <button onClick={printFullWorkOrder} style={{ display: 'block', width: '100%', padding: '12px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  📋 Full Work Order<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>With all pricing & totals</span>
+              <div style={{ position: 'absolute', top: '100%', right: 0, background: 'white', border: '1px solid #ddd', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 100, minWidth: 280 }}>
+                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Print</div>
+                <button onClick={printFullWorkOrder} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
+                  📋 Full Work Order<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>With pricing + all attached PDFs</span>
                 </button>
-                <div style={{ borderTop: '1px solid #eee' }}></div>
-                <button onClick={printShopOrder} style={{ display: 'block', width: '100%', padding: '12px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  🔧 Production Copy<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>No pricing — for production</span>
+                <button onClick={printShopOrder} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
+                  🔧 Production Copy<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>No pricing + part prints only</span>
                 </button>
-                <div style={{ borderTop: '1px solid #eee' }}></div>
+                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
+                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Download Merged PDFs</div>
+                <button onClick={async () => { setShowPrintMenu(false); await downloadMergedPdf('full', true); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
+                  ⬇️ Full Package PDF<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Part prints + docs + purchase orders</span>
+                </button>
+                <button onClick={async () => { setShowPrintMenu(false); await downloadMergedPdf('production', true); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
+                  ⬇️ Part Prints PDF<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Part prints only — no POs or docs</span>
+                </button>
+                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
                 <button onClick={() => { setShowPrintMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', color: '#666', fontSize: '0.9rem' }}>Cancel</button>
               </div>
             )}
@@ -1491,6 +1516,21 @@ function WorkOrderDetailsPage() {
                     title="Download"
                   >
                     <Download size={14} />
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await regeneratePODocument(id, doc.id);
+                        showMessage('PO PDF regenerated');
+                        await loadOrder();
+                      } catch (err) {
+                        setError('Failed to regenerate PO PDF');
+                      }
+                    }} 
+                    style={{ background: 'none', border: '1px solid #1976d2', borderRadius: 4, cursor: 'pointer', padding: '4px 8px', color: '#1976d2' }}
+                    title="Regenerate PDF"
+                  >
+                    <RefreshCw size={14} />
                   </button>
                   <button 
                     onClick={() => handleDeleteDocument(doc.id)} 
