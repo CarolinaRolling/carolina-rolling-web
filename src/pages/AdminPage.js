@@ -728,7 +728,6 @@ function AdminPage() {
         >
           <AlertTriangle size={16} style={{ marginRight: 6 }} />
           System Logs
-        </button>
           {window.nasErrorLog?.length > 0 && (
             <span style={{ 
               marginLeft: 6, 

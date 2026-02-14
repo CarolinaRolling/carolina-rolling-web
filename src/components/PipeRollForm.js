@@ -533,12 +533,9 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const unitPrice = materialEach + laborEach;
   const lineTotal = unitPrice * qty;
 
-  const sectionStyle = { padding: '16px 0', borderBottom: '1px solid #eee' };
+  const sectionStyle = { gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 8, paddingTop: 12 };
   const sectionTitle = (icon, title, color) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-      <span style={{ fontSize: '1.1rem' }}>{icon}</span>
-      <span style={{ fontWeight: 600, color, fontSize: '0.95rem' }}>{title}</span>
-    </div>
+    <h4 style={{ marginBottom: 10, color, fontSize: '0.95rem' }}>{icon} {title}</h4>
   );
 
   const isCustomGrade = partData.material && !gradeOptions.includes(partData.material) && partData.material !== 'Custom';
