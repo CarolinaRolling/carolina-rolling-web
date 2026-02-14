@@ -1,21 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Calendar, Clock, Search, ChevronDown, ChevronUp, 
-  AlertTriangle, CheckCircle, ArrowUpDown, Filter
+  Calendar, Clock, Search, 
+  AlertTriangle, Filter
 } from 'lucide-react';
-import { getShipments } from '../services/api';
+import { getWorkOrders } from '../services/api';
+
+// Match inventory page statuses exactly
+const STATUSES = {
+  quoted: { label: 'Quoted', color: '#9e9e9e', bg: '#f5f5f5' },
+  work_order_generated: { label: 'WO Generated', color: '#7b1fa2', bg: '#f3e5f5' },
+  waiting_for_materials: { label: 'Waiting for Materials', color: '#f57c00', bg: '#fff3e0' },
+  received: { label: 'Received', color: '#1976d2', bg: '#e3f2fd' },
+  processing: { label: 'Processing', color: '#0288d1', bg: '#e1f5fe' },
+  stored: { label: 'Stored', color: '#388e3c', bg: '#e8f5e9' },
+  shipped: { label: 'Shipped', color: '#7b1fa2', bg: '#f3e5f5' },
+  picked_up: { label: 'Picked Up', color: '#7b1fa2', bg: '#f3e5f5' },
+  archived: { label: 'Archived', color: '#616161', bg: '#eeeeee' },
+  // Legacy mappings
+  draft: { label: 'Received', color: '#1976d2', bg: '#e3f2fd' },
+  in_progress: { label: 'Processing', color: '#0288d1', bg: '#e1f5fe' },
+  completed: { label: 'Stored', color: '#388e3c', bg: '#e8f5e9' }
+};
+
+// Statuses that mean the job is done — hide from schedule
+const DONE_STATUSES = ['stored', 'completed', 'shipped', 'picked_up', 'archived'];
+
+// Active statuses for filter dropdown
+const ACTIVE_STATUSES = [
+  { value: 'waiting_for_materials', label: 'Waiting for Materials' },
+  { value: 'received', label: 'Received' },
+  { value: 'processing', label: 'Processing' },
+];
 
 function SchedulingPage() {
   const navigate = useNavigate();
-  const [shipments, setShipments] = useState([]);
-  const [filteredShipments, setFilteredShipments] = useState([]);
+  const [workOrders, setWorkOrders] = useState([]);
+  const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedRows, setExpandedRows] = useState({});
   
-  // Load saved preferences from localStorage
   const [sortBy, setSortBy] = useState(() => {
     return localStorage.getItem('scheduling_sortBy') || 'promised_asc';
   });
@@ -23,7 +48,6 @@ function SchedulingPage() {
     return localStorage.getItem('scheduling_statusFilter') || 'all';
   });
 
-  // Save preferences to localStorage when they change
   useEffect(() => {
     localStorage.setItem('scheduling_sortBy', sortBy);
   }, [sortBy]);
@@ -33,60 +57,71 @@ function SchedulingPage() {
   }, [statusFilter]);
 
   useEffect(() => {
-    loadShipments();
+    loadWorkOrders();
   }, []);
 
   useEffect(() => {
-    filterAndSortShipments();
-  }, [shipments, searchQuery, sortBy, statusFilter]);
+    filterAndSort();
+  }, [workOrders, searchQuery, sortBy, statusFilter]);
 
-  const loadShipments = async () => {
+  const loadWorkOrders = async () => {
     try {
       setLoading(true);
-      const response = await getShipments();
-      // Filter out shipped AND stored/completed items — they're done
-      const activeShipments = (response.data.data || []).filter(s => 
-        s.status !== 'shipped' && s.status !== 'stored' && s.status !== 'completed'
-      );
-      setShipments(activeShipments);
+      const response = await getWorkOrders();
+      const all = response.data.data || [];
+      // Filter out done statuses
+      const active = all.filter(o => !DONE_STATUSES.includes(o.status));
+      setWorkOrders(active);
     } catch (err) {
-      setError('Failed to load shipments');
+      setError('Failed to load work orders');
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterAndSortShipments = () => {
-    let filtered = [...shipments];
+  const filterAndSort = () => {
+    let filtered = [...workOrders];
 
-    // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(s =>
-        s.clientName?.toLowerCase().includes(query) ||
-        s.clientPurchaseOrderNumber?.toLowerCase().includes(query) ||
-        s.jobNumber?.toLowerCase().includes(query) ||
-        s.description?.toLowerCase().includes(query)
+      filtered = filtered.filter(o =>
+        o.clientName?.toLowerCase().includes(query) ||
+        o.clientPurchaseOrderNumber?.toLowerCase().includes(query) ||
+        (o.drNumber && `DR-${o.drNumber}`.toLowerCase().includes(query)) ||
+        (o.drNumber && o.drNumber.toString().includes(query)) ||
+        o.orderNumber?.toLowerCase().includes(query) ||
+        o.description?.toLowerCase().includes(query)
       );
     }
 
-    // Filter by status
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(s => s.status === statusFilter);
+      filtered = filtered.filter(o => {
+        // Handle legacy mappings
+        if (statusFilter === 'processing') {
+          return o.status === 'processing' || o.status === 'in_progress';
+        }
+        if (statusFilter === 'received') {
+          return o.status === 'received' || o.status === 'draft';
+        }
+        return o.status === statusFilter;
+      });
     }
 
-    // Sort
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'name_asc':
           return (a.clientName || '').localeCompare(b.clientName || '');
         case 'name_desc':
           return (b.clientName || '').localeCompare(a.clientName || '');
+        case 'dr_asc':
+          return (a.drNumber || 0) - (b.drNumber || 0);
+        case 'dr_desc':
+          return (b.drNumber || 0) - (a.drNumber || 0);
         case 'received_asc':
-          return new Date(a.receivedAt || 0) - new Date(b.receivedAt || 0);
+          return new Date(a.receivedAt || a.createdAt || 0) - new Date(b.receivedAt || b.createdAt || 0);
         case 'received_desc':
-          return new Date(b.receivedAt || 0) - new Date(a.receivedAt || 0);
+          return new Date(b.receivedAt || b.createdAt || 0) - new Date(a.receivedAt || a.createdAt || 0);
         case 'promised_asc':
           if (!a.promisedDate && !b.promisedDate) return 0;
           if (!a.promisedDate) return 1;
@@ -112,15 +147,13 @@ function SchedulingPage() {
       }
     });
 
-    setFilteredShipments(filtered);
+    setFilteredOrders(filtered);
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return '—';
     return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+      month: 'short', day: 'numeric', year: 'numeric',
     });
   };
 
@@ -130,8 +163,7 @@ function SchedulingPage() {
     today.setHours(0, 0, 0, 0);
     const target = new Date(dateString);
     target.setHours(0, 0, 0, 0);
-    const diff = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
-    return diff;
+    return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
   };
 
   const getDateStatus = (dateString) => {
@@ -159,44 +191,22 @@ function SchedulingPage() {
     }
   };
 
-  const getStatusStyle = (status) => {
-    switch (status) {
-      case 'received':
-        return { background: '#e3f2fd', color: '#1565c0' };
-      case 'in_progress':
-        return { background: '#fff3e0', color: '#e65100' };
-      case 'completed':
-        return { background: '#e8f5e9', color: '#2e7d32' };
-      default:
-        return { background: '#f5f5f5', color: '#666' };
-    }
+  const getStatusConfig = (status) => {
+    return STATUSES[status] || { label: status, color: '#666', bg: '#f5f5f5' };
   };
 
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'received': return 'Received';
-      case 'in_progress': return 'In Progress';
-      case 'completed': return 'Completed';
-      default: return status;
-    }
-  };
-
-  const toggleRow = (id) => {
-    setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  // Stats - check both promisedDate and requestedDueDate
-  const overdueCount = shipments.filter(s => 
-    getDateStatus(s.promisedDate) === 'overdue' || 
-    getDateStatus(s.requestedDueDate) === 'overdue'
+  // Stats
+  const overdueCount = workOrders.filter(o => 
+    getDateStatus(o.promisedDate) === 'overdue' || 
+    getDateStatus(o.requestedDueDate) === 'overdue'
   ).length;
-  const todayCount = shipments.filter(s => 
-    getDateStatus(s.promisedDate) === 'today' || 
-    getDateStatus(s.requestedDueDate) === 'today'
+  const todayCount = workOrders.filter(o => 
+    getDateStatus(o.promisedDate) === 'today' || 
+    getDateStatus(o.requestedDueDate) === 'today'
   ).length;
-  const urgentCount = shipments.filter(s => 
-    getDateStatus(s.promisedDate) === 'urgent' || 
-    getDateStatus(s.requestedDueDate) === 'urgent'
+  const urgentCount = workOrders.filter(o => 
+    getDateStatus(o.promisedDate) === 'urgent' || 
+    getDateStatus(o.requestedDueDate) === 'urgent'
   ).length;
 
   if (loading) {
@@ -213,56 +223,54 @@ function SchedulingPage() {
         <div>
           <h1 className="page-title">Scheduling</h1>
           <p style={{ color: '#666', fontSize: '0.875rem', marginTop: 4 }}>
-            {filteredShipments.length} active jobs
+            {filteredOrders.length} active jobs
           </p>
         </div>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-
       {/* Stats Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginBottom: 20 }}>
-        <div style={{ 
-          background: overdueCount > 0 ? '#ffebee' : '#f5f5f5', 
-          padding: 16, 
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
+        <div style={{
+          padding: '16px',
+          background: overdueCount > 0 ? '#ffebee' : 'white',
           borderRadius: 8,
-          borderLeft: `4px solid ${overdueCount > 0 ? '#c62828' : '#ccc'}`
+          borderLeft: `4px solid ${overdueCount > 0 ? '#c62828' : '#e0e0e0'}`
         }}>
-          <div style={{ fontSize: '2rem', fontWeight: 700, color: overdueCount > 0 ? '#c62828' : '#666' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 700, color: overdueCount > 0 ? '#c62828' : '#999' }}>
             {overdueCount}
           </div>
-          <div style={{ fontSize: '0.8rem', color: '#666' }}>Overdue</div>
+          <div style={{ fontSize: '0.8rem', color: overdueCount > 0 ? '#c62828' : '#666' }}>Overdue</div>
         </div>
-        <div style={{ 
-          background: todayCount > 0 ? '#fff3e0' : '#f5f5f5', 
-          padding: 16, 
+        <div style={{
+          padding: '16px',
+          background: todayCount > 0 ? '#fff3e0' : 'white',
           borderRadius: 8,
-          borderLeft: `4px solid ${todayCount > 0 ? '#e65100' : '#ccc'}`
+          borderLeft: `4px solid ${todayCount > 0 ? '#e65100' : '#e0e0e0'}`
         }}>
-          <div style={{ fontSize: '2rem', fontWeight: 700, color: todayCount > 0 ? '#e65100' : '#666' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 700, color: todayCount > 0 ? '#e65100' : '#999' }}>
             {todayCount}
           </div>
-          <div style={{ fontSize: '0.8rem', color: '#666' }}>Due Today</div>
+          <div style={{ fontSize: '0.8rem', color: todayCount > 0 ? '#e65100' : '#666' }}>Due Today</div>
         </div>
-        <div style={{ 
-          background: urgentCount > 0 ? '#fff8e1' : '#f5f5f5', 
-          padding: 16, 
+        <div style={{
+          padding: '16px',
+          background: urgentCount > 0 ? '#fff8e1' : 'white',
           borderRadius: 8,
-          borderLeft: `4px solid ${urgentCount > 0 ? '#f57f17' : '#ccc'}`
+          borderLeft: `4px solid ${urgentCount > 0 ? '#f57f17' : '#e0e0e0'}`
         }}>
-          <div style={{ fontSize: '2rem', fontWeight: 700, color: urgentCount > 0 ? '#f57f17' : '#666' }}>
+          <div style={{ fontSize: '2rem', fontWeight: 700, color: urgentCount > 0 ? '#f57f17' : '#999' }}>
             {urgentCount}
           </div>
-          <div style={{ fontSize: '0.8rem', color: '#666' }}>Due in 3 Days</div>
+          <div style={{ fontSize: '0.8rem', color: urgentCount > 0 ? '#f57f17' : '#666' }}>Within 3 Days</div>
         </div>
-        <div style={{ 
-          background: '#f5f5f5', 
-          padding: 16, 
+        <div style={{
+          padding: '16px',
+          background: 'white',
           borderRadius: 8,
           borderLeft: '4px solid #1976d2'
         }}>
           <div style={{ fontSize: '2rem', fontWeight: 700, color: '#1976d2' }}>
-            {filteredShipments.length}
+            {filteredOrders.length}
           </div>
           <div style={{ fontSize: '0.8rem', color: '#666' }}>Total Active</div>
         </div>
@@ -275,7 +283,7 @@ function SchedulingPage() {
             <Search size={18} className="search-box-icon" />
             <input
               type="text"
-              placeholder="Search by name, PO#, job number..."
+              placeholder="Search by name, DR#, PO#..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -287,9 +295,9 @@ function SchedulingPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             <option value="all">All Statuses</option>
-            <option value="received">Received</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
+            {ACTIVE_STATUSES.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
           </select>
           <select
             className="form-select"
@@ -297,6 +305,10 @@ function SchedulingPage() {
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >
+            <optgroup label="By DR Number">
+              <option value="dr_desc">DR# (Newest)</option>
+              <option value="dr_asc">DR# (Oldest)</option>
+            </optgroup>
             <optgroup label="By Name">
               <option value="name_asc">Name A-Z</option>
               <option value="name_desc">Name Z-A</option>
@@ -318,18 +330,18 @@ function SchedulingPage() {
       </div>
 
       {/* Schedule Board */}
-      {filteredShipments.length === 0 ? (
+      {filteredOrders.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">📅</div>
           <div className="empty-state-title">No jobs to schedule</div>
-          <p>{searchQuery || statusFilter !== 'all' ? 'No jobs match your filters' : 'All jobs have been shipped!'}</p>
+          <p>{searchQuery || statusFilter !== 'all' ? 'No jobs match your filters' : 'All jobs are complete!'}</p>
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           {/* Table Header */}
           <div style={{ 
             display: 'grid', 
-            gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 120px',
+            gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 140px',
             background: '#f5f5f5',
             padding: '12px 16px',
             fontWeight: 600,
@@ -338,8 +350,8 @@ function SchedulingPage() {
             color: '#666',
             borderBottom: '2px solid #e0e0e0'
           }}>
-            <div>Client / Job</div>
-            <div>PO Number</div>
+            <div>DR# / Client</div>
+            <div>Client PO#</div>
             <div>Received</div>
             <div>Requested</div>
             <div>Promised</div>
@@ -347,17 +359,17 @@ function SchedulingPage() {
           </div>
 
           {/* Table Body */}
-          {filteredShipments.map((shipment, index) => {
-            const promisedStatus = getDateStatus(shipment.promisedDate);
-            const requestedStatus = getDateStatus(shipment.requestedDueDate);
-            const isExpanded = expandedRows[shipment.id];
+          {filteredOrders.map((order, index) => {
+            const promisedStatus = getDateStatus(order.promisedDate);
+            const requestedStatus = getDateStatus(order.requestedDueDate);
+            const statusCfg = getStatusConfig(order.status);
 
             return (
-              <div key={shipment.id}>
+              <div key={order.id}>
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 120px',
+                    gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 140px',
                     padding: '16px',
                     borderBottom: '1px solid #eee',
                     cursor: 'pointer',
@@ -365,45 +377,55 @@ function SchedulingPage() {
                     transition: 'background 0.2s',
                     alignItems: 'center'
                   }}
-                  onClick={() => navigate(`/shipment/${shipment.id}`)}
+                  onClick={() => navigate(`/work-order/${order.id}`)}
                   onMouseEnter={(e) => e.currentTarget.style.background = '#f0f7ff'}
                   onMouseLeave={(e) => e.currentTarget.style.background = index % 2 === 0 ? 'white' : '#fafafa'}
                 >
-                  {/* Client / Job */}
+                  {/* DR# / Client */}
                   <div>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{shipment.clientName}</div>
-                    {shipment.jobNumber && (
-                      <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                        Job: {shipment.jobNumber}
-                      </div>
-                    )}
-                    {shipment.description && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      {order.drNumber ? (
+                        <span style={{ 
+                          fontWeight: 700, 
+                          color: '#1565c0',
+                          fontSize: '0.95rem'
+                        }}>
+                          DR-{order.drNumber}
+                        </span>
+                      ) : (
+                        <span style={{ fontWeight: 600, color: '#666' }}>
+                          {order.orderNumber || '—'}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{order.clientName}</div>
+                    {order.description && (
                       <div style={{ 
                         fontSize: '0.8rem', 
                         color: '#999',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        maxWidth: 250
+                        maxWidth: 280
                       }}>
-                        {shipment.description}
+                        {order.description}
                       </div>
                     )}
                   </div>
 
-                  {/* PO Number */}
+                  {/* Client PO# */}
                   <div style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
-                    {shipment.clientPurchaseOrderNumber || '—'}
+                    {order.clientPurchaseOrderNumber || '—'}
                   </div>
 
                   {/* Received Date */}
                   <div style={{ fontSize: '0.9rem', color: '#666' }}>
-                    {formatDate(shipment.receivedAt)}
+                    {formatDate(order.receivedAt || order.createdAt)}
                   </div>
 
                   {/* Requested Date */}
                   <div>
-                    {shipment.requestedDueDate ? (
+                    {order.requestedDueDate ? (
                       <div style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -414,7 +436,7 @@ function SchedulingPage() {
                         ...getDateBadgeStyle(requestedStatus)
                       }}>
                         {requestedStatus === 'overdue' && <AlertTriangle size={14} />}
-                        {formatDate(shipment.requestedDueDate)}
+                        {formatDate(order.requestedDueDate)}
                       </div>
                     ) : (
                       <span style={{ color: '#ccc' }}>—</span>
@@ -423,7 +445,7 @@ function SchedulingPage() {
 
                   {/* Promised Date */}
                   <div>
-                    {shipment.promisedDate ? (
+                    {order.promisedDate ? (
                       <div style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -436,14 +458,14 @@ function SchedulingPage() {
                       }}>
                         {promisedStatus === 'overdue' && <AlertTriangle size={14} />}
                         {promisedStatus === 'today' && <Clock size={14} />}
-                        {formatDate(shipment.promisedDate)}
-                        {getDaysUntil(shipment.promisedDate) !== null && (
+                        {formatDate(order.promisedDate)}
+                        {getDaysUntil(order.promisedDate) !== null && (
                           <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>
-                            ({getDaysUntil(shipment.promisedDate) === 0 
+                            ({getDaysUntil(order.promisedDate) === 0 
                               ? 'Today' 
-                              : getDaysUntil(shipment.promisedDate) < 0 
-                                ? `${Math.abs(getDaysUntil(shipment.promisedDate))}d late`
-                                : `${getDaysUntil(shipment.promisedDate)}d`})
+                              : getDaysUntil(order.promisedDate) < 0 
+                                ? `${Math.abs(getDaysUntil(order.promisedDate))}d late`
+                                : `${getDaysUntil(order.promisedDate)}d`})
                           </span>
                         )}
                       </div>
@@ -460,9 +482,10 @@ function SchedulingPage() {
                       borderRadius: 12,
                       fontSize: '0.75rem',
                       fontWeight: 500,
-                      ...getStatusStyle(shipment.status)
+                      background: statusCfg.bg,
+                      color: statusCfg.color,
                     }}>
-                      {getStatusLabel(shipment.status)}
+                      {statusCfg.label}
                     </span>
                   </div>
                 </div>
