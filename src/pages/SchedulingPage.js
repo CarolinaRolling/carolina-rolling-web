@@ -109,6 +109,12 @@ function SchedulingPage() {
     }
 
     filtered.sort((a, b) => {
+      // Rush orders always go to top
+      const aRush = a.parts?.some(p => p.partType === 'rush_service');
+      const bRush = b.parts?.some(p => p.partType === 'rush_service');
+      if (aRush && !bRush) return -1;
+      if (!aRush && bRush) return 1;
+
       switch (sortBy) {
         case 'name_asc':
           return (a.clientName || '').localeCompare(b.clientName || '');
@@ -208,6 +214,7 @@ function SchedulingPage() {
     getDateStatus(o.promisedDate) === 'urgent' || 
     getDateStatus(o.requestedDueDate) === 'urgent'
   ).length;
+  const rushCount = workOrders.filter(o => o.parts?.some(p => p.partType === 'rush_service')).length;
 
   if (loading) {
     return (
@@ -262,6 +269,17 @@ function SchedulingPage() {
             {urgentCount}
           </div>
           <div style={{ fontSize: '0.8rem', color: urgentCount > 0 ? '#f57f17' : '#666' }}>Within 3 Days</div>
+        </div>
+        <div style={{
+          padding: '16px',
+          background: rushCount > 0 ? '#ffebee' : 'white',
+          borderRadius: 8,
+          borderLeft: `4px solid ${rushCount > 0 ? '#c62828' : '#e0e0e0'}`
+        }}>
+          <div style={{ fontSize: '2rem', fontWeight: 700, color: rushCount > 0 ? '#c62828' : '#999' }}>
+            {rushCount}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: rushCount > 0 ? '#c62828' : '#666' }}>🚨 Rush Orders</div>
         </div>
         <div style={{
           padding: '16px',
@@ -363,6 +381,7 @@ function SchedulingPage() {
             const promisedStatus = getDateStatus(order.promisedDate);
             const requestedStatus = getDateStatus(order.requestedDueDate);
             const statusCfg = getStatusConfig(order.status);
+            const isRush = order.parts?.some(p => p.partType === 'rush_service');
 
             return (
               <div key={order.id}>
@@ -371,15 +390,16 @@ function SchedulingPage() {
                     display: 'grid',
                     gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 140px',
                     padding: '16px',
-                    borderBottom: '1px solid #eee',
+                    borderBottom: isRush ? '2px solid #ef5350' : '1px solid #eee',
                     cursor: 'pointer',
-                    background: index % 2 === 0 ? 'white' : '#fafafa',
+                    background: isRush ? '#ffebee' : (index % 2 === 0 ? 'white' : '#fafafa'),
                     transition: 'background 0.2s',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    borderLeft: isRush ? '4px solid #c62828' : undefined
                   }}
                   onClick={() => navigate(`/workorders/${order.id}`)}
-                  onMouseEnter={(e) => e.currentTarget.style.background = '#f0f7ff'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = index % 2 === 0 ? 'white' : '#fafafa'}
+                  onMouseEnter={(e) => e.currentTarget.style.background = isRush ? '#ffcdd2' : '#f0f7ff'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = isRush ? '#ffebee' : (index % 2 === 0 ? 'white' : '#fafafa')}
                 >
                   {/* DR# / Client */}
                   <div>
@@ -387,7 +407,7 @@ function SchedulingPage() {
                       {order.drNumber ? (
                         <span style={{ 
                           fontWeight: 700, 
-                          color: '#1565c0',
+                          color: isRush ? '#c62828' : '#1565c0',
                           fontSize: '0.95rem'
                         }}>
                           DR-{order.drNumber}
@@ -395,6 +415,14 @@ function SchedulingPage() {
                       ) : (
                         <span style={{ fontWeight: 600, color: '#666' }}>
                           {order.orderNumber || '—'}
+                        </span>
+                      )}
+                      {isRush && (
+                        <span style={{
+                          background: '#c62828', color: 'white', padding: '2px 8px',
+                          borderRadius: 4, fontSize: '0.7rem', fontWeight: 700
+                        }}>
+                          🚨 RUSH
                         </span>
                       )}
                     </div>

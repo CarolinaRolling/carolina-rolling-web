@@ -13,6 +13,7 @@ import ChannelRollForm from '../components/ChannelRollForm';
 import BeamRollForm from '../components/BeamRollForm';
 import ConeRollForm from '../components/ConeRollForm';
 import TeeBarRollForm from '../components/TeeBarRollForm';
+import RushServiceForm, { EXPEDITE_OPTIONS, EMERGENCY_OPTIONS } from '../components/RushServiceForm';
 import PressBrakeForm from '../components/PressBrakeForm';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
@@ -39,6 +40,7 @@ const PART_TYPES = {
   flat_stock: { label: 'Flat Stock', icon: '📄', desc: 'Flat material cut to custom print', fields: ['material', 'thickness', 'width', 'length'] },
   fab_service: { label: 'Fabrication Service', icon: '🔥', desc: 'Welding, fitting, cut-to-fit services', fields: [] },
   shop_rate: { label: 'Shop Rate', icon: '⏱️', desc: 'Hourly rate — custom work', fields: [] },
+  rush_service: { label: 'Expedite & Emergency', icon: '🚨', desc: 'Rush order surcharge and off-hour opening fees', fields: [] },
   other: { label: 'Other', icon: '📦', desc: 'Custom or miscellaneous parts', fields: ['material', 'thickness', 'width', 'length', 'sectionSize', 'outerDiameter', 'wallThickness', 'rollType', 'radius', 'diameter', 'arcDegrees'] }
 };
 
@@ -546,6 +548,11 @@ function WorkOrderDetailsPage() {
       if (!partData._coneHeight) warnings.push('Cone height is required');
       if (parseFloat(partData._coneLargeDia) <= parseFloat(partData._coneSmallDia)) warnings.push('Large diameter must be greater than small diameter');
     }
+    if (selectedPartType === 'rush_service') {
+      if (!partData._expediteEnabled && !partData._emergencyEnabled) warnings.push('Select at least Expedite or Emergency Service');
+      if (partData._expediteEnabled && partData._expediteType === 'custom_pct' && !partData._expediteCustomPct) warnings.push('Custom percentage is required');
+      if (partData._expediteEnabled && partData._expediteType === 'custom_amt' && !partData._expediteCustomAmt) warnings.push('Custom amount is required');
+    }
     if (!partData.quantity || parseInt(partData.quantity) < 1) warnings.push('Quantity must be at least 1');
     return warnings;
   };
@@ -583,6 +590,14 @@ function WorkOrderDetailsPage() {
         await updateWorkOrderPart(id, editingPart.id, dataToSend);
       } else {
         await addWorkOrderPart(id, dataToSend);
+      }
+      
+      // Rush service: set promise date to today
+      if (selectedPartType === 'rush_service' && (partData._expediteEnabled || partData._emergencyEnabled)) {
+        try {
+          const today = new Date().toISOString().split('T')[0];
+          await updateWorkOrder(id, { promisedDate: today });
+        } catch (e) { console.warn('Failed to set promise date:', e); }
       }
       await loadOrder();
       setShowPartModal(false);
@@ -704,7 +719,7 @@ function WorkOrderDetailsPage() {
       });
     }
 
-    const partsHtml = order.parts?.sort((a, b) => a.partNumber - b.partNumber).map(p => {
+    const partsHtml = order.parts?.sort((a, b) => a.partNumber - b.partNumber).filter(p => p.partType !== 'rush_service').map(p => {
       // Merge formData if present
       const part = { ...p };
       if (part.formData && typeof part.formData === 'object') Object.assign(part, part.formData);
@@ -903,6 +918,17 @@ function WorkOrderDetailsPage() {
         }
         return minLine;
       })()}
+      ${(() => {
+        const totals = calculateTotals();
+        let rushLines = '';
+        if (totals.expediteAmount > 0) {
+          rushLines += `<div style="display:flex;justify-content:space-between;padding:4px 0;color:#e65100"><span>🚨 ${totals.expediteLabel}</span><strong>${formatCurrency(totals.expediteAmount)}</strong></div>`;
+        }
+        if (totals.emergencyAmount > 0) {
+          rushLines += `<div style="display:flex;justify-content:space-between;padding:4px 0;color:#c62828"><span>🚨 ${totals.emergencyLabel}</span><strong>${formatCurrency(totals.emergencyAmount)}</strong></div>`;
+        }
+        return rushLines;
+      })()}
       <div style="display:flex;justify-content:space-between;padding:4px 0"><span>Parts Subtotal</span><strong>${formatCurrency(calculateTotals().partsSubtotal)}</strong></div>
       ${parseFloat(order.truckingCost) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Trucking</span><strong>${formatCurrency(order.truckingCost)}</strong></div>` : ''}
       ${parseFloat(order.taxAmount) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax</span><strong>${formatCurrency(order.taxAmount)}</strong></div>` : ''}
@@ -1060,6 +1086,7 @@ function WorkOrderDetailsPage() {
     let nonEaTotal = 0;
     let eaPricedTotal = 0;
     parts.forEach(p => {
+      if (p.partType === 'rush_service') return; // handle separately
       const total = parseFloat(p.partTotal) || 0;
       if (EA_PRICED.includes(p.partType)) {
         eaPricedTotal += total;
@@ -1076,12 +1103,41 @@ function WorkOrderDetailsPage() {
       partsSubtotal = nonEaTotal + eaPricedTotal;
     }
     
+    // Rush service: calculate expedite and emergency from rush_service parts
+    let expediteAmount = 0;
+    let emergencyAmount = 0;
+    let expediteLabel = '';
+    let emergencyLabel = '';
+    const rushPart = parts.find(p => p.partType === 'rush_service');
+    if (rushPart) {
+      const fd = rushPart.formData || {};
+      if (fd._expediteEnabled) {
+        if (fd._expediteType === 'custom_amt') {
+          expediteAmount = parseFloat(fd._expediteCustomAmt) || 0;
+          expediteLabel = 'Expedite (Custom)';
+        } else {
+          let pct = parseFloat(fd._expediteType) || 0;
+          if (fd._expediteType === 'custom_pct') pct = parseFloat(fd._expediteCustomPct) || 0;
+          expediteAmount = partsSubtotal * (pct / 100);
+          expediteLabel = `Expedite (${pct}%)`;
+        }
+      }
+      if (fd._emergencyEnabled) {
+        const emergOpts = { 'Saturday': 600, 'Saturday Night': 800, 'Sunday': 600, 'Sunday Night': 800 };
+        emergencyAmount = emergOpts[fd._emergencyDay] || 0;
+        emergencyLabel = `Emergency Off Hour Opening: ${fd._emergencyDay}`;
+      }
+    }
+    
+    const rushTotal = expediteAmount + emergencyAmount;
+    partsSubtotal += rushTotal;
+    
     const trucking = parseFloat(editData.truckingCost) || parseFloat(order?.truckingCost) || 0;
     const subtotal = partsSubtotal + trucking;
     const taxRate = parseFloat(editData.taxRate) || parseFloat(order?.taxRate) || defaultTaxRate;
     const taxAmount = subtotal * (taxRate / 100);
     const grandTotal = subtotal + taxAmount;
-    return { partsSubtotal, trucking, subtotal, taxRate, taxAmount, grandTotal, minInfo };
+    return { partsSubtotal, trucking, subtotal, taxRate, taxAmount, grandTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel };
   };
   
   // Order Material functions
@@ -1684,7 +1740,7 @@ function WorkOrderDetailsPage() {
                 )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, fontSize: '0.875rem' }}>
-                  <div><strong>Qty:</strong> {part.quantity}</div>
+                  {part.partType !== 'rush_service' && <div><strong>Qty:</strong> {part.quantity}</div>}
                   {part.material && <div><strong>Material:</strong> {part.material}</div>}
                   {part.thickness && <div><strong>Thickness:</strong> {part.thickness}</div>}
                   {part.width && <div><strong>Width:</strong> {part.width}</div>}
@@ -1703,6 +1759,27 @@ function WorkOrderDetailsPage() {
                   )}
                   {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
                 </div>
+                {/* Rush Service Display */}
+                {part.partType === 'rush_service' && (() => {
+                  const fd = part.formData || {};
+                  const totals = calculateTotals();
+                  return (
+                    <div style={{ padding: 12, background: '#fff8e1', borderRadius: 8, border: '2px solid #ffcc80' }}>
+                      {fd._expediteEnabled && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#e65100', fontWeight: 600 }}>
+                          <span>🚨 {totals.expediteLabel}</span>
+                          <span>{formatCurrency(totals.expediteAmount)}</span>
+                        </div>
+                      )}
+                      {fd._emergencyEnabled && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#c62828', fontWeight: 600 }}>
+                          <span>🚨 {totals.emergencyLabel}</span>
+                          <span>{formatCurrency(totals.emergencyAmount)}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {part.specialInstructions && <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: '0.875rem' }}><strong>Instructions:</strong> {part.specialInstructions}</div>}
                 
                 {/* Pricing Summary */}
@@ -1764,7 +1841,7 @@ function WorkOrderDetailsPage() {
                 </tr>
               </thead>
               <tbody>
-                {order.parts.sort((a, b) => a.partNumber - b.partNumber).map(part => (
+                {order.parts.sort((a, b) => a.partNumber - b.partNumber).filter(p => p.partType !== 'rush_service').map(part => (
                   <tr key={part.id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: 8 }}>{part.partNumber}</td>
                     <td style={{ padding: 8 }}>
@@ -1796,6 +1873,18 @@ function WorkOrderDetailsPage() {
                     <span>Total Labor <s style={{ color: '#999' }}>{formatCurrency(calculateTotals().minInfo.totalLabor)}</s></span>
                     <span style={{ color: '#e65100', fontWeight: 600 }}>{formatCurrency(calculateTotals().minInfo.adjustedLabor)} (min)</span>
                   </div>
+                </div>
+              )}
+              {calculateTotals().expediteAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #ffcc80', color: '#e65100', fontSize: '0.85rem' }}>
+                  <span>🚨 {calculateTotals().expediteLabel}</span>
+                  <span style={{ fontWeight: 600 }}>{formatCurrency(calculateTotals().expediteAmount)}</span>
+                </div>
+              )}
+              {calculateTotals().emergencyAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #ffcc80', color: '#c62828', fontSize: '0.85rem' }}>
+                  <span>🚨 {calculateTotals().emergencyLabel}</span>
+                  <span style={{ fontWeight: 600 }}>{formatCurrency(calculateTotals().emergencyAmount)}</span>
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
@@ -2035,6 +2124,10 @@ function WorkOrderDetailsPage() {
               ) : selectedPartType === 'cone_roll' ? (
                 <div className="grid grid-2">
                   <ConeRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'rush_service' ? (
+                <div className="grid grid-2">
+                  <RushServiceForm partData={partData} setPartData={setPartData} />
                 </div>
               ) : (
                 /* Generic form for 'other' part type */

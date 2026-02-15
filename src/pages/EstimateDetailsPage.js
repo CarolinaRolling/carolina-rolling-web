@@ -22,6 +22,7 @@ import BeamRollForm from '../components/BeamRollForm';
 import ConeRollForm from '../components/ConeRollForm';
 import TeeBarRollForm from '../components/TeeBarRollForm';
 import PressBrakeForm from '../components/PressBrakeForm';
+import RushServiceForm from '../components/RushServiceForm';
 
 const PART_TYPES = {
   plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator' },
@@ -37,6 +38,7 @@ const PART_TYPES = {
   flat_stock: { label: 'Flat Stock', icon: '📄', desc: 'Ship flat — plate, angle, tube, channel, beam (no rolling)' },
   fab_service: { label: 'Fabrication Service', icon: '🔥', desc: 'Welding, fitting, cut-to-fit — links to another part' },
   shop_rate: { label: 'Shop Rate', icon: '⏱️', desc: 'Hourly rate — flattening, art projects, custom work' },
+  rush_service: { label: 'Expedite & Emergency', icon: '🚨', desc: 'Rush order surcharge and off-hour opening fees' },
   other: { label: 'Other', icon: '📦', desc: 'Custom or miscellaneous parts' }
 };
 
@@ -414,6 +416,7 @@ function EstimateDetailsPage() {
     let eaPricedTotal = 0;
     
     parts.forEach(part => {
+      if (part.partType === 'rush_service') return; // handle separately
       const calc = calculatePartTotal(part);
       if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType)) {
         eaPricedTotal += calc.partTotal;
@@ -428,6 +431,30 @@ function EstimateDetailsPage() {
     } else {
       partsSubtotal += eaPricedTotal;
     }
+    
+    // Rush service: calculate expedite and emergency
+    let expediteAmount = 0, emergencyAmount = 0, expediteLabel = '', emergencyLabel = '';
+    const rushPart = parts.find(p => p.partType === 'rush_service');
+    if (rushPart) {
+      const fd = rushPart.formData || rushPart;
+      if (fd._expediteEnabled) {
+        if (fd._expediteType === 'custom_amt') {
+          expediteAmount = parseFloat(fd._expediteCustomAmt) || 0;
+          expediteLabel = 'Expedite (Custom)';
+        } else {
+          let pct = parseFloat(fd._expediteType) || 0;
+          if (fd._expediteType === 'custom_pct') pct = parseFloat(fd._expediteCustomPct) || 0;
+          expediteAmount = partsSubtotal * (pct / 100);
+          expediteLabel = `Expedite (${pct}%)`;
+        }
+      }
+      if (fd._emergencyEnabled) {
+        const emergOpts = { 'Saturday': 600, 'Saturday Night': 800, 'Sunday': 600, 'Sunday Night': 800 };
+        emergencyAmount = emergOpts[fd._emergencyDay] || 0;
+        emergencyLabel = `Emergency Off Hour Opening: ${fd._emergencyDay}`;
+      }
+    }
+    partsSubtotal += expediteAmount + emergencyAmount;
     
     // Discount
     let discountAmt = 0;
@@ -448,7 +475,7 @@ function EstimateDetailsPage() {
     const ccFee = (grandTotal * ccFeeRate / 100) + ccFeeFixed;
     const ccTotal = grandTotal + ccFee;
     
-    return { partsSubtotal, discountAmt, afterDiscount, trucking, taxAmount, grandTotal, ccFee, ccTotal, minInfo };
+    return { partsSubtotal, discountAmt, afterDiscount, trucking, taxAmount, grandTotal, ccFee, ccTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel };
   };
 
   const handleDownloadPDF = async () => {
@@ -696,6 +723,12 @@ function EstimateDetailsPage() {
       if (!partData._shopDescription) warnings.push('Job description is required');
       if (!partData._shopHours || parseFloat(partData._shopHours) <= 0) warnings.push('Estimated hours is required');
     }
+
+    if (partData.partType === 'rush_service') {
+      if (!partData._expediteEnabled && !partData._emergencyEnabled) warnings.push('Select at least Expedite or Emergency Service');
+      if (partData._expediteEnabled && partData._expediteType === 'custom_pct' && !partData._expediteCustomPct) warnings.push('Custom percentage is required');
+      if (partData._expediteEnabled && partData._expediteType === 'custom_amt' && !partData._expediteCustomAmt) warnings.push('Custom amount is required');
+    }
     
     // Generic validations for all types
     if (!partData.quantity || parseInt(partData.quantity) < 1) warnings.push('Quantity must be at least 1');
@@ -851,7 +884,7 @@ function EstimateDetailsPage() {
   
   const printEstimate = () => {
     const totals = calculateTotals();
-    const partsHtml = parts.map(part => {
+    const partsHtml = parts.filter(p => p.partType !== 'rush_service').map(part => {
       const calc = calculatePartTotal(part);
       const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
       const pricingHtml = isEaPricing
@@ -899,6 +932,8 @@ function EstimateDetailsPage() {
       ${formData.truckingCost > 0 ? `<div style="background:#fff3e0;padding:12px;border-radius:8px;margin:12px 0;"><strong>🚚 Trucking:</strong> ${formData.truckingDescription || ''} - ${formatCurrency(formData.truckingCost)} (Not Taxed)</div>` : ''}
       <div style="background:#f0f7ff;padding:16px;border-radius:8px;margin-top:20px;">
         ${minimumLine}
+        ${totals.expediteAmount > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0;color:#e65100;border-bottom:1px solid #ffcc80"><span>🚨 ${totals.expediteLabel}</span><strong>${formatCurrency(totals.expediteAmount)}</strong></div>` : ''}
+        ${totals.emergencyAmount > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0;color:#c62828;border-bottom:1px solid #ffcc80"><span>🚨 ${totals.emergencyLabel}</span><strong>${formatCurrency(totals.emergencyAmount)}</strong></div>` : ''}
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Parts Subtotal</span><span>${formatCurrency(totals.partsSubtotal)}</span></div>
         ${discountLine}
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Trucking</span><span>${formatCurrency(totals.trucking)}</span></div>
@@ -1131,6 +1166,24 @@ function EstimateDetailsPage() {
                   </div>
 
                   <div style={{ fontSize: '0.875rem', marginBottom: 12 }}>
+                    {/* Rush Service Display */}
+                    {part.partType === 'rush_service' ? (() => {
+                      const fd = part.formData || part;
+                      return (
+                        <div style={{ padding: 12, background: '#fff8e1', borderRadius: 8, border: '2px solid #ffcc80' }}>
+                          {fd._expediteEnabled && (
+                            <div style={{ padding: '4px 0', color: '#e65100', fontWeight: 600 }}>
+                              🚨 Expedite: {fd._expediteType === 'custom_amt' ? `$${parseFloat(fd._expediteCustomAmt) || 0}` : `${fd._expediteType === 'custom_pct' ? (fd._expediteCustomPct || 0) : fd._expediteType}% of parts subtotal`}
+                            </div>
+                          )}
+                          {fd._emergencyEnabled && (
+                            <div style={{ padding: '4px 0', color: '#c62828', fontWeight: 600 }}>
+                              🚨 Emergency Off Hour Opening: {fd._emergencyDay} — ${{'Saturday': 600, 'Saturday Night': 800, 'Sunday': 600, 'Sunday Night': 800}[fd._emergencyDay] || 0}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })() : <>
                     {/* Line 1: Qty, Size, Grade */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
                       <span><strong>Qty:</strong> {part.quantity}</span>
@@ -1193,6 +1246,7 @@ function EstimateDetailsPage() {
                         {part._pitchDevelopedDia > 0 && <span style={{ color: '#2e7d32', fontWeight: 600 }}> | Dev Ø: {parseFloat(part._pitchDevelopedDia).toFixed(4)}"</span>}
                       </div>
                     )}
+                  </>}
                   </div>
 
                   {/* Material Section - only show if we supply material (old part types) */}
@@ -1413,7 +1467,7 @@ function EstimateDetailsPage() {
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: 8 }}>Parts Breakdown</div>
                 <div style={{ fontSize: '0.8rem', padding: 8, background: '#f9f9f9', borderRadius: 8 }}>
-                  {parts.map(part => {
+                  {parts.filter(p => p.partType !== 'rush_service').map(part => {
                     const calc = calculatePartTotal(part);
                     return (
                       <div key={part.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
@@ -1437,6 +1491,18 @@ function EstimateDetailsPage() {
                     <span>Total Labor <s style={{ color: '#999' }}>{formatCurrency(totals.minInfo.totalLabor)}</s></span>
                     <span style={{ color: '#e65100', fontWeight: 600 }}>{formatCurrency(totals.minInfo.adjustedLabor)} (min)</span>
                   </div>
+                </div>
+              )}
+              {totals.expediteAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #ffcc80', color: '#e65100', fontSize: '0.85rem' }}>
+                  <span>🚨 {totals.expediteLabel}</span>
+                  <span style={{ fontWeight: 600 }}>{formatCurrency(totals.expediteAmount)}</span>
+                </div>
+              )}
+              {totals.emergencyAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #ffcc80', color: '#c62828', fontSize: '0.85rem' }}>
+                  <span>🚨 {totals.emergencyLabel}</span>
+                  <span style={{ fontWeight: 600 }}>{formatCurrency(totals.emergencyAmount)}</span>
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #ddd' }}>
@@ -1834,6 +1900,10 @@ function EstimateDetailsPage() {
                     partData={partData}
                     setPartData={setPartData}
                   />
+                </div>
+              ) : partData.partType === 'rush_service' ? (
+                <div className="grid grid-2">
+                  <RushServiceForm partData={partData} setPartData={setPartData} />
                 </div>
               ) : (
                 <div>

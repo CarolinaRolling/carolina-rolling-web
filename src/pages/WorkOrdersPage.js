@@ -76,6 +76,12 @@ function WorkOrdersPage() {
 
     // Sort
     filtered.sort((a, b) => {
+      // Rush orders always go to top
+      const aRush = a.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'picked_up', 'archived'].includes(a.status);
+      const bRush = b.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'picked_up', 'archived'].includes(b.status);
+      if (aRush && !bRush) return -1;
+      if (!aRush && bRush) return 1;
+
       switch (sortBy) {
         case 'dr_desc':
           return (b.drNumber || 0) - (a.drNumber || 0);
@@ -259,15 +265,19 @@ function WorkOrdersPage() {
         </div>
       ) : (
         <div className="grid grid-3">
-          {filteredOrders.map((order) => (
+          {filteredOrders.map((order) => {
+            const isRush = order.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'picked_up', 'archived'].includes(order.status);
+            return (
             <div
               key={order.id}
               className="card"
               onClick={() => navigate(`/workorders/${order.id}`)}
               style={{
                 cursor: 'pointer',
-                borderLeft: `4px solid ${getStatusColor(order)}`,
-                transition: 'transform 0.15s, box-shadow 0.15s'
+                transition: 'transform 0.15s, box-shadow 0.15s',
+                background: isRush ? '#ffebee' : undefined,
+                border: isRush ? '2px solid #ef5350' : undefined,
+                borderLeft: isRush ? '4px solid #c62828' : `4px solid ${getStatusColor(order)}`,
               }}
               onMouseOver={(e) => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
@@ -286,8 +296,8 @@ function WorkOrdersPage() {
                       fontFamily: 'Courier New, monospace',
                       fontWeight: 700,
                       fontSize: '1.2rem',
-                      color: '#1976d2',
-                      background: '#e3f2fd',
+                      color: isRush ? '#c62828' : '#1976d2',
+                      background: isRush ? '#ffcdd2' : '#e3f2fd',
                       padding: '4px 10px',
                       borderRadius: 6,
                       display: 'inline-block'
@@ -303,7 +313,18 @@ function WorkOrdersPage() {
                     {order.clientName}
                   </div>
                 </div>
-                {getStatusBadge(order.status)}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  {isRush && (
+                    <span style={{
+                      background: '#c62828', color: 'white', padding: '3px 10px',
+                      borderRadius: 4, fontSize: '0.75rem', fontWeight: 700,
+                      letterSpacing: '0.5px'
+                    }}>
+                      🚨 RUSH
+                    </span>
+                  )}
+                  {getStatusBadge(order.status)}
+                </div>
               </div>
 
               {/* Client PO */}
@@ -350,7 +371,7 @@ function WorkOrdersPage() {
                 )}
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
 
