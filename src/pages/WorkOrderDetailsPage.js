@@ -120,21 +120,21 @@ function WorkOrderDetailsPage() {
 
       // Determine correct tax rate: WO stored > client-specific > admin default
       let effectiveTaxRate = adminTaxRate;
-      if (data.taxRate) {
-        effectiveTaxRate = parseFloat(data.taxRate);
-      } else if (data.clientId) {
-        // Try to get client-specific tax rate
+      let loadedClient = null;
+      if (data.clientId) {
         try {
           const clientRes = await searchClients(data.clientName || '');
           const clients = clientRes.data?.data || [];
-          const client = clients.find(c => c.id === data.clientId);
-          if (client?.customTaxRate) {
-            effectiveTaxRate = parseFloat(client.customTaxRate) * 100;
+          loadedClient = clients.find(c => c.id === data.clientId);
+          if (loadedClient?.paymentTerms) {
+            setClientPaymentTerms(loadedClient.paymentTerms);
           }
-          if (client?.paymentTerms) {
-            setClientPaymentTerms(client.paymentTerms);
-          }
-        } catch (e) { /* use admin default */ }
+        } catch (e) { /* ignore */ }
+      }
+      if (data.taxRate) {
+        effectiveTaxRate = parseFloat(data.taxRate);
+      } else if (loadedClient?.customTaxRate) {
+        effectiveTaxRate = parseFloat(loadedClient.customTaxRate) * 100;
       }
 
       setEditData({
@@ -856,14 +856,24 @@ function WorkOrderDetailsPage() {
 <body>
   <h1>${includePricing ? '📋' : '🔧'} ${title}: ${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber}</h1>
   
+  ${includePricing ? `
   <div class="header-grid">
     <div class="header-item"><strong>Client</strong>${order.clientName}</div>
     ${clientPO ? `<div class="header-item"><strong>Client PO#</strong>${clientPO}</div>` : '<div></div>'}
     ${order.promisedDate ? `<div class="header-item"><strong>Promised Date</strong>${new Date(order.promisedDate).toLocaleDateString()}</div>` : '<div></div>'}
     ${order.contactName ? `<div class="header-item"><strong>Contact</strong>${order.contactName}${order.contactPhone ? ' — ' + order.contactPhone : ''}</div>` : '<div></div>'}
     ${order.storageLocation ? `<div class="header-item"><strong>Storage</strong>${order.storageLocation}</div>` : '<div></div>'}
+    ${clientPaymentTerms ? `<div class="header-item"><strong>Payment Terms</strong><span style="font-weight:700;color:#1565c0">${clientPaymentTerms}</span></div>` : ''}
     <div class="header-item"><strong>Status</strong>${order.status?.replace(/_/g, ' ').toUpperCase()}</div>
   </div>
+  ` : `
+  <div style="display:flex;gap:24px;margin-bottom:20px;padding:10px 14px;background:#f5f5f5;border-radius:6px;font-size:1rem;">
+    <div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Client</strong>${order.clientName}</div>
+    ${order.storageLocation ? `<div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Storage</strong>${order.storageLocation}</div>` : ''}
+    ${order.promisedDate ? `<div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Promised</strong>${new Date(order.promisedDate).toLocaleDateString()}</div>` : ''}
+    <div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Status</strong>${order.status?.replace(/_/g, ' ').toUpperCase()}</div>
+  </div>
+  `}
 
   ${order.notes ? `
     <div style="padding:10px;background:#e3f2fd;border-radius:4px;margin-bottom:16px;border-left:4px solid #1976d2">
