@@ -54,6 +54,7 @@ function EstimateDetailsPage() {
   const isNew = id === 'new';
 
   const [estimate, setEstimate] = useState(null);
+  const [clientPaymentTerms, setClientPaymentTerms] = useState(null);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -176,6 +177,15 @@ function EstimateDetailsPage() {
       });
       setParts((data.parts || []).sort((a, b) => a.partNumber - b.partNumber));
       setFiles(data.files || []);
+      // Load client payment terms
+      if (data.clientName) {
+        try {
+          const clientRes = await searchClients(data.clientName);
+          const clients = clientRes.data?.data || [];
+          const client = clients.find(c => c.name === data.clientName);
+          if (client?.paymentTerms) setClientPaymentTerms(client.paymentTerms);
+        } catch (e) { /* ignore */ }
+      }
     } catch (err) {
       setError('Failed to load estimate');
     } finally {
@@ -1034,6 +1044,7 @@ function EstimateDetailsPage() {
                             taxRate: client.customTaxRate ? parseFloat(client.customTaxRate) * 100 : formData.taxRate
                           });
                           setShowClientSuggestions(false);
+                          setClientPaymentTerms(client.paymentTerms || null);
                           showMessage(`Applied ${client.name}'s info`);
                         }}
                       >
@@ -1068,6 +1079,12 @@ function EstimateDetailsPage() {
                 <input type="tel" className="form-input" value={formatPhone(formData.contactPhone || '')}
                   onChange={(e) => setFormData({ ...formData, contactPhone: formatPhone(e.target.value) })} />
               </div>
+              {clientPaymentTerms && (
+                <div className="form-group">
+                  <label className="form-label">Payment Terms</label>
+                  <div style={{ padding: '8px 12px', background: '#f5f5f5', borderRadius: 6, fontWeight: 600, fontSize: '0.95rem', border: '1px solid #e0e0e0' }}>{clientPaymentTerms}</div>
+                </div>
+              )}
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label">Project Description</label>
                 <textarea className="form-textarea" value={formData.projectDescription}

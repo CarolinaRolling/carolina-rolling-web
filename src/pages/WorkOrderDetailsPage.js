@@ -53,6 +53,7 @@ function WorkOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const [clientPaymentTerms, setClientPaymentTerms] = useState(null);
   const [shipment, setShipment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -129,6 +130,9 @@ function WorkOrderDetailsPage() {
           const client = clients.find(c => c.id === data.clientId);
           if (client?.customTaxRate) {
             effectiveTaxRate = parseFloat(client.customTaxRate) * 100;
+          }
+          if (client?.paymentTerms) {
+            setClientPaymentTerms(client.paymentTerms);
           }
         } catch (e) { /* use admin default */ }
       }
@@ -1414,6 +1418,7 @@ function WorkOrderDetailsPage() {
                           updates.taxRate = defaultTaxRate.toString();
                         }
                         setEditData(updates);
+                        setClientPaymentTerms(client.paymentTerms || null);
                         setShowClientSuggestions(false);
                       }}>
                       <strong>{client.name}</strong>
@@ -1457,6 +1462,7 @@ function WorkOrderDetailsPage() {
           <>
             <div className="detail-grid">
               <div className="detail-item"><div className="detail-item-label"><User size={14} /> Client</div><div className="detail-item-value">{order.clientName}</div></div>
+              {clientPaymentTerms && <div className="detail-item"><div className="detail-item-label">Payment Terms</div><div className="detail-item-value" style={{ fontWeight: 600 }}>{clientPaymentTerms}</div></div>}
               {clientPO && <div className="detail-item"><div className="detail-item-label"><FileText size={14} /> Client PO#</div><div className="detail-item-value" style={{ color: '#1976d2', fontWeight: 600 }}>{clientPO}</div></div>}
               {order.jobNumber && <div className="detail-item"><div className="detail-item-label">Job#</div><div className="detail-item-value">{order.jobNumber}</div></div>}
               {order.storageLocation && <div className="detail-item"><div className="detail-item-label"><MapPin size={14} /> Location</div><div className="detail-item-value">{order.storageLocation}</div></div>}
