@@ -76,6 +76,7 @@ const ClientsVendorsPage = () => {
       taxStatus: 'taxable',
       resaleCertificate: '',
       customTaxRate: '',
+      paymentTerms: '',
       notes: ''
     });
     setShowModal(true);
@@ -320,6 +321,7 @@ const ClientsVendorsPage = () => {
                   <th>Client Name</th>
                   <th>Contact</th>
                   <th>Tax Status</th>
+                  <th>Terms</th>
                   <th>Custom Rate</th>
                   <th>Status</th>
                   <th style={{ width: 100 }}>Actions</th>
@@ -343,6 +345,13 @@ const ClientsVendorsPage = () => {
                       {client.contactEmail && <div style={{ fontSize: '0.85rem', color: '#666' }}>{client.contactEmail}</div>}
                     </td>
                     <td>{getTaxStatusBadge(client.taxStatus)}</td>
+                    <td>
+                      {client.paymentTerms ? (
+                        <span style={{ fontWeight: 500, fontSize: '0.85rem' }}>{client.paymentTerms}</span>
+                      ) : (
+                        <span style={{ color: '#999', fontSize: '0.85rem' }}>—</span>
+                      )}
+                    </td>
                     <td>
                       {client.customTaxRate ? (
                         <span style={{ fontWeight: 500 }}>{(parseFloat(client.customTaxRate) * 100).toFixed(2)}%</span>
@@ -487,6 +496,15 @@ const ClientsVendorsPage = () => {
                   onChange={(e) => setFormData({ ...formData, customTaxRate: e.target.value ? parseFloat(e.target.value) / 100 : '' })} 
                   placeholder="Leave blank for default (9.75%)"
                 />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Payment Terms</label>
+                <select className="form-select" value={formData.paymentTerms || ''} onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}>
+                  <option value="">Not Set</option>
+                  <option value="COD">COD</option>
+                  <option value="1/2% 10 Net 30">1/2% 10 Net 30</option>
+                  <option value="Net 60">Net 60</option>
+                </select>
               </div>
               {formData.taxStatus === 'resale' && (
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>

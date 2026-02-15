@@ -457,9 +457,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   }, [materialDescription]);
 
   useEffect(() => {
-    if (rollingDescription) {
-      setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
-    }
+    setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
   }, [rollingDescription]);
 
   // Sync roll fields to partData
@@ -475,7 +473,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       updates.radius = '';
     }
     setPartData(prev => ({ ...prev, ...updates }));
-  }, [rollValue, rollMeasureType, rollMeasurePoint]);
+  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint]);
 
   // Handle size selection
   const handleSizeSelect = (sizeLabel) => {

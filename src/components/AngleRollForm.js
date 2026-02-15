@@ -254,9 +254,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
 
   // Auto-update rolling description in special instructions
   useEffect(() => {
-    if (rollingDescription) {
-      setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
-    }
+    setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
   }, [rollingDescription]);
 
   // Calculate pricing: material ea + labor ea = unit price, unit price × qty = line total

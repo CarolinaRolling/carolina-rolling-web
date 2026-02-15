@@ -240,9 +240,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
 
   // Auto-update rolling description
   useEffect(() => {
-    if (rollingDescription) {
-      setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
-    }
+    setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
   }, [rollingDescription]);
 
   // Pricing
