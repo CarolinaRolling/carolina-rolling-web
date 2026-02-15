@@ -139,6 +139,16 @@ function WorkOrderDetailsPage() {
         effectiveTaxRate = parseFloat(loadedClient.customTaxRate) * 100;
       }
 
+      // Auto-determine tax exempt from client if not already saved on the WO
+      let taxExempt = data.taxExempt || false;
+      let taxExemptReason = data.taxExemptReason || '';
+      let taxExemptCertNumber = data.taxExemptCertNumber || '';
+      if (!data.taxExempt && loadedClient && (loadedClient.taxStatus === 'resale' || loadedClient.taxStatus === 'exempt')) {
+        taxExempt = true;
+        taxExemptReason = loadedClient.taxStatus === 'resale' ? 'Resale' : 'Tax Exempt';
+        taxExemptCertNumber = loadedClient.resaleCertificate || '';
+      }
+
       setEditData({
         clientId: data.clientId || null,
         clientName: data.clientName || '',
@@ -156,6 +166,10 @@ function WorkOrderDetailsPage() {
         truckingDescription: data.truckingDescription || '',
         truckingCost: data.truckingCost || '',
         taxRate: effectiveTaxRate.toString(),
+        // Tax exempt
+        taxExempt: taxExempt,
+        taxExemptReason: taxExemptReason,
+        taxExemptCertNumber: taxExemptCertNumber,
         // Minimum charge override
         minimumOverride: data.minimumOverride || false,
         minimumOverrideReason: data.minimumOverrideReason || '',
@@ -755,13 +769,14 @@ function WorkOrderDetailsPage() {
       let rollingBlock = '';
       const rollingLines = [];
       
-      if (rollingDescFull) {
-        const descLines = rollingDescFull.split(/\n|\\n/).map(l => l.trim()).filter(l => l);
-        rollingLines.push(...descLines);
+      if (part._rollToMethod === 'print') {
+        const printName = pdfFiles.length > 0 ? pdfFiles.map(f => f.originalName).join(', ') : '(see attached)';
+        rollingLines.push(`Roll per print: ${printName}`);
       } else if (part._rollToMethod === 'template') {
         rollingLines.push('Roll Per Template / Sample');
-      } else if (part._rollToMethod === 'print') {
-        rollingLines.push('Roll Per Print (see attached)');
+      } else if (rollingDescFull) {
+        const descLines = rollingDescFull.split(/\n|\\n/).map(l => l.trim()).filter(l => l);
+        rollingLines.push(...descLines);
       } else {
         // Fallback: build roll line from raw fields
         const rollVal = part.diameter || part.radius;
@@ -903,6 +918,38 @@ function WorkOrderDetailsPage() {
   ${partsHtml}
 
   ${includePricing ? `
+    <h3 style="color:#1976d2;margin-top:24px;border-bottom:1px solid #bbdefb;padding-bottom:6px">Pricing Summary</h3>
+    <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-bottom:12px">
+      <thead>
+        <tr style="background:#f5f5f5">
+          <th style="padding:6px 8px;text-align:left;border-bottom:2px solid #ddd">#</th>
+          <th style="padding:6px 8px;text-align:left;border-bottom:2px solid #ddd">Description</th>
+          <th style="padding:6px 8px;text-align:right;border-bottom:2px solid #ddd">Qty</th>
+          <th style="padding:6px 8px;text-align:right;border-bottom:2px solid #ddd">Labor</th>
+          <th style="padding:6px 8px;text-align:right;border-bottom:2px solid #ddd">Material</th>
+          <th style="padding:6px 8px;text-align:right;border-bottom:2px solid #ddd">Setup</th>
+          <th style="padding:6px 8px;text-align:right;border-bottom:2px solid #ddd">Other</th>
+          <th style="padding:6px 8px;text-align:right;border-bottom:2px solid #ddd">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${order.parts?.sort((a, b) => a.partNumber - b.partNumber).filter(p => p.partType !== 'rush_service').map(part => `
+          <tr style="border-bottom:1px solid #eee">
+            <td style="padding:6px 8px">${part.partNumber}</td>
+            <td style="padding:6px 8px">${PART_TYPES[part.partType]?.label || part.partType}${part.materialDescription ? `<div style="font-size:0.8em;color:#666">${part.materialDescription}</div>` : ''}</td>
+            <td style="padding:6px 8px;text-align:right">${part.quantity}</td>
+            <td style="padding:6px 8px;text-align:right">${formatCurrency(part.laborTotal)}</td>
+            <td style="padding:6px 8px;text-align:right">${formatCurrency(part.materialTotal)}</td>
+            <td style="padding:6px 8px;text-align:right">${formatCurrency(part.setupCharge)}</td>
+            <td style="padding:6px 8px;text-align:right">${formatCurrency(part.otherCharges)}</td>
+            <td style="padding:6px 8px;text-align:right;font-weight:600">${formatCurrency(part.partTotal)}</td>
+          </tr>
+        `).join('') || ''}
+      </tbody>
+    </table>
+  ` : ''}
+
+  ${includePricing ? `
     <div style="margin-top:24px;padding:16px;background:#f0f7ff;border-radius:8px;border:1px solid #bbdefb">
       <h3 style="margin:0 0 12px;color:#1976d2">Order Totals</h3>
       ${(() => {
@@ -930,8 +977,8 @@ function WorkOrderDetailsPage() {
         return rushLines;
       })()}
       <div style="display:flex;justify-content:space-between;padding:4px 0"><span>Parts Subtotal</span><strong>${formatCurrency(calculateTotals().partsSubtotal)}</strong></div>
-      ${parseFloat(order.truckingCost) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Trucking</span><strong>${formatCurrency(order.truckingCost)}</strong></div>` : ''}
-      ${parseFloat(order.taxAmount) > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax</span><strong>${formatCurrency(order.taxAmount)}</strong></div>` : ''}
+      ${calculateTotals().trucking > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>${order.truckingDescription || 'Trucking'}</span><strong>${formatCurrency(calculateTotals().trucking)}</strong></div>` : ''}
+      ${(editData.taxExempt || order.taxExempt) ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax</span><span style="color:#c62828;font-weight:bold">EXEMPT${(editData.taxExemptCertNumber || order.taxExemptCertNumber) ? ' (Cert#: ' + (editData.taxExemptCertNumber || order.taxExemptCertNumber) + ')' : ''}</span></div>` : (calculateTotals().taxAmount > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax (${calculateTotals().taxRate}%)</span><strong>${formatCurrency(calculateTotals().taxAmount)}</strong></div>` : '')}
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid #1976d2;margin-top:4px;font-size:1.2rem">
         <strong>Grand Total</strong><strong style="color:#2e7d32">${formatCurrency(calculateTotals().grandTotal)}</strong>
       </div>
@@ -1135,7 +1182,8 @@ function WorkOrderDetailsPage() {
     const trucking = parseFloat(editData.truckingCost) || parseFloat(order?.truckingCost) || 0;
     const subtotal = partsSubtotal + trucking;
     const taxRate = parseFloat(editData.taxRate) || parseFloat(order?.taxRate) || defaultTaxRate;
-    const taxAmount = subtotal * (taxRate / 100);
+    const isTaxExempt = editData.taxExempt || order?.taxExempt;
+    const taxAmount = isTaxExempt ? 0 : subtotal * (taxRate / 100);
     const grandTotal = subtotal + taxAmount;
     return { partsSubtotal, trucking, subtotal, taxRate, taxAmount, grandTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel };
   };
@@ -1270,7 +1318,7 @@ function WorkOrderDetailsPage() {
           </div>
         </div>
         <div className="actions-row">
-          {order.status !== 'shipped' && order.status !== 'picked_up' && (
+          {order.status !== 'archived' && (
             <>
               <select className="form-select" value={order.status} onChange={(e) => handleStatusChange(e.target.value)} style={{ width: 'auto' }}>
                 <option value="waiting_for_materials">Waiting for Materials</option>
@@ -1278,6 +1326,7 @@ function WorkOrderDetailsPage() {
                 <option value="processing">Processing</option>
                 <option value="stored">Stored</option>
                 <option value="shipped">Shipped</option>
+                <option value="picked_up">Picked Up</option>
               </select>
               {order.status === 'stored' && <button className="btn btn-success" onClick={() => setShowPickupModal(true)}><Check size={18} />Pickup/Ship</button>}
             </>
@@ -1482,6 +1531,16 @@ function WorkOrderDetailsPage() {
                           updates.taxRate = (parseFloat(client.customTaxRate) * 100).toFixed(2);
                         } else {
                           updates.taxRate = defaultTaxRate.toString();
+                        }
+                        // Auto tax exempt for resale/exempt clients
+                        if (client.taxStatus === 'resale' || client.taxStatus === 'exempt') {
+                          updates.taxExempt = true;
+                          updates.taxExemptReason = client.taxStatus === 'resale' ? 'Resale' : 'Tax Exempt';
+                          updates.taxExemptCertNumber = client.resaleCertificate || '';
+                        } else {
+                          updates.taxExempt = false;
+                          updates.taxExemptReason = '';
+                          updates.taxExemptCertNumber = '';
                         }
                         setEditData(updates);
                         setClientPaymentTerms(client.paymentTerms || null);
@@ -1753,7 +1812,11 @@ function WorkOrderDetailsPage() {
                   {part.radius && !(part.formData || {})._rollToMethod && <div><strong>Radius:</strong> {part.radius}</div>}
                   {part.diameter && !(part.formData || {})._rollToMethod && <div><strong>Diameter:</strong> {part.diameter}</div>}
                   {(part.formData || {})._rollToMethod === 'template' && <div style={{ color: '#e65100' }}><strong>📐 Per Template/Sample</strong></div>}
-                  {(part.formData || {})._rollToMethod === 'print' && <div style={{ color: '#1565c0' }}><strong>📄 Per Print (see attached)</strong></div>}
+                  {(part.formData || {})._rollToMethod === 'print' && (() => {
+                    const printFiles = (part.files || []).filter(f => f.mimeType === 'application/pdf' || f.originalName?.toLowerCase().endsWith('.pdf'));
+                    const printName = printFiles.length > 0 ? printFiles.map(f => f.originalName).join(', ') : '(see attached)';
+                    return <div style={{ color: '#1565c0' }}><strong>📄 Roll per print: {printName}</strong></div>;
+                  })()}
                   {(part.formData || {})._rollToMethod === 'print' && !(part.files || []).some(f => f.mimeType === 'application/pdf' || f.originalName?.toLowerCase().endsWith('.pdf')) && (
                     <div style={{ color: '#c62828', fontSize: '0.8rem', fontWeight: 600, marginTop: 4 }}>⚠️ Roll instruction PDF required — upload below</div>
                   )}
@@ -1925,21 +1988,36 @@ function WorkOrderDetailsPage() {
               </div>
 
               {isEditing ? (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                  <span>Tax Rate:</span>
-                  <input 
-                    type="number" 
-                    step="0.0001"
-                    className="form-input" 
-                    value={editData.taxRate}
-                    onChange={(e) => setEditData({ ...editData, taxRate: e.target.value })}
-                    style={{ width: 80, textAlign: 'right' }}
-                  />
+                <div style={{ padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: editData.taxExempt ? 6 : 0 }}>
+                    <input type="checkbox" checked={editData.taxExempt} onChange={(e) => setEditData({ ...editData, taxExempt: e.target.checked })} />
+                    <span style={{ fontWeight: 600, color: editData.taxExempt ? '#c62828' : undefined }}>Tax Exempt</span>
+                  </label>
+                  {editData.taxExempt ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem' }}>
+                      <input className="form-input" placeholder="Reason (e.g. Resale)" value={editData.taxExemptReason} onChange={(e) => setEditData({ ...editData, taxExemptReason: e.target.value })} style={{ flex: 1, fontSize: '0.85rem' }} />
+                      <input className="form-input" placeholder="Cert #" value={editData.taxExemptCertNumber} onChange={(e) => setEditData({ ...editData, taxExemptCertNumber: e.target.value })} style={{ width: 120, fontSize: '0.85rem' }} />
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                      <span>Tax Rate:</span>
+                      <input type="number" step="0.0001" className="form-input" value={editData.taxRate} onChange={(e) => setEditData({ ...editData, taxRate: e.target.value })} style={{ width: 80, textAlign: 'right' }} />
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                  <span>Tax ({(parseFloat(order.taxRate) || defaultTaxRate).toFixed(2)}%):</span>
-                  <span>{formatCurrency(calculateTotals().taxAmount)}</span>
+                  {(editData.taxExempt || order.taxExempt) ? (
+                    <>
+                      <span>Tax:</span>
+                      <span style={{ color: '#c62828', fontWeight: 600 }}>EXEMPT{(editData.taxExemptCertNumber || order.taxExemptCertNumber) ? ` (${editData.taxExemptReason || order.taxExemptReason || 'Resale'}${editData.taxExemptCertNumber || order.taxExemptCertNumber ? ' #' + (editData.taxExemptCertNumber || order.taxExemptCertNumber) : ''})` : (editData.taxExemptReason || order.taxExemptReason ? ` (${editData.taxExemptReason || order.taxExemptReason})` : '')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Tax ({(parseFloat(order.taxRate) || defaultTaxRate).toFixed(2)}%):</span>
+                      <span>{formatCurrency(calculateTotals().taxAmount)}</span>
+                    </>
+                  )}
                 </div>
               )}
 

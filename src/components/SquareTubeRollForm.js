@@ -197,7 +197,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   // Build rolling description
   const rollingDescription = useMemo(() => {
     if (rollToMethod === 'template') return 'Roll Per Template / Sample';
-    if (rollToMethod === 'print') return 'Roll Per Print (see attached)';
+    if (rollToMethod === 'print') return 'Roll per print';
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return '';
     const lines = [];

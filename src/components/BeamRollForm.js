@@ -157,7 +157,7 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
       return `Camber ${depth}" on ${len}${dir}`;
     }
     if (rollToMethod === 'template') return 'Roll Per Template / Sample';
-    if (rollToMethod === 'print') return 'Roll Per Print (see attached)';
+    if (rollToMethod === 'print') return 'Roll per print';
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return '';
     const lines = [];
