@@ -62,7 +62,7 @@ const PIPE_SCHEDULES = {
 
 // Common tube wall thicknesses
 const TUBE_WALL_OPTIONS = [
-  '.035"', '.049"', '.058"', '.065"', '.083"', '.095"', '.109"', '.120"', '.134"', '.156"', '.188"', '.250"', '.375"', '.500"', 'Custom'
+  '.035"', '.049"', '.058"', '.065"', '.083"', '.095"', '.109"', '.120"', '.125"', '.134"', '.156"', '.188"', '.250"', '.375"', '.500"', 'Custom'
 ];
 
 const DEFAULT_GRADES = ['A500 Gr B', 'A513', 'DOM', 'A36', '1018', '1045', '4140', '304 S/S', '316 S/S', '6061-T6 Alum', '5052 Alum', 'Custom'];
@@ -106,6 +106,10 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');
   const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'diameter');
   const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'centerline');
+  const [showDiaFind, setShowDiaFind] = useState(false);
+  const [diaFindChord, setDiaFindChord] = useState('');
+  const [diaFindRise, setDiaFindRise] = useState('');
+  const diaFindResult = (diaFindChord && diaFindRise && parseFloat(diaFindRise) > 0) ? ((parseFloat(diaFindChord) ** 2) / (4 * parseFloat(diaFindRise))) + parseFloat(diaFindRise) : null;
   const [rollLimits, setRollLimits] = useState([]);   // admin: min rollable diameters
   const [mandrelDies, setMandrelDies] = useState([]);  // admin: available mandrel dies
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADES);
@@ -695,6 +699,39 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
             </select>
           </div>
         </div>
+
+        {/* DiaFind - chord & rise to diameter calculator */}
+        {!rollToMethod && (
+          <div style={{ marginBottom: 8 }}>
+            <button type="button" onClick={() => setShowDiaFind(!showDiaFind)}
+              style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+              📐 DiaFind {showDiaFind ? '▾' : '▸'} <span style={{ fontWeight: 400, color: '#888' }}>— chord & rise → diameter</span>
+            </button>
+            {showDiaFind && (
+              <div style={{ marginTop: 8, padding: 12, background: '#f3e5f5', borderRadius: 8, border: '1px solid #ce93d8' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Chord (inches)</label>
+                    <input type="number" step="0.001" className="form-input" value={diaFindChord} onChange={(e) => setDiaFindChord(e.target.value)} placeholder="e.g. 48" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Rise (inches)</label>
+                    <input type="number" step="0.001" className="form-input" value={diaFindRise} onChange={(e) => setDiaFindRise(e.target.value)} placeholder="e.g. 2.5" />
+                  </div>
+                </div>
+                {diaFindResult && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 700, color: '#6a1b9a', fontSize: '1rem' }}>⌀ {diaFindResult.toFixed(3)}"</span>
+                    <button type="button" onClick={() => { setRollValue(diaFindResult.toFixed(3)); setRollMeasureType('diameter'); setShowDiaFind(false); }}
+                      style={{ padding: '6px 16px', background: '#7b1fa2', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>
+                      Apply Diameter
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Roll limit check */}
         {rollCheck && (

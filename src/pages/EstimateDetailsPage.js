@@ -1721,7 +1721,7 @@ function EstimateDetailsPage() {
 
       {/* Add/Edit Part Modal */}
       {showPartModal && (
-        <div className="modal-overlay" onClick={() => setShowPartModal(false)}>
+        <div className="modal-overlay">
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
             <div className="modal-header">
               <h3 className="modal-title">
@@ -1925,7 +1925,7 @@ function EstimateDetailsPage() {
               <div className="form-group">
                 <label className="form-label">Quantity *</label>
                 <input type="number" className="form-input" value={partData.quantity}
-                  onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })} min="1" />
+                  onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })} onFocus={(e) => e.target.select()} min="1" />
               </div>
             </div>
 

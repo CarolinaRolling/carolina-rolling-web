@@ -6,7 +6,7 @@ import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
-  '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '7/8"',
+  '1/8"', '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '7/8"',
   '1"', '1-1/4"', '1-1/2"', '2"', 'Custom'
 ];
 
@@ -264,7 +264,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       {/* === DIMENSIONS === */}
       <div className="form-group">
         <label className="form-label">Quantity *</label>
-        <input type="number" className="form-input" value={partData.quantity} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} min="1" />
+        <input type="number" className="form-input" value={partData.quantity} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} onFocus={(e) => e.target.select()} min="1" />
       </div>
 
       <div className="form-group">

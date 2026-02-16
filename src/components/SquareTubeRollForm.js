@@ -6,7 +6,7 @@ import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 
 const THICKNESS_OPTIONS = [
   '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
-  '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '1"', 'Custom'
+  '1/8"', '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '1"', 'Custom'
 ];
 
 const TUBE_SIZE_OPTIONS = [
@@ -50,6 +50,10 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');
   const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'diameter');
   const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'inside');
+  const [showDiaFind, setShowDiaFind] = useState(false);
+  const [diaFindChord, setDiaFindChord] = useState('');
+  const [diaFindRise, setDiaFindRise] = useState('');
+  const diaFindResult = (diaFindChord && diaFindRise && parseFloat(diaFindRise) > 0) ? ((parseFloat(diaFindChord) ** 2) / (4 * parseFloat(diaFindRise))) + parseFloat(diaFindRise) : null;
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
   const [completeRings, setCompleteRings] = useState(!!(partData._completeRings));
   const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
@@ -207,10 +211,6 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
 
     let rollLine = `Roll to ${rv}" ${spec}`;
     if (ewHw) rollLine += ` ${ewHw}`;
-
-    if (isRectangular && partData._sideOrientation) {
-      rollLine += ` (${partData._sideOrientation}" side ${partData.rollType === 'easy_way' ? 'out' : 'in'})`;
-    }
     lines.push(rollLine);
 
     if (riseCalc) {
@@ -386,6 +386,39 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
           </div>
         </div>
 
+        {/* DiaFind - chord & rise to diameter calculator */}
+        {!rollToMethod && (
+          <div style={{ marginBottom: 12 }}>
+            <button type="button" onClick={() => setShowDiaFind(!showDiaFind)}
+              style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+              📐 DiaFind {showDiaFind ? '▾' : '▸'} <span style={{ fontWeight: 400, color: '#888' }}>— chord & rise → diameter</span>
+            </button>
+            {showDiaFind && (
+              <div style={{ marginTop: 8, padding: 12, background: '#f3e5f5', borderRadius: 8, border: '1px solid #ce93d8' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Chord (inches)</label>
+                    <input type="number" step="0.001" className="form-input" value={diaFindChord} onChange={(e) => setDiaFindChord(e.target.value)} placeholder="e.g. 48" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Rise (inches)</label>
+                    <input type="number" step="0.001" className="form-input" value={diaFindRise} onChange={(e) => setDiaFindRise(e.target.value)} placeholder="e.g. 2.5" />
+                  </div>
+                </div>
+                {diaFindResult && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 700, color: '#6a1b9a', fontSize: '1rem' }}>⌀ {diaFindResult.toFixed(3)}"</span>
+                    <button type="button" onClick={() => { setRollValue(diaFindResult.toFixed(3)); setRollMeasureType('diameter'); setShowDiaFind(false); }}
+                      style={{ padding: '6px 16px', background: '#7b1fa2', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>
+                      Apply Diameter
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Easy Way / Hard Way — only for rectangular tubes */}
         {isRectangular && (
         <div style={{ marginBottom: 12 }}>
@@ -417,33 +450,6 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
             </button>
           </div>
         </div>
-        )}
-
-        {/* Side Orientation for rectangular tubes */}
-        {isRectangular && partData.rollType && (
-          <div style={{
-            background: '#e3f2fd', borderRadius: 8, padding: 12, marginBottom: 12,
-            border: '1px solid #90caf9'
-          }}>
-            <label className="form-label" style={{ marginBottom: 8, fontWeight: 600 }}>
-              Which side faces {partData.rollType === 'easy_way' ? 'outward' : 'inward'}?
-            </label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[parsedSize.side1, parsedSize.side2].filter((v, i, a) => a.indexOf(v) === i).map(side => (
-                <button key={side} type="button"
-                  style={{
-                    flex: 1, padding: 10, borderRadius: 8, cursor: 'pointer', fontWeight: 600,
-                    border: `2px solid ${partData._sideOrientation === String(side) ? '#1565c0' : '#ccc'}`,
-                    background: partData._sideOrientation === String(side) ? '#e3f2fd' : '#fff',
-                    color: partData._sideOrientation === String(side) ? '#1565c0' : '#666',
-                  }}
-                  onClick={() => setPartData({ ...partData, _sideOrientation: String(side) })}
-                >
-                  {side}" side {partData.rollType === 'easy_way' ? 'out' : 'in'}
-                </button>
-              ))}
-            </div>
-          </div>
         )}
 
         {/* Arc */}

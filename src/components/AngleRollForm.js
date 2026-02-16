@@ -5,12 +5,12 @@ import { searchVendors, getSettings, createVendor } from '../services/api';
 
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
-  '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '7/8"',
+  '1/8"', '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '7/8"',
   '1"', '1-1/4"', '1-1/2"', '2"', 'Custom'
 ];
 
 const ANGLE_SIZE_OPTIONS = [
-  '1x1', '2x2', '3x3', '4x4', '5x5', '6x6',
+  '1x1', '1.25x1.25', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '5x5', '6x6',
   '1x2', '2x3', '3x4', '4x5', '4x6', 'Custom'
 ];
 
@@ -48,6 +48,10 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
   const [completeRings, setCompleteRings] = useState(!!(partData._completeRings));
   const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
   const [tangentLength, setTangentLength] = useState(partData._tangentLength || '12');
+  const [showDiaFind, setShowDiaFind] = useState(false);
+  const [diaFindChord, setDiaFindChord] = useState('');
+  const [diaFindRise, setDiaFindRise] = useState('');
+  const diaFindResult = (diaFindChord && diaFindRise && parseFloat(diaFindRise) > 0) ? ((parseFloat(diaFindChord) ** 2) / (4 * parseFloat(diaFindRise))) + parseFloat(diaFindRise) : null;
 
   // Load grades from admin settings
   useEffect(() => {
@@ -391,6 +395,39 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
             </select>
           </div>
         </div>
+
+        {/* DiaFind - chord & rise to diameter calculator */}
+        {!rollToMethod && (
+          <div style={{ marginBottom: 12 }}>
+            <button type="button" onClick={() => setShowDiaFind(!showDiaFind)}
+              style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+              📐 DiaFind {showDiaFind ? '▾' : '▸'} <span style={{ fontWeight: 400, color: '#888' }}>— chord & rise → diameter</span>
+            </button>
+            {showDiaFind && (
+              <div style={{ marginTop: 8, padding: 12, background: '#f3e5f5', borderRadius: 8, border: '1px solid #ce93d8' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Chord (inches)</label>
+                    <input type="number" step="0.001" className="form-input" value={diaFindChord} onChange={(e) => setDiaFindChord(e.target.value)} placeholder="e.g. 48" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Rise (inches)</label>
+                    <input type="number" step="0.001" className="form-input" value={diaFindRise} onChange={(e) => setDiaFindRise(e.target.value)} placeholder="e.g. 2.5" />
+                  </div>
+                </div>
+                {diaFindResult && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 700, color: '#6a1b9a', fontSize: '1rem' }}>⌀ {diaFindResult.toFixed(3)}"</span>
+                    <button type="button" onClick={() => { setRollValue(diaFindResult.toFixed(3)); setRollMeasureType('diameter'); setShowDiaFind(false); }}
+                      style={{ padding: '6px 16px', background: '#7b1fa2', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>
+                      Apply Diameter
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Easy Way / Hard Way */}
         <div style={{ marginBottom: 12 }}>
