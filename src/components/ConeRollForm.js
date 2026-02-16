@@ -60,16 +60,17 @@ function generateCommands(cone, segments, radialSegs) {
     var segAngle = blank.developedAngle / rSegs;
     var lyrName = 'CONE-L' + (h + 1);
 
+    // Output ONE segment only — vendors use their own nesting software
     cmds.push('(CONELAYOUT ' +
       blank.outerRadius.toFixed(4) + ' ' +
       blank.innerRadius.toFixed(4) + ' ' +
       segAngle.toFixed(4) + ' ' +
-      rSegs + ' ' +
+      '1 ' +
       '"' + lyrName + '" ' +
       offsetX.toFixed(4) + ')');
 
-    // Calculate offset for next layer group
-    offsetX += rSegs * (blank.outerRadius * 2 + spacing);
+    // Offset for next layer — only one segment width
+    offsetX += (blank.outerRadius * 2 + spacing);
   }
 
   return cmds;
@@ -209,8 +210,10 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   useEffect(function() { segmentSpecs.forEach(function(sp) { var cv = blankRefs.current[sp.layer]; if (cv && sp.blank) drawBlank(cv, sp.blank, sp.segmentAngle, sp.layer); }); }, [segmentSpecs]);
 
   useEffect(function() {
-    setPartData(function(p) { return Object.assign({}, p, { _coneLargeDia: largeDia, _coneLargeDiaType: largeDiaType, _coneLargeDiaMeasure: largeDiaMeasure, _coneSmallDia: smallDia, _coneSmallDiaType: smallDiaType, _coneSmallDiaMeasure: smallDiaMeasure, _coneHeight: coneHeight, _coneRadialSegments: radialSegments, _coneShowAdvanced: showAdvanced, _coneHeightCutMethod: heightCutMethod, _coneHeightSegments: heightSegments, _coneCustomCuts: customCuts }); });
-  }, [largeDia, largeDiaType, largeDiaMeasure, smallDia, smallDiaType, smallDiaMeasure, coneHeight, radialSegments, showAdvanced, heightCutMethod, heightSegments, customCuts]);
+    setPartData(function(p) { return Object.assign({}, p, { _coneLargeDia: largeDia, _coneLargeDiaType: largeDiaType, _coneLargeDiaMeasure: largeDiaMeasure, _coneSmallDia: smallDia, _coneSmallDiaType: smallDiaType, _coneSmallDiaMeasure: smallDiaMeasure, _coneHeight: coneHeight, _coneRadialSegments: radialSegments, _coneShowAdvanced: showAdvanced, _coneHeightCutMethod: heightCutMethod, _coneHeightSegments: heightSegments, _coneCustomCuts: customCuts,
+      _coneSegmentDetails: segmentSpecs.map(function(s) { return { layer: s.layer, segmentAngle: s.segmentAngle, sheetWidth: s.sheetWidth, sheetHeight: s.sheetHeight, outerRadius: s.outerRadius, innerRadius: s.innerRadius, bottomDia: s.bottomDia, topDia: s.topDia }; })
+    }); });
+  }, [largeDia, largeDiaType, largeDiaMeasure, smallDia, smallDiaType, smallDiaMeasure, coneHeight, radialSegments, showAdvanced, heightCutMethod, heightSegments, customCuts, segmentSpecs]);
 
   useEffect(function() { var total = heightSegs.length * (parseInt(radialSegments) || 1); setPartData(function(p) { return Object.assign({}, p, { quantity: String(total) }); }); }, [radialSegments, heightSegs]);
 
@@ -383,7 +386,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
 
           <div style={{ background: '#f0f4ff', padding: 14, borderRadius: 8, border: '1px solid #bfdbfe' }}>
             <div style={{ fontSize: '0.8rem', color: '#1e3a5f', marginBottom: 10 }}>
-              {generatedCmds.length === 1 ? 'Copy and paste into AutoCAD command line:' : 'Copy these ' + generatedCmds.length + ' lines and paste into AutoCAD command line (one per layer):'}
+              {generatedCmds.length === 1 ? 'Copy and paste into AutoCAD command line (draws one segment):' : 'Copy these ' + generatedCmds.length + ' lines and paste into AutoCAD command line (one segment per layer):'}
             </div>
 
             <textarea ref={cmdRef} readOnly value={generatedCmds.join('\n')}

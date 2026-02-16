@@ -33,7 +33,11 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
     const parts = [`${qty}pc:`];
     if (partData.thickness) parts.push(partData.thickness);
     if (partData.width) parts.push(`x ${partData.width}"`);
-    if (partData.length) parts.push(`x ${partData.length}`);
+    if (partData.length) {
+      const len = String(partData.length);
+      const hasUnit = len.includes('"') || len.includes("'") || len.toLowerCase().includes('ft');
+      parts.push(`x ${len}${hasUnit ? '' : '"'}`);
+    }
     if (partData.material) parts.push(partData.material);
     if (partData._materialOrigin) parts.push(partData._materialOrigin);
     parts.push('— Press Brake');

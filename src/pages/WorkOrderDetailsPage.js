@@ -758,7 +758,7 @@ function WorkOrderDetailsPage() {
         if (part.sectionSize) materialParts.push(part.sectionSize);
         if (part.thickness) materialParts.push(part.thickness);
         if (part.width) materialParts.push(`x ${part.width}"`);
-        if (part.length) materialParts.push(`x ${part.length}`);
+        if (part.length) materialParts.push(`x ${part.length}${part.length.toString().includes('"') || part.length.toString().includes("'") ? '' : '"'}`);
         if (part.outerDiameter) materialParts.push(`${part.outerDiameter}" OD`);
         if (part.wallThickness && part.wallThickness !== 'SOLID') materialParts.push(`x ${part.wallThickness} wall`);
         if (part.wallThickness === 'SOLID') materialParts.push('Solid');
@@ -799,6 +799,27 @@ function WorkOrderDetailsPage() {
         rollingBlock = `
           <div style="background:#e8f5e9;padding:10px 12px;border-radius:4px;border-left:4px solid #2e7d32;margin-top:6px">
             <pre style="white-space:pre-wrap;margin:0;font-family:'Courier New',monospace;font-size:0.95rem;font-weight:bold;color:#1B5E20;line-height:1.5">${rollingLines.join('\n')}</pre>
+          </div>
+        `;
+      }
+
+      // Cone segment breakdown for print
+      let coneSegmentBlock = '';
+      if (part.partType === 'cone_roll' && part._coneSegmentDetails && part._coneSegmentDetails.length > 0 && ((parseInt(part._coneRadialSegments) || 1) > 1 || part._coneSegmentDetails.length > 1)) {
+        coneSegmentBlock = `
+          <div style="margin-top:6px;padding:10px;background:#f5f0ff;border:1px solid #d1c4e9;border-radius:4px;">
+            <div style="font-weight:bold;color:#4a148c;font-size:0.9rem;margin-bottom:6px;">🔺 Cone Segment Breakdown — ${part._coneSegmentDetails.length} layer(s) × ${part._coneRadialSegments} segment(s)</div>
+            <table style="width:100%;font-size:0.85rem;border-collapse:collapse;">
+              <tr style="border-bottom:1px solid #ce93d8;color:#6a1b9a;font-weight:600;">
+                <td style="padding:4px;">Layer</td><td style="padding:4px;">Segment</td><td style="padding:4px;">Sheet Size</td><td style="padding:4px;">OR / IR</td>
+              </tr>
+              ${part._coneSegmentDetails.map(s => `<tr style="border-bottom:1px solid #e8e0f0;">
+                <td style="padding:4px;">L${s.layer}</td>
+                <td style="padding:4px;">${s.segmentAngle.toFixed(1)}°</td>
+                <td style="padding:4px;">${s.sheetWidth}" × ${s.sheetHeight}"</td>
+                <td style="padding:4px;">${s.outerRadius.toFixed(1)}" / ${s.innerRadius.toFixed(1)}"</td>
+              </tr>`).join('')}
+            </table>
           </div>
         `;
       }
@@ -856,6 +877,7 @@ function WorkOrderDetailsPage() {
           ${part.heatNumber ? `<div style="margin-bottom:4px;font-size:0.9rem"><strong>Heat#:</strong> ${part.heatNumber}</div>` : ''}
           ${part.cutFileReference ? `<div style="margin-bottom:4px;font-size:0.9rem;color:#1565c0"><strong>📐 Cut File:</strong> ${part.cutFileReference}</div>` : ''}
           ${rollingBlock}
+          ${coneSegmentBlock}
           ${specsHtml}
           ${includePricing && part.partType !== 'fab_service' ? `<div style="margin-bottom:6px;font-size:0.85rem;color:#555">📦 Material supplied by: <strong>${part.materialSource === 'customer_supplied' ? (order.clientName || 'Customer') : 'Carolina Rolling Company'}</strong></div>` : ''}
           ${part.materialSource === 'customer_supplied' ? '<div style="font-size:0.85rem;color:#666;margin:4px 0"><em>Customer Supplied Material</em></div>' : ''}
@@ -1833,6 +1855,17 @@ function WorkOrderDetailsPage() {
                   {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
                   {(part.formData || {})._completeRings && (part.formData || {})._ringsNeeded && (
                     <div style={{ color: '#2e7d32', fontWeight: 600, marginTop: 4 }}>⭕ {(part.formData || {})._ringsNeeded} complete ring(s) required</div>
+                  )}
+                  {/* Cone segment breakdown */}
+                  {part.partType === 'cone_roll' && (part.formData || {})._coneSegmentDetails && (part.formData || {})._coneSegmentDetails.length > 0 && (
+                    <div style={{ fontSize: '0.8rem', color: '#4a148c', marginTop: 4, padding: 8, background: '#f5f0ff', borderRadius: 6, border: '1px solid #d1c4e9' }}>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>🔺 {(part.formData || {})._coneSegmentDetails.length} layer(s) × {(part.formData || {})._coneRadialSegments || 1} segment(s)</div>
+                      {(part.formData || {})._coneSegmentDetails.map((s, i) => (
+                        <div key={i} style={{ fontSize: '0.75rem', color: '#6a1b9a' }}>
+                          L{s.layer}: {s.segmentAngle.toFixed(1)}° segment — Sheet {s.sheetWidth}" × {s.sheetHeight}" | OR: {s.outerRadius.toFixed(1)}" / IR: {s.innerRadius.toFixed(1)}"
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
                 {/* Rush Service Display */}
