@@ -116,10 +116,19 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', border: '2px dashed #1565c0', borderRadius: 8, cursor: 'pointer', fontSize: '0.9rem', color: '#1565c0', background: '#e3f2fd' }}>
             <Upload size={18} /> Upload print...
             <input type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }} onChange={(e) => {
-              if (e.target.files[0]) setPartData({ ...partData, _shapeFile: e.target.files[0] });
+              if (e.target.files[0]) {
+                const file = e.target.files[0];
+                setPartData({ ...partData, _shapeFile: file, _shapeFileName: file.name });
+              }
             }} />
           </label>
-          {partData._shapeFile && <div style={{ fontSize: '0.85rem', color: '#2e7d32', marginTop: 4, fontWeight: 600 }}>📎 {partData._shapeFile.name}</div>}
+          {(partData._shapeFile || partData._shapeFileName) && <div style={{ fontSize: '0.85rem', color: '#2e7d32', marginTop: 4, fontWeight: 600 }}>📎 {partData._shapeFile?.name || partData._shapeFileName} {!partData._shapeFile && '(saved)'}</div>}
+        </div>
+        <div className="form-group" style={{ marginTop: 8 }}>
+          <label className="form-label">Cut File Reference</label>
+          <input type="text" className="form-input" value={partData.cutFileReference || ''}
+            onChange={(e) => setPartData({ ...partData, cutFileReference: e.target.value })}
+            placeholder="e.g. Part2_cutout.dxf — will appear on estimate" />
         </div>
       </div>
 

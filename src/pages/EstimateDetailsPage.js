@@ -764,6 +764,9 @@ function EstimateDetailsPage() {
       
       // Ensure materialSource has a valid value before sending
       const dataToSend = { ...partData };
+      // Capture the shape file before cleaning dataToSend
+      const pendingShapeFile = dataToSend._shapeFile;
+      delete dataToSend._shapeFile; // File objects can't be serialized to JSON
       if (!dataToSend.materialSource || !['we_order', 'customer_supplied'].includes(dataToSend.materialSource)) {
         dataToSend.materialSource = 'customer_supplied';
       }
@@ -782,11 +785,23 @@ function EstimateDetailsPage() {
         dataToSend.partTotal = ((matEach + labEach) * qty).toFixed(2);
       }
       
+      let savedPartId = editingPart?.id;
       if (editingPart && editingPart.id) {
         await updateEstimatePart(id, editingPart.id, dataToSend);
       } else {
-        await addEstimatePart(id, dataToSend);
+        const result = await addEstimatePart(id, dataToSend);
+        savedPartId = result.data?.data?.id || result.data?.id;
       }
+      
+      // Auto-upload pending shape file (from Press Brake form)
+      if (pendingShapeFile && savedPartId) {
+        try {
+          await uploadEstimatePartFile(id, savedPartId, pendingShapeFile, 'drawing');
+        } catch (fileErr) {
+          console.error('Auto-upload file failed:', fileErr);
+        }
+      }
+      
       await loadEstimate();
       setShowPartModal(false);
       setEditingPart(null);

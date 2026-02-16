@@ -585,6 +585,9 @@ function WorkOrderDetailsPage() {
       
       // Build data matching estimate save flow
       const dataToSend = { partType: selectedPartType, ...partData, quantity: parseInt(partData.quantity) || 1 };
+      // Capture shape file before cleaning
+      const pendingShapeFile = dataToSend._shapeFile;
+      delete dataToSend._shapeFile; // File objects can't be serialized
       
       // Sanitize ENUM fields - empty strings break Postgres ENUMs
       if (!dataToSend.rollType) dataToSend.rollType = null;
@@ -603,11 +606,22 @@ function WorkOrderDetailsPage() {
         dataToSend.partTotal = ((matEach + labEach) * qty).toFixed(2);
       }
       
+      let savedPartId = editingPart?.id;
       console.log('Saving part data:', dataToSend);
       if (editingPart) {
         await updateWorkOrderPart(id, editingPart.id, dataToSend);
       } else {
-        await addWorkOrderPart(id, dataToSend);
+        const result = await addWorkOrderPart(id, dataToSend);
+        savedPartId = result.data?.data?.id || result.data?.id;
+      }
+      
+      // Auto-upload pending shape file (from Press Brake form)
+      if (pendingShapeFile && savedPartId) {
+        try {
+          await uploadPartFiles(id, savedPartId, [pendingShapeFile]);
+        } catch (fileErr) {
+          console.error('Auto-upload file failed:', fileErr);
+        }
       }
       
       // Rush service: set promise date to today
