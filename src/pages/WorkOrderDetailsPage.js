@@ -808,7 +808,7 @@ function WorkOrderDetailsPage() {
       if (part.partType === 'cone_roll' && part._coneSegmentDetails && part._coneSegmentDetails.length > 0 && ((parseInt(part._coneRadialSegments) || 1) > 1 || part._coneSegmentDetails.length > 1)) {
         coneSegmentBlock = `
           <div style="margin-top:6px;padding:10px;background:#f5f0ff;border:1px solid #d1c4e9;border-radius:4px;">
-            <div style="font-weight:bold;color:#4a148c;font-size:0.9rem;margin-bottom:6px;">🔺 Cone Segment Breakdown — ${part._coneSegmentDetails.length} layer(s) × ${part._coneRadialSegments} segment(s)</div>
+            <div style="font-weight:bold;color:#4a148c;font-size:0.9rem;margin-bottom:6px;">🔺 Cone Segment Breakdown — ${part._coneSegmentDetails.length} layer(s) x ${part._coneRadialSegments} @ ${(360 / (parseInt(part._coneRadialSegments) || 1)).toFixed(0)}°</div>
             <table style="width:100%;font-size:0.85rem;border-collapse:collapse;">
               <tr style="border-bottom:1px solid #ce93d8;color:#6a1b9a;font-weight:600;">
                 <td style="padding:4px;">Layer</td><td style="padding:4px;">Segment</td><td style="padding:4px;">Sheet Size</td><td style="padding:4px;">OR / IR</td>
@@ -1859,7 +1859,7 @@ function WorkOrderDetailsPage() {
                   {/* Cone segment breakdown */}
                   {part.partType === 'cone_roll' && (part.formData || {})._coneSegmentDetails && (part.formData || {})._coneSegmentDetails.length > 0 && (
                     <div style={{ fontSize: '0.8rem', color: '#4a148c', marginTop: 4, padding: 8, background: '#f5f0ff', borderRadius: 6, border: '1px solid #d1c4e9' }}>
-                      <div style={{ fontWeight: 600, marginBottom: 4 }}>🔺 {(part.formData || {})._coneSegmentDetails.length} layer(s) × {(part.formData || {})._coneRadialSegments || 1} segment(s)</div>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>🔺 {(part.formData || {})._coneSegmentDetails.length} layer(s) x {(part.formData || {})._coneRadialSegments || 1} @ {(360 / (parseInt((part.formData || {})._coneRadialSegments) || 1)).toFixed(0)}°</div>
                       {(part.formData || {})._coneSegmentDetails.map((s, i) => (
                         <div key={i} style={{ fontSize: '0.75rem', color: '#6a1b9a' }}>
                           L{s.layer}: {s.segmentAngle.toFixed(1)}° segment — Sheet {s.sheetWidth}" × {s.sheetHeight}" | OR: {s.outerRadius.toFixed(1)}" / IR: {s.innerRadius.toFixed(1)}"

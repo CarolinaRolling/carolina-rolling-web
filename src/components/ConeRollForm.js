@@ -220,8 +220,8 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   var materialDescription = useMemo(function() {
     var qty = parseInt(partData.quantity) || 1, parts = [qty + 'pc:'];
     if (partData.thickness) parts.push(partData.thickness);
-    parts.push('Plate \u2014 Cone Layout');
-    if (coneData) parts.push('(\u2300' + parseFloat(largeDia).toFixed(1) + '" \u2192 \u2300' + parseFloat(smallDia).toFixed(1) + '" \u00d7 ' + parseFloat(coneHeight).toFixed(1) + '"H)');
+    parts.push('Plate - Cone Layout');
+    if (coneData) parts.push('(Dia ' + parseFloat(largeDia).toFixed(1) + '" to Dia ' + parseFloat(smallDia).toFixed(1) + '" x ' + parseFloat(coneHeight).toFixed(1) + '"H)');
     if (partData.material) parts.push(partData.material);
     if (partData._materialOrigin) parts.push(partData._materialOrigin);
     return parts.join(' ');
@@ -230,16 +230,16 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   var rollingDescription = useMemo(function() {
     if (!coneData) return '';
     var rS = parseInt(radialSegments) || 1, l = [];
-    l.push('Cone: \u2300' + parseFloat(largeDia).toFixed(2) + '" (' + largeDiaType + ') \u2192 \u2300' + parseFloat(smallDia).toFixed(2) + '" (' + smallDiaType + ')');
-    l.push('Height: ' + parseFloat(coneHeight).toFixed(2) + '" | Slant: ' + coneData.slantHeight.toFixed(2) + '" | Semi-angle: ' + coneData.semiAngle.toFixed(2) + '\u00b0');
-    l.push(heightSegs.length + ' layer(s) \u00d7 ' + rS + ' segment(s) = ' + (heightSegs.length * rS) + ' pcs total');
-    segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': Sheet ' + s.sheetWidth + '"\u00d7' + s.sheetHeight + '" | OR:' + s.outerRadius.toFixed(1) + '" IR:' + s.innerRadius.toFixed(1) + '" | Angle:' + s.segmentAngle.toFixed(1) + '\u00b0'); });
+    l.push('Cone: Dia ' + parseFloat(largeDia).toFixed(2) + '" (' + largeDiaType + ') to Dia ' + parseFloat(smallDia).toFixed(2) + '" (' + smallDiaType + ')');
+    l.push('Height: ' + parseFloat(coneHeight).toFixed(2) + '" | Slant: ' + coneData.slantHeight.toFixed(2) + '" | Semi-angle: ' + coneData.semiAngle.toFixed(2) + ' deg');
+    l.push(heightSegs.length + ' layer(s) x ' + rS + ' segment(s) = ' + (heightSegs.length * rS) + ' pcs total');
+    segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': Sheet ' + s.sheetWidth + '"x' + s.sheetHeight + '" | OR:' + s.outerRadius.toFixed(1) + '" IR:' + s.innerRadius.toFixed(1) + '" | Angle:' + s.segmentAngle.toFixed(1) + ' deg'); });
     return l.join('\n');
   }, [coneData, largeDia, smallDia, largeDiaType, smallDiaType, coneHeight, radialSegments, heightSegs, segmentSpecs]);
 
   useEffect(function() {
     var u = { materialDescription: materialDescription };
-    if (coneData) u.sectionSize = '\u2300' + parseFloat(largeDia).toFixed(1) + '"\u2192\u2300' + parseFloat(smallDia).toFixed(1) + '"';
+    if (coneData) u.sectionSize = 'Dia ' + parseFloat(largeDia).toFixed(1) + '" to Dia ' + parseFloat(smallDia).toFixed(1) + '"';
     setPartData(function(p) { return Object.assign({}, p, u); });
   }, [materialDescription]);
   useEffect(function() { if (rollingDescription) setPartData(function(p) { return Object.assign({}, p, { _rollingDescription: rollingDescription }); }); }, [rollingDescription]);
