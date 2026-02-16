@@ -350,7 +350,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const riseCalc = useMemo(() => {
     if (!rollCalc) return null;
     const radiusValue = rollCalc.centerlineDia / 2;
-    if (radiusValue <= 0) return null;
+    if (radiusValue <= 0 || rollCalc.centerlineDia <= 100) return null;
     const chord = radiusValue >= 60 ? 60 : radiusValue >= 24 ? 24 : radiusValue >= 12 ? 12 : radiusValue >= 6 ? 6 : 3;
     const rise = calculateRise(radiusValue, chord);
     if (rise !== null && rise > 0) return { rise, chord };
@@ -374,9 +374,16 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     const tang = parseFloat(tangentLength) || 0;
     const usable = lengthInches - (2 * tang);
     if (usable <= 0) return { error: 'Length too short after tangents' };
-    const pcsPerRing = Math.ceil(circumference / usable);
-    const totalQty = pcsPerRing * (parseInt(ringsNeeded) || 1);
-    return { circumference, usable, pcsPerRing, totalQty, tangent: tang };
+    const numRings = parseInt(ringsNeeded) || 1;
+    if (circumference <= usable) {
+      const ringsPerStick = Math.floor(usable / circumference);
+      const sticksNeeded = Math.ceil(numRings / ringsPerStick);
+      return { circumference, usable, ringsPerStick, sticksNeeded, tangent: tang, multiSegment: false };
+    } else {
+      const segmentsPerRing = Math.ceil(circumference / usable);
+      const sticksNeeded = segmentsPerRing * numRings;
+      return { circumference, usable, segmentsPerRing, sticksNeeded, tangent: tang, multiSegment: true };
+    }
   }, [completeRings, rollCalc, lengthInches, tangentLength, ringsNeeded]);
 
   // Auto-update quantity when complete rings changes
@@ -384,10 +391,13 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     if (completeRings && ringCalc && !ringCalc.error) {
       setPartData(prev => ({
         ...prev,
-        quantity: String(ringCalc.totalQty),
+        quantity: String(parseInt(ringsNeeded) || 1),
         _completeRings: true,
         _ringsNeeded: ringsNeeded,
         _tangentLength: tangentLength,
+        _ringSticksNeeded: ringCalc.sticksNeeded,
+        _ringRingsPerStick: ringCalc.ringsPerStick || 0,
+        _ringMultiSegment: ringCalc.multiSegment || false,
       }));
     } else {
       setPartData(prev => ({ ...prev, _completeRings: false }));
@@ -429,7 +439,11 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       lines.push(`Direction: ${pitchDirection === 'clockwise' ? 'Clockwise' : 'Counter-Clockwise'} (going up)`);
     }
     if (completeRings && ringCalc && !ringCalc.error) {
-      lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.pcsPerRing} pcs/ring, ${ringCalc.totalQty} pcs total`);
+      if (!ringCalc.multiSegment) {
+        lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.ringsPerStick} rings/stick, ${ringCalc.sticksNeeded} stick(s) needed`);
+      } else {
+        lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.segmentsPerRing} segments/ring, ${ringCalc.sticksNeeded} stick(s) needed`);
+      }
       lines.push(`Tangents: ${ringCalc.tangent}" each end`);
     }
     return lines.join('\n');
@@ -560,7 +574,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
           style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
         {completeRings && ringCalc && !ringCalc.error && (
           <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>
-            ⭕ Auto: {ringsNeeded} ring(s) × {ringCalc.pcsPerRing} pcs = {ringCalc.totalQty}
+            ⭕ {ringsNeeded} ring(s) — {ringCalc.sticksNeeded} stick(s) needed{!ringCalc.multiSegment ? ` (${ringCalc.ringsPerStick} rings/stick)` : ` (${ringCalc.segmentsPerRing} segments/ring)`}
           </div>
         )}
       </div>
@@ -829,18 +843,23 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                       <div style={{ fontWeight: 600 }}>{ringCalc.circumference.toFixed(2)}"</div>
                     </div>
                     <div>
-                      <div style={{ color: '#666', fontSize: '0.7rem' }}>Usable/Piece</div>
+                      <div style={{ color: '#666', fontSize: '0.7rem' }}>Usable Length</div>
                       <div style={{ fontWeight: 600 }}>{ringCalc.usable.toFixed(2)}" <span style={{ color: '#999', fontSize: '0.75rem' }}>({lengthInches}" - {ringCalc.tangent * 2}" tang)</span></div>
                     </div>
                     <div>
-                      <div style={{ color: '#666', fontSize: '0.7rem' }}>Pieces/Ring</div>
-                      <div style={{ fontWeight: 600, fontSize: '1.1rem', color: '#1565c0' }}>{ringCalc.pcsPerRing}</div>
+                      <div style={{ color: '#666', fontSize: '0.7rem' }}>{ringCalc.multiSegment ? 'Segments/Ring' : 'Rings/Stick'}</div>
+                      <div style={{ fontWeight: 600, fontSize: '1.1rem', color: '#1565c0' }}>{ringCalc.multiSegment ? ringCalc.segmentsPerRing : ringCalc.ringsPerStick}</div>
                     </div>
                   </div>
                   <div style={{ marginTop: 10, padding: '8px 0', borderTop: '1px solid #a5d6a7', display: 'flex', justifyContent: 'space-between', fontSize: '1rem' }}>
-                    <span><strong>{ringsNeeded}</strong> ring(s) × <strong>{ringCalc.pcsPerRing}</strong> pcs/ring</span>
-                    <strong style={{ color: '#2e7d32', fontSize: '1.1rem' }}>= {ringCalc.totalQty} pcs total</strong>
+                    <span><strong>{ringsNeeded}</strong> ring(s) needed</span>
+                    <strong style={{ color: '#2e7d32', fontSize: '1.1rem' }}>= {ringCalc.sticksNeeded} stick(s) to order</strong>
                   </div>
+                  {!ringCalc.multiSegment && ringCalc.ringsPerStick > 1 && (
+                    <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#1565c0', fontStyle: 'italic' }}>
+                      💡 Material cost per ring = stick price ÷ {ringCalc.ringsPerStick}
+                    </div>
+                  )}
                 </div>
               )}
               {ringCalc && ringCalc.error && (

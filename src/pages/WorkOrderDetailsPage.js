@@ -792,6 +792,10 @@ function WorkOrderDetailsPage() {
       }
       
       if (rollingLines.length > 0) {
+        // Add complete rings note if applicable
+        if (part._completeRings && part._ringsNeeded) {
+          rollingLines.push(`${part._ringsNeeded} complete ring(s) required`);
+        }
         rollingBlock = `
           <div style="background:#e8f5e9;padding:10px 12px;border-radius:4px;border-left:4px solid #2e7d32;margin-top:6px">
             <pre style="white-space:pre-wrap;margin:0;font-family:'Courier New',monospace;font-size:0.95rem;font-weight:bold;color:#1B5E20;line-height:1.5">${rollingLines.join('\n')}</pre>
@@ -1827,6 +1831,9 @@ function WorkOrderDetailsPage() {
                     <div style={{ color: '#c62828', fontSize: '0.8rem', fontWeight: 600, marginTop: 4 }}>⚠️ Roll instruction PDF required — upload below</div>
                   )}
                   {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
+                  {(part.formData || {})._completeRings && (part.formData || {})._ringsNeeded && (
+                    <div style={{ color: '#2e7d32', fontWeight: 600, marginTop: 4 }}>⭕ {(part.formData || {})._ringsNeeded} complete ring(s) required</div>
+                  )}
                 </div>
                 {/* Rush Service Display */}
                 {part.partType === 'rush_service' && (() => {
