@@ -10,9 +10,17 @@ const THICKNESS_OPTIONS = [
 ];
 
 const ANGLE_SIZE_OPTIONS = [
-  '1x1', '1.25x1.25', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '5x5', '6x6',
+  '0.5x0.5', '0.75x0.75', '1x1', '1.25x1.25', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '5x5', '6x6',
   '1x2', '2x3', '3x4', '4x5', '4x6', 'Custom'
 ];
+
+function dimToFraction(n) {
+  var fracs = { 0.125: '1/8', 0.25: '1/4', 0.375: '3/8', 0.5: '1/2', 0.625: '5/8', 0.75: '3/4', 0.875: '7/8' };
+  var whole = Math.floor(n), dec = +(n - whole).toFixed(3);
+  if (dec === 0) return String(whole);
+  var f = fracs[dec];
+  return f ? (whole > 0 ? whole + '-' + f : f) : String(n);
+}
 
 const DEFAULT_GRADE_OPTIONS = ['A36', '304 S/S', '316 S/S', 'AR400', 'Custom'];
 
@@ -193,7 +201,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     if (partData._angleSize && partData._angleSize !== 'Custom') {
       const parsed = parseAngleSize(partData._angleSize);
       if (parsed) {
-        descParts.push(`${parsed.leg1}" x ${parsed.leg2}"`);
+        descParts.push(`${dimToFraction(parsed.leg1)}" x ${dimToFraction(parsed.leg2)}"`);
       }
     } else if (partData._customAngleSize) {
       descParts.push(partData._customAngleSize);
@@ -332,7 +340,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
           {ANGLE_SIZE_OPTIONS.map(s => {
             if (s === 'Custom') return <option key={s} value={s}>{s}</option>;
             const p = parseAngleSize(s);
-            return <option key={s} value={s}>{p.leg1}" x {p.leg2}"</option>;
+            return <option key={s} value={s}>{dimToFraction(p.leg1)}" x {dimToFraction(p.leg2)}"</option>;
           })}
         </select>
         {(selectedAngleSizeOption === 'Custom') && (

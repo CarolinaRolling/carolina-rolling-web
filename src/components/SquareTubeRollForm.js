@@ -11,13 +11,21 @@ const THICKNESS_OPTIONS = [
 
 const TUBE_SIZE_OPTIONS = [
   // Square
-  '1x1', '1.25x1.25', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '5x5', '6x6',
+  '0.5x0.5', '0.75x0.75', '1x1', '1.25x1.25', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '5x5', '6x6',
   // Rectangular
   '1x2', '1x3', '1.5x2', '1.5x3', '2x3', '2x4', '3x4', '3x5', '4x6',
   'Custom'
 ];
 
 const DEFAULT_GRADE_OPTIONS = ['A500 Gr B', 'A513', '304 S/S', '316 S/S', '6061-T6 Alum', 'Custom'];
+
+function dimToFraction(n) {
+  var fracs = { 0.125: '1/8', 0.25: '1/4', 0.375: '3/8', 0.5: '1/2', 0.625: '5/8', 0.75: '3/4', 0.875: '7/8' };
+  var whole = Math.floor(n), dec = +(n - whole).toFixed(3);
+  if (dec === 0) return String(whole);
+  var f = fracs[dec];
+  return f ? (whole > 0 ? whole + '-' + f : f) : String(n);
+}
 
 // Parse tube size string like "2x4" into { side1, side2 }
 function parseTubeSize(sizeStr) {
@@ -190,7 +198,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     if (partData._tubeSize && partData._tubeSize !== 'Custom') {
       const parsed = parseTubeSize(partData._tubeSize);
       if (parsed) {
-        descParts.push(`${parsed.side1}" x ${parsed.side2}"`);
+        descParts.push(`${dimToFraction(parsed.side1)}" x ${dimToFraction(parsed.side2)}"`);
       }
     } else if (partData._customTubeSize) {
       descParts.push(partData._customTubeSize);
@@ -314,13 +322,13 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
           <optgroup label="Square">
             {TUBE_SIZE_OPTIONS.filter(s => { const p = parseTubeSize(s); return p && p.side1 === p.side2; }).map(s => {
               const p = parseTubeSize(s);
-              return <option key={s} value={s}>{p.side1}" x {p.side2}" Sq</option>;
+              return <option key={s} value={s}>{dimToFraction(p.side1)}" x {dimToFraction(p.side2)}" Sq</option>;
             })}
           </optgroup>
           <optgroup label="Rectangular">
             {TUBE_SIZE_OPTIONS.filter(s => { const p = parseTubeSize(s); return p && p.side1 !== p.side2; }).map(s => {
               const p = parseTubeSize(s);
-              return <option key={s} value={s}>{p.side1}" x {p.side2}" Rect</option>;
+              return <option key={s} value={s}>{dimToFraction(p.side1)}" x {dimToFraction(p.side2)}" Rect</option>;
             })}
           </optgroup>
           <option value="Custom">Custom Size</option>

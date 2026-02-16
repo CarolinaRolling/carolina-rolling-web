@@ -977,8 +977,10 @@ function EstimateDetailsPage() {
         ${taxLine}
         <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:1.3em;font-weight:bold;color:#1976d2;"><span>Grand Total</span><span>${formatCurrency(totals.grandTotal)}</span></div>
       </div>
-      <div style="background:#e8f5e9;padding:10px 12px;border-radius:8px;margin-top:12px;font-size:0.85em;color:#555;">
-        <strong>Credit Card (Square):</strong> In-Person (2.6% + $0.15): <strong style="color:#388e3c;">${formatCurrency(totals.ccInPersonTotal)}</strong> &nbsp;|&nbsp; Manual (3.5% + $0.15): <strong style="color:#e65100;">${formatCurrency(totals.ccManualTotal)}</strong>
+      <div style="text-align:right;margin-top:16px;padding-top:12px;border-top:1px solid #ccc;font-size:0.9em;color:#555;line-height:1.8;">
+        <div style="font-weight:600;color:#333;">Total with Credit Card Fees</div>
+        <div>In-Person (2.6% + $0.15): <strong>${formatCurrency(totals.ccInPersonTotal)}</strong></div>
+        <div>Manual (3.5% + $0.15): <strong>${formatCurrency(totals.ccManualTotal)}</strong></div>
       </div>
       ${formData.notes ? `<div style="margin-top:20px;padding:12px;background:#f9f9f9;border-radius:8px;"><strong>Terms:</strong> ${formData.notes}</div>` : ''}
       </body></html>`);
@@ -1631,8 +1633,10 @@ function EstimateDetailsPage() {
               </div>
               
               {/* Credit Card Total */}
-              <div style={{ background: '#e8f5e9', borderRadius: 6, padding: '8px 10px', marginTop: 8, fontSize: '0.8rem', color: '#555' }}>
-                <strong>CC (Square):</strong> In-Person: <strong style={{ color: '#388e3c' }}>{formatCurrency(totals.ccInPersonTotal)}</strong> | Manual: <strong style={{ color: '#e65100' }}>{formatCurrency(totals.ccManualTotal)}</strong>
+              <div style={{ textAlign: 'right', marginTop: 12, paddingTop: 8, borderTop: '1px solid #ccc', fontSize: '0.8rem', color: '#555', lineHeight: 1.8 }}>
+                <div style={{ fontWeight: 600, color: '#333' }}>Total with Credit Card Fees</div>
+                <div>In-Person (2.6% + $0.15): <strong>{formatCurrency(totals.ccInPersonTotal)}</strong></div>
+                <div>Manual (3.5% + $0.15): <strong>{formatCurrency(totals.ccManualTotal)}</strong></div>
               </div>
             </div>
 
