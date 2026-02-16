@@ -916,7 +916,22 @@ function EstimateDetailsPage() {
         <h4 style="margin:0 0 8px;color:#1976d2;">Part #${part.partNumber} - ${PART_TYPES[part.partType]?.label || part.partType}</h4>
         <p style="margin:0 0 4px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''} ${part.cutFileReference ? `<span style="color:#1565c0">Cut File: ${part.cutFileReference}</span>` : ''}</p>
         <p style="margin:0 0 4px;"><strong>Qty:</strong> ${part.quantity}${part.sectionSize ? ` | <strong>Size:</strong> ${part.sectionSize}` : ''}${part.thickness ? ` | <strong>Thk:</strong> ${part.thickness}` : ''}${part.material ? ` | <strong>Grade:</strong> ${part.material}` : ''}</p>
-        ${part.materialDescription ? `<p style="margin:0 0 4px;font-size:0.9em;color:#555;">📦 ${part.materialDescription}</p>` : ''}
+        ${part.partType === 'cone_roll' ? (() => {
+          const thk = part.thickness || '';
+          const ldType = (part._coneLargeDiaType || 'inside') === 'inside' ? 'ID' : (part._coneLargeDiaType === 'outside' ? 'OD' : 'CLD');
+          const sdType = (part._coneSmallDiaType || 'inside') === 'inside' ? 'ID' : (part._coneSmallDiaType === 'outside' ? 'OD' : 'CLD');
+          const ld = parseFloat(part._coneLargeDia) || 0;
+          const sd = parseFloat(part._coneSmallDia) || 0;
+          const vh = parseFloat(part._coneHeight) || 0;
+          const grade = part.material || '';
+          const origin = part._materialOrigin || '';
+          let c = thk ? thk + ' ' : '';
+          c += 'Cone - ';
+          if (ld && sd && vh) c += ld.toFixed(1) + '" ' + ldType + ' x ' + sd.toFixed(1) + '" ' + sdType + ' x ' + vh.toFixed(1) + '" VH';
+          if (grade) c += ' ' + grade;
+          if (origin) c += ' ' + origin;
+          return `<p style="margin:0 0 4px;font-size:0.9em;color:#555;">📦 ${part.quantity}pc: ${c}</p>`;
+        })() : (part.materialDescription ? `<p style="margin:0 0 4px;font-size:0.9em;color:#555;">📦 ${part.materialDescription}</p>` : '')}
         ${part._rollToMethod === 'template' ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;font-weight:bold;">📐 Roll Per Template / Sample${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}</p>` : part._rollToMethod === 'print' ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;font-weight:bold;">📄 Roll per print: (see attached)${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}</p>` : (part.diameter || part.radius) ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">🔄 ${part.diameter || part.radius}" ${(() => { const mp = part._rollMeasurePoint || 'inside'; const isRad = !!part.radius && !part.diameter; if (mp === 'inside') return isRad ? 'ISR' : 'ID'; if (mp === 'outside') return isRad ? 'OSR' : 'OD'; return isRad ? 'CLR' : 'CLD'; })()}${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}${part.arcDegrees ? ' | Arc: ' + part.arcDegrees + '°' : ''}</p>` : ''}
         ${(() => { const desc = part._rollingDescription || part.specialInstructions || ''; const lines = desc.split('\n').filter(l => l.includes('Rise:') || l.includes('Complete Ring') || l.includes('Cone:') || l.includes('Sheet Size:')); return lines.length ? `<p style="margin:0 0 4px;color:#6a1b9a;font-size:0.85em;">📐 ${lines.map(l => l.trim()).join(' | ')}</p>` : ''; })()}
         ${part._completeRings && part._ringsNeeded ? `<p style="margin:0 0 4px;color:#2e7d32;font-size:0.9em;font-weight:bold;">⭕ ${part._ringsNeeded} complete ring(s) required</p>` : ''}

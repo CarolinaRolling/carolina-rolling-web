@@ -748,7 +748,23 @@ function WorkOrderDetailsPage() {
       // Build material line - prefer formData description (matches write-up format)
       const formMaterialDesc = part._materialDescription || part.materialDescription || '';
       let materialLine = '';
-      if (formMaterialDesc) {
+      if (part.partType === 'cone_roll') {
+        // Always rebuild cone description from fields to avoid stale/garbled data
+        const thk = part.thickness || '';
+        const ldType = (part._coneLargeDiaType || 'inside') === 'inside' ? 'ID' : (part._coneLargeDiaType === 'outside' ? 'OD' : 'CLD');
+        const sdType = (part._coneSmallDiaType || 'inside') === 'inside' ? 'ID' : (part._coneSmallDiaType === 'outside' ? 'OD' : 'CLD');
+        const ld = parseFloat(part._coneLargeDia) || 0;
+        const sd = parseFloat(part._coneSmallDia) || 0;
+        const vh = parseFloat(part._coneHeight) || 0;
+        const grade = part.material || '';
+        const origin = part._materialOrigin || '';
+        let coneLine = thk ? thk + ' ' : '';
+        coneLine += 'Cone - ';
+        if (ld && sd && vh) coneLine += ld.toFixed(1) + '" ' + ldType + ' x ' + sd.toFixed(1) + '" ' + sdType + ' x ' + vh.toFixed(1) + '" VH';
+        if (grade) coneLine += ' ' + grade;
+        if (origin) coneLine += ' ' + origin;
+        materialLine = `${part.quantity}pc: ${coneLine}`;
+      } else if (formMaterialDesc) {
         // Use the pre-formatted description; ensure qty is shown
         const cleaned = formMaterialDesc.replace(/^\(\d+\)\s*/, '').replace(/^\d+pc:?\s*/, '');
         materialLine = `${part.quantity}pc: ${cleaned}`;
