@@ -143,10 +143,14 @@ function WorkOrderDetailsPage() {
       let taxExempt = data.taxExempt || false;
       let taxExemptReason = data.taxExemptReason || '';
       let taxExemptCertNumber = data.taxExemptCertNumber || '';
-      if (!data.taxExempt && loadedClient && (loadedClient.taxStatus === 'resale' || loadedClient.taxStatus === 'exempt')) {
-        taxExempt = true;
-        taxExemptReason = loadedClient.taxStatus === 'resale' ? 'Resale' : 'Tax Exempt';
-        taxExemptCertNumber = loadedClient.resaleCertificate || '';
+      if (!data.taxExempt && loadedClient) {
+        const clientIsExempt = loadedClient.taxStatus === 'resale' || loadedClient.taxStatus === 'exempt' ||
+          (loadedClient.resaleCertificate && loadedClient.permitStatus === 'active');
+        if (clientIsExempt) {
+          taxExempt = true;
+          taxExemptReason = (loadedClient.taxStatus === 'exempt') ? 'Tax Exempt' : 'Resale';
+          taxExemptCertNumber = loadedClient.resaleCertificate || '';
+        }
       }
 
       setEditData({
@@ -1532,10 +1536,12 @@ function WorkOrderDetailsPage() {
                         } else {
                           updates.taxRate = defaultTaxRate.toString();
                         }
-                        // Auto tax exempt for resale/exempt clients
-                        if (client.taxStatus === 'resale' || client.taxStatus === 'exempt') {
+                        // Auto tax exempt for resale/exempt clients or verified resale certificates
+                        const isExempt = client.taxStatus === 'resale' || client.taxStatus === 'exempt' || 
+                          (client.resaleCertificate && client.permitStatus === 'active');
+                        if (isExempt) {
                           updates.taxExempt = true;
-                          updates.taxExemptReason = client.taxStatus === 'resale' ? 'Resale' : 'Tax Exempt';
+                          updates.taxExemptReason = (client.taxStatus === 'exempt') ? 'Tax Exempt' : 'Resale';
                           updates.taxExemptCertNumber = client.resaleCertificate || '';
                         } else {
                           updates.taxExempt = false;

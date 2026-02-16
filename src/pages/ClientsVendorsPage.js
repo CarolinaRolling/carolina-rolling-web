@@ -146,7 +146,9 @@ const ClientsVendorsPage = () => {
             permitOwnerName: result.ownerName || '',
             permitDbaName: result.dbaName || '',
             _permitRawFields: result.rawFields || {},
-            _permitLabelMap: result.labelMap || {}
+            _permitLabelMap: result.labelMap || {},
+            // Auto-set tax status to resale when permit is verified active
+            ...(result.status === 'active' ? { taxStatus: 'resale' } : {})
           }));
         }
         showMessage(`Permit verified: ${result.status.toUpperCase()}${result.rawResponse ? ' — ' + result.rawResponse : ''}`);

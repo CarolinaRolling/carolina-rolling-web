@@ -179,13 +179,26 @@ function EstimateDetailsPage() {
       });
       setParts((data.parts || []).sort((a, b) => a.partNumber - b.partNumber));
       setFiles(data.files || []);
-      // Load client payment terms
+      // Load client payment terms and auto-detect tax exempt
       if (data.clientName) {
         try {
           const clientRes = await searchClients(data.clientName);
           const clients = clientRes.data?.data || [];
           const client = clients.find(c => c.name === data.clientName);
           if (client?.paymentTerms) setClientPaymentTerms(client.paymentTerms);
+          // Auto tax exempt for verified resale clients (only if not already saved on estimate)
+          if (client && !data.taxExempt) {
+            const clientIsExempt = client.taxStatus === 'resale' || client.taxStatus === 'exempt' ||
+              (client.resaleCertificate && client.permitStatus === 'active');
+            if (clientIsExempt) {
+              setFormData(prev => ({
+                ...prev,
+                taxExempt: true,
+                taxExemptReason: (client.taxStatus === 'exempt') ? 'Tax Exempt' : 'Resale',
+                taxExemptCertNumber: client.resaleCertificate || ''
+              }));
+            }
+          }
         } catch (e) { /* ignore */ }
       }
     } catch (err) {
@@ -1071,9 +1084,10 @@ function EstimateDetailsPage() {
                             contactName: client.contactName || formData.contactName,
                             contactEmail: client.contactEmail || formData.contactEmail,
                             contactPhone: client.contactPhone || formData.contactPhone,
-                            // Apply tax settings
-                            taxExempt: client.taxStatus === 'resale' || client.taxStatus === 'exempt',
-                            taxExemptReason: client.taxStatus === 'resale' ? 'Resale' : (client.taxStatus === 'exempt' ? 'Tax Exempt' : ''),
+                            // Apply tax settings - auto exempt for resale/exempt or verified resale certs
+                            taxExempt: client.taxStatus === 'resale' || client.taxStatus === 'exempt' || 
+                              (!!client.resaleCertificate && client.permitStatus === 'active'),
+                            taxExemptReason: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? 'Resale' : (client.taxStatus === 'exempt' ? 'Tax Exempt' : ''),
                             taxExemptCertNumber: client.resaleCertificate || '',
                             useCustomTax: !!client.customTaxRate,
                             taxRate: client.customTaxRate ? parseFloat(client.customTaxRate) * 100 : formData.taxRate
@@ -1089,10 +1103,10 @@ function EstimateDetailsPage() {
                         </div>
                         <span style={{ 
                           fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4,
-                          background: client.taxStatus === 'resale' ? '#fff3e0' : client.taxStatus === 'exempt' ? '#e8f5e9' : '#e3f2fd',
-                          color: client.taxStatus === 'resale' ? '#e65100' : client.taxStatus === 'exempt' ? '#2e7d32' : '#1565c0'
+                          background: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '#fff3e0' : client.taxStatus === 'exempt' ? '#e8f5e9' : '#e3f2fd',
+                          color: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '#e65100' : client.taxStatus === 'exempt' ? '#2e7d32' : '#1565c0'
                         }}>
-                          {client.taxStatus === 'resale' ? 'Resale' : client.taxStatus === 'exempt' ? 'Exempt' : 'Taxable'}
+                          {(client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '✅ Resale' : client.taxStatus === 'exempt' ? 'Exempt' : 'Taxable'}
                         </span>
                       </div>
                     ))}
