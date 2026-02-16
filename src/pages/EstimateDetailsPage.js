@@ -920,24 +920,14 @@ function EstimateDetailsPage() {
         ${part._rollToMethod === 'template' ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;font-weight:bold;">📐 Roll Per Template / Sample${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}</p>` : part._rollToMethod === 'print' ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;font-weight:bold;">📄 Roll per print: (see attached)${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}</p>` : (part.diameter || part.radius) ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">🔄 ${part.diameter || part.radius}" ${(() => { const mp = part._rollMeasurePoint || 'inside'; const isRad = !!part.radius && !part.diameter; if (mp === 'inside') return isRad ? 'ISR' : 'ID'; if (mp === 'outside') return isRad ? 'OSR' : 'OD'; return isRad ? 'CLR' : 'CLD'; })()}${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}${part.arcDegrees ? ' | Arc: ' + part.arcDegrees + '°' : ''}</p>` : ''}
         ${(() => { const desc = part._rollingDescription || part.specialInstructions || ''; const lines = desc.split('\n').filter(l => l.includes('Rise:') || l.includes('Complete Ring') || l.includes('Cone:') || l.includes('Sheet Size:')); return lines.length ? `<p style="margin:0 0 4px;color:#6a1b9a;font-size:0.85em;">📐 ${lines.map(l => l.trim()).join(' | ')}</p>` : ''; })()}
         ${part._completeRings && part._ringsNeeded ? `<p style="margin:0 0 4px;color:#2e7d32;font-size:0.9em;font-weight:bold;">⭕ ${part._ringsNeeded} complete ring(s) required</p>` : ''}
-        ${part.partType === 'cone_roll' && part._coneSegmentDetails && part._coneSegmentDetails.length > 0 && ((parseInt(part._coneRadialSegments) || 1) > 1 || part._coneSegmentDetails.length > 1) ? `
-          <div style="margin:8px 0;padding:10px;background:#f5f0ff;border:1px solid #d1c4e9;border-radius:6px;">
-            <div style="font-weight:bold;color:#4a148c;font-size:0.9em;margin-bottom:6px;">🔺 Cone Segment Breakdown — ${part._coneSegmentDetails.length > 1 ? part._coneSegmentDetails.length + ' layers x ' : ''}${part._coneRadialSegments} @ ${(360 / (parseInt(part._coneRadialSegments) || 1)).toFixed(0)}°</div>
-            <table style="width:100%;font-size:0.85em;border-collapse:collapse;">
-              ${part._coneSegmentDetails.length > 1 ? `<tr style="border-bottom:1px solid #ce93d8;color:#6a1b9a;font-weight:600;">
-                <td style="padding:4px;">Layer</td><td style="padding:4px;">Segment</td><td style="padding:4px;">Sheet Size</td><td style="padding:4px;">OR / IR</td>
-              </tr>
-              ${part._coneSegmentDetails.map(s => `<tr style="border-bottom:1px solid #e8e0f0;">
-                <td style="padding:4px;">L${s.layer}</td>
-                <td style="padding:4px;">${s.segmentAngle.toFixed(1)}°</td>
-                <td style="padding:4px;">${s.sheetWidth}" × ${s.sheetHeight}"</td>
-                <td style="padding:4px;">${s.outerRadius.toFixed(1)}" / ${s.innerRadius.toFixed(1)}"</td>
-              </tr>`).join('')}` : ''}
-            </table>
-          </div>
+        ${part.partType === 'cone_roll' ? `
+          <p style="margin:0 0 4px;color:#4a148c;font-size:0.9em;">
+            ${part._coneType === 'eccentric' ? 'Eccentric' + (part._coneEccentricAngle ? ' = ' + part._coneEccentricAngle + '°' : '') : 'Concentric'}${(parseInt(part._coneRadialSegments) || 1) > 1 ? ' | ' + part._coneRadialSegments + ' @ ' + (360 / (parseInt(part._coneRadialSegments) || 1)).toFixed(0) + '°' : ''}
+          </p>
         ` : ''}
         ${part._pitchEnabled ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;">🌀 Pitch: ${part._pitchDirection === 'clockwise' ? 'CW' : 'CCW'}${part._pitchMethod === 'runrise' && part._pitchRise ? ' | Run: ' + part._pitchRun + '" / Rise: ' + part._pitchRise + '"' : ''}${part._pitchMethod === 'degree' && part._pitchAngle ? ' | Angle: ' + part._pitchAngle + '°' : ''}${part._pitchMethod === 'space' && part._pitchSpaceValue ? ' | ' + (part._pitchSpaceType === 'center' ? 'C-C' : 'Between') + ': ' + part._pitchSpaceValue + '"' : ''}${part._pitchDevelopedDia > 0 ? ' | <strong style="color:#2e7d32;">Dev Ø: ' + parseFloat(part._pitchDevelopedDia).toFixed(4) + '"</strong>' : ''}</p>` : ''}
         ${!['fab_service', 'shop_rate'].includes(part.partType) ? (part.materialSource === 'customer_supplied' || !part.weSupplyMaterial ? `<p style="color:#388e3c;">Material supplied by: ${formData.clientName || 'Customer'}</p>` : `<p style="color:#388e3c;">Material supplied by: Carolina Rolling Company</p>`) : ''}
+        ${part.partType === 'cone_roll' && part.cutFileReference ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">Layout Filename: ${part.cutFileReference}</p>` : ''}
         ${pricingHtml}
         ${part.partType === 'shop_rate' ? '<p style="margin:8px 0 0;padding:8px;background:#fff3e0;border:1px solid #ffcc80;border-radius:6px;font-size:0.85em;color:#e65100;">⚠️ Pricing is an estimate based on predicted hours. Actual cost may vary depending on hours required to complete the job.</p>' : ''}
       </div>`;
@@ -972,20 +962,8 @@ function EstimateDetailsPage() {
         ${taxLine}
         <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:1.3em;font-weight:bold;color:#1976d2;"><span>Grand Total</span><span>${formatCurrency(totals.grandTotal)}</span></div>
       </div>
-      <div style="background:#e8f5e9;padding:12px;border-radius:8px;margin-top:12px;">
-        <div style="font-size:0.85em;color:#666;margin-bottom:8px;font-weight:bold;">Payment by Credit Card (Square)</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div style="padding:8px;background:#f1f8e9;border-radius:6px;">
-            <div style="font-size:0.8em;color:#666;margin-bottom:4px;">In-Person (2.6% + $0.15)</div>
-            <div style="display:flex;justify-content:space-between;font-size:0.85em;"><span>Fee:</span><span>${formatCurrency(totals.ccInPersonFee)}</span></div>
-            <div style="display:flex;justify-content:space-between;font-weight:bold;color:#388e3c;"><span>Total:</span><span>${formatCurrency(totals.ccInPersonTotal)}</span></div>
-          </div>
-          <div style="padding:8px;background:#fff8e1;border-radius:6px;">
-            <div style="font-size:0.8em;color:#666;margin-bottom:4px;">Manual Input (3.5% + $0.15)</div>
-            <div style="display:flex;justify-content:space-between;font-size:0.85em;"><span>Fee:</span><span>${formatCurrency(totals.ccManualFee)}</span></div>
-            <div style="display:flex;justify-content:space-between;font-weight:bold;color:#e65100;"><span>Total:</span><span>${formatCurrency(totals.ccManualTotal)}</span></div>
-          </div>
-        </div>
+      <div style="background:#e8f5e9;padding:10px 12px;border-radius:8px;margin-top:12px;font-size:0.85em;color:#555;">
+        <strong>Credit Card (Square):</strong> In-Person (2.6% + $0.15): <strong style="color:#388e3c;">${formatCurrency(totals.ccInPersonTotal)}</strong> &nbsp;|&nbsp; Manual (3.5% + $0.15): <strong style="color:#e65100;">${formatCurrency(totals.ccManualTotal)}</strong>
       </div>
       ${formData.notes ? `<div style="margin-top:20px;padding:12px;background:#f9f9f9;border-radius:8px;"><strong>Terms:</strong> ${formData.notes}</div>` : ''}
       </body></html>`);
@@ -1283,16 +1261,15 @@ function EstimateDetailsPage() {
                     {part._completeRings && part._ringsNeeded && (
                       <div style={{ fontSize: '0.85rem', color: '#2e7d32', fontWeight: 600, marginTop: 4 }}>⭕ {part._ringsNeeded} complete ring(s) required</div>
                     )}
-                    {/* Cone segment breakdown */}
-                    {part.partType === 'cone_roll' && part._coneSegmentDetails && part._coneSegmentDetails.length > 0 && ((parseInt(part._coneRadialSegments) || 1) > 1 || part._coneSegmentDetails.length > 1) && (
-                      <div style={{ fontSize: '0.8rem', color: '#4a148c', marginTop: 4, padding: 8, background: '#f5f0ff', borderRadius: 6, border: '1px solid #d1c4e9' }}>
-                        <div style={{ fontWeight: 600, marginBottom: 4 }}>🔺 {part._coneSegmentDetails.length > 1 ? `${part._coneSegmentDetails.length} layers x ` : ''}{part._coneRadialSegments} @ {(360 / (parseInt(part._coneRadialSegments) || 1)).toFixed(0)}°</div>
-                        {part._coneSegmentDetails.length > 1 && part._coneSegmentDetails.map((s, i) => (
-                          <div key={i} style={{ fontSize: '0.75rem', color: '#6a1b9a' }}>
-                            L{s.layer}: {s.segmentAngle.toFixed(1)}° — Sheet {s.sheetWidth}" × {s.sheetHeight}" | OR: {s.outerRadius.toFixed(1)}" / IR: {s.innerRadius.toFixed(1)}"
-                          </div>
-                        ))}
+                    {/* Cone type + segments */}
+                    {part.partType === 'cone_roll' && (
+                      <div style={{ fontSize: '0.8rem', color: '#4a148c', marginTop: 4 }}>
+                        🔺 {part._coneType === 'eccentric' ? `Eccentric${part._coneEccentricAngle ? ` = ${part._coneEccentricAngle}°` : ''}` : 'Concentric'}
+                        {(parseInt(part._coneRadialSegments) || 1) > 1 && ` | ${part._coneRadialSegments} @ ${(360 / (parseInt(part._coneRadialSegments) || 1)).toFixed(0)}°`}
                       </div>
+                    )}
+                    {part.partType === 'cone_roll' && part.cutFileReference && (
+                      <div style={{ fontSize: '0.8rem', color: '#1565c0', marginTop: 2 }}>Layout Filename: {part.cutFileReference}</div>
                     )}
                     {/* Line 4: Pitch info */}
                     {part._pitchEnabled && (
@@ -1639,22 +1616,8 @@ function EstimateDetailsPage() {
               </div>
               
               {/* Credit Card Total */}
-              <div style={{ background: '#e8f5e9', borderRadius: 6, padding: 10, marginTop: 8 }}>
-                <div style={{ fontSize: '0.75rem', color: '#666', marginBottom: 6, fontWeight: 600 }}>
-                  Credit Card (Square)
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div style={{ padding: 6, background: '#f1f8e9', borderRadius: 4 }}>
-                    <div style={{ fontSize: '0.7rem', color: '#666' }}>In-Person (2.6% + $0.15)</div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#388e3c' }}>{formatCurrency(totals.ccInPersonTotal)}</div>
-                    <div style={{ fontSize: '0.65rem', color: '#999' }}>Fee: {formatCurrency(totals.ccInPersonFee)}</div>
-                  </div>
-                  <div style={{ padding: 6, background: '#fff8e1', borderRadius: 4 }}>
-                    <div style={{ fontSize: '0.7rem', color: '#666' }}>Manual (3.5% + $0.15)</div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 600, color: '#e65100' }}>{formatCurrency(totals.ccManualTotal)}</div>
-                    <div style={{ fontSize: '0.65rem', color: '#999' }}>Fee: {formatCurrency(totals.ccManualFee)}</div>
-                  </div>
-                </div>
+              <div style={{ background: '#e8f5e9', borderRadius: 6, padding: '8px 10px', marginTop: 8, fontSize: '0.8rem', color: '#555' }}>
+                <strong>CC (Square):</strong> In-Person: <strong style={{ color: '#388e3c' }}>{formatCurrency(totals.ccInPersonTotal)}</strong> | Manual: <strong style={{ color: '#e65100' }}>{formatCurrency(totals.ccManualTotal)}</strong>
               </div>
             </div>
 

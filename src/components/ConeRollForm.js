@@ -150,6 +150,8 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   var [heightCutMethod, setHeightCutMethod] = useState(partData._coneHeightCutMethod || 'equal');
   var [heightSegments, setHeightSegments] = useState(partData._coneHeightSegments || 1);
   var [customCuts, setCustomCuts] = useState(partData._coneCustomCuts || '');
+  var [coneType, setConeType] = useState(partData._coneType || 'concentric');
+  var [eccentricAngle, setEccentricAngle] = useState(partData._coneEccentricAngle || '');
   var [copiedCmd, setCopiedCmd] = useState(false);
   var coneCanvasRef = useRef(null);
   var blankRefs = useRef({});
@@ -210,35 +212,47 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   useEffect(function() { segmentSpecs.forEach(function(sp) { var cv = blankRefs.current[sp.layer]; if (cv && sp.blank) drawBlank(cv, sp.blank, sp.segmentAngle, sp.layer); }); }, [segmentSpecs]);
 
   useEffect(function() {
-    setPartData(function(p) { return Object.assign({}, p, { _coneLargeDia: largeDia, _coneLargeDiaType: largeDiaType, _coneLargeDiaMeasure: largeDiaMeasure, _coneSmallDia: smallDia, _coneSmallDiaType: smallDiaType, _coneSmallDiaMeasure: smallDiaMeasure, _coneHeight: coneHeight, _coneRadialSegments: radialSegments, _coneShowAdvanced: showAdvanced, _coneHeightCutMethod: heightCutMethod, _coneHeightSegments: heightSegments, _coneCustomCuts: customCuts,
+    setPartData(function(p) { return Object.assign({}, p, { _coneLargeDia: largeDia, _coneLargeDiaType: largeDiaType, _coneLargeDiaMeasure: largeDiaMeasure, _coneSmallDia: smallDia, _coneSmallDiaType: smallDiaType, _coneSmallDiaMeasure: smallDiaMeasure, _coneHeight: coneHeight, _coneRadialSegments: radialSegments, _coneShowAdvanced: showAdvanced, _coneHeightCutMethod: heightCutMethod, _coneHeightSegments: heightSegments, _coneCustomCuts: customCuts, _coneType: coneType, _coneEccentricAngle: eccentricAngle,
       _coneSegmentDetails: segmentSpecs.map(function(s) { return { layer: s.layer, segmentAngle: s.segmentAngle, sheetWidth: s.sheetWidth, sheetHeight: s.sheetHeight, outerRadius: s.outerRadius, innerRadius: s.innerRadius, bottomDia: s.bottomDia, topDia: s.topDia }; })
     }); });
-  }, [largeDia, largeDiaType, largeDiaMeasure, smallDia, smallDiaType, smallDiaMeasure, coneHeight, radialSegments, showAdvanced, heightCutMethod, heightSegments, customCuts, segmentSpecs]);
+  }, [largeDia, largeDiaType, largeDiaMeasure, smallDia, smallDiaType, smallDiaMeasure, coneHeight, radialSegments, showAdvanced, heightCutMethod, heightSegments, customCuts, segmentSpecs, coneType, eccentricAngle]);
 
   useEffect(function() { var total = heightSegs.length * (parseInt(radialSegments) || 1); setPartData(function(p) { return Object.assign({}, p, { quantity: String(total) }); }); }, [radialSegments, heightSegs]);
 
   var materialDescription = useMemo(function() {
-    var qty = parseInt(partData.quantity) || 1, parts = [qty + 'pc:'];
+    var parts = [];
     if (partData.thickness) parts.push(partData.thickness);
-    parts.push('Plate - Cone Layout');
-    if (coneData) parts.push('(Dia ' + parseFloat(largeDia).toFixed(1) + '" to Dia ' + parseFloat(smallDia).toFixed(1) + '" x ' + parseFloat(coneHeight).toFixed(1) + '"H)');
+    parts.push('Cone -');
+    if (coneData) {
+      var ldLabel = largeDiaType === 'inside' ? 'ID' : largeDiaType === 'outside' ? 'OD' : 'CLD';
+      var sdLabel = smallDiaType === 'inside' ? 'ID' : smallDiaType === 'outside' ? 'OD' : 'CLD';
+      parts.push(parseFloat(largeDia).toFixed(1) + '" ' + ldLabel + ' x ' + parseFloat(smallDia).toFixed(1) + '" ' + sdLabel + ' x ' + parseFloat(coneHeight).toFixed(1) + '" VH');
+    }
     if (partData.material) parts.push(partData.material);
     if (partData._materialOrigin) parts.push(partData._materialOrigin);
     return parts.join(' ');
-  }, [partData.thickness, partData.material, partData._materialOrigin, partData.quantity, largeDia, smallDia, coneHeight, coneData]);
+  }, [partData.thickness, partData.material, partData._materialOrigin, largeDia, smallDia, largeDiaType, smallDiaType, coneHeight, coneData]);
 
   var rollingDescription = useMemo(function() {
     if (!coneData) return '';
     var rS = parseInt(radialSegments) || 1, l = [];
-    l.push('Cone: Dia ' + parseFloat(largeDia).toFixed(2) + '" (' + largeDiaType + ') to Dia ' + parseFloat(smallDia).toFixed(2) + '" (' + smallDiaType + ')');
-    l.push('Height: ' + parseFloat(coneHeight).toFixed(2) + '" | Slant: ' + coneData.slantHeight.toFixed(2) + '" | Semi-angle: ' + coneData.semiAngle.toFixed(2) + ' deg');
-    var layerPrefix = heightSegs.length > 1 ? heightSegs.length + ' layers x ' : '';
-    l.push(layerPrefix + rS + ' @ ' + (360 / rS).toFixed(0) + ' deg = ' + (heightSegs.length * rS) + ' pcs total');
+    // Line 1: Cone type
+    if (coneType === 'eccentric') {
+      l.push('Eccentric' + (eccentricAngle ? ' = ' + eccentricAngle + ' deg' : ''));
+    } else {
+      l.push('Concentric');
+    }
+    // Line 2: Segment info (only if segmented)
+    if (rS > 1) {
+      l.push(rS + ' @ ' + (360 / rS).toFixed(0) + ' deg');
+    }
+    // Line 3: Multi-layer info (only if multiple layers)
     if (heightSegs.length > 1) {
-      segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': Sheet ' + s.sheetWidth + '"x' + s.sheetHeight + '" | OR:' + s.outerRadius.toFixed(1) + '" IR:' + s.innerRadius.toFixed(1) + '" | ' + s.segmentAngle.toFixed(1) + ' deg'); });
+      l.push(heightSegs.length + ' layers');
+      segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': ' + s.segmentAngle.toFixed(1) + ' deg - Sheet ' + s.sheetWidth + '"x' + s.sheetHeight + '" | OR:' + s.outerRadius.toFixed(1) + '" IR:' + s.innerRadius.toFixed(1) + '"'); });
     }
     return l.join('\n');
-  }, [coneData, largeDia, smallDia, largeDiaType, smallDiaType, coneHeight, radialSegments, heightSegs, segmentSpecs]);
+  }, [coneData, coneType, eccentricAngle, radialSegments, heightSegs, segmentSpecs]);
 
   useEffect(function() {
     var u = { materialDescription: materialDescription };
@@ -322,6 +336,26 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
 
         {showAdvanced && (
           <div style={{ marginTop: 12, padding: 16, borderRadius: 8, background: '#faf5ff', border: '1px solid #e9d5ff' }}>
+            {/* Cone Type */}
+            <div style={{ marginBottom: 16 }}>
+              <label className="form-label" style={{ fontWeight: 700, color: '#764ba2' }}>Cone Type</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" onClick={function() { setConeType('concentric'); }}
+                  style={{ flex: 1, padding: '10px', borderRadius: 6, fontWeight: 600, border: '2px solid ' + (coneType === 'concentric' ? '#764ba2' : '#ccc'), background: coneType === 'concentric' ? '#ede9fe' : '#fff', color: coneType === 'concentric' ? '#764ba2' : '#666', cursor: 'pointer' }}>
+                  Concentric
+                </button>
+                <button type="button" onClick={function() { setConeType('eccentric'); }}
+                  style={{ flex: 1, padding: '10px', borderRadius: 6, fontWeight: 600, border: '2px solid ' + (coneType === 'eccentric' ? '#e65100' : '#ccc'), background: coneType === 'eccentric' ? '#fff3e0' : '#fff', color: coneType === 'eccentric' ? '#e65100' : '#666', cursor: 'pointer' }}>
+                  Eccentric
+                </button>
+              </div>
+              {coneType === 'eccentric' && (
+                <div style={{ marginTop: 8 }}>
+                  <label className="form-label">Eccentric Angle (degrees)</label>
+                  <input type="number" className="form-input" value={eccentricAngle} onChange={function(e) { setEccentricAngle(e.target.value); }} placeholder="e.g., 15" step="0.1" />
+                </div>
+              )}
+            </div>
             {/* Radial */}
             <div style={{ marginBottom: 16 }}>
               <label className="form-label" style={{ fontWeight: 700, color: '#764ba2' }}>Segments Around Cone: <strong>{radialSegments}</strong></label>
@@ -350,16 +384,16 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
         )}
       </div>
 
-      {/* CONE PREVIEW */}
-      {coneData && (
+      {/* CONE PREVIEW — concentric only */}
+      {coneData && coneType === 'concentric' && (
         <div style={secStyle}>
           {secHead('\uD83D\uDC41\uFE0F', 'Cone Preview', '#667eea')}
           <canvas ref={coneCanvasRef} style={{ width: '100%', height: 220, borderRadius: 8, border: '1px solid #e0e0e0' }} />
         </div>
       )}
 
-      {/* SEGMENT DETAILS */}
-      {segmentSpecs.length > 0 && (
+      {/* SEGMENT DETAILS — concentric only */}
+      {segmentSpecs.length > 0 && coneType === 'concentric' && (
         <div style={secStyle}>
           {secHead('📋', 'Segment Details (' + segmentSpecs.length + ' layer' + (segmentSpecs.length > 1 ? 's' : '') + ' \u00d7 ' + radialSegments + ' seg' + (radialSegments > 1 ? 's' : '') + ')', '#2e7d32')}
           {segmentSpecs.map(function(sp) { return (
@@ -382,8 +416,8 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
         </div>
       )}
 
-      {/* AUTOCAD INTEGRATION — after segment details */}
-      {coneData && (
+      {/* AUTOCAD INTEGRATION — concentric only */}
+      {coneData && coneType === 'concentric' && (
         <div style={secStyle}>
           {secHead('📐', 'AutoCAD Command', '#b45309')}
 
