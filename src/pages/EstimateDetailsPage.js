@@ -6,7 +6,7 @@ import {
   addEstimatePart, updateEstimatePart, deleteEstimatePart,
   uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
   downloadEstimatePDF, convertEstimateToWorkOrder,
-  uploadEstimatePartFile, deleteEstimatePartFile,
+  uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile,
   searchClients, searchVendors, getSettings, resetEstimateConversion
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
@@ -847,6 +847,22 @@ function EstimateDetailsPage() {
     finally { setUploadingPartFile(null); }
   };
 
+  const handleViewPartFile = async (partId, file) => {
+    try {
+      const response = await viewEstimatePartFile(id, partId, file.id);
+      const url = response.data?.data?.url || response.data?.url;
+      if (url) {
+        window.open(url, '_blank');
+      } else {
+        // Fallback to direct URL
+        window.open(file.url, '_blank');
+      }
+    } catch (err) {
+      // Fallback to direct URL if proxy fails
+      window.open(file.url, '_blank');
+    }
+  };
+
   const handleDeletePartFile = async (partId, fileId) => {
     if (!window.confirm('Delete this file?')) return;
     try {
@@ -1430,10 +1446,10 @@ function EstimateDetailsPage() {
                             padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: '0.8rem'
                           }}>
                             <FileText size={14} style={{ color: '#1976d2' }} />
-                            <a href={file.url} target="_blank" rel="noopener noreferrer"
-                              style={{ color: '#1976d2', textDecoration: 'none', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <button onClick={() => handleViewPartFile(part.id, file)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1976d2', textDecoration: 'underline', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem', padding: 0 }}>
                               {file.originalName || file.filename}
-                            </a>
+                            </button>
                             <button onClick={() => handleDeletePartFile(part.id, file.id)}
                               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d32f2f', padding: 2 }}>
                               <X size={14} />
