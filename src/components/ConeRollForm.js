@@ -232,8 +232,11 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
     var rS = parseInt(radialSegments) || 1, l = [];
     l.push('Cone: Dia ' + parseFloat(largeDia).toFixed(2) + '" (' + largeDiaType + ') to Dia ' + parseFloat(smallDia).toFixed(2) + '" (' + smallDiaType + ')');
     l.push('Height: ' + parseFloat(coneHeight).toFixed(2) + '" | Slant: ' + coneData.slantHeight.toFixed(2) + '" | Semi-angle: ' + coneData.semiAngle.toFixed(2) + ' deg');
-    l.push(heightSegs.length + ' layer(s) x ' + rS + ' segment(s) = ' + (heightSegs.length * rS) + ' pcs total');
-    segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': Sheet ' + s.sheetWidth + '"x' + s.sheetHeight + '" | OR:' + s.outerRadius.toFixed(1) + '" IR:' + s.innerRadius.toFixed(1) + '" | Angle:' + s.segmentAngle.toFixed(1) + ' deg'); });
+    var layerPrefix = heightSegs.length > 1 ? heightSegs.length + ' layers x ' : '';
+    l.push(layerPrefix + rS + ' @ ' + (360 / rS).toFixed(0) + ' deg = ' + (heightSegs.length * rS) + ' pcs total');
+    if (heightSegs.length > 1) {
+      segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': Sheet ' + s.sheetWidth + '"x' + s.sheetHeight + '" | OR:' + s.outerRadius.toFixed(1) + '" IR:' + s.innerRadius.toFixed(1) + '" | ' + s.segmentAngle.toFixed(1) + ' deg'); });
+    }
     return l.join('\n');
   }, [coneData, largeDia, smallDia, largeDiaType, smallDiaType, coneHeight, radialSegments, heightSegs, segmentSpecs]);
 
