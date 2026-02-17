@@ -793,7 +793,7 @@ function EstimateDetailsPage() {
         savedPartId = result.data?.data?.id || result.data?.id;
       }
       
-      // Auto-upload pending shape file (from Press Brake form)
+      // Auto-upload pending shape file (from any part form with drawing upload)
       if (pendingShapeFile && savedPartId) {
         try {
           await uploadEstimatePartFile(id, savedPartId, pendingShapeFile, 'drawing');

@@ -3,8 +3,9 @@ import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
+import { useSectionSizes } from '../hooks/useSectionSizes';
 
-const CHANNEL_SIZES = [
+const DEFAULT_CHANNEL_SIZES = [
   'C3x4.1', 'C3x5', 'C3x6',
   'C4x5.4', 'C4x7.25',
   'C5x6.7', 'C5x9',
@@ -20,8 +21,7 @@ const CHANNEL_SIZES = [
   'MC10x6.5', 'MC10x22', 'MC10x25', 'MC10x28.5', 'MC10x33.6',
   'MC12x10.6', 'MC12x31', 'MC12x35', 'MC12x40', 'MC12x45', 'MC12x50',
   'MC13x31.8', 'MC13x35', 'MC13x40',
-  'MC18x42.7', 'MC18x45.8', 'MC18x51.9', 'MC18x58',
-  'Custom'
+  'MC18x42.7', 'MC18x45.8', 'MC18x51.9', 'MC18x58'
 ];
 
 const DEFAULT_GRADE_OPTIONS = ['A36', 'A572 Gr 50', '304 S/S', '316 S/S', 'Custom'];
@@ -41,6 +41,8 @@ function calculateRise(radiusInches, chordInches) {
 }
 
 export default function ChannelRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
+  const dynamicChannelSizes = useSectionSizes('channel', DEFAULT_CHANNEL_SIZES);
+  const CHANNEL_SIZES = [...dynamicChannelSizes, 'Custom'];
   const [customGrade, setCustomGrade] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
   const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');
@@ -372,7 +374,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
         <PitchSection partData={partData} setPartData={setPartData} clDiameter={clDiameter} inputDiameter={rollMeasureType === 'radius' ? (parseFloat(rollValue) || 0) * 2 : (parseFloat(rollValue) || 0)} profileOD={profileSize} />
       </div>
 
-      <div style={sectionStyle}><div className="form-group"><label className="form-label">Custom Shape / Drawing (PDF)</label><label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px dashed #bbb', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}><Upload size={16} /> Upload drawing...<input type="file" accept=".pdf,.png,.jpg" style={{ display: 'none' }} onChange={(e) => { if (e.target.files[0]) setPartData({ ...partData, _shapeFile: e.target.files[0] }); }} /></label>{partData._shapeFile && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile.name}</div>}</div></div>
+      <div style={sectionStyle}><div className="form-group"><label className="form-label">Custom Shape / Drawing (PDF)</label><label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px dashed #bbb', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}><Upload size={16} /> Upload drawing...<input type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }} onChange={(e) => { if (e.target.files[0]) { const file = e.target.files[0]; setPartData({ ...partData, _shapeFile: file, _shapeFileName: file.name }); } }} /></label>{(partData._shapeFile || partData._shapeFileName) && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile?.name || partData._shapeFileName} {!partData._shapeFile && partData._shapeFileName && <span style={{ color: '#999' }}>(saved)</span>}</div>}</div></div>
 
       <div style={sectionStyle}><div className="form-group"><label className="form-label">Special Instructions</label><textarea className="form-textarea" value={partData.specialInstructions || ''} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} rows={2} /></div></div>
 

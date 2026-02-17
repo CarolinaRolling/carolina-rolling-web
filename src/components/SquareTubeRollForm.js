@@ -3,19 +3,17 @@ import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
+import { useSectionSizes } from '../hooks/useSectionSizes';
 
 const THICKNESS_OPTIONS = [
   '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
   '1/8"', '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '1"', 'Custom'
 ];
 
-const TUBE_SIZE_OPTIONS = [
-  // Square
-  '0.5x0.5', '0.75x0.75', '1x1', '1.25x1.25', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '5x5', '6x6',
-  // Rectangular
-  '1x2', '1x3', '1.5x2', '1.5x3', '2x3', '2x4', '3x4', '3x5', '4x6',
-  'Custom'
-];
+const DEFAULT_SQ_RECT = {
+  square: ['0.5x0.5', '0.75x0.75', '1x1', '1.25x1.25', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '5x5', '6x6'],
+  rectangular: ['1x2', '1x3', '1.5x2', '1.5x3', '2x3', '2x4', '3x4', '3x5', '4x6']
+};
 
 const DEFAULT_GRADE_OPTIONS = ['A500 Gr B', 'A513', '304 S/S', '316 S/S', '6061-T6 Alum', 'Custom'];
 
@@ -29,7 +27,7 @@ function dimToFraction(n) {
 
 // Parse tube size string like "2x4" into { side1, side2 }
 function parseTubeSize(sizeStr) {
-  if (!sizeStr || sizeStr === 'Custom') return null;
+  if (!sizeStr || sizeStr === 'Custom' || sizeStr === 'CustomSq' || sizeStr === 'CustomRect') return null;
   const parts = sizeStr.split('x').map(Number);
   if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
     return { side1: parts[0], side2: parts[1] };
@@ -51,6 +49,8 @@ function calculateRise(radiusInches, chordInches) {
 }
 
 export default function SquareTubeRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
+  const dynamicSqRect = useSectionSizes('sq_rect_tube', DEFAULT_SQ_RECT);
+  const TUBE_SIZE_OPTIONS = [...(dynamicSqRect.square || []), ...(dynamicSqRect.rectangular || [])];
   const [customThickness, setCustomThickness] = useState('');
   const [customGrade, setCustomGrade] = useState('');
   const [customTubeSize, setCustomTubeSize] = useState('');
@@ -113,8 +113,8 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint]);
 
   // Parse size
-  const parsedSize = useMemo(() => parseTubeSize(partData._tubeSize), [partData._tubeSize]);
-  const isRectangular = parsedSize && parsedSize.side1 !== parsedSize.side2;
+  const parsedSize = useMemo(() => parseTubeSize(partData._tubeSize) || parseTubeSize(partData._customTubeSize), [partData._tubeSize, partData._customTubeSize]);
+  const isRectangular = (parsedSize && parsedSize.side1 !== parsedSize.side2) || partData._tubeSize === 'CustomRect';
 
   // Profile size for CL offset
   const profileSize = useMemo(() => {
@@ -195,13 +195,18 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     const descParts = [];
     descParts.push(`${qty}pc:`);
 
-    if (partData._tubeSize && partData._tubeSize !== 'Custom') {
+    if (partData._tubeSize && partData._tubeSize !== 'CustomSq' && partData._tubeSize !== 'CustomRect') {
       const parsed = parseTubeSize(partData._tubeSize);
       if (parsed) {
         descParts.push(`${dimToFraction(parsed.side1)}" x ${dimToFraction(parsed.side2)}"`);
       }
     } else if (partData._customTubeSize) {
-      descParts.push(partData._customTubeSize);
+      const parsed = parseTubeSize(partData._customTubeSize);
+      if (parsed) {
+        descParts.push(`${dimToFraction(parsed.side1)}" x ${dimToFraction(parsed.side2)}"`);
+      } else {
+        descParts.push(partData._customTubeSize);
+      }
     }
 
     if (partData.thickness) descParts.push(`x ${partData.thickness}`);
@@ -252,7 +257,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   // Auto-update material description + sectionSize
   useEffect(() => {
     const updates = { materialDescription, _materialDescription: materialDescription };
-    if (partData._tubeSize && partData._tubeSize !== 'Custom') {
+    if (partData._tubeSize && partData._tubeSize !== 'CustomSq' && partData._tubeSize !== 'CustomRect') {
       updates.sectionSize = partData._tubeSize;
     } else if (partData._customTubeSize) {
       updates.sectionSize = partData._customTubeSize;
@@ -284,7 +289,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   const selectedThicknessOption = THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : '');
   const isCustomGrade = partData.material && !gradeOptions.includes(partData.material);
   const selectedGradeOption = gradeOptions.includes(partData.material) ? partData.material : (partData.material ? 'Custom' : '');
-  const selectedTubeSizeOption = TUBE_SIZE_OPTIONS.includes(partData._tubeSize) ? partData._tubeSize : (partData._tubeSize ? 'Custom' : '');
+  const selectedTubeSizeOption = TUBE_SIZE_OPTIONS.includes(partData._tubeSize) ? partData._tubeSize : (partData._tubeSize === 'CustomSq' || partData._tubeSize === 'Custom' ? 'CustomSq' : partData._tubeSize === 'CustomRect' ? 'CustomRect' : (partData._tubeSize ? 'CustomSq' : ''));
 
   const sectionStyle = { gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 8, paddingTop: 12 };
   const sectionTitle = (icon, text, color) => <h4 style={{ marginBottom: 10, color, fontSize: '0.95rem' }}>{icon} {text}</h4>;
@@ -309,12 +314,14 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
         <label className="form-label">Tube Size *</label>
         <select className="form-select" value={selectedTubeSizeOption} onChange={(e) => {
           const newSize = e.target.value;
-          const parsed = parseTubeSize(newSize);
-          const isSq = parsed && parsed.side1 === parsed.side2;
-          if (newSize === 'Custom') {
-            setPartData({ ...partData, _tubeSize: 'Custom', _sideOrientation: '', rollType: null });
+          if (newSize === 'CustomSq') {
+            setPartData({ ...partData, _tubeSize: 'CustomSq', _customTubeSize: '', _customTubeSide1: '', _customTubeSide2: '', _sideOrientation: '', rollType: null });
+          } else if (newSize === 'CustomRect') {
+            setPartData({ ...partData, _tubeSize: 'CustomRect', _customTubeSize: '', _customTubeSide1: '', _customTubeSide2: '', _sideOrientation: '', rollType: null });
           } else {
-            setPartData({ ...partData, _tubeSize: newSize, _sideOrientation: '', rollType: isSq ? null : partData.rollType });
+            const parsed = parseTubeSize(newSize);
+            const isSq = parsed && parsed.side1 === parsed.side2;
+            setPartData({ ...partData, _tubeSize: newSize, _customTubeSize: '', _customTubeSide1: '', _customTubeSide2: '', _sideOrientation: '', rollType: isSq ? null : partData.rollType });
             setCustomTubeSize('');
           }
         }}>
@@ -324,19 +331,52 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
               const p = parseTubeSize(s);
               return <option key={s} value={s}>{dimToFraction(p.side1)}" x {dimToFraction(p.side2)}" Sq</option>;
             })}
+            <option value="CustomSq">Custom Square...</option>
           </optgroup>
           <optgroup label="Rectangular">
             {TUBE_SIZE_OPTIONS.filter(s => { const p = parseTubeSize(s); return p && p.side1 !== p.side2; }).map(s => {
               const p = parseTubeSize(s);
               return <option key={s} value={s}>{dimToFraction(p.side1)}" x {dimToFraction(p.side2)}" Rect</option>;
             })}
+            <option value="CustomRect">Custom Rectangular...</option>
           </optgroup>
-          <option value="Custom">Custom Size</option>
         </select>
-        {(selectedTubeSizeOption === 'Custom') && (
-          <input className="form-input" style={{ marginTop: 4 }} placeholder='e.g. 3x5 or 3" x 5"'
-            value={partData._customTubeSize || customTubeSize}
-            onChange={(e) => { setCustomTubeSize(e.target.value); setPartData({ ...partData, _customTubeSize: e.target.value }); }} />
+        {selectedTubeSizeOption === 'CustomSq' && (
+          <div style={{ marginTop: 4 }}>
+            <input className="form-input" placeholder='Side dimension (e.g. 7)' type="number" step="any"
+              value={partData._customTubeSide1 || ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                const sizeStr = v ? `${v}x${v}` : '';
+                setPartData({ ...partData, _customTubeSide1: v, _customTubeSide2: v, _customTubeSize: sizeStr });
+                setCustomTubeSize(sizeStr);
+              }} />
+            {partData._customTubeSide1 && <div style={{ fontSize: '0.75rem', color: '#666', marginTop: 2 }}>{partData._customTubeSide1}" x {partData._customTubeSide1}" Square</div>}
+          </div>
+        )}
+        {selectedTubeSizeOption === 'CustomRect' && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
+            <input className="form-input" placeholder='Side 1' type="number" step="any" style={{ flex: 1 }}
+              value={partData._customTubeSide1 || ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                const s2 = partData._customTubeSide2 || '';
+                const sizeStr = v && s2 ? `${v}x${s2}` : '';
+                setPartData({ ...partData, _customTubeSide1: v, _customTubeSize: sizeStr });
+                setCustomTubeSize(sizeStr);
+              }} />
+            <span style={{ fontWeight: 600, color: '#999' }}>x</span>
+            <input className="form-input" placeholder='Side 2' type="number" step="any" style={{ flex: 1 }}
+              value={partData._customTubeSide2 || ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                const s1 = partData._customTubeSide1 || '';
+                const sizeStr = s1 && v ? `${s1}x${v}` : '';
+                setPartData({ ...partData, _customTubeSide2: v, _customTubeSize: sizeStr });
+                setCustomTubeSize(sizeStr);
+              }} />
+            {partData._customTubeSide1 && partData._customTubeSide2 && <div style={{ fontSize: '0.75rem', color: '#666', whiteSpace: 'nowrap' }}>{partData._customTubeSide1}" x {partData._customTubeSide2}" Rect</div>}
+          </div>
         )}
       </div>
 
@@ -589,11 +629,11 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
           <label className="form-label">Custom Shape (PDF)</label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px dashed #bbb', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}>
             <Upload size={16} /> Upload drawing...
-            <input type="file" accept=".pdf,.png,.jpg" style={{ display: 'none' }} onChange={(e) => {
-              if (e.target.files[0]) setPartData({ ...partData, _shapeFile: e.target.files[0] });
+            <input type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }} onChange={(e) => {
+              if (e.target.files[0]) { const file = e.target.files[0]; setPartData({ ...partData, _shapeFile: file, _shapeFileName: file.name }); }
             }} />
           </label>
-          {partData._shapeFile && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile.name}</div>}
+          {(partData._shapeFile || partData._shapeFileName) && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile?.name || partData._shapeFileName} {!partData._shapeFile && partData._shapeFileName && <span style={{ color: '#999' }}>(saved)</span>}</div>}
         </div>
       </div>
 

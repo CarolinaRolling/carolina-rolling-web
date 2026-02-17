@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, ClipboardList, DollarSign, Database, Hash, Mail, ShoppingCart, FileCode } from 'lucide-react';
+import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, ClipboardList, DollarSign, Database, Hash, Mail, ShoppingCart, FileCode, Truck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 function Layout({ children }) {
@@ -37,6 +37,12 @@ function Layout({ children }) {
               <NavLink to="/new-shipment" className={({ isActive }) => isActive ? 'active' : ''}>
                 <PlusCircle size={20} />
                 <span>New Shipment</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/shipments" className={({ isActive }) => isActive ? 'active' : ''}>
+                <Truck size={20} />
+                <span>Shipments</span>
               </NavLink>
             </li>
             <li>
@@ -111,12 +117,6 @@ function Layout({ children }) {
                   <NavLink to="/admin/autocad-tools" className={({ isActive }) => isActive ? 'active' : ''}>
                     <FileCode size={20} />
                     <span>AutoCAD Tools</span>
-                  </NavLink>
-                </li>
-                <li>
-                  <NavLink to="/admin/shipments" className={({ isActive }) => isActive ? 'active' : ''}>
-                    <Package size={20} />
-                    <span>Shipments</span>
                   </NavLink>
                 </li>
               </>

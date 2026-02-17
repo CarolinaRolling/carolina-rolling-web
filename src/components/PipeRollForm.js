@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import RollToOverride from './RollToOverride';
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
+import { useSectionSizes } from '../hooks/useSectionSizes';
 
 // Sagitta formula: h = R - sqrt(R² - (c/2)²)
 function calculateRise(radiusInches, chordInches) {
@@ -11,8 +12,8 @@ function calculateRise(radiusInches, chordInches) {
   return radiusInches - Math.sqrt(radiusInches * radiusInches - halfChord * halfChord);
 }
 
-// ── PIPE & TUBE SIZE DATA ──────────────────────────────────────────────────────
-const TUBE_SIZES = [
+// ── PIPE & TUBE SIZE DATA (defaults) ──────────────────────────────────────────
+const DEFAULT_TUBE_SIZES = [
   { label: '.625" OD Tube', od: 0.625, type: 'tube', defaultLength: '20\'' },
   { label: '.75" OD Tube', od: 0.75, type: 'tube', defaultLength: '20\'' },
   { label: '1" OD Tube', od: 1.0, type: 'tube', defaultLength: '20\'' },
@@ -23,7 +24,7 @@ const TUBE_SIZES = [
   { label: '4" OD Tube', od: 4.0, type: 'tube', defaultLength: '20\'' },
 ];
 
-const PIPE_SIZES = [
+const DEFAULT_PIPE_SIZES = [
   { label: '1" Pipe', nominal: '1"', od: 1.315, type: 'pipe', defaultLength: '21\'' },
   { label: '1.25" Pipe', nominal: '1-1/4"', od: 1.660, type: 'pipe', defaultLength: '21\'' },
   { label: '1.5" Pipe', nominal: '1-1/2"', od: 1.900, type: 'pipe', defaultLength: '21\'' },
@@ -32,7 +33,7 @@ const PIPE_SIZES = [
   { label: '4" Pipe', nominal: '4"', od: 4.500, type: 'pipe', defaultLength: '21\'' },
 ];
 
-const SOLID_BAR_SIZES = [
+const DEFAULT_SOLID_BAR_SIZES = [
   { label: '.500" Solid Round', od: 0.500, type: 'solid_bar', defaultLength: '20\'' },
   { label: '.625" Solid Round', od: 0.625, type: 'solid_bar', defaultLength: '20\'' },
   { label: '.750" Solid Round', od: 0.750, type: 'solid_bar', defaultLength: '20\'' },
@@ -48,7 +49,7 @@ const SOLID_BAR_SIZES = [
   { label: '4" Solid Round', od: 4.0, type: 'solid_bar', defaultLength: '20\'' },
 ];
 
-const ALL_SIZES = [...TUBE_SIZES, ...PIPE_SIZES, ...SOLID_BAR_SIZES];
+const DEFAULT_ALL_PIPE_SIZES = [...DEFAULT_TUBE_SIZES, ...DEFAULT_PIPE_SIZES, ...DEFAULT_SOLID_BAR_SIZES];
 
 // Schedule data: { schedule: wallThickness } for each pipe nominal size
 const PIPE_SCHEDULES = {
@@ -100,6 +101,11 @@ function getMaterialCategory(grade) {
 
 // ── COMPONENT ──────────────────────────────────────────────────────────────────
 export default function PipeRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
+  const dynamicPipeSizes = useSectionSizes('pipe', DEFAULT_ALL_PIPE_SIZES);
+  const ALL_SIZES = dynamicPipeSizes;
+  const TUBE_SIZES = ALL_SIZES.filter(s => s.type === 'tube');
+  const PIPE_SIZES = ALL_SIZES.filter(s => s.type === 'pipe');
+  const SOLID_BAR_SIZES = ALL_SIZES.filter(s => s.type === 'solid_bar');
   const [customGrade, setCustomGrade] = useState('');
   const [customWall, setCustomWall] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');

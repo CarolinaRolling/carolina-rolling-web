@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
+import { useSectionSizes } from '../hooks/useSectionSizes';
 
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
@@ -9,9 +10,9 @@ const THICKNESS_OPTIONS = [
   '1"', '1-1/4"', '1-1/2"', '2"', 'Custom'
 ];
 
-const ANGLE_SIZE_OPTIONS = [
+const DEFAULT_ANGLE_SIZES = [
   '0.5x0.5', '0.75x0.75', '1x1', '1.25x1.25', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '5x5', '6x6',
-  '1x2', '2x3', '3x4', '4x5', '4x6', 'Custom'
+  '1x2', '2x3', '3x4', '4x5', '4x6'
 ];
 
 function dimToFraction(n) {
@@ -45,6 +46,8 @@ function calculateRise(radiusInches, chordInches) {
 }
 
 export default function AngleRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
+  const dynamicAngleSizes = useSectionSizes('angle', DEFAULT_ANGLE_SIZES);
+  const ANGLE_SIZE_OPTIONS = [...dynamicAngleSizes, 'Custom'];
   const [customThickness, setCustomThickness] = useState('');
   const [customGrade, setCustomGrade] = useState('');
   const [customAngleSize, setCustomAngleSize] = useState('');
@@ -631,11 +634,11 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
           <label className="form-label">Custom Shape (PDF)</label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px dashed #bbb', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}>
             <Upload size={16} /> Upload drawing...
-            <input type="file" accept=".pdf,.png,.jpg" style={{ display: 'none' }} onChange={(e) => {
-              if (e.target.files[0]) setPartData({ ...partData, _shapeFile: e.target.files[0] });
+            <input type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }} onChange={(e) => {
+              if (e.target.files[0]) { const file = e.target.files[0]; setPartData({ ...partData, _shapeFile: file, _shapeFileName: file.name }); }
             }} />
           </label>
-          {partData._shapeFile && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile.name}</div>}
+          {(partData._shapeFile || partData._shapeFileName) && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile?.name || partData._shapeFileName} {!partData._shapeFile && partData._shapeFileName && <span style={{ color: '#999' }}>(saved)</span>}</div>}
         </div>
       </div>
 

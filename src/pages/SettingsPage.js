@@ -116,7 +116,36 @@ function SettingsPage() {
           </div>
         </div>
 
-        {/* Email Settings */}
+        {/* Section Sizes */}
+        <div 
+          className="card" 
+          style={{ cursor: 'pointer' }}
+          onClick={() => navigate('/settings/section-sizes')}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ 
+                width: 48, 
+                height: 48, 
+                borderRadius: 12, 
+                background: '#fff3e0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.5rem'
+              }}>
+                📐
+              </div>
+              <div>
+                <h3 style={{ fontWeight: 600, marginBottom: 4 }}>Section Sizes</h3>
+                <p style={{ color: '#666', fontSize: '0.875rem' }}>Manage dropdown sizes for angle, channel, beam, pipe & tubing</p>
+              </div>
+            </div>
+            <ArrowRight size={20} color="#999" />
+          </div>
+        </div>
+
+        {/* Email Settings (original) */}
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
             <div style={{ 

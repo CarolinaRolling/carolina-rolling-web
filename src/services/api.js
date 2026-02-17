@@ -58,6 +58,7 @@ export const createShipment = (data) => api.post('/shipments', data);
 export const updateShipment = (id, data) => api.put(`/shipments/${id}`, data);
 export const deleteShipment = (id) => api.delete(`/shipments/${id}`);
 export const linkShipmentToWorkOrder = (shipmentId, workOrderId) => api.post(`/shipments/${shipmentId}/link-workorder`, { workOrderId });
+export const unlinkShipmentFromWorkOrder = (shipmentId) => api.post(`/shipments/${shipmentId}/unlink-workorder`);
 export const archiveShipment = (id) => api.put(`/shipments/${id}/archive`);
 export const bulkArchiveShipments = (ids) => api.post('/shipments/bulk-archive', { ids });
 export const bulkDeleteShipments = (ids) => api.post('/shipments/bulk-delete', { ids });

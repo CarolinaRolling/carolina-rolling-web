@@ -22,7 +22,7 @@ import {
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument, regeneratePODocument,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
-  searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, duplicateWorkOrderToEstimate,
+  searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage
 } from '../services/api';
 
@@ -421,6 +421,20 @@ function WorkOrderDetailsPage() {
     }
   };
 
+  const handleUnlinkShipment = async () => {
+    if (!shipment?.id) return;
+    if (!window.confirm('Unlink this shipment from the work order? The shipment will go back to the unlinked queue.')) return;
+    try {
+      await unlinkShipmentFromWorkOrder(shipment.id);
+      setShipment(null);
+      setShowReceivingInfo(false);
+      showMessage('Shipment unlinked');
+      await loadOrder();
+    } catch (err) {
+      setError('Failed to unlink shipment: ' + (err.response?.data?.error?.message || err.message));
+    }
+  };
+
   const filteredUnlinkedShipments = unlinkedShipments.filter(s => {
     if (!shipmentSearchQuery) return true;
     const q = shipmentSearchQuery.toLowerCase();
@@ -615,7 +629,7 @@ function WorkOrderDetailsPage() {
         savedPartId = result.data?.data?.id || result.data?.id;
       }
       
-      // Auto-upload pending shape file (from Press Brake form)
+      // Auto-upload pending shape file (from any part form with drawing upload)
       if (pendingShapeFile && savedPartId) {
         try {
           await uploadPartFiles(id, savedPartId, [pendingShapeFile]);
@@ -1421,7 +1435,7 @@ function WorkOrderDetailsPage() {
 
       {/* Toggle for Receiving Info */}
       {shipment ? (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
           <button 
             className={`btn ${showReceivingInfo ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => setShowReceivingInfo(!showReceivingInfo)}
@@ -1430,6 +1444,14 @@ function WorkOrderDetailsPage() {
             <Truck size={18} />
             {showReceivingInfo ? 'Hide Receiving Info' : 'Show Receiving Info'}
             {shipment.photos?.length > 0 && <span style={{ background: '#4caf50', color: 'white', borderRadius: 10, padding: '2px 6px', fontSize: '0.7rem' }}>{shipment.photos.length} 📷</span>}
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={handleUnlinkShipment}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, borderColor: '#d32f2f', color: '#d32f2f', fontSize: '0.85rem' }}
+            title="Unlink this shipment from the work order"
+          >
+            <X size={16} /> Unlink
           </button>
         </div>
       ) : (

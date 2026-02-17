@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
+import { useSectionSizes } from '../hooks/useSectionSizes';
 
-const BEAM_SIZES = [
+const DEFAULT_BEAM_SIZES = [
   // W - Wide Flange (common)
   'W4x13', 'W5x16', 'W5x19',
   'W6x9', 'W6x12', 'W6x15', 'W6x16', 'W6x20', 'W6x25',
@@ -26,9 +27,7 @@ const BEAM_SIZES = [
   'S12x31.8', 'S12x35', 'S12x40.8', 'S12x50',
   'S15x42.9', 'S15x50', 'S18x54.7', 'S18x70',
   'S20x66', 'S20x75', 'S20x86', 'S20x96',
-  'S24x80', 'S24x90', 'S24x100', 'S24x106', 'S24x121',
-  // HSS (square/rect already in tube form but structural beams sometimes listed)
-  'Custom'
+  'S24x80', 'S24x90', 'S24x100', 'S24x106', 'S24x121'
 ];
 
 const DEFAULT_GRADE_OPTIONS = ['A36', 'A572 Gr 50', 'A992', '304 S/S', '316 S/S', 'Custom'];
@@ -48,6 +47,8 @@ function calculateRise(radiusInches, chordInches) {
 }
 
 export default function BeamRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
+  const dynamicBeamSizes = useSectionSizes('beam', DEFAULT_BEAM_SIZES);
+  const BEAM_SIZES = [...dynamicBeamSizes, 'Custom'];
   const [customGrade, setCustomGrade] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
   const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');
@@ -442,7 +443,7 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
         )}
       </div>
 
-      <div style={sectionStyle}><div className="form-group"><label className="form-label">Custom Shape / Drawing (PDF)</label><label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px dashed #bbb', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}><Upload size={16} /> Upload drawing...<input type="file" accept=".pdf,.png,.jpg" style={{ display: 'none' }} onChange={(e) => { if (e.target.files[0]) setPartData({ ...partData, _shapeFile: e.target.files[0] }); }} /></label>{partData._shapeFile && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile.name}</div>}</div></div>
+      <div style={sectionStyle}><div className="form-group"><label className="form-label">Custom Shape / Drawing (PDF)</label><label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px dashed #bbb', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}><Upload size={16} /> Upload drawing...<input type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }} onChange={(e) => { if (e.target.files[0]) { const file = e.target.files[0]; setPartData({ ...partData, _shapeFile: file, _shapeFileName: file.name }); } }} /></label>{(partData._shapeFile || partData._shapeFileName) && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile?.name || partData._shapeFileName} {!partData._shapeFile && partData._shapeFileName && <span style={{ color: '#999' }}>(saved)</span>}</div>}</div></div>
 
       <div style={sectionStyle}><div className="form-group"><label className="form-label">Special Instructions</label><textarea className="form-textarea" value={partData.specialInstructions || ''} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} rows={2} /></div></div>
 

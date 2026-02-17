@@ -24,6 +24,7 @@ import EmailSettingsPage from './pages/EmailSettingsPage';
 import ClientsVendorsPage from './pages/ClientsVendorsPage';
 import AutoCADToolsPage from './pages/AutoCADToolsPage';
 import ShipmentsAdminPage from './pages/ShipmentsAdminPage';
+import SectionSizesPage from './pages/SectionSizesPage';
 import './App.css';
 
 // Protected Route Component
@@ -154,6 +155,12 @@ function AppRoutes() {
           <Layout><LocationSettingsPage /></Layout>
         </ProtectedRoute>
       } />
+
+      <Route path="/settings/section-sizes" element={
+        <ProtectedRoute>
+          <Layout><SectionSizesPage /></Layout>
+        </ProtectedRoute>
+      } />
       
       <Route path="/scheduling" element={
         <ProtectedRoute>
@@ -198,9 +205,15 @@ function AppRoutes() {
       } />
       
       <Route path="/admin/shipments" element={
-        <AdminRoute>
+        <ProtectedRoute>
           <Layout><ShipmentsAdminPage /></Layout>
-        </AdminRoute>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/shipments" element={
+        <ProtectedRoute>
+          <Layout><ShipmentsAdminPage /></Layout>
+        </ProtectedRoute>
       } />
       
       {/* Alternate route for workorder (singular) */}
