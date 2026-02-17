@@ -23,7 +23,7 @@ import {
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
-  getWorkOrderPrintPackage
+  getWorkOrderPrintPackage, updateDRNumber
 } from '../services/api';
 
 const PART_TYPES = {
@@ -96,6 +96,8 @@ function WorkOrderDetailsPage() {
   const [shipmentSearchQuery, setShipmentSearchQuery] = useState('');
   const [shipmentLinking, setShipmentLinking] = useState(false);
   const [reordering, setReordering] = useState(false);
+  const [editingDR, setEditingDR] = useState(false);
+  const [drInput, setDrInput] = useState('');
 
   useEffect(() => { loadOrder(); loadLaborMinimums(); }, [id]);
 
@@ -432,6 +434,21 @@ function WorkOrderDetailsPage() {
       await loadOrder();
     } catch (err) {
       setError('Failed to unlink shipment: ' + (err.response?.data?.error?.message || err.message));
+    }
+  };
+
+  const handleDRChange = async () => {
+    const newDR = parseInt(drInput);
+    if (!newDR || newDR < 1) { setError('Please enter a valid DR number'); return; }
+    if (newDR === order.drNumber) { setEditingDR(false); return; }
+    try {
+      await updateDRNumber(id, newDR);
+      setEditingDR(false);
+      showMessage(`DR number changed to DR-${newDR}`);
+      await loadOrder();
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || err.message;
+      setError(msg);
     }
   };
 
@@ -1368,9 +1385,23 @@ function WorkOrderDetailsPage() {
           <div>
             {order.drNumber ? (
               <h1 className="detail-title" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontFamily: 'Courier New, monospace', background: '#e3f2fd', padding: '4px 12px', borderRadius: 6, color: '#1976d2' }}>
-                  DR-{order.drNumber}
-                </span>
+                {editingDR ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontFamily: 'Courier New, monospace', color: '#1976d2', fontWeight: 700 }}>DR-</span>
+                    <input type="number" value={drInput} onChange={(e) => setDrInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleDRChange(); if (e.key === 'Escape') setEditingDR(false); }}
+                      autoFocus
+                      style={{ width: 90, fontFamily: 'Courier New, monospace', fontSize: '1.1rem', fontWeight: 700, padding: '4px 8px', border: '2px solid #1976d2', borderRadius: 6, textAlign: 'center' }} />
+                    <button className="btn btn-sm btn-primary" onClick={handleDRChange} style={{ padding: '4px 8px' }}><Check size={16} /></button>
+                    <button className="btn btn-sm btn-outline" onClick={() => setEditingDR(false)} style={{ padding: '4px 8px' }}><X size={16} /></button>
+                  </span>
+                ) : (
+                  <span style={{ fontFamily: 'Courier New, monospace', background: '#e3f2fd', padding: '4px 12px', borderRadius: 6, color: '#1976d2', cursor: 'pointer' }}
+                    onClick={() => { setDrInput(String(order.drNumber)); setEditingDR(true); }}
+                    title="Click to change DR number">
+                    DR-{order.drNumber} <Edit size={14} style={{ opacity: 0.5, marginLeft: 4 }} />
+                  </span>
+                )}
               </h1>
             ) : (
               <h1 className="detail-title">{order.orderNumber}</h1>
