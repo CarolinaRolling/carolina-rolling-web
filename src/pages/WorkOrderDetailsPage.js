@@ -895,7 +895,10 @@ function WorkOrderDetailsPage() {
       // Build specs grid (for office copy only)
       const specs = [];
       if (part.material) specs.push(['Grade', part.material]);
-      if (part.sectionSize) specs.push(['Size', part.sectionSize]);
+      if (part.sectionSize) {
+        const sizeDisplay = part.partType === 'pipe_roll' && part._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${part._schedule} Pipe`) : part.sectionSize;
+        specs.push(['Size', sizeDisplay]);
+      }
       if (part.thickness) specs.push(['Thickness', part.thickness]);
       if (part.width) specs.push(['Width', part.width + '"']);
       if (part.length) specs.push(['Length', part.length]);
@@ -1923,7 +1926,7 @@ function WorkOrderDetailsPage() {
                   {part.thickness && <div><strong>Thickness:</strong> {part.thickness}</div>}
                   {part.width && <div><strong>Width:</strong> {part.width}</div>}
                   {part.length && <div><strong>Length:</strong> {part.length}</div>}
-                  {part.sectionSize && <div><strong>Section:</strong> {part.sectionSize}</div>}
+                  {part.sectionSize && <div><strong>Size:</strong> {part.partType === 'pipe_roll' && (part.formData || {})._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${(part.formData || {})._schedule} Pipe`) : part.sectionSize}</div>}
                   {part.outerDiameter && <div><strong>OD:</strong> {part.outerDiameter}</div>}
                   {part.wallThickness && part.wallThickness !== 'SOLID' && <div><strong>Wall:</strong> {part.wallThickness}</div>}
                   {part.wallThickness === 'SOLID' && <div><strong style={{ color: '#e65100' }}>Solid Round Bar</strong></div>}

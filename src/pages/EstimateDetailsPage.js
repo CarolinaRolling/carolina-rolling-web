@@ -979,7 +979,7 @@ function EstimateDetailsPage() {
       return `<div style="border:1px solid #ddd;border-radius:8px;padding:16px;margin-bottom:12px;">
         <h4 style="margin:0 0 8px;color:#1976d2;">Part #${part.partNumber} - ${PART_TYPES[part.partType]?.label || part.partType}</h4>
         <p style="margin:0 0 4px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''} ${part.cutFileReference ? `<span style="color:#1565c0">Cut File: ${part.cutFileReference}</span>` : ''}</p>
-        <p style="margin:0 0 4px;"><strong>Qty:</strong> ${part.quantity}${part.sectionSize ? ` | <strong>Size:</strong> ${part.sectionSize}` : ''}${part.thickness ? ` | <strong>Thk:</strong> ${part.thickness}` : ''}${part.material ? ` | <strong>Grade:</strong> ${part.material}` : ''}</p>
+        <p style="margin:0 0 4px;"><strong>Qty:</strong> ${part.quantity}${part.sectionSize ? ` | <strong>Size:</strong> ${part.partType === 'pipe_roll' && part._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${part._schedule} Pipe`) : part.sectionSize}` : ''}${part.thickness ? ` | <strong>Thk:</strong> ${part.thickness}` : ''}${part.outerDiameter ? ` | <strong>OD:</strong> ${part.outerDiameter}"` : ''}${part.wallThickness && part.wallThickness !== 'SOLID' ? ` | <strong>Wall:</strong> ${part.wallThickness}` : ''}${part.length ? ` | <strong>Length:</strong> ${part.length}` : ''}${part.material ? ` | <strong>Grade:</strong> ${part.material}` : ''}</p>
         ${part.partType === 'cone_roll' ? (() => {
           const thk = part.thickness || '';
           const ldType = (part._coneLargeDiaType || 'inside') === 'inside' ? 'ID' : (part._coneLargeDiaType === 'outside' ? 'OD' : 'CLD');
@@ -1314,13 +1314,13 @@ function EstimateDetailsPage() {
                     {/* Line 1: Qty, Size, Grade */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
                       <span><strong>Qty:</strong> {part.quantity}</span>
-                      {part.sectionSize && <span style={{ color: '#555' }}>| <strong>Size:</strong> {part.sectionSize}</span>}
+                      {part.sectionSize && <span style={{ color: '#555' }}>| <strong>Size:</strong> {part.partType === 'pipe_roll' && (part.formData || {})._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${(part.formData || {})._schedule} Pipe`) : part.sectionSize}</span>}
                       {part.thickness && <span style={{ color: '#555' }}>| <strong>Thk:</strong> {part.thickness}</span>}
                       {part.outerDiameter && <span style={{ color: '#555' }}>| <strong>OD:</strong> {part.outerDiameter}"</span>}
                       {part.wallThickness && part.wallThickness !== 'SOLID' && <span style={{ color: '#555' }}>| <strong>Wall:</strong> {part.wallThickness}</span>}
                       {part.wallThickness === 'SOLID' && <span style={{ color: '#e65100', fontWeight: 600 }}>| Solid Bar</span>}
                       {part.width && <span style={{ color: '#555' }}>| <strong>Width:</strong> {part.width}"</span>}
-                      {part.length && <span style={{ color: '#555' }}>| <strong>Len:</strong> {part.length}</span>}
+                      {part.length && <span style={{ color: '#555' }}>| <strong>Length:</strong> {part.length}</span>}
                       {part.material && <span style={{ color: '#555' }}>| <strong>Grade:</strong> {part.material}</span>}
                     </div>
                     {/* Line 2: Roll info */}
