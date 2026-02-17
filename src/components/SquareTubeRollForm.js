@@ -274,12 +274,12 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   const qty = parseInt(partData.quantity) || 1;
   const materialCost = parseFloat(partData.materialTotal) || 0;
   const materialMarkup = parseFloat(partData.materialMarkupPercent) || 0;
-  const materialEachRaw = materialCost * (1 + materialMarkup / 100);
+  const materialEachRaw = Math.round(materialCost * (1 + materialMarkup / 100) * 100) / 100;
   const rounding = partData._materialRounding || 'none';
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
   const laborEach = parseFloat(partData.laborTotal) || 0;
   const unitPrice = materialEach + laborEach;
-  const lineTotal = unitPrice * qty;
+  const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
   useEffect(() => {
     setPartData(prev => ({ ...prev, partTotal: lineTotal.toFixed(2) }));
@@ -300,8 +300,8 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
       <div className="form-group">
         <label className="form-label">Quantity *</label>
         <input type="number" className="form-input" value={partData.quantity}
-          onChange={(e) => setPartData({ ...partData, quantity: e.target.value })}
-          min="1" disabled={completeRings}
+          onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })}
+          onFocus={(e) => e.target.select()} min="1" disabled={completeRings}
           style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
         {completeRings && ringCalc && !ringCalc.error && (
           <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>
@@ -345,7 +345,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
           <div style={{ marginTop: 4 }}>
             <input className="form-input" placeholder='Side dimension (e.g. 7)' type="number" step="any"
               value={partData._customTubeSide1 || ''}
-              onChange={(e) => {
+              onFocus={(e) => e.target.select()} onChange={(e) => {
                 const v = e.target.value;
                 const sizeStr = v ? `${v}x${v}` : '';
                 setPartData({ ...partData, _customTubeSide1: v, _customTubeSide2: v, _customTubeSize: sizeStr });
@@ -358,7 +358,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
           <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
             <input className="form-input" placeholder='Side 1' type="number" step="any" style={{ flex: 1 }}
               value={partData._customTubeSide1 || ''}
-              onChange={(e) => {
+              onFocus={(e) => e.target.select()} onChange={(e) => {
                 const v = e.target.value;
                 const s2 = partData._customTubeSide2 || '';
                 const sizeStr = v && s2 ? `${v}x${s2}` : '';
@@ -368,7 +368,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
             <span style={{ fontWeight: 600, color: '#999' }}>x</span>
             <input className="form-input" placeholder='Side 2' type="number" step="any" style={{ flex: 1 }}
               value={partData._customTubeSide2 || ''}
-              onChange={(e) => {
+              onFocus={(e) => e.target.select()} onChange={(e) => {
                 const v = e.target.value;
                 const s1 = partData._customTubeSide1 || '';
                 const sizeStr = s1 && v ? `${s1}x${v}` : '';
@@ -460,11 +460,11 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label" style={{ fontSize: '0.8rem' }}>Chord (inches)</label>
-                    <input type="number" step="0.001" className="form-input" value={diaFindChord} onChange={(e) => setDiaFindChord(e.target.value)} placeholder="e.g. 48" />
+                    <input type="number" step="0.001" className="form-input" value={diaFindChord} onFocus={(e) => e.target.select()} onChange={(e) => setDiaFindChord(e.target.value)} placeholder="e.g. 48" />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label" style={{ fontSize: '0.8rem' }}>Rise (inches)</label>
-                    <input type="number" step="0.001" className="form-input" value={diaFindRise} onChange={(e) => setDiaFindRise(e.target.value)} placeholder="e.g. 2.5" />
+                    <input type="number" step="0.001" className="form-input" value={diaFindRise} onFocus={(e) => e.target.select()} onChange={(e) => setDiaFindRise(e.target.value)} placeholder="e.g. 2.5" />
                   </div>
                 </div>
                 {diaFindResult && (
@@ -518,7 +518,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
         <div className="form-group">
           <label className="form-label">Arc (degrees)</label>
           <input type="number" step="0.1" className="form-input" value={partData.arcDegrees || ''}
-            onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} placeholder="e.g. 90, 180, 360" />
+            onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} placeholder="e.g. 90, 180, 360" />
         </div>
 
         {/* Rise Calculation for large radius */}
@@ -560,12 +560,12 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Rings Needed</label>
                   <input type="number" min="1" className="form-input" value={ringsNeeded}
-                    onChange={(e) => setRingsNeeded(parseInt(e.target.value) || 1)} />
+                    onFocus={(e) => e.target.select()} onChange={(e) => setRingsNeeded(parseInt(e.target.value) || 1)} />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Tangent Each End (inches)</label>
                   <input type="number" step="0.5" className="form-input" value={tangentLength}
-                    onChange={(e) => setTangentLength(e.target.value)} />
+                    onFocus={(e) => e.target.select()} onChange={(e) => setTangentLength(e.target.value)} />
                   <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Flat/straight ends that won't bend</div>
                 </div>
               </div>
@@ -736,15 +736,15 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
           <div className="form-group">
             <label className="form-label">Material Cost (each)</label>
-            <input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
+            <input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
           </div>
           <div className="form-group">
             <label className="form-label">Markup %</label>
-            <input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" />
+            <input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" />
           </div>
           <div className="form-group">
             <label className="form-label">Labor (each)</label>
-            <input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" />
+            <input type="number" step="any" className="form-input" value={partData.laborTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" />
           </div>
         </div>
 

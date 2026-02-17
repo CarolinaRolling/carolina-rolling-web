@@ -238,12 +238,12 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   const qty = parseInt(partData.quantity) || 1;
   const materialCost = parseFloat(partData.materialTotal) || 0;
   const materialMarkup = parseFloat(partData.materialMarkupPercent) || 0;
-  const materialEachRaw = materialCost * (1 + materialMarkup / 100);
+  const materialEachRaw = Math.round(materialCost * (1 + materialMarkup / 100) * 100) / 100;
   const rounding = partData._materialRounding || 'none';
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
   const laborEach = parseFloat(partData.laborTotal) || 0;
   const unitPrice = materialEach + laborEach;
-  const lineTotal = unitPrice * qty;
+  const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
   // Auto-update part total
   useEffect(() => {
@@ -331,7 +331,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
           </label>
           {showAngle && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-              <input className="form-input" type="number" step="0.1" style={{ width: 120 }} value={angleValue} onChange={(e) => setAngleValue(e.target.value)} placeholder="Degrees" />
+              <input className="form-input" type="number" step="0.1" style={{ width: 120 }} value={angleValue} onFocus={(e) => e.target.select()} onChange={(e) => setAngleValue(e.target.value)} placeholder="Degrees" />
               <span style={{ fontSize: '0.85rem', color: '#666' }}>degrees</span>
             </div>
           )}
@@ -352,7 +352,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
               </label>
               {showTangent && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                  <input className="form-input" type="number" step="0.1" style={{ width: 120 }} value={tangentLength} onChange={(e) => setTangentLength(e.target.value)} placeholder="Length each" />
+                  <input className="form-input" type="number" step="0.1" style={{ width: 120 }} value={tangentLength} onFocus={(e) => e.target.select()} onChange={(e) => setTangentLength(e.target.value)} placeholder="Length each" />
                   <span style={{ fontSize: '0.85rem', color: '#666' }}>× 2 = {((parseFloat(tangentLength) || 0) * 2).toFixed(2)}"</span>
                 </div>
               )}
@@ -421,7 +421,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: '0.8rem', color: '#666' }}>Custom:</span>
                       <input className="form-input" type="number" step="0.01" style={{ width: 100 }}
-                        value={stockLength} onChange={(e) => setStockLength(e.target.value)} placeholder='e.g. 240"' />
+                        value={stockLength} onFocus={(e) => e.target.select()} onChange={(e) => setStockLength(e.target.value)} placeholder='e.g. 240"' />
                       <span style={{ fontSize: '0.8rem', color: '#666' }}>inches</span>
                     </div>
 
@@ -671,15 +671,15 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
           <div className="form-group">
             <label className="form-label">Material Cost (each)</label>
-            <input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
+            <input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
           </div>
           <div className="form-group">
             <label className="form-label">Markup %</label>
-            <input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" />
+            <input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" />
           </div>
           <div className="form-group">
             <label className="form-label">Labor (each)</label>
-            <input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" />
+            <input type="number" step="any" className="form-input" value={partData.laborTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" />
           </div>
         </div>
 

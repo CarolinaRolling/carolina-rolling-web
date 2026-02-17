@@ -195,12 +195,12 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
   const qty = parseInt(partData.quantity) || 1;
   const materialCost = parseFloat(partData.materialTotal) || 0;
   const materialMarkup = parseFloat(partData.materialMarkupPercent) || 0;
-  const materialEachRaw = materialCost * (1 + materialMarkup / 100);
+  const materialEachRaw = Math.round(materialCost * (1 + materialMarkup / 100) * 100) / 100;
   const rounding = partData._materialRounding || 'none';
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
   const laborEach = parseFloat(partData.laborTotal) || 0;
   const unitPrice = materialEach + laborEach;
-  const lineTotal = unitPrice * qty;
+  const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
   useEffect(() => { setPartData(prev => ({ ...prev, partTotal: lineTotal.toFixed(2) })); }, [lineTotal]);
 
@@ -216,8 +216,8 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
       <div className="form-group">
         <label className="form-label">Quantity *</label>
         <input type="number" className="form-input" value={partData.quantity}
-          onChange={(e) => setPartData({ ...partData, quantity: e.target.value })}
-          min="1" disabled={completeRings}
+          onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })}
+          onFocus={(e) => e.target.select()} min="1" disabled={completeRings}
           style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
         {completeRings && ringCalc && !ringCalc.error && (
           <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>⭕ {ringsNeeded} ring(s) — {ringCalc.sticksNeeded} stick(s) needed{!ringCalc.multiSegment ? ` (${ringCalc.ringsPerStick} rings/stick)` : ` (${ringCalc.segmentsPerRing} segments/ring)`}</div>
@@ -317,8 +317,8 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
           {completeRings && (
             <div style={{ marginTop: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                <div className="form-group" style={{ margin: 0 }}><label className="form-label">Rings Needed</label><input type="number" min="1" className="form-input" value={ringsNeeded} onChange={(e) => setRingsNeeded(parseInt(e.target.value) || 1)} /></div>
-                <div className="form-group" style={{ margin: 0 }}><label className="form-label">Tangent Each End (inches)</label><input type="number" step="0.5" className="form-input" value={tangentLength} onChange={(e) => setTangentLength(e.target.value)} /><div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Flat/straight ends</div></div>
+                <div className="form-group" style={{ margin: 0 }}><label className="form-label">Rings Needed</label><input type="number" min="1" className="form-input" value={ringsNeeded} onFocus={(e) => e.target.select()} onChange={(e) => setRingsNeeded(parseInt(e.target.value) || 1)} /></div>
+                <div className="form-group" style={{ margin: 0 }}><label className="form-label">Tangent Each End (inches)</label><input type="number" step="0.5" className="form-input" value={tangentLength} onFocus={(e) => e.target.select()} onChange={(e) => setTangentLength(e.target.value)} /><div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Flat/straight ends</div></div>
               </div>
               {ringCalc && !ringCalc.error && (
                 <div style={{ background: '#c8e6c9', borderRadius: 8, padding: 12, fontSize: '0.85rem' }}>
@@ -385,9 +385,9 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
       <div style={sectionStyle}>
         {sectionTitle('💰', 'Pricing', '#1976d2')}
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
-          <div className="form-group"><label className="form-label">Material Cost (each)</label><input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" /></div>
-          <div className="form-group"><label className="form-label">Markup %</label><input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" /></div>
-          <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" /></div>
+          <div className="form-group"><label className="form-label">Material Cost (each)</label><input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" /></div>
+          <div className="form-group"><label className="form-label">Markup %</label><input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" /></div>
+          <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input" value={partData.laborTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" /></div>
         </div>
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material Cost (ea)</span><span>${materialCost.toFixed(2)}</span></div>

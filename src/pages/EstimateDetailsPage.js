@@ -751,7 +751,7 @@ function EstimateDetailsPage() {
     return warnings;
   };
 
-  const handleSavePart = async () => {
+  const handleSavePart = async (addAnother = false) => {
     const warnings = validatePart();
     if (warnings.length > 0) {
       setPartFormError(warnings);
@@ -775,11 +775,14 @@ function EstimateDetailsPage() {
       
       // Recalculate partTotal at save time to avoid useEffect timing issues
       const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
+      // Clean price fields to exact 2-decimal values
+      if (dataToSend.laborTotal) dataToSend.laborTotal = (Math.round(parseFloat(dataToSend.laborTotal) * 100) / 100).toFixed(2);
+      if (dataToSend.materialTotal) dataToSend.materialTotal = (Math.round(parseFloat(dataToSend.materialTotal) * 100) / 100).toFixed(2);
       if (EA_PRICED.includes(dataToSend.partType)) {
         const qty = parseInt(dataToSend.quantity) || 1;
         const matCost = parseFloat(dataToSend.materialTotal) || 0;
         const matMarkup = parseFloat(dataToSend.materialMarkupPercent) || 0;
-        const matEachRaw = matCost * (1 + matMarkup / 100);
+        const matEachRaw = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
         const matEach = roundUpMaterial(matEachRaw, dataToSend._materialRounding);
         const labEach = parseFloat(dataToSend.laborTotal) || 0;
         dataToSend.partTotal = ((matEach + labEach) * qty).toFixed(2);
@@ -803,11 +806,22 @@ function EstimateDetailsPage() {
       }
       
       await loadEstimate();
-      setShowPartModal(false);
-      setEditingPart(null);
-      setPartData({});
-      setPartFormError(null);
-      showMessage(editingPart ? 'Part updated' : 'Part added');
+      
+      if (addAnother && !editingPart) {
+        // Reset form and go back to part type picker
+        setShowPartModal(false);
+        setEditingPart(null);
+        setPartData({});
+        setPartFormError(null);
+        showMessage('Part added — select next part type');
+        setShowPartTypePicker(true);
+      } else {
+        setShowPartModal(false);
+        setEditingPart(null);
+        setPartData({});
+        setPartFormError(null);
+        showMessage(editingPart ? 'Part updated' : 'Part added');
+      }
     } catch (err) { 
       console.error('Save part error:', err);
       setPartFormError([err.response?.data?.error?.message || 'Failed to save part']); 
@@ -851,13 +865,14 @@ function EstimateDetailsPage() {
   };
 
   // Part File Upload Handlers
-  const handlePartFileUpload = async (partId, file) => {
-    if (!file) return;
+  const handlePartFileUpload = async (partId, files) => {
+    const fileList = Array.isArray(files) ? files : files?.length ? Array.from(files) : files ? [files] : [];
+    if (fileList.length === 0) return;
     try {
       setUploadingPartFile(partId);
-      await uploadEstimatePartFile(id, partId, file, 'drawing');
+      await uploadEstimatePartFile(id, partId, fileList, 'drawing');
       await loadEstimate();
-      showMessage('File uploaded to part');
+      showMessage(`${fileList.length} file${fileList.length > 1 ? 's' : ''} uploaded to part`);
     } catch (err) { setError('Failed to upload file'); }
     finally { setUploadingPartFile(null); }
   };
@@ -1437,11 +1452,12 @@ function EstimateDetailsPage() {
                       <label style={{ cursor: 'pointer' }}>
                         <input
                           type="file"
-                          accept=".pdf,.png,.jpg,.jpeg,.gif,.dxf,.dwg"
+                          accept=".pdf,.png,.jpg,.jpeg,.gif,.dxf,.dwg,.stp,.step"
+                          multiple
                           style={{ display: 'none' }}
                           onChange={(e) => {
-                            if (e.target.files[0]) {
-                              handlePartFileUpload(part.id, e.target.files[0]);
+                            if (e.target.files?.length > 0) {
+                              handlePartFileUpload(part.id, e.target.files);
                               e.target.value = '';
                             }
                           }}
@@ -2264,7 +2280,13 @@ function EstimateDetailsPage() {
 
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowPartModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSavePart} disabled={!partData.partType || saving}>
+              {!editingPart && (
+                <button className="btn btn-outline" onClick={() => handleSavePart(true)} disabled={!partData.partType || saving}
+                  style={{ borderColor: '#1976d2', color: '#1976d2' }}>
+                  {saving ? 'Saving...' : 'Save & Add Another'}
+                </button>
+              )}
+              <button className="btn btn-primary" onClick={() => handleSavePart(false)} disabled={!partData.partType || saving}>
                 {saving ? 'Saving...' : editingPart ? 'Update Part' : 'Add Part'}
               </button>
             </div>

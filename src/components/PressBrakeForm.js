@@ -51,12 +51,12 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
   const qty = parseInt(partData.quantity) || 1;
   const materialCost = parseFloat(partData.materialTotal) || 0;
   const materialMarkup = parseFloat(partData.materialMarkupPercent) || 0;
-  const materialEachRaw = materialCost * (1 + materialMarkup / 100);
+  const materialEachRaw = Math.round(materialCost * (1 + materialMarkup / 100) * 100) / 100;
   const rounding = partData._materialRounding || 'none';
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
   const laborEach = parseFloat(partData.laborTotal) || 0;
   const unitPrice = materialEach + laborEach;
-  const lineTotal = unitPrice * qty;
+  const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
   useEffect(() => {
     setPartData(prev => ({ ...prev, partTotal: lineTotal.toFixed(2) }));
@@ -77,7 +77,7 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
       <div className="form-group">
         <label className="form-label">Quantity *</label>
         <input type="number" className="form-input" value={partData.quantity}
-          onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} min="1" />
+          onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} onFocus={(e) => e.target.select()} min="1" />
       </div>
 
       <div className="form-group">
@@ -217,14 +217,14 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
         {sectionTitle('💰', 'Pricing', '#1976d2')}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <div className="form-group"><label className="form-label">Material Cost (each)</label>
-            <input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''}
-              onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" /></div>
+            <input type="number" step="any" className="form-input" value={partData.materialTotal || ''}
+              onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" /></div>
           <div className="form-group"><label className="form-label">Markup %</label>
             <input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20}
-              onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" /></div>
+              onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" /></div>
           <div className="form-group"><label className="form-label">Labor (each)</label>
-            <input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''}
-              onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" /></div>
+            <input type="number" step="any" className="form-input" value={partData.laborTotal || ''}
+              onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" /></div>
         </div>
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material Cost (ea)</span><span>${materialCost.toFixed(2)}</span></div>

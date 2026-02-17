@@ -261,7 +261,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
       <div className="form-group">
         <label className="form-label">Quantity *</label>
         <input type="number" className="form-input" value={partData.quantity || '1'}
-          onChange={(e) => update({ quantity: e.target.value })} min="1" />
+          onChange={(e) => update({ quantity: e.target.value })} onFocus={(e) => e.target.select()} min="1" />
       </div>
 
       {/* Service Type */}

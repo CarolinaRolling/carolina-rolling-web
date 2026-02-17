@@ -553,12 +553,12 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const qty = parseInt(partData.quantity) || 1;
   const materialCost = parseFloat(partData.materialTotal) || 0;
   const materialMarkup = parseFloat(partData.materialMarkupPercent) || 0;
-  const materialEachRaw = materialCost * (1 + materialMarkup / 100);
+  const materialEachRaw = Math.round(materialCost * (1 + materialMarkup / 100) * 100) / 100;
   const rounding = partData._materialRounding || 'none';
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
   const laborEach = parseFloat(partData.laborTotal) || 0;
   const unitPrice = materialEach + laborEach;
-  const lineTotal = unitPrice * qty;
+  const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
   const sectionStyle = { gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 8, paddingTop: 12 };
   const sectionTitle = (icon, title, color) => (
@@ -575,8 +575,8 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       <div className="form-group">
         <label className="form-label">Quantity *</label>
         <input type="number" className="form-input" value={partData.quantity || 1}
-          onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })}
-          min="1" disabled={completeRings}
+          onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })}
+          onFocus={(e) => e.target.select()} min="1" disabled={completeRings}
           style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
         {completeRings && ringCalc && !ringCalc.error && (
           <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>
@@ -627,7 +627,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
         <div className="form-group">
           <label className="form-label">Outer Diameter (inches) *</label>
           <input type="number" step="0.001" className="form-input" value={partData.outerDiameter || ''}
-            onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} placeholder="e.g. 2.375" />
+            onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} placeholder="e.g. 2.375" />
         </div>
       )}
 
@@ -732,11 +732,11 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label" style={{ fontSize: '0.8rem' }}>Chord (inches)</label>
-                    <input type="number" step="0.001" className="form-input" value={diaFindChord} onChange={(e) => setDiaFindChord(e.target.value)} placeholder="e.g. 48" />
+                    <input type="number" step="0.001" className="form-input" value={diaFindChord} onFocus={(e) => e.target.select()} onChange={(e) => setDiaFindChord(e.target.value)} placeholder="e.g. 48" />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label" style={{ fontSize: '0.8rem' }}>Rise (inches)</label>
-                    <input type="number" step="0.001" className="form-input" value={diaFindRise} onChange={(e) => setDiaFindRise(e.target.value)} placeholder="e.g. 2.5" />
+                    <input type="number" step="0.001" className="form-input" value={diaFindRise} onFocus={(e) => e.target.select()} onChange={(e) => setDiaFindRise(e.target.value)} placeholder="e.g. 2.5" />
                   </div>
                 </div>
                 {diaFindResult && (
@@ -807,7 +807,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
         <div className="form-group" style={{ marginTop: 12 }}>
           <label className="form-label">Arc (degrees)</label>
           <input type="number" step="0.1" className="form-input" value={partData.arcDegrees || ''}
-            onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} placeholder="e.g. 90, 180, 360" />
+            onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} placeholder="e.g. 90, 180, 360" />
         </div>
 
         {/* === COMPLETE RINGS === */}
@@ -830,12 +830,12 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Rings Needed</label>
                   <input type="number" min="1" className="form-input" value={ringsNeeded}
-                    onChange={(e) => setRingsNeeded(parseInt(e.target.value) || 1)} />
+                    onFocus={(e) => e.target.select()} onChange={(e) => setRingsNeeded(parseInt(e.target.value) || 1)} />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Tangent Each End (inches)</label>
                   <input type="number" step="0.5" className="form-input" value={tangentLength}
-                    onChange={(e) => setTangentLength(e.target.value)} />
+                    onFocus={(e) => e.target.select()} onChange={(e) => setTangentLength(e.target.value)} />
                   <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Flat/straight ends that won't bend</div>
                 </div>
               </div>
@@ -945,13 +945,13 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Run (inches)</label>
                     <input type="number" step="0.1" className="form-input" value={pitchRun}
-                      onChange={(e) => setPitchRun(e.target.value)} placeholder="12" />
+                      onFocus={(e) => e.target.select()} onChange={(e) => setPitchRun(e.target.value)} placeholder="12" />
                     <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Horizontal distance (default 12")</div>
                   </div>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Rise (inches)</label>
                     <input type="number" step="0.01" className="form-input" value={pitchRise}
-                      onChange={(e) => setPitchRise(e.target.value)} placeholder="Height at run point" />
+                      onFocus={(e) => e.target.select()} onChange={(e) => setPitchRise(e.target.value)} placeholder="Height at run point" />
                     <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Vertical rise at the run distance</div>
                   </div>
                 </div>
@@ -962,7 +962,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Pitch Angle (degrees)</label>
                   <input type="number" step="0.1" className="form-input" value={pitchAngle}
-                    onChange={(e) => setPitchAngle(e.target.value)} placeholder="e.g. 5, 10, 15" />
+                    onFocus={(e) => e.target.select()} onChange={(e) => setPitchAngle(e.target.value)} placeholder="e.g. 5, 10, 15" />
                   <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Angle of the helix from horizontal</div>
                 </div>
               )}
@@ -985,7 +985,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Spacing (inches)</label>
                     <input type="number" step="0.01" className="form-input" value={pitchSpaceValue}
-                      onChange={(e) => setPitchSpaceValue(e.target.value)} placeholder="Rise per full revolution" />
+                      onFocus={(e) => e.target.select()} onChange={(e) => setPitchSpaceValue(e.target.value)} placeholder="Rise per full revolution" />
                     <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Rise over one full revolution (run = circumference)</div>
                   </div>
                 </div>
@@ -1167,15 +1167,15 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
           <div className="form-group">
             <label className="form-label">Material Cost (each)</label>
-            <input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
+            <input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
           </div>
           <div className="form-group">
             <label className="form-label">Markup %</label>
-            <input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" />
+            <input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" />
           </div>
           <div className="form-group">
             <label className="form-label">Labor (each)</label>
-            <input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" />
+            <input type="number" step="any" className="form-input" value={partData.laborTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" />
           </div>
         </div>
 

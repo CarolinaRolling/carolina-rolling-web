@@ -67,14 +67,14 @@ export default function ShopRateForm({ partData, setPartData }) {
             <label className="form-label">Estimated Hours *</label>
             <input type="number" step="0.25" min="0" className="form-input"
               value={partData._shopHours || ''}
-              onChange={(e) => setPartData({ ...partData, _shopHours: e.target.value })}
+              onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, _shopHours: e.target.value })}
               placeholder="e.g. 2.5" />
           </div>
           <div className="form-group">
             <label className="form-label">Shop Rate ($/hr)</label>
             <input type="number" step="1" className="form-input"
               value={partData._shopRate || rate}
-              onChange={(e) => setPartData({ ...partData, _shopRate: e.target.value })}
+              onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, _shopRate: e.target.value })}
               placeholder="125" />
             <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>From default labor rate in admin settings</div>
           </div>

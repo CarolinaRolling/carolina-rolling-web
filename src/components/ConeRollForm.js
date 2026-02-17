@@ -302,16 +302,16 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       <div style={secStyle}>
         {secHead('🔺', 'Cone Dimensions', '#764ba2')}
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
-          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Large {largeDiaMeasure === 'radius' ? 'Radius' : 'Diameter'} *</label><input type="number" step="0.001" className="form-input" value={largeDia} onChange={function(e) { setLargeDia(e.target.value); }} placeholder="e.g. 24" /></div>
+          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Large {largeDiaMeasure === 'radius' ? 'Radius' : 'Diameter'} *</label><input type="number" step="0.001" className="form-input" value={largeDia} onFocus={(e) => e.target.select()} onChange={function(e) { setLargeDia(e.target.value); }} placeholder="e.g. 24" /></div>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">Measured At</label><select className="form-select" value={largeDiaType} onChange={function(e) { setLargeDiaType(e.target.value); }}><option value="inside">Inside</option><option value="centerline">Centerline</option><option value="outside">Outside</option></select></div>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">Type</label><select className="form-select" value={largeDiaMeasure} onChange={function(e) { setLargeDiaMeasure(e.target.value); }}><option value="diameter">Diameter</option><option value="radius">Radius</option></select></div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
-          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Small {smallDiaMeasure === 'radius' ? 'Radius' : 'Diameter'} *</label><input type="number" step="0.001" className="form-input" value={smallDia} onChange={function(e) { setSmallDia(e.target.value); }} placeholder="e.g. 12" /></div>
+          <div className="form-group" style={{ margin: 0 }}><label className="form-label">Small {smallDiaMeasure === 'radius' ? 'Radius' : 'Diameter'} *</label><input type="number" step="0.001" className="form-input" value={smallDia} onFocus={(e) => e.target.select()} onChange={function(e) { setSmallDia(e.target.value); }} placeholder="e.g. 12" /></div>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">Measured At</label><select className="form-select" value={smallDiaType} onChange={function(e) { setSmallDiaType(e.target.value); }}><option value="inside">Inside</option><option value="centerline">Centerline</option><option value="outside">Outside</option></select></div>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">Type</label><select className="form-select" value={smallDiaMeasure} onChange={function(e) { setSmallDiaMeasure(e.target.value); }}><option value="diameter">Diameter</option><option value="radius">Radius</option></select></div>
         </div>
-        <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">Cone Height *</label><input type="number" step="0.001" className="form-input" value={coneHeight} onChange={function(e) { setConeHeight(e.target.value); }} placeholder="e.g. 18" /></div>
+        <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">Cone Height *</label><input type="number" step="0.001" className="form-input" value={coneHeight} onFocus={(e) => e.target.select()} onChange={function(e) { setConeHeight(e.target.value); }} placeholder="e.g. 18" /></div>
 
         {/* COMPUTED PROPERTIES */}
         {coneData && (
@@ -352,7 +352,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
               {coneType === 'eccentric' && (
                 <div style={{ marginTop: 8 }}>
                   <label className="form-label">Eccentric Angle (degrees)</label>
-                  <input type="number" className="form-input" value={eccentricAngle} onChange={function(e) { setEccentricAngle(e.target.value); }} placeholder="e.g., 15" step="0.1" />
+                  <input type="number" className="form-input" value={eccentricAngle} onFocus={(e) => e.target.select()} onChange={function(e) { setEccentricAngle(e.target.value); }} placeholder="e.g., 15" step="0.1" />
                 </div>
               )}
             </div>
@@ -502,8 +502,8 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       <div style={secStyle}>
         {secHead('💰', 'Pricing', '#1976d2')}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="form-group"><label className="form-label">Material (each)</label><input type="number" step="0.01" className="form-input" value={partData.materialTotal || ''} onChange={function(e) { setPartData(Object.assign({}, partData, { materialTotal: e.target.value })); }} placeholder="0.00" /></div>
-          <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''} onChange={function(e) { setPartData(Object.assign({}, partData, { laborTotal: e.target.value })); }} placeholder="0.00" /></div>
+          <div className="form-group"><label className="form-label">Material (each)</label><input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialTotal: e.target.value })); }} placeholder="0.00" /></div>
+          <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input" value={partData.laborTotal || ''} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { laborTotal: e.target.value })); }} placeholder="0.00" /></div>
         </div>
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material (ea)</span><span>${matEa.toFixed(2)}</span></div>

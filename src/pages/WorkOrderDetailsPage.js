@@ -606,7 +606,7 @@ function WorkOrderDetailsPage() {
     return warnings;
   };
 
-  const handleSavePart = async () => {
+  const handleSavePart = async (addAnother = false) => {
     const warnings = validatePart();
     if (warnings.length > 0) { setPartFormError(warnings); return; }
     try {
@@ -628,13 +628,16 @@ function WorkOrderDetailsPage() {
       
       // Recalculate partTotal at save time for ea-priced parts
       const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'];
+      // Clean price fields to exact 2-decimal values
+      if (dataToSend.laborTotal) dataToSend.laborTotal = (Math.round(parseFloat(dataToSend.laborTotal) * 100) / 100).toFixed(2);
+      if (dataToSend.materialTotal) dataToSend.materialTotal = (Math.round(parseFloat(dataToSend.materialTotal) * 100) / 100).toFixed(2);
       if (EA_PRICED.includes(selectedPartType)) {
         const qty = parseInt(dataToSend.quantity) || 1;
         const matCost = parseFloat(dataToSend.materialTotal) || 0;
         const matMarkup = parseFloat(dataToSend.materialMarkupPercent) || 0;
-        const matEach = matCost * (1 + matMarkup / 100);
+        const matEach = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
         const labEach = parseFloat(dataToSend.laborTotal) || 0;
-        dataToSend.partTotal = ((matEach + labEach) * qty).toFixed(2);
+        dataToSend.partTotal = (Math.round((matEach + labEach) * qty * 100) / 100).toFixed(2);
       }
       
       let savedPartId = editingPart?.id;
@@ -663,11 +666,21 @@ function WorkOrderDetailsPage() {
         } catch (e) { console.warn('Failed to set promise date:', e); }
       }
       await loadOrder();
-      setShowPartModal(false);
-      setEditingPart(null);
-      setPartData({});
-      setPartFormError(null);
-      showMessage(editingPart ? 'Part updated' : 'Part added');
+      
+      if (addAnother && !editingPart) {
+        setShowPartModal(false);
+        setEditingPart(null);
+        setPartData({});
+        setPartFormError(null);
+        showMessage('Part added — select next part type');
+        setShowPartTypePicker(true);
+      } else {
+        setShowPartModal(false);
+        setEditingPart(null);
+        setPartData({});
+        setPartFormError(null);
+        showMessage(editingPart ? 'Part updated' : 'Part added');
+      }
     } catch (err) {
       console.error('Save part error:', err.response?.data || err);
       setPartFormError([err.response?.data?.error?.message || 'Failed to save part']);
@@ -2351,7 +2364,13 @@ function WorkOrderDetailsPage() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowPartModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSavePart} disabled={saving || !selectedPartType}>{saving ? 'Saving...' : editingPart ? 'Update Part' : 'Add Part'}</button>
+              {!editingPart && (
+                <button className="btn btn-outline" onClick={() => handleSavePart(true)} disabled={saving || !selectedPartType}
+                  style={{ borderColor: '#1976d2', color: '#1976d2' }}>
+                  {saving ? 'Saving...' : 'Save & Add Another'}
+                </button>
+              )}
+              <button className="btn btn-primary" onClick={() => handleSavePart(false)} disabled={saving || !selectedPartType}>{saving ? 'Saving...' : editingPart ? 'Update Part' : 'Add Part'}</button>
             </div>
           </div>
         </div>

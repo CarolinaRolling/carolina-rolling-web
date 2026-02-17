@@ -184,9 +184,13 @@ export const deleteEstimatePart = (estimateId, partId) => api.delete(`/estimates
 // Estimate Part Files
 export const getEstimatePartFiles = (estimateId, partId) => api.get(`/estimates/${estimateId}/parts/${partId}/files`);
 export const viewEstimatePartFile = (estimateId, partId, fileId) => api.get(`/estimates/${estimateId}/parts/${partId}/files/${fileId}/view`);
-export const uploadEstimatePartFile = (estimateId, partId, file, fileType = 'other') => {
+export const uploadEstimatePartFile = (estimateId, partId, fileOrFiles, fileType = 'other') => {
   const formData = new FormData();
-  formData.append('file', file);
+  if (Array.isArray(fileOrFiles)) {
+    fileOrFiles.forEach(f => formData.append('files', f));
+  } else {
+    formData.append('files', fileOrFiles);
+  }
   formData.append('fileType', fileType);
   return api.post(`/estimates/${estimateId}/parts/${partId}/files`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
