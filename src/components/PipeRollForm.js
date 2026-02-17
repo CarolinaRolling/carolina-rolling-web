@@ -575,7 +575,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       <div className="form-group">
         <label className="form-label">Quantity *</label>
         <input type="number" className="form-input" value={partData.quantity || 1}
-          onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })}
+          onChange={(e) => setPartData({ ...partData, quantity: parseInt(e.target.value) || 1 })}
           onFocus={(e) => e.target.select()} min="1" disabled={completeRings}
           style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
         {completeRings && ringCalc && !ringCalc.error && (
@@ -634,18 +634,18 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       {/* Schedule selector for pipes */}
       {selectedSize && selectedSize.type === 'pipe' && (
         <div className="form-group">
-          <label className="form-label">Schedule</label>
+          <label className="form-label">Schedule *</label>
           <select className="form-select" value={partData._schedule || ''}
             onChange={(e) => handleScheduleSelect(e.target.value)}>
             <option value="">Select schedule...</option>
-            {availableSchedules.map(s => (
-              <option key={s.schedule} value={s.schedule}>{s.label}</option>
+            {availableSchedules.filter(s => ['10', '40', '80', '160'].includes(s.schedule)).map(s => (
+              <option key={s.schedule} value={s.schedule}>Sch. {s.schedule} ({s.wall}" wall)</option>
             ))}
           </select>
         </div>
       )}
 
-      {/* Wall thickness for tubes (hidden for solid bars) */}
+      {/* Wall thickness for tubes and custom (hidden for pipes and solid bars) */}
       {(!selectedSize || selectedSize.type === 'tube' || partData._pipeSize === 'Custom') && (!selectedSize || selectedSize.type !== 'solid_bar') && (
         <div className="form-group">
           <label className="form-label">Wall Thickness</label>

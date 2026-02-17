@@ -319,7 +319,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
       <div className="form-group">
         <label className="form-label">Quantity *</label>
         <input type="number" className="form-input" value={partData.quantity}
-          onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, quantity: e.target.value })}
+          onChange={(e) => setPartData({ ...partData, quantity: e.target.value })}
           onFocus={(e) => e.target.select()} min="1" disabled={completeRings}
           style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
         {completeRings && ringCalc && !ringCalc.error && (
