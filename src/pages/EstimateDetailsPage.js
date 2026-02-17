@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, Upload, Eye, X, Printer, Check, FileDown, Package, FileText } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Upload, Eye, X, Printer, Check, FileDown, Package, FileText, Edit } from 'lucide-react';
 import {
   getEstimateById, createEstimate, updateEstimate,
   addEstimatePart, updateEstimatePart, deleteEstimatePart,
@@ -97,6 +97,10 @@ function EstimateDetailsPage() {
   // Part file upload state
   const [uploadingPartFile, setUploadingPartFile] = useState(null);
   const partFileInputRef = useRef(null);
+  
+  // Estimate number editing state
+  const [editingEstNum, setEditingEstNum] = useState(false);
+  const [estNumInput, setEstNumInput] = useState('');
   
   // Client autofill state
   const [clientSuggestions, setClientSuggestions] = useState([]);
@@ -533,6 +537,20 @@ function EstimateDetailsPage() {
   };
 
   const showMessage = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(null), 3000); };
+
+  const handleEstNumChange = async () => {
+    const newNum = estNumInput.trim();
+    if (!newNum) { setError('Estimate number cannot be empty'); return; }
+    if (newNum === estimate.estimateNumber) { setEditingEstNum(false); return; }
+    try {
+      await updateEstimate(id, { estimateNumber: newNum });
+      setEditingEstNum(false);
+      showMessage(`Estimate number changed to ${newNum}`);
+      await loadEstimate();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to update estimate number');
+    }
+  };
 
   const openAddPartModal = () => {
     setEditingPart(null);
@@ -1046,7 +1064,24 @@ function EstimateDetailsPage() {
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="page-title">{isNew ? 'New Estimate' : estimate?.estimateNumber}</h1>
+            {isNew ? (
+              <h1 className="page-title">New Estimate</h1>
+            ) : editingEstNum ? (
+              <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input type="text" value={estNumInput} onChange={(e) => setEstNumInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleEstNumChange(); if (e.key === 'Escape') setEditingEstNum(false); }}
+                  autoFocus
+                  style={{ fontSize: '1.1rem', fontWeight: 700, padding: '4px 10px', border: '2px solid #1976d2', borderRadius: 6, width: 220 }} />
+                <button className="btn btn-sm btn-primary" onClick={handleEstNumChange} style={{ padding: '4px 8px' }}><Check size={16} /></button>
+                <button className="btn btn-sm btn-outline" onClick={() => setEditingEstNum(false)} style={{ padding: '4px 8px' }}><X size={16} /></button>
+              </h1>
+            ) : (
+              <h1 className="page-title" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                onClick={() => { setEstNumInput(estimate?.estimateNumber || ''); setEditingEstNum(true); }}
+                title="Click to change estimate number">
+                {estimate?.estimateNumber} <Edit size={14} style={{ opacity: 0.4 }} />
+              </h1>
+            )}
             {!isNew && <div style={{ color: '#666', fontSize: '0.875rem' }}>{formData.clientName}</div>}
           </div>
         </div>
@@ -1105,6 +1140,14 @@ function EstimateDetailsPage() {
           {/* Client Info */}
           <div className="card">
             <h3 className="card-title" style={{ marginBottom: 16 }}>Client Information</h3>
+            {isNew && (
+              <div className="form-group" style={{ marginBottom: 12 }}>
+                <label className="form-label">Custom Estimate Number <span style={{ fontWeight: 400, color: '#999' }}>(optional — leave blank for auto)</span></label>
+                <input type="text" className="form-input" value={formData.estimateNumber || ''}
+                  onChange={(e) => setFormData({ ...formData, estimateNumber: e.target.value })}
+                  placeholder="e.g. Q-2026-001 or leave blank for EST-XXXXXX-XXX" style={{ maxWidth: 300 }} />
+              </div>
+            )}
             <div className="grid grid-2">
               <div className="form-group" style={{ position: 'relative' }}>
                 <label className="form-label">Client Name *</label>
