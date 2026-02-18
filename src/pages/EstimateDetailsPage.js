@@ -1152,6 +1152,117 @@ function EstimateDetailsPage() {
       {error && <div className="alert alert-error" style={{ whiteSpace: 'pre-line' }}>{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
+      {/* Status Workflow Bar */}
+      {!isNew && estimate && (
+        <div style={{ 
+          display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', marginBottom: 16,
+          background: '#f5f5f5', borderRadius: 10, border: '1px solid #e0e0e0', flexWrap: 'wrap'
+        }}>
+          {/* Status steps */}
+          {[
+            { key: 'draft', label: 'Draft', icon: '📝', color: '#757575', bg: '#eeeeee' },
+            { key: 'sent', label: 'Sent', icon: '📤', color: '#1565c0', bg: '#e3f2fd' },
+            { key: 'accepted', label: 'Accepted', icon: '✅', color: '#2e7d32', bg: '#e8f5e9' },
+          ].map((step, idx) => {
+            const statusOrder = ['draft', 'sent', 'accepted', 'declined', 'converted', 'archived'];
+            const currentIdx = statusOrder.indexOf(estimate.status);
+            const stepIdx = statusOrder.indexOf(step.key);
+            const isActive = estimate.status === step.key;
+            const isPast = stepIdx < currentIdx || (estimate.status === 'converted' && step.key !== 'converted');
+            const ts = step.key === 'sent' ? estimate.sentAt : step.key === 'accepted' ? estimate.acceptedAt : estimate.createdAt;
+            return (
+              <React.Fragment key={step.key}>
+                {idx > 0 && <div style={{ width: 24, height: 2, background: isPast || isActive ? step.color : '#ccc' }} />}
+                <div style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                  opacity: isPast || isActive ? 1 : 0.4,
+                }}>
+                  <div style={{
+                    padding: '6px 14px', borderRadius: 20, fontSize: '0.85rem', fontWeight: 600,
+                    background: isActive ? step.bg : isPast ? step.bg : '#eee',
+                    color: isActive || isPast ? step.color : '#999',
+                    border: isActive ? `2px solid ${step.color}` : '2px solid transparent',
+                  }}>
+                    {step.icon} {step.label}
+                  </div>
+                  {ts && (isPast || isActive) && (
+                    <div style={{ fontSize: '0.7rem', color: '#888' }}>
+                      {new Date(ts).toLocaleDateString()} {new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  )}
+                </div>
+              </React.Fragment>
+            );
+          })}
+
+          {/* Converted indicator */}
+          {estimate.workOrderId && (
+            <>
+              <div style={{ width: 24, height: 2, background: '#7b1fa2' }} />
+              <div style={{ padding: '6px 14px', borderRadius: 20, fontSize: '0.85rem', fontWeight: 600, background: '#f3e5f5', color: '#7b1fa2', border: '2px solid #7b1fa2' }}>
+                🔄 Work Order Created
+              </div>
+            </>
+          )}
+
+          {/* Declined indicator */}
+          {estimate.status === 'declined' && (
+            <div style={{ padding: '6px 14px', borderRadius: 20, fontSize: '0.85rem', fontWeight: 600, background: '#ffebee', color: '#c62828', border: '2px solid #c62828' }}>
+              ❌ Declined
+            </div>
+          )}
+
+          {/* Spacer */}
+          <div style={{ flex: 1 }} />
+
+          {/* Action buttons */}
+          {estimate.status === 'draft' && (
+            <button className="btn btn-sm" onClick={async () => {
+              try {
+                await updateEstimate(id, { status: 'sent' });
+                await loadEstimate();
+                showMessage('Estimate marked as sent');
+              } catch (err) { setError('Failed to update status'); }
+            }} style={{ background: '#1565c0', color: 'white', borderRadius: 20, padding: '6px 16px' }}>
+              📤 Mark as Sent
+            </button>
+          )}
+          {estimate.status === 'sent' && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-sm" onClick={async () => {
+                try {
+                  await updateEstimate(id, { status: 'accepted' });
+                  await loadEstimate();
+                  showMessage('Estimate marked as accepted');
+                } catch (err) { setError('Failed to update status'); }
+              }} style={{ background: '#2e7d32', color: 'white', borderRadius: 20, padding: '6px 16px' }}>
+                ✅ Mark as Accepted
+              </button>
+              <button className="btn btn-sm" onClick={async () => {
+                try {
+                  await updateEstimate(id, { status: 'declined' });
+                  await loadEstimate();
+                  showMessage('Estimate marked as declined');
+                } catch (err) { setError('Failed to update status'); }
+              }} style={{ background: '#fff', color: '#c62828', border: '1px solid #c62828', borderRadius: 20, padding: '6px 16px' }}>
+                ❌ Decline
+              </button>
+            </div>
+          )}
+          {(estimate.status === 'declined' || estimate.status === 'archived') && (
+            <button className="btn btn-sm" onClick={async () => {
+              try {
+                await updateEstimate(id, { status: 'draft' });
+                await loadEstimate();
+                showMessage('Estimate reset to draft');
+              } catch (err) { setError('Failed to update status'); }
+            }} style={{ background: '#fff', color: '#555', border: '1px solid #999', borderRadius: 20, padding: '6px 16px' }}>
+              ↩ Reset to Draft
+            </button>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
         <div>
           {/* Client Info */}
