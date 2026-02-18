@@ -806,10 +806,27 @@ function WorkOrderDetailsPage() {
       });
     }
 
-    const partsHtml = order.parts?.sort((a, b) => a.partNumber - b.partNumber).filter(p => p.partType !== 'rush_service').map(p => {
-      // Merge formData if present
-      const part = { ...p };
-      if (part.formData && typeof part.formData === 'object') Object.assign(part, part.formData);
+    const partsHtml = (() => {
+      const sorted = (order.parts || []).sort((a, b) => a.partNumber - b.partNumber).filter(p => p.partType !== 'rush_service').map(p => {
+        const part = { ...p };
+        if (part.formData && typeof part.formData === 'object') Object.assign(part, part.formData);
+        return part;
+      });
+      const regular = sorted.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !p._linkedPartId);
+      const services = sorted.filter(p => ['fab_service', 'shop_rate'].includes(p.partType) && p._linkedPartId);
+      const grouped = [];
+      const used = new Set();
+      regular.forEach(rp => {
+        grouped.push(rp);
+        services.forEach(sp => {
+          if (String(sp._linkedPartId) === String(rp.id) && !used.has(sp.id)) { grouped.push(sp); used.add(sp.id); }
+        });
+      });
+      services.forEach(sp => { if (!used.has(sp.id)) grouped.push(sp); });
+      return grouped;
+    })().map(part => {
+      const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && part._linkedPartId;
+      const linkedParent = isLinkedService ? order.parts.find(p => String(p.id) === String(part._linkedPartId)) : null;
 
       const pdfFiles = part.files?.filter(f => f.mimeType === 'application/pdf' || f.originalName?.toLowerCase().endsWith('.pdf')) || [];
       pdfFiles.forEach(f => allPdfUrls.push({ url: f.url, name: f.originalName, partNumber: part.partNumber }));
@@ -946,10 +963,10 @@ function WorkOrderDetailsPage() {
       const hasUniqueInstructions = specialInstr && specialInstr.trim() !== rollingDescFull.trim();
 
       return `
-        <div style="border:2px solid #1976d2;padding:14px;margin-bottom:14px;border-radius:8px;page-break-inside:avoid;position:relative">
+        <div style="border:2px solid ${isLinkedService ? '#ce93d8' : '#1976d2'};padding:${isLinkedService ? '10' : '14'}px;margin-bottom:${isLinkedService ? '4' : '14'}px;margin-left:${isLinkedService ? '32' : '0'}px;border-radius:${isLinkedService ? '4' : '8'}px;page-break-inside:avoid;position:relative;background:${isLinkedService ? '#fce4ec' : 'white'}">
           ${checkboxHtml}
-          <div style="font-size:1.2rem;font-weight:bold;color:#1976d2;margin-bottom:4px;padding-bottom:6px;border-bottom:2px solid #1976d2">
-            Part #${part.partNumber} — ${PART_TYPES[part.partType]?.label || part.partType}
+          <div style="font-size:${isLinkedService ? '1rem' : '1.2rem'};font-weight:bold;color:${isLinkedService ? '#7b1fa2' : '#1976d2'};margin-bottom:4px;padding-bottom:6px;border-bottom:2px solid ${isLinkedService ? '#ce93d8' : '#1976d2'}">
+            ${isLinkedService ? '↳ ' : ''}Part #${part.partNumber} — ${PART_TYPES[part.partType]?.label || part.partType}${isLinkedService && linkedParent ? ` <span style="font-weight:400;font-size:0.85em;color:#9c27b0;">for Part #${linkedParent.partNumber}</span>` : ''}
           </div>
           <div style="font-size:1rem;font-weight:700;margin:6px 0;color:#333">${materialLine}</div>
           ${part.clientPartNumber ? `<div style="margin-bottom:4px;font-size:0.9rem"><strong>Client Part#:</strong> ${part.clientPartNumber}</div>` : ''}
@@ -1042,18 +1059,35 @@ function WorkOrderDetailsPage() {
         </tr>
       </thead>
       <tbody>
-        ${order.parts?.sort((a, b) => a.partNumber - b.partNumber).filter(p => p.partType !== 'rush_service').map(part => `
-          <tr style="border-bottom:1px solid #eee">
-            <td style="padding:6px 8px">${part.partNumber}</td>
-            <td style="padding:6px 8px">${PART_TYPES[part.partType]?.label || part.partType}${part.materialDescription ? `<div style="font-size:0.8em;color:#666">${part.materialDescription}</div>` : ''}</td>
+        ${(() => {
+          const sorted = (order.parts || []).sort((a, b) => a.partNumber - b.partNumber).filter(p => p.partType !== 'rush_service');
+          const regular = sorted.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !((p.formData || {})._linkedPartId || p._linkedPartId));
+          const services = sorted.filter(p => ['fab_service', 'shop_rate'].includes(p.partType) && ((p.formData || {})._linkedPartId || p._linkedPartId));
+          const grouped = [];
+          const used = new Set();
+          regular.forEach(rp => {
+            grouped.push(rp);
+            services.forEach(sp => {
+              const lid = (sp.formData || {})._linkedPartId || sp._linkedPartId;
+              if (String(lid) === String(rp.id) && !used.has(sp.id)) { grouped.push(sp); used.add(sp.id); }
+            });
+          });
+          services.forEach(sp => { if (!used.has(sp.id)) grouped.push(sp); });
+          return grouped.map(part => {
+            const isLS = ['fab_service', 'shop_rate'].includes(part.partType) && ((part.formData || {})._linkedPartId || part._linkedPartId);
+            return `
+          <tr style="border-bottom:1px solid #eee;${isLS ? 'background:#fce4ec;' : ''}">
+            <td style="padding:6px 8px">${isLS ? '' : part.partNumber}</td>
+            <td style="padding:6px 8px;${isLS ? 'padding-left:20px;' : ''}">${isLS ? '↳ ' : ''}${PART_TYPES[part.partType]?.label || part.partType}${part.materialDescription ? `<div style="font-size:0.8em;color:#666">${part.materialDescription}</div>` : ''}</td>
             <td style="padding:6px 8px;text-align:right">${part.quantity}</td>
             <td style="padding:6px 8px;text-align:right">${formatCurrency(part.laborTotal)}</td>
             <td style="padding:6px 8px;text-align:right">${formatCurrency(part.materialTotal)}</td>
             <td style="padding:6px 8px;text-align:right">${formatCurrency(part.setupCharge)}</td>
             <td style="padding:6px 8px;text-align:right">${formatCurrency(part.otherCharges)}</td>
             <td style="padding:6px 8px;text-align:right;font-weight:600">${formatCurrency(part.partTotal)}</td>
-          </tr>
-        `).join('') || ''}
+          </tr>`;
+          }).join('');
+        })()}
       </tbody>
     </table>
   ` : ''}
@@ -1873,13 +1907,44 @@ function WorkOrderDetailsPage() {
           </div>
         ) : (
           <div>
-            {order.parts.sort((a, b) => a.partNumber - b.partNumber).map(part => (
-              <div key={part.id} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 16, marginBottom: 12, background: part.status === 'completed' ? '#f9fff9' : 'white' }}>
+            {(() => {
+              // Group parts: regular parts first, then linked services right after their parent
+              const sortedParts = [...order.parts].sort((a, b) => a.partNumber - b.partNumber);
+              const regularParts = sortedParts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !(p._linkedPartId || (p.formData || {})._linkedPartId));
+              const serviceParts = sortedParts.filter(p => ['fab_service', 'shop_rate'].includes(p.partType) && (p._linkedPartId || (p.formData || {})._linkedPartId));
+              const grouped = [];
+              const usedServiceIds = new Set();
+              regularParts.forEach(rp => {
+                grouped.push(rp);
+                serviceParts.forEach(sp => {
+                  const linkedId = sp._linkedPartId || (sp.formData || {})._linkedPartId;
+                  if (String(linkedId) === String(rp.id) && !usedServiceIds.has(sp.id)) {
+                    grouped.push(sp);
+                    usedServiceIds.add(sp.id);
+                  }
+                });
+              });
+              serviceParts.forEach(sp => { if (!usedServiceIds.has(sp.id)) grouped.push(sp); });
+              return grouped;
+            })().map(part => {
+              const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
+              const linkedParent = isLinkedService ? order.parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
+              return (
+              <div key={part.id} style={{
+                border: isLinkedService ? '2px solid #ce93d8' : '1px solid #e0e0e0',
+                borderRadius: isLinkedService ? 4 : 8, padding: isLinkedService ? '12px 16px' : 16, marginBottom: isLinkedService ? 4 : 12,
+                marginLeft: isLinkedService ? 32 : 0, marginTop: isLinkedService ? -4 : 0,
+                background: isLinkedService ? '#fce4ec' : (part.status === 'completed' ? '#f9fff9' : 'white'),
+              }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontWeight: 600, fontSize: '1.1rem' }}>#{part.partNumber}</span>
-                      <span style={{ color: '#1976d2' }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
+                      {isLinkedService && <span style={{ color: '#7b1fa2', fontWeight: 700 }}>↳</span>}
+                      <span style={{ fontWeight: 600, fontSize: isLinkedService ? '1rem' : '1.1rem' }}>#{part.partNumber}</span>
+                      <span style={{ color: isLinkedService ? '#7b1fa2' : '#1976d2' }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
+                      {isLinkedService && linkedParent && (
+                        <span style={{ fontSize: '0.8rem', color: '#9c27b0' }}>for Part #{linkedParent.partNumber}</span>
+                      )}
                       <StatusBadge status={part.status} />
                       {part.materialOrdered && (
                         <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '2px 8px', borderRadius: 4, fontSize: '0.7rem' }}>
@@ -2023,7 +2088,7 @@ function WorkOrderDetailsPage() {
                   )}
                 </div>
               </div>
-            ))}
+            ); })}
           </div>
         )}
       </div>
@@ -2050,11 +2115,29 @@ function WorkOrderDetailsPage() {
                 </tr>
               </thead>
               <tbody>
-                {order.parts.sort((a, b) => a.partNumber - b.partNumber).filter(p => p.partType !== 'rush_service').map(part => (
-                  <tr key={part.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: 8 }}>{part.partNumber}</td>
-                    <td style={{ padding: 8 }}>
-                      {PART_TYPES[part.partType]?.label || part.partType}
+                {(() => {
+                  const sorted = [...order.parts].sort((a, b) => a.partNumber - b.partNumber).filter(p => p.partType !== 'rush_service');
+                  const regular = sorted.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !(p._linkedPartId || (p.formData || {})._linkedPartId));
+                  const services = sorted.filter(p => ['fab_service', 'shop_rate'].includes(p.partType) && (p._linkedPartId || (p.formData || {})._linkedPartId));
+                  const grouped = [];
+                  const used = new Set();
+                  regular.forEach(rp => {
+                    grouped.push(rp);
+                    services.forEach(sp => {
+                      const lid = sp._linkedPartId || (sp.formData || {})._linkedPartId;
+                      if (String(lid) === String(rp.id) && !used.has(sp.id)) { grouped.push(sp); used.add(sp.id); }
+                    });
+                  });
+                  services.forEach(sp => { if (!used.has(sp.id)) grouped.push(sp); });
+                  return grouped;
+                })().map(part => {
+                  const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
+                  return (
+                  <tr key={part.id} style={{ borderBottom: '1px solid #eee', background: isLinkedService ? '#fce4ec' : 'transparent' }}>
+                    <td style={{ padding: 8 }}>{isLinkedService ? '' : part.partNumber}</td>
+                    <td style={{ padding: 8, paddingLeft: isLinkedService ? 24 : 8 }}>
+                      {isLinkedService && <span style={{ color: '#7b1fa2', marginRight: 4 }}>↳</span>}
+                      <span style={{ color: isLinkedService ? '#7b1fa2' : 'inherit' }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
                       {part.materialDescription && <div style={{ fontSize: '0.8rem', color: '#666' }}>{part.materialDescription}</div>}
                     </td>
                     <td style={{ padding: 8, textAlign: 'right' }}>{part.quantity}</td>
@@ -2064,7 +2147,8 @@ function WorkOrderDetailsPage() {
                     <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.otherCharges)}</td>
                     <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{formatCurrency(part.partTotal)}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

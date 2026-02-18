@@ -963,7 +963,24 @@ function EstimateDetailsPage() {
   
   const printEstimate = () => {
     const totals = calculateTotals();
-    const partsHtml = parts.filter(p => p.partType !== 'rush_service').map(part => {
+    const partsHtml = (() => {
+      const sorted = parts.filter(p => p.partType !== 'rush_service').sort((a, b) => a.partNumber - b.partNumber);
+      const regular = sorted.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !(p._linkedPartId || (p.formData || {})._linkedPartId));
+      const services = sorted.filter(p => ['fab_service', 'shop_rate'].includes(p.partType) && (p._linkedPartId || (p.formData || {})._linkedPartId));
+      const grouped = [];
+      const used = new Set();
+      regular.forEach(rp => {
+        grouped.push(rp);
+        services.forEach(sp => {
+          const lid = sp._linkedPartId || (sp.formData || {})._linkedPartId;
+          if (String(lid) === String(rp.id) && !used.has(sp.id)) { grouped.push(sp); used.add(sp.id); }
+        });
+      });
+      services.forEach(sp => { if (!used.has(sp.id)) grouped.push(sp); });
+      return grouped;
+    })().map(part => {
+      const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
+      const linkedParent = isLinkedService ? parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
       const calc = calculatePartTotal(part);
       const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
       const pricingHtml = isEaPricing
@@ -976,8 +993,8 @@ function EstimateDetailsPage() {
             <tr><td>Rolling:</td><td style="text-align:right;">${formatCurrency(part.rollingCost)}</td></tr>
             <tr><td>Other Services:</td><td style="text-align:right;">${formatCurrency(calc.otherTotal)}</td></tr>
             <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Part Total:</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`;
-      return `<div style="border:1px solid #ddd;border-radius:8px;padding:16px;margin-bottom:12px;">
-        <h4 style="margin:0 0 8px;color:#1976d2;">Part #${part.partNumber} - ${PART_TYPES[part.partType]?.label || part.partType}</h4>
+      return `<div style="border:1px solid ${isLinkedService ? '#ce93d8' : '#ddd'};border-radius:${isLinkedService ? '4' : '8'}px;padding:${isLinkedService ? '12' : '16'}px;margin-bottom:${isLinkedService ? '4' : '12'}px;margin-left:${isLinkedService ? '32' : '0'}px;background:${isLinkedService ? '#fce4ec' : 'white'};">
+        <h4 style="margin:0 0 8px;color:${isLinkedService ? '#7b1fa2' : '#1976d2'};">${isLinkedService ? '↳ ' : ''}Part #${part.partNumber} - ${PART_TYPES[part.partType]?.label || part.partType}${isLinkedService && linkedParent ? ` <span style="font-weight:400;font-size:0.85em;color:#9c27b0;">for Part #${linkedParent.partNumber}</span>` : ''}</h4>
         <p style="margin:0 0 4px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''} ${part.cutFileReference ? `<span style="color:#1565c0">Cut File: ${part.cutFileReference}</span>` : ''}</p>
         <p style="margin:0 0 4px;"><strong>Qty:</strong> ${part.quantity}${part.sectionSize ? ` | <strong>Size:</strong> ${part.partType === 'pipe_roll' && part._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${part._schedule} Pipe`) : part.sectionSize}` : ''}${part.thickness ? ` | <strong>Thk:</strong> ${part.thickness}` : ''}${part.outerDiameter ? ` | <strong>OD:</strong> ${part.outerDiameter}"` : ''}${part.wallThickness && part.wallThickness !== 'SOLID' ? ` | <strong>Wall:</strong> ${part.wallThickness}` : ''}${part.length ? ` | <strong>Length:</strong> ${part.length}` : ''}${part.material ? ` | <strong>Grade:</strong> ${part.material}` : ''}</p>
         ${part.partType === 'cone_roll' ? (() => {
@@ -1266,14 +1283,48 @@ function EstimateDetailsPage() {
 
             {isNew && <p style={{ color: '#666', padding: 20, textAlign: 'center' }}>Save the estimate first to add parts</p>}
 
-            {parts.map(part => {
+            {(() => {
+              // Group parts: regular parts first, then linked services right after their parent
+              const sortedParts = [...parts].sort((a, b) => a.partNumber - b.partNumber);
+              const regularParts = sortedParts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !(p._linkedPartId || (p.formData || {})._linkedPartId));
+              const serviceParts = sortedParts.filter(p => ['fab_service', 'shop_rate'].includes(p.partType) && (p._linkedPartId || (p.formData || {})._linkedPartId));
+              const grouped = [];
+              const usedServiceIds = new Set();
+              regularParts.forEach(rp => {
+                grouped.push(rp);
+                serviceParts.forEach(sp => {
+                  const linkedId = sp._linkedPartId || (sp.formData || {})._linkedPartId;
+                  if (String(linkedId) === String(rp.id) && !usedServiceIds.has(sp.id)) {
+                    grouped.push(sp);
+                    usedServiceIds.add(sp.id);
+                  }
+                });
+              });
+              // Add any unlinked services at the end
+              serviceParts.forEach(sp => { if (!usedServiceIds.has(sp.id)) grouped.push(sp); });
+              return grouped;
+            })().map(part => {
               const calc = calculatePartTotal(part);
+              const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
+              const linkedParent = isLinkedService ? parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
               return (
-                <div key={part.id} style={{ border: '2px solid #e0e0e0', borderRadius: 12, padding: 16, marginBottom: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
+                <div key={part.id} style={{
+                  border: isLinkedService ? '2px solid #ce93d8' : '2px solid #e0e0e0',
+                  borderRadius: 12, padding: isLinkedService ? '12px 16px' : 16, marginBottom: isLinkedService ? 4 : 12,
+                  marginLeft: isLinkedService ? 32 : 0, marginTop: isLinkedService ? -4 : 0,
+                  background: isLinkedService ? '#fce4ec' : 'white',
+                  borderTopLeftRadius: isLinkedService ? 4 : 12, borderTopRightRadius: isLinkedService ? 4 : 12,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 8, borderBottom: isLinkedService ? '1px solid #e1bee7' : '1px solid #eee' }}>
                     <div>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1976d2' }}>
+                      <div style={{ fontSize: isLinkedService ? '0.95rem' : '1.1rem', fontWeight: 700, color: isLinkedService ? '#7b1fa2' : '#1976d2' }}>
+                        {isLinkedService && <span style={{ marginRight: 6 }}>↳</span>}
                         Part #{part.partNumber} - {PART_TYPES[part.partType]?.label || part.partType}
+                        {isLinkedService && linkedParent && (
+                          <span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#9c27b0', marginLeft: 8 }}>
+                            for Part #{linkedParent.partNumber}
+                          </span>
+                        )}
                       </div>
                       <div style={{ color: '#666', fontSize: '0.85rem' }}>
                         {part.clientPartNumber && `Client Part#: ${part.clientPartNumber}`}
@@ -1609,11 +1660,27 @@ function EstimateDetailsPage() {
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: 8 }}>Parts Breakdown</div>
                 <div style={{ fontSize: '0.8rem', padding: 8, background: '#f9f9f9', borderRadius: 8 }}>
-                  {parts.filter(p => p.partType !== 'rush_service').map(part => {
+                  {(() => {
+                    const sorted = parts.filter(p => p.partType !== 'rush_service').sort((a, b) => a.partNumber - b.partNumber);
+                    const regular = sorted.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !(p._linkedPartId || (p.formData || {})._linkedPartId));
+                    const services = sorted.filter(p => ['fab_service', 'shop_rate'].includes(p.partType) && (p._linkedPartId || (p.formData || {})._linkedPartId));
+                    const grouped = [];
+                    const used = new Set();
+                    regular.forEach(rp => {
+                      grouped.push(rp);
+                      services.forEach(sp => {
+                        const lid = sp._linkedPartId || (sp.formData || {})._linkedPartId;
+                        if (String(lid) === String(rp.id) && !used.has(sp.id)) { grouped.push(sp); used.add(sp.id); }
+                      });
+                    });
+                    services.forEach(sp => { if (!used.has(sp.id)) grouped.push(sp); });
+                    return grouped;
+                  })().map(part => {
                     const calc = calculatePartTotal(part);
+                    const isLS = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
                     return (
-                      <div key={part.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                        <span>Part #{part.partNumber}</span>
+                      <div key={part.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', paddingLeft: isLS ? 12 : 0, color: isLS ? '#7b1fa2' : 'inherit', fontSize: isLS ? '0.75rem' : '0.8rem' }}>
+                        <span>{isLS ? '↳ ' : ''}Part #{part.partNumber}{isLS ? ` (${PART_TYPES[part.partType]?.label})` : ''}</span>
                         <span>{formatCurrency(calc.partTotal)}</span>
                       </div>
                     );
