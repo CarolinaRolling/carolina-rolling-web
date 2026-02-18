@@ -15,6 +15,9 @@ import ConeRollForm from '../components/ConeRollForm';
 import TeeBarRollForm from '../components/TeeBarRollForm';
 import RushServiceForm, { EXPEDITE_OPTIONS, EMERGENCY_OPTIONS } from '../components/RushServiceForm';
 import PressBrakeForm from '../components/PressBrakeForm';
+import FlatStockForm from '../components/FlatStockForm';
+import FabServiceForm from '../components/FabServiceForm';
+import ShopRateForm from '../components/ShopRateForm';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
@@ -291,7 +294,7 @@ function WorkOrderDetailsPage() {
 
   const getMinimumInfo = () => {
     let totalLabor = 0, totalMaterial = 0, highestMinimum = 0, highestMinRule = null;
-    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'];
+    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
     const parts = order?.parts || [];
 
     parts.forEach(part => {
@@ -602,6 +605,14 @@ function WorkOrderDetailsPage() {
       if (partData._expediteEnabled && partData._expediteType === 'custom_pct' && !partData._expediteCustomPct) warnings.push('Custom percentage is required');
       if (partData._expediteEnabled && partData._expediteType === 'custom_amt' && !partData._expediteCustomAmt) warnings.push('Custom amount is required');
     }
+    if (selectedPartType === 'fab_service') {
+      if (!partData._serviceType) warnings.push('Service type is required');
+      if (!partData._linkedPartId) warnings.push('A linked part must be selected');
+    }
+    if (selectedPartType === 'shop_rate') {
+      if (!partData._shopDescription) warnings.push('Job description is required');
+      if (!partData._shopHours || parseFloat(partData._shopHours) <= 0) warnings.push('Estimated hours is required');
+    }
     if (!partData.quantity || parseInt(partData.quantity) < 1) warnings.push('Quantity must be at least 1');
     return warnings;
   };
@@ -627,7 +638,7 @@ function WorkOrderDetailsPage() {
       }
       
       // Recalculate partTotal at save time for ea-priced parts
-      const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'];
+      const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
       // Clean price fields to exact 2-decimal values
       if (dataToSend.laborTotal) dataToSend.laborTotal = (Math.round(parseFloat(dataToSend.laborTotal) * 100) / 100).toFixed(2);
       if (dataToSend.materialTotal) dataToSend.materialTotal = (Math.round(parseFloat(dataToSend.materialTotal) * 100) / 100).toFixed(2);
@@ -1226,7 +1237,7 @@ function WorkOrderDetailsPage() {
   const calculateTotals = () => {
     const parts = order?.parts || [];
     const minInfo = getMinimumInfo();
-    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll'];
+    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
     
     let nonEaTotal = 0;
     let eaPricedTotal = 0;
@@ -2280,7 +2291,7 @@ function WorkOrderDetailsPage() {
               )}
 
               {/* Common fields for types that have their own form */}
-              {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'cone_roll', 'tee_bar', 'press_brake'].includes(selectedPartType) && (
+              {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'cone_roll', 'tee_bar', 'press_brake', 'fab_service', 'shop_rate', 'rush_service'].includes(selectedPartType) && (
               <div className="grid grid-2" style={{ marginBottom: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Client Part Number</label>
@@ -2298,7 +2309,11 @@ function WorkOrderDetailsPage() {
               )}
 
               {/* Type-specific form */}
-              {(selectedPartType === 'plate_roll' || selectedPartType === 'flat_stock') ? (
+              {selectedPartType === 'flat_stock' ? (
+                <div className="grid grid-2">
+                  <FlatStockForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'plate_roll' ? (
                 <div className="grid grid-2">
                   <PlateRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
                 </div>
@@ -2337,6 +2352,14 @@ function WorkOrderDetailsPage() {
               ) : selectedPartType === 'cone_roll' ? (
                 <div className="grid grid-2">
                   <ConeRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'fab_service' ? (
+                <div className="grid grid-2">
+                  <FabServiceForm partData={partData} setPartData={setPartData} estimateParts={order?.parts || []} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'shop_rate' ? (
+                <div className="grid grid-2">
+                  <ShopRateForm partData={partData} setPartData={setPartData} />
                 </div>
               ) : selectedPartType === 'rush_service' ? (
                 <div className="grid grid-2">
