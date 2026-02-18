@@ -1075,16 +1075,22 @@ function WorkOrderDetailsPage() {
           services.forEach(sp => { if (!used.has(sp.id)) grouped.push(sp); });
           return grouped.map(part => {
             const isLS = ['fab_service', 'shop_rate'].includes(part.partType) && ((part.formData || {})._linkedPartId || part._linkedPartId);
+            const isEa = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
+            const printTotals = calculateTotals();
+            const lr = (printTotals.minInfo.minimumApplies && printTotals.minInfo.totalLabor > 0 && isEa) ? printTotals.minInfo.adjustedLabor / printTotals.minInfo.totalLabor : 1;
+            const adjLab = (parseFloat(part.laborTotal) || 0) * lr;
+            const labDelta = (adjLab - (parseFloat(part.laborTotal) || 0)) * (parseInt(part.quantity) || 1);
+            const adjPT = isEa ? (parseFloat(part.partTotal) || 0) + labDelta : (parseFloat(part.partTotal) || 0);
             return `
           <tr style="border-bottom:1px solid #eee;${isLS ? 'background:#fce4ec;' : ''}">
             <td style="padding:6px 8px">${isLS ? '' : part.partNumber}</td>
             <td style="padding:6px 8px;${isLS ? 'padding-left:20px;' : ''}">${isLS ? '↳ ' : ''}${PART_TYPES[part.partType]?.label || part.partType}${part.materialDescription ? `<div style="font-size:0.8em;color:#666">${part.materialDescription}</div>` : ''}</td>
             <td style="padding:6px 8px;text-align:right">${part.quantity}</td>
-            <td style="padding:6px 8px;text-align:right">${formatCurrency(part.laborTotal)}</td>
+            <td style="padding:6px 8px;text-align:right">${formatCurrency(adjLab)}</td>
             <td style="padding:6px 8px;text-align:right">${formatCurrency(part.materialTotal)}</td>
             <td style="padding:6px 8px;text-align:right">${formatCurrency(part.setupCharge)}</td>
             <td style="padding:6px 8px;text-align:right">${formatCurrency(part.otherCharges)}</td>
-            <td style="padding:6px 8px;text-align:right;font-weight:600">${formatCurrency(part.partTotal)}</td>
+            <td style="padding:6px 8px;text-align:right;font-weight:600">${formatCurrency(adjPT)}</td>
           </tr>`;
           }).join('');
         })()}
@@ -2132,6 +2138,12 @@ function WorkOrderDetailsPage() {
                   return grouped;
                 })().map(part => {
                   const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
+                  const isEa = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
+                  const woTotals = calculateTotals();
+                  const lr = (woTotals.minInfo.minimumApplies && woTotals.minInfo.totalLabor > 0 && isEa) ? woTotals.minInfo.adjustedLabor / woTotals.minInfo.totalLabor : 1;
+                  const adjLabor = (parseFloat(part.laborTotal) || 0) * lr;
+                  const laborDelta = (adjLabor - (parseFloat(part.laborTotal) || 0)) * (parseInt(part.quantity) || 1);
+                  const adjPartTotal = isEa ? (parseFloat(part.partTotal) || 0) + laborDelta : (parseFloat(part.partTotal) || 0);
                   return (
                   <tr key={part.id} style={{ borderBottom: '1px solid #eee', background: isLinkedService ? '#fce4ec' : 'transparent' }}>
                     <td style={{ padding: 8 }}>{isLinkedService ? '' : part.partNumber}</td>
@@ -2141,11 +2153,11 @@ function WorkOrderDetailsPage() {
                       {part.materialDescription && <div style={{ fontSize: '0.8rem', color: '#666' }}>{part.materialDescription}</div>}
                     </td>
                     <td style={{ padding: 8, textAlign: 'right' }}>{part.quantity}</td>
-                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.laborTotal)}</td>
+                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(adjLabor)}</td>
                     <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.materialTotal)}</td>
                     <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.setupCharge)}</td>
                     <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.otherCharges)}</td>
-                    <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{formatCurrency(part.partTotal)}</td>
+                    <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{formatCurrency(adjPartTotal)}</td>
                   </tr>
                   );
                 })}

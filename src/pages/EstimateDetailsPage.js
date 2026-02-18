@@ -500,6 +500,8 @@ function EstimateDetailsPage() {
   const handleDownloadPDF = async () => {
     try {
       setDownloadingPDF(true);
+      // Save current state first so PDF reflects on-screen values (tax exempt, pricing, etc.)
+      await updateEstimate(id, { ...formData });
       const response = await downloadEstimatePDF(id);
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
@@ -983,12 +985,17 @@ function EstimateDetailsPage() {
       const linkedParent = isLinkedService ? parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
       const calc = calculatePartTotal(part);
       const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
+      // Adjust labor proportionally when minimum applies
+      const laborRatio = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEaPricing) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
+      const adjLaborEach = calc.laborEach * laborRatio;
+      const adjUnitPrice = (calc.materialEach || 0) + adjLaborEach;
+      const adjPartTotal = adjUnitPrice * (parseInt(part.quantity) || 1);
       const pricingHtml = isEaPricing
         ? `<table style="width:100%;margin-top:8px;">
             ${calc.materialEach > 0 ? `<tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialEach)}</td></tr>` : ''}
-            <tr><td>${part.partType === 'fab_service' ? 'Service' : part.partType === 'shop_rate' ? 'Shop Rate' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}:</td><td style="text-align:right;">${formatCurrency(calc.laborEach)}</td></tr>
-            <tr style="border-top:1px solid #ddd;"><td><strong>Unit Price:</strong></td><td style="text-align:right;"><strong>${formatCurrency(calc.unitPrice)}</strong></td></tr>
-            <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Line Total (${part.quantity} × ${formatCurrency(calc.unitPrice)}):</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`
+            <tr><td>${part.partType === 'fab_service' ? 'Service' : part.partType === 'shop_rate' ? 'Shop Rate' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}:</td><td style="text-align:right;">${formatCurrency(adjLaborEach)}</td></tr>
+            <tr style="border-top:1px solid #ddd;"><td><strong>Unit Price:</strong></td><td style="text-align:right;"><strong>${formatCurrency(adjUnitPrice)}</strong></td></tr>
+            <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Line Total (${part.quantity} × ${formatCurrency(adjUnitPrice)}):</td><td style="text-align:right;">${formatCurrency(adjPartTotal)}</td></tr></table>`
         : `<table style="width:100%;margin-top:8px;"><tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialTotal)}</td></tr>
             <tr><td>Rolling:</td><td style="text-align:right;">${formatCurrency(part.rollingCost)}</td></tr>
             <tr><td>Other Services:</td><td style="text-align:right;">${formatCurrency(calc.otherTotal)}</td></tr>
@@ -1418,6 +1425,12 @@ function EstimateDetailsPage() {
               const calc = calculatePartTotal(part);
               const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
               const linkedParent = isLinkedService ? parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
+              // Adjust labor proportionally when minimum charge applies
+              const isEa = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
+              const laborRatio = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEa) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
+              const adjLabor = (calc.laborEach || 0) * laborRatio;
+              const adjUnitPrice = (calc.materialEach || 0) + adjLabor;
+              const adjPartTotal = adjUnitPrice * (parseInt(part.quantity) || 1);
               return (
                 <div key={part.id} style={{
                   border: isLinkedService ? '2px solid #ce93d8' : '2px solid #e0e0e0',
@@ -1589,15 +1602,15 @@ function EstimateDetailsPage() {
                       {/* Rolling/Labor line */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
                         <span>{part.partType === 'fab_service' ? 'Service' : part.partType === 'shop_rate' ? 'Shop Rate' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}</span>
-                        <strong>{formatCurrency(calc.laborEach)}</strong>
+                        <strong>{formatCurrency(adjLabor)}</strong>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #ddd', marginTop: 4, fontWeight: 600 }}>
                         <span>Unit Price</span>
-                        <span style={{ color: '#1976d2' }}>{formatCurrency(calc.unitPrice)}</span>
+                        <span style={{ color: '#1976d2' }}>{formatCurrency(adjUnitPrice)}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '1.05rem', borderTop: '1px solid #ddd' }}>
-                        <strong>Line Total ({part.quantity} × {formatCurrency(calc.unitPrice)})</strong>
-                        <strong style={{ color: '#2e7d32' }}>{formatCurrency(calc.partTotal)}</strong>
+                        <strong>Line Total ({part.quantity} × {formatCurrency(adjUnitPrice)})</strong>
+                        <strong style={{ color: '#2e7d32' }}>{formatCurrency(adjPartTotal)}</strong>
                       </div>
                       {part.partType === 'shop_rate' && (
                         <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 6, padding: 8, marginTop: 8, fontSize: '0.8rem', color: '#e65100' }}>
@@ -1789,10 +1802,13 @@ function EstimateDetailsPage() {
                   })().map(part => {
                     const calc = calculatePartTotal(part);
                     const isLS = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
+                    const isEa = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
+                    const lr = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEa) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
+                    const adjTotal = isEa ? ((calc.materialEach || 0) + (calc.laborEach || 0) * lr) * (parseInt(part.quantity) || 1) : calc.partTotal;
                     return (
                       <div key={part.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', paddingLeft: isLS ? 12 : 0, color: isLS ? '#7b1fa2' : 'inherit', fontSize: isLS ? '0.75rem' : '0.8rem' }}>
                         <span>{isLS ? '↳ ' : ''}Part #{part.partNumber}{isLS ? ` (${PART_TYPES[part.partType]?.label})` : ''}</span>
-                        <span>{formatCurrency(calc.partTotal)}</span>
+                        <span>{formatCurrency(adjTotal)}</span>
                       </div>
                     );
                   })}
