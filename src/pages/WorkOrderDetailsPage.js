@@ -1127,7 +1127,7 @@ function WorkOrderDetailsPage() {
       })()}
       <div style="display:flex;justify-content:space-between;padding:4px 0"><span>Parts Subtotal</span><strong>${formatCurrency(calculateTotals().partsSubtotal)}</strong></div>
       ${calculateTotals().trucking > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>${order.truckingDescription || 'Trucking'}</span><strong>${formatCurrency(calculateTotals().trucking)}</strong></div>` : ''}
-      ${(editData.taxExempt || order.taxExempt) ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax</span><span style="color:#c62828;font-weight:bold">EXEMPT${(editData.taxExemptCertNumber || order.taxExemptCertNumber) ? ' (Cert#: ' + (editData.taxExemptCertNumber || order.taxExemptCertNumber) + ')' : ''}</span></div>` : (calculateTotals().taxAmount > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax (${calculateTotals().taxRate}%)</span><strong>${formatCurrency(calculateTotals().taxAmount)}</strong></div>` : '')}
+      ${(editData.taxExempt || order.taxExempt) ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax</span><span style="color:#c62828;font-weight:bold">EXEMPT</span></div>` : (calculateTotals().taxAmount > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax (${calculateTotals().taxRate}%)</span><strong>${formatCurrency(calculateTotals().taxAmount)}</strong></div>` : '')}
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid #1976d2;margin-top:4px;font-size:1.2rem">
         <strong>Grand Total</strong><strong style="color:#2e7d32">${formatCurrency(calculateTotals().grandTotal)}</strong>
       </div>

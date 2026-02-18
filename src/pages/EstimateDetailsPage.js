@@ -501,7 +501,23 @@ function EstimateDetailsPage() {
     try {
       setDownloadingPDF(true);
       // Save current state first so PDF reflects on-screen values (tax exempt, pricing, etc.)
-      await updateEstimate(id, { ...formData });
+      try {
+        await updateEstimate(id, { 
+          taxExempt: formData.taxExempt, 
+          taxExemptReason: formData.taxExemptReason,
+          taxExemptCertNumber: formData.taxExemptCertNumber,
+          taxRate: formData.taxRate,
+          truckingCost: formData.truckingCost,
+          truckingDescription: formData.truckingDescription,
+          discountPercent: formData.discountPercent,
+          discountAmount: formData.discountAmount,
+          discountReason: formData.discountReason,
+          minimumOverride: formData.minimumOverride,
+          minimumOverrideReason: formData.minimumOverrideReason
+        });
+      } catch (saveErr) {
+        console.warn('Auto-save before PDF failed:', saveErr);
+      }
       const response = await downloadEstimatePDF(id);
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
@@ -1037,7 +1053,7 @@ function EstimateDetailsPage() {
     }).join('');
     
     const taxLine = formData.taxExempt 
-      ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Tax</span><span style="color:#c62828;font-weight:bold;">EXEMPT${formData.taxExemptCertNumber ? ` (Cert#: ${formData.taxExemptCertNumber})` : ''}</span></div>`
+      ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Tax</span><span style="color:#c62828;font-weight:bold;">EXEMPT</span></div>`
       : `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Tax (${formData.taxRate}%)</span><span>${formatCurrency(totals.taxAmount)}</span></div>`;
     
     const discountLine = totals.discountAmt > 0
