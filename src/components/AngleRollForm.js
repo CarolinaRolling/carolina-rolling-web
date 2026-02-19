@@ -256,7 +256,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     // Orientation option
     if (partData._orientationOption) {
       const combo = partData.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID';
-      lines.push(`Orientation: ${combo} Option ${partData._orientationOption} (see diagram)`);
+      lines.push(`Orientation: ${combo} Option ${partData._orientationOption}`);
     }
     
     if (riseCalc) {

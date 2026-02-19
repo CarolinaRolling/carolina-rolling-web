@@ -166,7 +166,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
     // Orientation option
     if (partData._orientationOption) {
       const combo = partData.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID';
-      lines.push(`Orientation: ${combo} Option ${partData._orientationOption} (see diagram)`);
+      lines.push(`Orientation: ${combo} Option ${partData._orientationOption}`);
     }
     if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
     if (completeRings && ringCalc && !ringCalc.error) {
