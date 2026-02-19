@@ -246,6 +246,7 @@ export const getNextDRNumber = () => api.get('/dr-numbers/next');
 export const setNextDRNumber = (nextNumber) => api.put('/dr-numbers/next', { nextNumber });
 export const assignDRNumber = (data) => api.post('/dr-numbers/assign', data);
 export const voidDRNumber = (drNumber, reason, voidedBy) => api.post(`/dr-numbers/${drNumber}/void`, { reason, voidedBy });
+export const releaseDRNumber = (drNumber) => api.delete(`/dr-numbers/${drNumber}/release`);
 export const getVoidedDRNumbers = () => api.get('/dr-numbers/voided');
 
 // PO Numbers

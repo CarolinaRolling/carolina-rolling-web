@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
@@ -227,6 +227,17 @@ function AppRoutes() {
 }
 
 function App() {
+  // Prevent scroll wheel from changing number input values globally
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (e.target && e.target.type === 'number') {
+        e.target.blur();
+      }
+    };
+    document.addEventListener('wheel', handleWheel, { passive: true });
+    return () => document.removeEventListener('wheel', handleWheel);
+  }, []);
+
   return (
     <AuthProvider>
       <Router>
