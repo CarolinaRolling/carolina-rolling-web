@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, AlertTriangle, Trash2, RefreshCw, Save, Unlock, Search } from 'lucide-react';
-import { getPONumbers, getPONumberStats, setNextPONumber, voidPONumber, releasePONumber, getVoidedPONumbers } from '../services/api';
+import { ShoppingCart, AlertTriangle, Trash2, RefreshCw, Save, Unlock, Search, Edit2 } from 'lucide-react';
+import { getPONumbers, getPONumberStats, setNextPONumber, voidPONumber, releasePONumber, reassignPONumber, getVoidedPONumbers } from '../services/api';
 
 function PONumbersPage() {
   const [stats, setStats] = useState({ lastUsed: 0, nextNumber: 1, voidedCount: 0, activeCount: 0 });
@@ -18,6 +18,8 @@ function PONumbersPage() {
   const [releaseConfirm, setReleaseConfirm] = useState(null);
   const [searchFilter, setSearchFilter] = useState('');
   const [tab, setTab] = useState('active');
+  const [editingPO, setEditingPO] = useState(null);
+  const [editValue, setEditValue] = useState('');
 
   useEffect(() => { loadData(); }, []);
 
@@ -80,6 +82,22 @@ function PONumbersPage() {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Failed to release PO number');
+    } finally { setSaving(false); }
+  };
+
+  const handleReassign = async (oldPO) => {
+    const newPO = parseInt(editValue);
+    if (!newPO || newPO < 1) { setError('Please enter a valid number'); return; }
+    if (newPO === oldPO) { setEditingPO(null); return; }
+    try {
+      setSaving(true); setError(null);
+      await reassignPONumber(oldPO, newPO);
+      setSuccess(`PO number changed from PO${oldPO} → PO${newPO}`);
+      setEditingPO(null); setEditValue('');
+      loadData();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to change PO number');
     } finally { setSaving(false); }
   };
 
@@ -241,12 +259,31 @@ function PONumbersPage() {
           ) : (
             <table className="table">
               <thead>
-                <tr><th>PO #</th><th>Supplier</th><th>Client</th><th>Linked Order</th><th>Created</th><th style={{ width: 120 }}>Actions</th></tr>
+                <tr><th>PO #</th><th>Supplier</th><th>Client</th><th>Linked Order</th><th>Created</th><th style={{ width: 180 }}>Actions</th></tr>
               </thead>
               <tbody>
                 {filteredActive.map(po => (
                   <tr key={po.id} style={{ background: (!po.inboundOrderId && !po.workOrderId) ? '#fff3e0' : 'transparent' }}>
-                    <td><strong style={{ color: '#1976d2' }}>PO{po.poNumber}</strong></td>
+                    <td>
+                      {editingPO === po.poNumber ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontWeight: 700, color: '#1976d2' }}>PO</span>
+                          <input type="text" inputMode="numeric" value={editValue}
+                            onChange={(e) => setEditValue(e.target.value.replace(/[^0-9]/g, ''))}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleReassign(po.poNumber); if (e.key === 'Escape') setEditingPO(null); }}
+                            autoFocus onFocus={(e) => e.target.select()}
+                            style={{ width: 80, padding: '2px 6px', fontSize: '0.9rem', fontWeight: 700, border: '2px solid #1976d2', borderRadius: 4 }} />
+                          <button onClick={() => handleReassign(po.poNumber)} disabled={saving}
+                            style={{ background: '#1976d2', color: 'white', border: 'none', borderRadius: 4, padding: '3px 8px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                            {saving ? '...' : 'Save'}
+                          </button>
+                          <button onClick={() => setEditingPO(null)}
+                            style={{ background: '#eee', border: '1px solid #ccc', borderRadius: 4, padding: '3px 8px', fontSize: '0.75rem', cursor: 'pointer' }}>Cancel</button>
+                        </div>
+                      ) : (
+                        <strong style={{ color: '#1976d2' }}>PO{po.poNumber}</strong>
+                      )}
+                    </td>
                     <td>{po.supplier || '—'}</td>
                     <td>{po.clientName || '—'}</td>
                     <td>
@@ -259,23 +296,32 @@ function PONumbersPage() {
                     </td>
                     <td style={{ fontSize: '0.85rem', color: '#666' }}>{formatDate(po.createdAt)}</td>
                     <td>
-                      {releaseConfirm === po.poNumber ? (
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button onClick={() => handleRelease(po.poNumber)} disabled={saving}
-                            style={{ background: '#e65100', color: 'white', padding: '3px 8px', fontSize: '0.75rem', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-                            {saving ? '...' : 'Yes'}
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {editingPO !== po.poNumber && (
+                          <button onClick={() => { setEditingPO(po.poNumber); setEditValue(String(po.poNumber)); }}
+                            style={{ background: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9', padding: '3px 10px', fontSize: '0.75rem', borderRadius: 4, cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Edit2 size={12} /> Edit
                           </button>
-                          <button onClick={() => setReleaseConfirm(null)}
-                            style={{ padding: '3px 8px', fontSize: '0.75rem', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', background: 'white' }}>No</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setReleaseConfirm(po.poNumber)}
-                          style={{ background: (!po.inboundOrderId && !po.workOrderId) ? '#fff3e0' : '#f5f5f5', color: (!po.inboundOrderId && !po.workOrderId) ? '#e65100' : '#666',
-                            border: `1px solid ${(!po.inboundOrderId && !po.workOrderId) ? '#e65100' : '#ccc'}`, padding: '3px 10px', fontSize: '0.75rem', borderRadius: 4, cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Unlock size={12} /> Release
-                        </button>
-                      )}
+                        )}
+                        {releaseConfirm === po.poNumber ? (
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button onClick={() => handleRelease(po.poNumber)} disabled={saving}
+                              style={{ background: '#e65100', color: 'white', padding: '3px 8px', fontSize: '0.75rem', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+                              {saving ? '...' : 'Yes'}
+                            </button>
+                            <button onClick={() => setReleaseConfirm(null)}
+                              style={{ padding: '3px 8px', fontSize: '0.75rem', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', background: 'white' }}>No</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setReleaseConfirm(po.poNumber)}
+                            style={{ background: (!po.inboundOrderId && !po.workOrderId) ? '#fff3e0' : '#f5f5f5', color: (!po.inboundOrderId && !po.workOrderId) ? '#e65100' : '#666',
+                              border: `1px solid ${(!po.inboundOrderId && !po.workOrderId) ? '#e65100' : '#ccc'}`, padding: '3px 10px', fontSize: '0.75rem', borderRadius: 4, cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Unlock size={12} /> Release
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -1969,7 +1969,22 @@ function WorkOrderDetailsPage() {
                       )}
                       <StatusBadge status={part.status} />
                       {part.materialOrdered && (
-                        <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '2px 8px', borderRadius: 4, fontSize: '0.7rem' }}>
+                        <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '2px 8px', borderRadius: 4, fontSize: '0.7rem', cursor: 'pointer' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const current = part.materialPurchaseOrderNumber || '';
+                            const num = current.replace(/\D/g, '');
+                            const newNum = prompt(`Edit PO number (currently ${current}):\nEnter new number:`, num);
+                            if (newNum && newNum !== num) {
+                              const poNum = newNum.replace(/\D/g, '');
+                              if (poNum) {
+                                updateWorkOrderPart(id, part.id, { materialPurchaseOrderNumber: `PO${poNum}` })
+                                  .then(() => loadOrder())
+                                  .catch(err => setError('Failed to update PO number'));
+                              }
+                            }
+                          }}
+                          title="Click to edit PO number">
                           ✓ {part.materialPurchaseOrderNumber}
                         </span>
                       )}
@@ -2009,7 +2024,24 @@ function WorkOrderDetailsPage() {
                       </div>
                       {part.materialSource === 'we_order' && (
                         part.materialOrdered ? (
-                          <span style={{ fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>✓ {part.materialPurchaseOrderNumber}</span>
+                          <span style={{ fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600, cursor: 'pointer', borderBottom: '1px dashed #2e7d32' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const current = part.materialPurchaseOrderNumber || '';
+                              const num = current.replace(/\D/g, '');
+                              const newNum = prompt(`Edit PO number (currently ${current}):\nEnter new number:`, num);
+                              if (newNum && newNum !== num) {
+                                const poNum = newNum.replace(/\D/g, '');
+                                if (poNum) {
+                                  updateWorkOrderPart(id, part.id, { materialPurchaseOrderNumber: `PO${poNum}` })
+                                    .then(() => loadOrder())
+                                    .catch(err => setError('Failed to update PO number'));
+                                }
+                              }
+                            }}
+                            title="Click to edit PO number">
+                            ✓ {part.materialPurchaseOrderNumber}
+                          </span>
                         ) : (
                           <span style={{ fontSize: '0.8rem', color: '#e65100' }}>Needs ordering</span>
                         )

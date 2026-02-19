@@ -259,6 +259,7 @@ export const voidPONumber = (poNumber, reason, voidedBy) => api.post(`/po-number
 export const getVoidedPONumbers = () => api.get('/po-numbers/voided');
 export const deletePONumber = (id) => api.delete(`/po-numbers/${id}`);
 export const releasePONumber = (poNumber) => api.delete(`/po-numbers/${poNumber}/release`);
+export const reassignPONumber = (oldPoNumber, newPoNumber) => api.put(`/po-numbers/${oldPoNumber}/reassign`, { newPoNumber });
 
 // Daily Email Settings
 export const getDailyEmailSettings = () => api.get('/email/settings');
