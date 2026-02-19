@@ -253,6 +253,12 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     }
     lines.push(rollLine);
     
+    // Orientation option
+    if (partData._orientationOption) {
+      const combo = partData.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID';
+      lines.push(`Orientation: ${combo} Option ${partData._orientationOption} (see diagram)`);
+    }
+    
     if (riseCalc) {
       lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
     }
@@ -267,7 +273,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     }
     
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, isUnequalLegs, partData._legOrientation, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, isUnequalLegs, partData._legOrientation, partData._orientationOption, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded]);
 
   // Auto-update material description + sectionSize
   useEffect(() => {
@@ -407,7 +413,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
           </div>
           <div className="form-group">
             <label className="form-label">Measured At</label>
-            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasurePoint} onChange={(e) => { setRollMeasurePoint(e.target.value); setPartData(prev => ({ ...prev, _orientationOption: '' })); }}>
               <option value="inside">Inside</option>
               <option value="outside">Outside</option>
             </select>
@@ -466,7 +472,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
                 color: partData.rollType === 'easy_way' ? '#2e7d32' : '#666',
                 cursor: 'pointer'
               }}
-              onClick={() => setPartData({ ...partData, rollType: 'easy_way', _legOrientation: '' })}
+              onClick={() => setPartData({ ...partData, rollType: 'easy_way', _legOrientation: '', _orientationOption: '' })}
             >
               Easy Way (EW)
             </button>
@@ -478,12 +484,64 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
                 color: partData.rollType === 'hard_way' ? '#c62828' : '#666',
                 cursor: 'pointer'
               }}
-              onClick={() => setPartData({ ...partData, rollType: 'hard_way', _legOrientation: '' })}
+              onClick={() => setPartData({ ...partData, rollType: 'hard_way', _legOrientation: '', _orientationOption: '' })}
             >
               Hard Way (HW)
             </button>
           </div>
         </div>
+
+        {/* Measurement Orientation Diagram — EW+OD or HW+ID */}
+        {partData.rollType && rollMeasurePoint && !rollToMethod && (
+          (partData.rollType === 'easy_way' && rollMeasurePoint === 'outside') ||
+          (partData.rollType === 'hard_way' && rollMeasurePoint === 'inside')
+        ) && (
+          <div style={{
+            padding: 14, borderRadius: 8, marginBottom: 12,
+            background: partData._orientationOption ? '#e8f5e9' : '#fff3e0',
+            border: `2px solid ${partData._orientationOption ? '#4caf50' : '#ff9800'}`
+          }}>
+            <label className="form-label" style={{ 
+              color: partData._orientationOption ? '#2e7d32' : '#e65100', 
+              fontWeight: 700, marginBottom: 10, display: 'block' 
+            }}>
+              {partData._orientationOption ? '✅' : '⚠️'} Which orientation? Select where the {rollMeasurePoint === 'outside' ? 'OD' : 'ID'} is measured from:
+            </label>
+            <div style={{ display: 'flex', gap: 12 }}>
+              {[1, 2].map(opt => {
+                const imgFile = partData.rollType === 'easy_way' 
+                  ? `EWODOp${opt}.png` 
+                  : `HWIDOp${opt}.png`;
+                const isSelected = partData._orientationOption === String(opt);
+                return (
+                  <div key={opt}
+                    onClick={() => setPartData({ ...partData, _orientationOption: String(opt) })}
+                    style={{
+                      flex: 1, cursor: 'pointer', borderRadius: 8, overflow: 'hidden',
+                      border: `3px solid ${isSelected ? '#2e7d32' : '#ccc'}`,
+                      background: isSelected ? '#e8f5e9' : '#fff',
+                      boxShadow: isSelected ? '0 0 8px rgba(46,125,50,0.3)' : 'none',
+                      transition: 'all 0.15s'
+                    }}>
+                    <img 
+                      src={`/images/angle-orientation/${imgFile}`} 
+                      alt={`Option ${opt}`}
+                      style={{ width: '100%', display: 'block' }}
+                    />
+                    <div style={{ 
+                      padding: '8px 0', textAlign: 'center', fontWeight: 700,
+                      fontSize: '0.9rem',
+                      color: isSelected ? '#2e7d32' : '#666',
+                      background: isSelected ? '#c8e6c9' : '#f5f5f5'
+                    }}>
+                      {isSelected ? '✓ ' : ''}Option {opt}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Leg Orientation - Only show for unequal legs */}
         {isUnequalLegs && partData.rollType && (

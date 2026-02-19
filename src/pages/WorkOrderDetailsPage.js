@@ -907,6 +907,21 @@ function WorkOrderDetailsPage() {
 
       // Cone segment breakdown for print
       let coneSegmentBlock = '';
+
+      // Orientation diagram for angle/channel rolls
+      let orientationBlock = '';
+      if ((part.partType === 'angle_roll' || part.partType === 'channel_roll') && part._orientationOption) {
+        const imgPrefix = part.partType === 'channel_roll' ? 'Channel' : '';
+        const imgFile = part.rollType === 'easy_way' ? `${imgPrefix}EWODOp${part._orientationOption}.png` : `${imgPrefix}HWIDOp${part._orientationOption}.png`;
+        const label = part.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID';
+        orientationBlock = `
+          <div style="margin-top:8px;max-width:220px;">
+            <img src="/images/angle-orientation/${imgFile}" style="width:100%;border:1px solid #ddd;border-radius:4px;" />
+            <div style="font-size:0.75em;color:#666;text-align:center;">${label} Option ${part._orientationOption}</div>
+          </div>
+        `;
+      }
+
       if (part.partType === 'cone_roll') {
         var cTypeLabel = part._coneType === 'eccentric' ? 'Eccentric' + (part._coneEccentricAngle ? ' = ' + part._coneEccentricAngle + '°' : '') : 'Concentric';
         var rSegs = parseInt(part._coneRadialSegments) || 1;
@@ -973,6 +988,7 @@ function WorkOrderDetailsPage() {
           ${part.heatNumber ? `<div style="margin-bottom:4px;font-size:0.9rem"><strong>Heat#:</strong> ${part.heatNumber}</div>` : ''}
           ${part.cutFileReference ? `<div style="margin-bottom:4px;font-size:0.9rem;color:#1565c0"><strong>📐 Cut File:</strong> ${part.cutFileReference}</div>` : ''}
           ${rollingBlock}
+          ${orientationBlock}
           ${coneSegmentBlock}
           ${specsHtml}
           ${includePricing && part.partType !== 'fab_service' ? `<div style="margin-bottom:6px;font-size:0.85rem;color:#555">📦 Material supplied by: <strong>${part.materialSource === 'customer_supplied' ? (order.clientName || 'Customer') : 'Carolina Rolling Company'}</strong></div>` : ''}
@@ -2027,6 +2043,19 @@ function WorkOrderDetailsPage() {
                   {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
                   {(part.formData || {})._completeRings && (part.formData || {})._ringsNeeded && (
                     <div style={{ color: '#2e7d32', fontWeight: 600, marginTop: 4 }}>⭕ {(part.formData || {})._ringsNeeded} complete ring(s) required</div>
+                  )}
+                  {/* Orientation diagram for angle/channel rolls */}
+                  {(part.partType === 'angle_roll' || part.partType === 'channel_roll') && (part.formData || {})._orientationOption && (
+                    <div style={{ marginTop: 8, maxWidth: 250 }}>
+                      <img 
+                        src={`/images/angle-orientation/${part.partType === 'channel_roll' ? 'Channel' : ''}${part.rollType === 'easy_way' ? 'EWOD' : 'HWID'}Op${(part.formData || {})._orientationOption}.png`}
+                        alt={`${part.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID'} Option ${(part.formData || {})._orientationOption}`}
+                        style={{ width: '100%', borderRadius: 6, border: '1px solid #ddd' }}
+                      />
+                      <div style={{ fontSize: '0.75rem', color: '#666', textAlign: 'center', marginTop: 2 }}>
+                        {part.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID'} Option {(part.formData || {})._orientationOption}
+                      </div>
+                    </div>
                   )}
                   {/* Cone type + segments */}
                   {part.partType === 'cone_roll' && (

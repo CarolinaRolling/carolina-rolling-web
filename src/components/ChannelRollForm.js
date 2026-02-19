@@ -163,6 +163,11 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
     let rollLine = `Roll to ${rv}" ${spec}`;
     if (ewHw) rollLine += ` ${ewHw} (${partData.rollType === 'easy_way' ? 'flanges out' : partData.rollType === 'hard_way' ? 'flanges in' : 'on edge'})`;
     lines.push(rollLine);
+    // Orientation option
+    if (partData._orientationOption) {
+      const combo = partData.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID';
+      lines.push(`Orientation: ${combo} Option ${partData._orientationOption} (see diagram)`);
+    }
     if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
     if (completeRings && ringCalc && !ringCalc.error) {
       if (!ringCalc.multiSegment) {
@@ -174,7 +179,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
     }
     lines.push(...getPitchDescriptionLines(partData, clDiameter));
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, partData._orientationOption, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
 
   useEffect(() => {
     const updates = { materialDescription, _materialDescription: materialDescription };
@@ -266,7 +271,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
           <div className="form-group"><label className="form-label">Roll to: *</label><input className="form-input" value={rollToMethod ? '' : rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder={rollToMethod === 'template' ? 'Per Template/Sample' : rollToMethod === 'print' ? 'Per Print' : 'Enter value'} type="number" step="0.001" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} /></div>
           <div className="form-group"><label className="form-label">Measured At</label>
-            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}><option value="inside">Inside</option><option value="outside">Outside</option></select></div>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasurePoint} onChange={(e) => { setRollMeasurePoint(e.target.value); setPartData(prev => ({ ...prev, _orientationOption: '' })); }}><option value="inside">Inside</option><option value="outside">Outside</option></select></div>
           <div className="form-group"><label className="form-label">Type</label>
             <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}><option value="diameter">Diameter</option><option value="radius">Radius</option></select></div>
         </div>
@@ -310,15 +315,67 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" style={{ flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem',
                 border: `2px solid ${partData.rollType === 'easy_way' ? '#2e7d32' : '#ccc'}`, background: partData.rollType === 'easy_way' ? '#e8f5e9' : '#fff', color: partData.rollType === 'easy_way' ? '#2e7d32' : '#666', cursor: 'pointer' }}
-              onClick={() => setPartData({ ...partData, rollType: 'easy_way' })}>Easy Way (EW) — Flanges Out</button>
+              onClick={() => setPartData({ ...partData, rollType: 'easy_way', _orientationOption: '' })}>Easy Way (EW) — Flanges Out</button>
             <button type="button" style={{ flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem',
                 border: `2px solid ${partData.rollType === 'hard_way' ? '#c62828' : '#ccc'}`, background: partData.rollType === 'hard_way' ? '#ffebee' : '#fff', color: partData.rollType === 'hard_way' ? '#c62828' : '#666', cursor: 'pointer' }}
-              onClick={() => setPartData({ ...partData, rollType: 'hard_way' })}>Hard Way (HW) — Flanges In</button>
+              onClick={() => setPartData({ ...partData, rollType: 'hard_way', _orientationOption: '' })}>Hard Way (HW) — Flanges In</button>
             <button type="button" style={{ flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem',
                 border: `2px solid ${partData.rollType === 'on_edge' ? '#1565c0' : '#ccc'}`, background: partData.rollType === 'on_edge' ? '#e3f2fd' : '#fff', color: partData.rollType === 'on_edge' ? '#1565c0' : '#666', cursor: 'pointer' }}
-              onClick={() => setPartData({ ...partData, rollType: 'on_edge' })}>On-Edge (OE)</button>
+              onClick={() => setPartData({ ...partData, rollType: 'on_edge', _orientationOption: '' })}>On-Edge (OE)</button>
           </div>
         </div>
+
+        {/* Measurement Orientation Diagram — EW+OD or HW+ID */}
+        {partData.rollType && rollMeasurePoint && !rollToMethod && (
+          (partData.rollType === 'easy_way' && rollMeasurePoint === 'outside') ||
+          (partData.rollType === 'hard_way' && rollMeasurePoint === 'inside')
+        ) && (
+          <div style={{
+            padding: 14, borderRadius: 8, marginBottom: 12,
+            background: partData._orientationOption ? '#e8f5e9' : '#fff3e0',
+            border: `2px solid ${partData._orientationOption ? '#4caf50' : '#ff9800'}`
+          }}>
+            <label className="form-label" style={{ 
+              color: partData._orientationOption ? '#2e7d32' : '#e65100', 
+              fontWeight: 700, marginBottom: 10, display: 'block' 
+            }}>
+              {partData._orientationOption ? '✅' : '⚠️'} Which orientation? Select where the {rollMeasurePoint === 'outside' ? 'OD' : 'ID'} is measured from:
+            </label>
+            <div style={{ display: 'flex', gap: 12 }}>
+              {[1, 2].map(opt => {
+                const imgFile = partData.rollType === 'easy_way' 
+                  ? `ChannelEWODOp${opt}.png` 
+                  : `ChannelHWIDOp${opt}.png`;
+                const isSelected = partData._orientationOption === String(opt);
+                return (
+                  <div key={opt}
+                    onClick={() => setPartData({ ...partData, _orientationOption: String(opt) })}
+                    style={{
+                      flex: 1, cursor: 'pointer', borderRadius: 8, overflow: 'hidden',
+                      border: `3px solid ${isSelected ? '#2e7d32' : '#ccc'}`,
+                      background: isSelected ? '#e8f5e9' : '#fff',
+                      boxShadow: isSelected ? '0 0 8px rgba(46,125,50,0.3)' : 'none',
+                      transition: 'all 0.15s'
+                    }}>
+                    <img 
+                      src={`/images/angle-orientation/${imgFile}`} 
+                      alt={`Option ${opt}`}
+                      style={{ width: '100%', display: 'block' }}
+                    />
+                    <div style={{ 
+                      padding: '8px 0', textAlign: 'center', fontWeight: 700,
+                      fontSize: '0.9rem',
+                      color: isSelected ? '#2e7d32' : '#666',
+                      background: isSelected ? '#c8e6c9' : '#f5f5f5'
+                    }}>
+                      {isSelected ? '✓ ' : ''}Option {opt}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {riseCalc && (
           <div style={{ background: '#e8f5e9', padding: 12, borderRadius: 8, marginBottom: 12 }}>

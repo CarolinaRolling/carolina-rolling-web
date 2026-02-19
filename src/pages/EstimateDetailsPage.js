@@ -1043,6 +1043,7 @@ function EstimateDetailsPage() {
         ${part._rollToMethod === 'template' ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;font-weight:bold;">📐 Roll Per Template / Sample${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}</p>` : part._rollToMethod === 'print' ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;font-weight:bold;">📄 Roll per print: (see attached)${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}</p>` : (part.diameter || part.radius) ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">🔄 ${part.diameter || part.radius}" ${(() => { const mp = part._rollMeasurePoint || 'inside'; const isRad = !!part.radius && !part.diameter; if (mp === 'inside') return isRad ? 'ISR' : 'ID'; if (mp === 'outside') return isRad ? 'OSR' : 'OD'; return isRad ? 'CLR' : 'CLD'; })()}${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}${part.arcDegrees ? ' | Arc: ' + part.arcDegrees + '°' : ''}</p>` : ''}
         ${(() => { const desc = part._rollingDescription || part.specialInstructions || ''; const lines = desc.split('\n').filter(l => l.includes('Rise:') || l.includes('Complete Ring') || l.includes('Cone:') || l.includes('Sheet Size:')); return lines.length ? `<p style="margin:0 0 4px;color:#6a1b9a;font-size:0.85em;">📐 ${lines.map(l => l.trim()).join(' | ')}</p>` : ''; })()}
         ${part._completeRings && part._ringsNeeded ? `<p style="margin:0 0 4px;color:#2e7d32;font-size:0.9em;font-weight:bold;">⭕ ${part._ringsNeeded} complete ring(s) required</p>` : ''}
+        ${(part.partType === 'angle_roll' || part.partType === 'channel_roll') && part._orientationOption ? `<div style="margin:8px 0;max-width:220px;"><img src="/images/angle-orientation/${part.partType === 'channel_roll' ? 'Channel' : ''}${part.rollType === 'easy_way' ? 'EWOD' : 'HWID'}Op${part._orientationOption}.png" style="width:100%;border:1px solid #ddd;border-radius:4px;" /><div style="font-size:0.75em;color:#666;text-align:center;">${part.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID'} Option ${part._orientationOption}</div></div>` : ''}
         ${part.partType === 'cone_roll' ? `
           <p style="margin:0 0 4px;color:#4a148c;font-size:0.9em;">
             ${part._coneType === 'eccentric' ? 'Eccentric' + (part._coneEccentricAngle ? ' = ' + part._coneEccentricAngle + '°' : '') : 'Concentric'}${(parseInt(part._coneRadialSegments) || 1) > 1 ? ' | ' + part._coneRadialSegments + ' @ ' + (360 / (parseInt(part._coneRadialSegments) || 1)).toFixed(0) + '°' : ''}
@@ -1561,6 +1562,19 @@ function EstimateDetailsPage() {
                     {/* Complete rings note */}
                     {part._completeRings && part._ringsNeeded && (
                       <div style={{ fontSize: '0.85rem', color: '#2e7d32', fontWeight: 600, marginTop: 4 }}>⭕ {part._ringsNeeded} complete ring(s) required</div>
+                    )}
+                    {/* Orientation diagram for angle/channel rolls */}
+                    {(part.partType === 'angle_roll' || part.partType === 'channel_roll') && part._orientationOption && (
+                      <div style={{ marginTop: 8, maxWidth: 250 }}>
+                        <img 
+                          src={`/images/angle-orientation/${part.partType === 'channel_roll' ? 'Channel' : ''}${part.rollType === 'easy_way' ? 'EWOD' : 'HWID'}Op${part._orientationOption}.png`}
+                          alt={`${part.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID'} Option ${part._orientationOption}`}
+                          style={{ width: '100%', borderRadius: 6, border: '1px solid #ddd' }}
+                        />
+                        <div style={{ fontSize: '0.75rem', color: '#666', textAlign: 'center', marginTop: 2 }}>
+                          {part.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID'} Option {part._orientationOption}
+                        </div>
+                      </div>
                     )}
                     {/* Cone type + segments */}
                     {part.partType === 'cone_roll' && (
