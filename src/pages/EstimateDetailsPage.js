@@ -195,12 +195,16 @@ function EstimateDetailsPage() {
             const clientIsExempt = client.taxStatus === 'resale' || client.taxStatus === 'exempt' ||
               (client.resaleCertificate && client.permitStatus === 'active');
             if (clientIsExempt) {
-              setFormData(prev => ({
-                ...prev,
+              const exemptData = {
                 taxExempt: true,
                 taxExemptReason: (client.taxStatus === 'exempt') ? 'Tax Exempt' : 'Resale',
                 taxExemptCertNumber: client.resaleCertificate || ''
-              }));
+              };
+              setFormData(prev => ({ ...prev, ...exemptData }));
+              // Persist to DB immediately so totals are recalculated without tax
+              if (!isNew) {
+                try { await updateEstimate(id, exemptData); } catch (e) { /* ignore */ }
+              }
             }
           }
         } catch (e) { /* ignore */ }
