@@ -74,6 +74,7 @@ function WorkOrderDetailsPage() {
   const [selectedPartType, setSelectedPartType] = useState('');
   const [partFormError, setPartFormError] = useState(null);  const [uploadingFiles, setUploadingFiles] = useState(null);
   const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [uploadingMtrs, setUploadingMtrs] = useState(false);
   const [showPickupModal, setShowPickupModal] = useState(false);
   const [pickupData, setPickupData] = useState({ pickedUpBy: '', type: null, items: {} });
   const [showPrintMenu, setShowPrintMenu] = useState(false);
@@ -93,6 +94,7 @@ function WorkOrderDetailsPage() {
   const [laborMinimums, setLaborMinimums] = useState([]);
   const fileInputRefs = useRef({});
   const docInputRef = useRef(null);
+  const mtrInputRef = useRef(null);
   const [defaultTaxRate, setDefaultTaxRate] = useState(9.75);
   const [showLinkShipmentModal, setShowLinkShipmentModal] = useState(false);
   const [unlinkedShipments, setUnlinkedShipments] = useState([]);
@@ -409,6 +411,20 @@ function WorkOrderDetailsPage() {
       showMessage('Document deleted');
     } catch (err) {
       setError('Failed to delete document');
+    }
+  };
+
+  // MTR upload
+  const handleMtrUpload = async (files) => {
+    try {
+      setUploadingMtrs(true);
+      await uploadWorkOrderDocuments(id, files, 'mtr');
+      await loadOrder();
+      showMessage('MTR(s) uploaded');
+    } catch (err) {
+      setError('Failed to upload MTR');
+    } finally {
+      setUploadingMtrs(false);
     }
   };
 
@@ -850,7 +866,7 @@ function WorkOrderDetailsPage() {
       order.documents.forEach(doc => {
         if (doc.documentType === 'purchase_order') {
           purchaseOrderUrls.push({ url: doc.url, name: doc.originalName });
-        } else {
+        } else if (doc.documentType !== 'mtr') {
           orderDocUrls.push({ url: doc.url, name: doc.originalName });
         }
       });
@@ -1795,20 +1811,9 @@ function WorkOrderDetailsPage() {
                   ))}
                   {editData._clientSearch && editData._clientSearch.length >= 2 && !clientSuggestions.some(c => c.name.toLowerCase() === (editData._clientSearch || '').toLowerCase()) && (
                     <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, borderTop: '2px solid #c8e6c9' }}
-                      onMouseDown={async () => {
-                        try {
-                          const res = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/clients`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                            body: JSON.stringify({ name: editData._clientSearch })
-                          });
-                          const data = await res.json();
-                          if (data.data) {
-                            setEditData({ ...editData, clientId: data.data.id, clientName: data.data.name, _clientSearch: undefined });
-                            showMessage(`Client "${data.data.name}" created`);
-                          }
-                        } catch (err) { setError('Failed to create client'); }
+                      onMouseDown={() => {
                         setShowClientSuggestions(false);
+                        navigate(`/admin/clients-vendors?addClient=${encodeURIComponent(editData._clientSearch)}`);
                       }}>
                       + Add "{editData._clientSearch}" as new client
                     </div>
@@ -1917,7 +1922,7 @@ function WorkOrderDetailsPage() {
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #eee' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <File size={18} /> Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order').length || 0})
+              <File size={18} /> Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').length || 0})
             </div>
             <button className="btn btn-sm btn-outline" onClick={() => docInputRef.current?.click()} disabled={uploadingDocs}>
               <Upload size={14} />{uploadingDocs ? 'Uploading...' : 'Upload'}
@@ -1926,9 +1931,9 @@ function WorkOrderDetailsPage() {
               onChange={(e) => handleDocumentUpload(Array.from(e.target.files))} />
           </div>
           <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Upload customer POs, supplier quotes, drawings, etc.</p>
-          {order.documents?.filter(d => d.documentType !== 'purchase_order').length > 0 && (
+          {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {order.documents.filter(d => d.documentType !== 'purchase_order').map(doc => (
+              {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').map(doc => (
                 <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f5f5f5', padding: '8px 12px', borderRadius: 6, fontSize: '0.85rem' }}>
                   <File size={16} color="#1976d2" />
                   <span style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
@@ -1936,6 +1941,51 @@ function WorkOrderDetailsPage() {
                   <button onClick={() => handleDeleteDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}><X size={14} /></button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* MTR (Material Test Reports) Section */}
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #eee' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, color: '#6a1b9a' }}>
+              <FileText size={18} /> MTRs ({order.documents?.filter(d => d.documentType === 'mtr').length || 0})
+            </div>
+            <button className="btn btn-sm" onClick={() => mtrInputRef.current?.click()} disabled={uploadingMtrs}
+              style={{ background: '#6a1b9a', color: 'white', border: 'none' }}>
+              <Upload size={14} />{uploadingMtrs ? 'Uploading...' : 'Upload MTR'}
+            </button>
+            <input type="file" multiple accept=".pdf" ref={mtrInputRef} style={{ display: 'none' }} 
+              onChange={(e) => { handleMtrUpload(Array.from(e.target.files)); e.target.value = ''; }} />
+          </div>
+          <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Upload Material Test Reports (PDF)</p>
+          {order.documents?.filter(d => d.documentType === 'mtr').length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {order.documents.filter(d => d.documentType === 'mtr').map(doc => (
+                <div key={doc.id} style={{ 
+                  display: 'flex', alignItems: 'center', gap: 8, 
+                  background: '#f3e5f5', padding: '10px 14px', borderRadius: 8, 
+                  border: '1px solid #ce93d8', fontSize: '0.85rem' 
+                }}>
+                  <FileText size={18} color="#6a1b9a" />
+                  <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
+                  <span style={{ fontSize: '0.7rem', color: '#999' }}>
+                    {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                  </span>
+                  <button onClick={() => handleViewDocument(doc.id)} 
+                    style={{ background: '#6a1b9a', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
+                    <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
+                  </button>
+                  <button onClick={() => handleDeleteDocument(doc.id)} 
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ background: '#fafafa', padding: 16, borderRadius: 8, textAlign: 'center', color: '#999', fontSize: '0.85rem' }}>
+              No MTRs uploaded yet
             </div>
           )}
         </div>

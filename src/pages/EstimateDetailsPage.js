@@ -1388,6 +1388,15 @@ function EstimateDetailsPage() {
                         </span>
                       </div>
                     ))}
+                    {formData.clientName && formData.clientName.length >= 2 && !clientSuggestions.some(c => c.name.toLowerCase() === formData.clientName.toLowerCase()) && (
+                      <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, borderTop: '2px solid #c8e6c9' }}
+                        onMouseDown={() => {
+                          setShowClientSuggestions(false);
+                          navigate(`/admin/clients-vendors?addClient=${encodeURIComponent(formData.clientName)}`);
+                        }}>
+                        + Add "{formData.clientName}" as new client
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
