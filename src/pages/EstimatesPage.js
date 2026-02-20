@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, DollarSign, Send, Check, X, Archive, Trash2 } from 'lucide-react';
-import { getEstimates, deleteEstimate, convertEstimateToWorkOrder, createEstimate, searchClients, createClient } from '../services/api';
+import { getEstimates, deleteEstimate, convertEstimateToWorkOrder, createEstimate, searchClients } from '../services/api';
 
 function EstimatesPage() {
   const navigate = useNavigate();
@@ -405,15 +405,9 @@ function EstimatesPage() {
                     ))}
                     {newEstData.clientName && newEstData.clientName.length >= 2 && !clientSuggestions.some(c => c.name.toLowerCase() === newEstData.clientName.toLowerCase()) && (
                       <div style={{ padding: '10px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, borderTop: '1px solid #c8e6c9' }}
-                        onMouseDown={async () => {
-                          try {
-                            const resp = await createClient({ name: newEstData.clientName, contactName: newEstData.contactName, contactEmail: newEstData.contactEmail, contactPhone: newEstData.contactPhone });
-                            if (resp.data.data) {
-                              setNewEstData({ ...newEstData, clientName: resp.data.data.name, contactName: resp.data.data.contactName || '', contactEmail: resp.data.data.contactEmail || '', contactPhone: resp.data.data.contactPhone || '' });
-                              setMessage(`Client "${resp.data.data.name}" created`);
-                            }
-                          } catch { setError('Failed to create client'); }
+                        onMouseDown={() => {
                           setShowClientSuggestions(false);
+                          navigate(`/admin/clients-vendors?addClient=${encodeURIComponent(newEstData.clientName)}`);
                         }}>
                         + Add "{newEstData.clientName}" as new client
                       </div>
@@ -428,15 +422,9 @@ function EstimatesPage() {
                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                   }}>
                     <div style={{ padding: '10px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600 }}
-                      onMouseDown={async () => {
-                        try {
-                          const resp = await createClient({ name: newEstData.clientName, contactName: newEstData.contactName, contactEmail: newEstData.contactEmail, contactPhone: newEstData.contactPhone });
-                          if (resp.data.data) {
-                            setNewEstData({ ...newEstData, clientName: resp.data.data.name, contactName: resp.data.data.contactName || '', contactEmail: resp.data.data.contactEmail || '', contactPhone: resp.data.data.contactPhone || '' });
-                            setMessage(`Client "${resp.data.data.name}" created`);
-                          }
-                        } catch { setError('Failed to create client'); }
+                      onMouseDown={() => {
                         setShowClientSuggestions(false);
+                        navigate(`/admin/clients-vendors?addClient=${encodeURIComponent(newEstData.clientName)}`);
                       }}>
                       + Add "{newEstData.clientName}" as new client
                     </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, Users, Building2, Search, Check, X } from 'lucide-react';
 import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit } from '../services/api';
 
@@ -23,6 +23,7 @@ const isValidResale = (val) => {
 
 const ClientsVendorsPage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('clients');
   const [clients, setClients] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -42,6 +43,24 @@ const ClientsVendorsPage = () => {
   useEffect(() => {
     loadData();
   }, [showInactive]);
+
+  // Auto-open add client form if navigated with ?addClient=Name
+  useEffect(() => {
+    const addClientName = searchParams.get('addClient');
+    if (addClientName && !loading) {
+      setActiveTab('clients');
+      setEditing(null);
+      setFormData({
+        name: addClientName,
+        contactName: '', contactPhone: '', contactEmail: '',
+        address: '', taxStatus: 'taxable', resaleCertificate: '',
+        customTaxRate: '', paymentTerms: '', notes: ''
+      });
+      setShowModal(true);
+      // Clear the query param so it doesn't re-trigger
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, loading]);
 
   const loadData = async () => {
     try {
