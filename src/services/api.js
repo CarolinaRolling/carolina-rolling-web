@@ -235,6 +235,7 @@ export const archiveOldEstimates = () => api.post('/estimates/archive-old');
 // Work Order Shipping & Archiving
 export const shipWorkOrder = (id, data) => api.post(`/workorders/${id}/ship`, data);
 export const archiveWorkOrder = (id) => api.post(`/workorders/${id}/archive`);
+export const recordPickup = (id, data) => api.post(`/workorders/${id}/pickup`, data);
 export const getArchivedWorkOrders = (params) => api.get('/workorders/archived', { params });
 export const getRecentlyCompletedOrders = () => api.get('/workorders/recently-completed');
 export const duplicateWorkOrderToEstimate = (id) => api.post(`/workorders/${id}/duplicate-to-estimate`);

@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, DollarSign, Send, Check, X, Archive, Trash2 } from 'lucide-react';
-import { getEstimates, deleteEstimate, convertEstimateToWorkOrder, createEstimate, searchClients } from '../services/api';
+import { getEstimates, deleteEstimate, convertEstimateToWorkOrder, createEstimate, searchClients, createClient } from '../services/api';
 
 function EstimatesPage() {
   const navigate = useNavigate();
   const [estimates, setEstimates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
@@ -28,6 +29,10 @@ function EstimatesPage() {
   useEffect(() => {
     loadEstimates();
   }, [showArchived]);
+
+  useEffect(() => {
+    if (message) { const t = setTimeout(() => setMessage(null), 3000); return () => clearTimeout(t); }
+  }, [message]);
 
   const loadEstimates = async () => {
     try {
@@ -152,6 +157,7 @@ function EstimatesPage() {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+      {message && <div style={{ background: '#e8f5e9', color: '#2e7d32', padding: '10px 16px', borderRadius: 8, marginBottom: 16, fontWeight: 500 }}>{message}</div>}
 
       {/* Tabs */}
       <div className="tabs">
@@ -337,7 +343,7 @@ function EstimatesPage() {
                   onChange={async (e) => {
                     const value = e.target.value;
                     setNewEstData({ ...newEstData, clientName: value });
-                    if (value.length >= 2) {
+                    if (value.length >= 1) {
                       try {
                         const res = await searchClients(value);
                         setClientSuggestions(res.data.data || []);
@@ -348,10 +354,16 @@ function EstimatesPage() {
                       setShowClientSuggestions(false);
                     }
                   }}
-                  onFocus={() => clientSuggestions.length > 0 && setShowClientSuggestions(true)}
+                  onFocus={async () => {
+                    if (newEstData.clientName.length >= 1) {
+                      try { const res = await searchClients(newEstData.clientName); setClientSuggestions(res.data.data || []); setShowClientSuggestions(true); } catch {}
+                    } else {
+                      try { const res = await searchClients(''); setClientSuggestions(res.data.data || []); setShowClientSuggestions(true); } catch {}
+                    }
+                  }}
                   onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
                   autoComplete="off"
-                  placeholder="Start typing to search..."
+                  placeholder="Search or add client..."
                   autoFocus
                 />
                 {showClientSuggestions && clientSuggestions.length > 0 && (
@@ -391,6 +403,43 @@ function EstimatesPage() {
                         </span>
                       </div>
                     ))}
+                    {newEstData.clientName && newEstData.clientName.length >= 2 && !clientSuggestions.some(c => c.name.toLowerCase() === newEstData.clientName.toLowerCase()) && (
+                      <div style={{ padding: '10px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, borderTop: '1px solid #c8e6c9' }}
+                        onMouseDown={async () => {
+                          try {
+                            const resp = await createClient({ name: newEstData.clientName, contactName: newEstData.contactName, contactEmail: newEstData.contactEmail, contactPhone: newEstData.contactPhone });
+                            if (resp.data.data) {
+                              setNewEstData({ ...newEstData, clientName: resp.data.data.name, contactName: resp.data.data.contactName || '', contactEmail: resp.data.data.contactEmail || '', contactPhone: resp.data.data.contactPhone || '' });
+                              setMessage(`Client "${resp.data.data.name}" created`);
+                            }
+                          } catch { setError('Failed to create client'); }
+                          setShowClientSuggestions(false);
+                        }}>
+                        + Add "{newEstData.clientName}" as new client
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Show add button when no suggestions at all */}
+                {showClientSuggestions && clientSuggestions.length === 0 && newEstData.clientName && newEstData.clientName.length >= 2 && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                    background: 'white', border: '1px solid #ddd', borderRadius: 4,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                  }}>
+                    <div style={{ padding: '10px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600 }}
+                      onMouseDown={async () => {
+                        try {
+                          const resp = await createClient({ name: newEstData.clientName, contactName: newEstData.contactName, contactEmail: newEstData.contactEmail, contactPhone: newEstData.contactPhone });
+                          if (resp.data.data) {
+                            setNewEstData({ ...newEstData, clientName: resp.data.data.name, contactName: resp.data.data.contactName || '', contactEmail: resp.data.data.contactEmail || '', contactPhone: resp.data.data.contactPhone || '' });
+                            setMessage(`Client "${resp.data.data.name}" created`);
+                          }
+                        } catch { setError('Failed to create client'); }
+                        setShowClientSuggestions(false);
+                      }}>
+                      + Add "{newEstData.clientName}" as new client
+                    </div>
                   </div>
                 )}
               </div>

@@ -157,9 +157,14 @@ function EstimateDetailsPage() {
     }
   };
 
+  const initialLoadDone = useRef(false);
+
   const loadEstimate = async () => {
+    const scrollY = window.scrollY;
+    const isReload = initialLoadDone.current;
+    
     try {
-      setLoading(true);
+      if (!isReload) setLoading(true);
       const response = await getEstimateById(id);
       const data = response.data.data;
       setEstimate(data);
@@ -213,6 +218,10 @@ function EstimateDetailsPage() {
       setError('Failed to load estimate');
     } finally {
       setLoading(false);
+      initialLoadDone.current = true;
+      if (isReload) {
+        requestAnimationFrame(() => window.scrollTo(0, scrollY));
+      }
     }
   };
 
