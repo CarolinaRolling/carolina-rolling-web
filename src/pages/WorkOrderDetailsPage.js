@@ -2140,17 +2140,21 @@ function WorkOrderDetailsPage() {
                     <button className="btn btn-sm btn-outline" onClick={() => fileInputRefs.current[part.id]?.click()} disabled={uploadingFiles === part.id}>
                       <Upload size={12} />{uploadingFiles === part.id ? 'Uploading...' : 'Upload'}
                     </button>
-                    <input type="file" multiple ref={el => fileInputRefs.current[part.id] = el} style={{ display: 'none' }} onChange={(e) => handleFileUpload(part.id, Array.from(e.target.files))} />
+                    <input type="file" multiple accept=".pdf,.stp,.step,.dxf,.dwg,.png,.jpg,.jpeg,.gif,.doc,.docx" ref={el => fileInputRefs.current[part.id] = el} style={{ display: 'none' }} onChange={(e) => handleFileUpload(part.id, Array.from(e.target.files))} />
                   </div>
                   {part.files?.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {part.files.map(file => (
-                        <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f5f5f5', padding: '4px 8px', borderRadius: 4, fontSize: '0.75rem' }}>
-                          <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.originalName}</span>
+                      {part.files.map(file => {
+                        const isStep = file.fileType === 'step_file' || file.originalName?.match(/\.(step|stp)$/i);
+                        return (
+                        <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: isStep ? '#f3e5f5' : '#f5f5f5', padding: '4px 8px', borderRadius: 4, fontSize: '0.75rem', border: isStep ? '1px solid #ce93d8' : 'none' }}>
+                          {isStep && <span title="STEP/3D File">🧊</span>}
+                          <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isStep ? '#7b1fa2' : 'inherit', fontWeight: isStep ? 600 : 400 }}>{file.originalName}</span>
                           <button onClick={() => handleViewFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}><Eye size={12} /></button>
                           <button onClick={() => handleDeleteFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d32f2f' }}><X size={12} /></button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
