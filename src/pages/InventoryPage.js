@@ -12,7 +12,6 @@ const STATUSES = {
   processing: { label: 'Processing', color: '#0288d1', bg: '#e1f5fe' },
   stored: { label: 'Stored', color: '#388e3c', bg: '#e8f5e9' },
   shipped: { label: 'Shipped', color: '#7b1fa2', bg: '#f3e5f5' },
-  picked_up: { label: 'Picked Up', color: '#7b1fa2', bg: '#f3e5f5' },
   archived: { label: 'Archived', color: '#616161', bg: '#eeeeee' },
   // Legacy status mappings
   draft: { label: 'Received', color: '#1976d2', bg: '#e3f2fd' },
@@ -124,7 +123,7 @@ function InventoryPage() {
       filtered = filtered.filter(o => o.status === 'stored' || o.status === 'completed');
     } else if (statusFilter === 'active') {
       // All non-archived, non-shipped, non-picked-up
-      filtered = filtered.filter(o => o.status !== 'archived' && o.status !== 'shipped' && o.status !== 'picked_up');
+      filtered = filtered.filter(o => o.status !== 'archived' && o.status !== 'shipped');
     }
 
     // Filter by search query

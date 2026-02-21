@@ -77,8 +77,8 @@ function WorkOrdersPage() {
     // Sort
     filtered.sort((a, b) => {
       // Rush orders always go to top
-      const aRush = a.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'picked_up', 'archived'].includes(a.status);
-      const bRush = b.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'picked_up', 'archived'].includes(b.status);
+      const aRush = a.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'archived'].includes(a.status);
+      const bRush = b.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'archived'].includes(b.status);
       if (aRush && !bRush) return -1;
       if (!aRush && bRush) return 1;
 
@@ -143,7 +143,6 @@ function WorkOrdersPage() {
       draft: { bg: '#e3f2fd', text: '#1565c0', label: 'Received' },
       in_progress: { bg: '#e1f5fe', text: '#0288d1', label: 'Processing' },
       completed: { bg: '#e8f5e9', text: '#2e7d32', label: 'Stored' },
-      picked_up: { bg: '#f3e5f5', text: '#7b1fa2', label: 'Shipped' }
     };
     const style = colors[status] || colors.received;
     return (
@@ -166,7 +165,6 @@ function WorkOrdersPage() {
       case 'stored':
       case 'completed': return '#388e3c';
       case 'shipped':
-      case 'picked_up': return '#7b1fa2';
       case 'processing':
       case 'in_progress': return '#0288d1';
       case 'waiting_for_materials': return '#f57c00';
@@ -266,7 +264,7 @@ function WorkOrdersPage() {
       ) : (
         <div className="grid grid-3">
           {filteredOrders.map((order) => {
-            const isRush = order.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'picked_up', 'archived'].includes(order.status);
+            const isRush = order.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'archived'].includes(order.status);
             return (
             <div
               key={order.id}

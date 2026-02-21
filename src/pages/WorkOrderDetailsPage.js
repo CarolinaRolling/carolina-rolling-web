@@ -1500,7 +1500,6 @@ function WorkOrderDetailsPage() {
       draft: { background: '#e3f2fd', color: '#1565c0' },
       in_progress: { background: '#e1f5fe', color: '#0288d1' },
       completed: { background: '#e8f5e9', color: '#2e7d32' },
-      picked_up: { background: '#f3e5f5', color: '#7b1fa2' },
     };
     const labels = {
       quoted: 'Quoted',
@@ -1515,7 +1514,6 @@ function WorkOrderDetailsPage() {
       draft: 'Received',
       in_progress: 'Processing',
       completed: 'Stored',
-      picked_up: 'Shipped'
     };
     return <span className="status-badge" style={styles[status] || styles.received}>{labels[status] || status?.replace('_', ' ')}</span>;
   };
@@ -1571,11 +1569,10 @@ function WorkOrderDetailsPage() {
                 <option value="processing">Processing</option>
                 <option value="stored">Stored</option>
                 <option value="shipped">Shipped</option>
-                <option value="picked_up">Picked Up</option>
               </select>
               {(order.status === 'stored' || (order.pickupHistory?.length > 0 && getPickupSummary().some(p => p.remaining > 0))) && (
                 <button className="btn btn-success" onClick={() => setShowPickupModal(true)}>
-                  <Check size={18} />{order.pickupHistory?.length > 0 ? 'Continue Pickup' : 'Pickup/Ship'}
+                  <Check size={18} />{order.pickupHistory?.length > 0 ? 'Continue Shipment' : 'Ship'}
                 </button>
               )}
             </>

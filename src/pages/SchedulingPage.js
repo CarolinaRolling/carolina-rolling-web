@@ -15,7 +15,6 @@ const STATUSES = {
   processing: { label: 'Processing', color: '#0288d1', bg: '#e1f5fe' },
   stored: { label: 'Stored', color: '#388e3c', bg: '#e8f5e9' },
   shipped: { label: 'Shipped', color: '#7b1fa2', bg: '#f3e5f5' },
-  picked_up: { label: 'Picked Up', color: '#7b1fa2', bg: '#f3e5f5' },
   archived: { label: 'Archived', color: '#616161', bg: '#eeeeee' },
   // Legacy mappings
   draft: { label: 'Received', color: '#1976d2', bg: '#e3f2fd' },
@@ -24,7 +23,7 @@ const STATUSES = {
 };
 
 // Statuses that mean the job is done — hide from schedule
-const DONE_STATUSES = ['stored', 'completed', 'shipped', 'picked_up', 'archived'];
+const DONE_STATUSES = ['stored', 'completed', 'shipped', 'archived'];
 
 // Active statuses for filter dropdown
 const ACTIVE_STATUSES = [
