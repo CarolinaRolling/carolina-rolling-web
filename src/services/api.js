@@ -314,4 +314,9 @@ export const getBatchStatus = () => api.get('/verify-permits/batch/status');
 export const cancelBatchVerification = () => api.post('/verify-permits/batch/cancel');
 export const downloadResaleReport = () => api.get('/verify-permits/report-pdf', { responseType: 'blob' });
 
+// API Key Management
+export const getApiKeys = () => api.get('/auth/api-keys');
+export const createApiKey = (data) => api.post('/auth/api-keys', data);
+export const revokeApiKey = (id) => api.delete(`/auth/api-keys/${id}`);
+
 export default api;

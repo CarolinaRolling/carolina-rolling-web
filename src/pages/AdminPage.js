@@ -5,7 +5,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, createApiKey, revokeApiKey } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -94,6 +94,13 @@ function AdminPage() {
   const [batchStatus, setBatchStatus] = useState(null);
   const [batchPolling, setBatchPolling] = useState(false);
 
+  // API Keys
+  const [apiKeys, setApiKeys] = useState([]);
+  const [showNewApiKeyModal, setShowNewApiKeyModal] = useState(false);
+  const [newApiKey, setNewApiKey] = useState({ name: '', clientName: '', permissions: 'read' });
+  const [createdApiKey, setCreatedApiKey] = useState(null); // holds key after creation (only shown once)
+  const [apiKeysLoading, setApiKeysLoading] = useState(false);
+
   useEffect(() => {
     if (!isAdmin()) {
       navigate('/inventory');
@@ -123,6 +130,8 @@ function AdminPage() {
       setLoading(false);
     } else if (activeTab === 'permits') {
       loadBatchStatus();
+    } else if (activeTab === 'apikeys') {
+      loadApiKeys();
     }
   }, [activeTab, logsPage]);
 
@@ -442,6 +451,52 @@ function AdminPage() {
     setSystemLogs([]);
   };
 
+  // API Key management
+  const loadApiKeys = async () => {
+    try {
+      setLoading(true);
+      const response = await getApiKeys();
+      setApiKeys(response.data.data || []);
+    } catch (err) {
+      setError('Failed to load API keys');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateApiKey = async () => {
+    if (!newApiKey.name.trim()) {
+      setError('API key name is required');
+      return;
+    }
+    try {
+      setSaving(true);
+      const response = await createApiKey({
+        name: newApiKey.name.trim(),
+        clientName: newApiKey.clientName.trim() || null,
+        permissions: newApiKey.permissions
+      });
+      setCreatedApiKey(response.data.data);
+      setNewApiKey({ name: '', clientName: '', permissions: 'read' });
+      loadApiKeys();
+    } catch (err) {
+      setError('Failed to create API key');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRevokeApiKey = async (id, name) => {
+    if (!window.confirm(`Revoke API key "${name}"? Any apps using this key will lose access.`)) return;
+    try {
+      await revokeApiKey(id);
+      setSuccess(`API key "${name}" revoked`);
+      loadApiKeys();
+    } catch (err) {
+      setError('Failed to revoke API key');
+    }
+  };
+
   const loadUsers = async () => {
     try {
       setLoading(true);
@@ -740,6 +795,13 @@ function AdminPage() {
               {window.nasErrorLog.length}
             </span>
           )}
+        </button>
+        <button 
+          className={`tab ${activeTab === 'apikeys' ? 'active' : ''}`}
+          onClick={() => setActiveTab('apikeys')}
+        >
+          <Key size={16} style={{ marginRight: 6 }} />
+          API Keys
         </button>
       </div>
 
@@ -1708,6 +1770,179 @@ function AdminPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'apikeys' && !loading && (
+        <div>
+          <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" onClick={() => { setShowNewApiKeyModal(true); setCreatedApiKey(null); }}>
+              <Plus size={18} />
+              Create API Key
+            </button>
+          </div>
+
+          {/* Show newly created key */}
+          {createdApiKey && (
+            <div className="card" style={{ marginBottom: 16, border: '2px solid #4caf50', background: '#e8f5e9' }}>
+              <h4 style={{ color: '#2e7d32', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Check size={20} />
+                API Key Created
+              </h4>
+              <p style={{ marginBottom: 8, color: '#333' }}>
+                Copy this key now — <strong>it will not be shown again</strong>:
+              </p>
+              <div style={{ 
+                background: '#fff', border: '1px solid #ccc', borderRadius: 6, padding: '12px 16px', 
+                fontFamily: 'monospace', fontSize: '0.95rem', wordBreak: 'break-all', marginBottom: 8
+              }}>
+                {createdApiKey.key}
+              </div>
+              <button className="btn btn-outline" onClick={() => {
+                navigator.clipboard.writeText(createdApiKey.key);
+                setSuccess('API key copied to clipboard');
+              }}>
+                Copy to Clipboard
+              </button>
+            </div>
+          )}
+
+          <div className="card">
+            <h3 style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Key size={20} />
+              API Keys
+            </h3>
+            <p style={{ color: '#666', marginBottom: 16 }}>
+              API keys allow external applications (like the customer portal) to securely access your data.
+              Each key can be scoped to a specific client or given full access.
+            </p>
+
+            {apiKeys.length === 0 ? (
+              <div className="empty-state" style={{ padding: 40 }}>
+                <div className="empty-state-icon">🔑</div>
+                <div className="empty-state-title">No API Keys</div>
+                <p>Create an API key to allow external apps to access your data.</p>
+              </div>
+            ) : (
+              <table className="data-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Client Scope</th>
+                    <th>Permissions</th>
+                    <th>Status</th>
+                    <th>Last Used</th>
+                    <th>Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {apiKeys.map(key => (
+                    <tr key={key.id} style={{ opacity: key.isActive ? 1 : 0.5 }}>
+                      <td style={{ fontWeight: 500 }}>{key.name}</td>
+                      <td>{key.clientName || <span style={{ color: '#999' }}>All clients</span>}</td>
+                      <td>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 500,
+                          background: key.permissions === 'admin' ? '#ffebee' : key.permissions === 'read_write' ? '#fff3e0' : '#e8f5e9',
+                          color: key.permissions === 'admin' ? '#c62828' : key.permissions === 'read_write' ? '#e65100' : '#2e7d32'
+                        }}>
+                          {key.permissions}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 500,
+                          background: key.isActive ? '#e8f5e9' : '#ffebee',
+                          color: key.isActive ? '#2e7d32' : '#c62828'
+                        }}>
+                          {key.isActive ? 'Active' : 'Revoked'}
+                        </span>
+                      </td>
+                      <td style={{ color: '#666', fontSize: '0.85rem' }}>
+                        {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : 'Never'}
+                      </td>
+                      <td style={{ color: '#666', fontSize: '0.85rem' }}>
+                        {new Date(key.createdAt).toLocaleDateString()}
+                      </td>
+                      <td>
+                        {key.isActive && (
+                          <button 
+                            className="btn btn-danger" 
+                            style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                            onClick={() => handleRevokeApiKey(key.id, key.name)}
+                          >
+                            Revoke
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="card" style={{ marginTop: 16 }}>
+            <h4 style={{ marginBottom: 8 }}>Usage</h4>
+            <p style={{ color: '#666', marginBottom: 8 }}>External apps include the key in the <code>X-API-Key</code> header:</p>
+            <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 6, fontSize: '0.85rem', overflow: 'auto' }}>
+{`fetch('https://carolina-rolling-inventory-api-641af96c90aa.herokuapp.com/api/workorders', {
+  headers: { 'X-API-Key': 'crm_your_key_here' }
+})`}
+            </pre>
+          </div>
+        </div>
+      )}
+
+      {/* New API Key Modal */}
+      {showNewApiKeyModal && (
+        <div className="modal-overlay" onClick={() => setShowNewApiKeyModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Create API Key</h3>
+              <button className="modal-close" onClick={() => setShowNewApiKeyModal(false)}>&times;</button>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Name *</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="e.g. Customer Portal, GNB Portal"
+                value={newApiKey.name}
+                onChange={(e) => setNewApiKey({ ...newApiKey, name: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Client Scope (optional)</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Leave empty for all clients, or enter client name"
+                value={newApiKey.clientName}
+                onChange={(e) => setNewApiKey({ ...newApiKey, clientName: e.target.value })}
+              />
+              <small style={{ color: '#666' }}>If set, this key can only see work orders for this specific client.</small>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Permissions</label>
+              <select
+                className="form-input"
+                value={newApiKey.permissions}
+                onChange={(e) => setNewApiKey({ ...newApiKey, permissions: e.target.value })}
+              >
+                <option value="read">Read Only — can view work orders and documents</option>
+                <option value="read_write">Read & Write — can also update data</option>
+                <option value="admin">Admin — full access</option>
+              </select>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setShowNewApiKeyModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => { handleCreateApiKey(); setShowNewApiKeyModal(false); }} disabled={saving || !newApiKey.name.trim()}>
+                {saving ? 'Creating...' : 'Create Key'}
+              </button>
+            </div>
           </div>
         </div>
       )}
