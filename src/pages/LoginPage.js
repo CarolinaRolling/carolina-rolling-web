@@ -43,18 +43,17 @@ function LoginPage() {
         boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{
-            width: 64,
-            height: 64,
-            background: '#1976d2',
-            borderRadius: 16,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 16px'
-          }}>
-            <Package size={32} color="white" />
-          </div>
+          <img 
+            src="/logo.png" 
+            alt="Carolina Rolling Co." 
+            style={{ 
+              width: 80, 
+              height: 80, 
+              borderRadius: '50%',
+              margin: '0 auto 16px',
+              display: 'block'
+            }} 
+          />
           <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: 4 }}>
             CR Admin
           </h1>

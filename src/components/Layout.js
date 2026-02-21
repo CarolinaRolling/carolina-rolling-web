@@ -16,8 +16,20 @@ function Layout({ children }) {
     <div className="layout">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h1>CR Admin</h1>
-          <p>Carolina Rolling</p>
+          <img 
+            src="/logo.png" 
+            alt="Carolina Rolling Co." 
+            style={{ 
+              width: 48, 
+              height: 48, 
+              borderRadius: '50%',
+              objectFit: 'cover'
+            }} 
+          />
+          <div>
+            <h1>CR Admin</h1>
+            <p>Carolina Rolling</p>
+          </div>
         </div>
         <nav>
           <ul className="sidebar-nav">
