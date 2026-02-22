@@ -41,6 +41,27 @@ function WorkOrdersPage() {
     loadOrders();
   }, []);
 
+  // Server-side search for finding orders across all statuses (including shipped/archived)
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 2) {
+      // Reset to normal active orders when search is cleared
+      if (searchQuery === '' && !loading) loadOrders();
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setLoading(true);
+        const response = await getWorkOrders({ search: searchQuery, limit: 100 });
+        setOrders(response.data.data || []);
+      } catch (err) {
+        console.error('Search failed:', err);
+      } finally {
+        setLoading(false);
+      }
+    }, 400); // debounce
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const loadOrders = async () => {
     try {
       setLoading(true);
@@ -57,13 +78,14 @@ function WorkOrdersPage() {
   const getFilteredOrders = () => {
     let filtered = [...orders];
 
-    // Filter by status
-    if (statusFilter !== 'all') {
+    // Filter by status (skip when searching — show all matching statuses)
+    if (statusFilter !== 'all' && !searchQuery) {
       filtered = filtered.filter(o => o.status === statusFilter);
     }
 
-    // Filter by search query
-    if (searchQuery) {
+    // Filter by search query (only for local filtering when search < 2 chars)
+    // Server-side search handles 2+ char queries — don't double-filter
+    if (searchQuery && searchQuery.length < 2) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(o =>
         o.clientName?.toLowerCase().includes(query) ||
