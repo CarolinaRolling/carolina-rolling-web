@@ -62,7 +62,9 @@ function EstimateDetailsPage() {
   const [error, setError] = useState(null);
   const [partFormError, setPartFormError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const pdfPreviewActive = useRef(false);
 
   const [formData, setFormData] = useState({
     clientName: '', contactName: '', contactEmail: '', contactPhone: '',
@@ -123,6 +125,11 @@ function EstimateDetailsPage() {
     loadDefaultSettings();
     if (!isNew) loadEstimate(); 
   }, [id]);
+
+  // Cleanup PDF blob URL on unmount
+  useEffect(() => {
+    return () => { if (pdfPreviewUrl) window.URL.revokeObjectURL(pdfPreviewUrl); };
+  }, [pdfPreviewUrl]);
 
   const loadDefaultSettings = async () => {
     try {
@@ -511,10 +518,10 @@ function EstimateDetailsPage() {
     return { partsSubtotal, discountAmt, afterDiscount, trucking, taxAmount, grandTotal, ccInPersonFee, ccInPersonTotal, ccManualFee, ccManualTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel };
   };
 
-  const handleDownloadPDF = async () => {
+  const generatePdfPreview = async () => {
     try {
-      setDownloadingPDF(true);
-      // Save current state first so PDF reflects on-screen values (tax exempt, pricing, etc.)
+      setPdfGenerating(true);
+      // Save current state first so PDF reflects on-screen values
       try {
         await updateEstimate(id, { 
           taxExempt: formData.taxExempt, 
@@ -534,20 +541,40 @@ function EstimateDetailsPage() {
       }
       const response = await downloadEstimatePDF(id);
       const blob = new Blob([response.data], { type: 'application/pdf' });
+      // Revoke old URL to free memory
+      if (pdfPreviewUrl) window.URL.revokeObjectURL(pdfPreviewUrl);
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Estimate-${estimate?.estimateNumber || id}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      showMessage('PDF downloaded');
+      setPdfPreviewUrl(url);
+      pdfPreviewActive.current = true;
     } catch (err) {
-      setError('Failed to download PDF');
+      setError('Failed to generate PDF');
       console.error(err);
     } finally {
-      setDownloadingPDF(false);
+      setPdfGenerating(false);
+    }
+  };
+
+  const handleDownloadFromPreview = () => {
+    if (!pdfPreviewUrl) return;
+    const link = document.createElement('a');
+    link.href = pdfPreviewUrl;
+    link.download = `Estimate-${estimate?.estimateNumber || id}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showMessage('PDF downloaded');
+  };
+
+  const closePdfPreview = () => {
+    if (pdfPreviewUrl) window.URL.revokeObjectURL(pdfPreviewUrl);
+    setPdfPreviewUrl(null);
+    pdfPreviewActive.current = false;
+  };
+
+  // Auto-regenerate PDF preview when it's open
+  const regeneratePdfIfActive = async () => {
+    if (pdfPreviewActive.current) {
+      await generatePdfPreview();
     }
   };
 
@@ -562,6 +589,7 @@ function EstimateDetailsPage() {
       } else {
         await updateEstimate(id, payload);
         await loadEstimate();
+        regeneratePdfIfActive();
       }
       showMessage(sendToClient ? 'Estimate sent' : 'Estimate saved');
     } catch (err) { setError('Failed to save'); }
@@ -579,6 +607,7 @@ function EstimateDetailsPage() {
       setEditingEstNum(false);
       showMessage(`Estimate number changed to ${newNum}`);
       await loadEstimate();
+      regeneratePdfIfActive();
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Failed to update estimate number');
     }
@@ -855,6 +884,7 @@ function EstimateDetailsPage() {
       }
       
       await loadEstimate();
+      regeneratePdfIfActive();
       
       if (addAnother && !editingPart) {
         // Reset form and go back to part type picker
@@ -883,6 +913,7 @@ function EstimateDetailsPage() {
     try {
       await deleteEstimatePart(id, partId);
       await loadEstimate();
+      regeneratePdfIfActive();
       showMessage('Part deleted');
     } catch (err) { setError('Failed to delete part'); }
   };
@@ -1060,7 +1091,7 @@ function EstimateDetailsPage() {
           </p>
         ` : ''}
         ${part._pitchEnabled ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;">🌀 Pitch: ${part._pitchDirection === 'clockwise' ? 'CW' : 'CCW'}${part._pitchMethod === 'runrise' && part._pitchRise ? ' | Run: ' + part._pitchRun + '" / Rise: ' + part._pitchRise + '"' : ''}${part._pitchMethod === 'degree' && part._pitchAngle ? ' | Angle: ' + part._pitchAngle + '°' : ''}${part._pitchMethod === 'space' && part._pitchSpaceValue ? ' | ' + (part._pitchSpaceType === 'center' ? 'C-C' : 'Between') + ': ' + part._pitchSpaceValue + '"' : ''}${part._pitchDevelopedDia > 0 ? ' | <strong style="color:#2e7d32;">Dev Ø: ' + parseFloat(part._pitchDevelopedDia).toFixed(4) + '"</strong>' : ''}</p>` : ''}
-        ${!['fab_service', 'shop_rate'].includes(part.partType) ? (part.materialSource === 'customer_supplied' || !part.weSupplyMaterial ? `<p style="color:#388e3c;">Material supplied by: ${formData.clientName || 'Customer'}</p>` : `<p style="color:#388e3c;">Material supplied by: Carolina Rolling Company</p>`) : ''}
+        ${!['fab_service', 'shop_rate'].includes(part.partType) ? (part.materialSource === 'we_order' ? `<p style="color:#388e3c;">Material supplied by: Carolina Rolling Company</p>` : `<p style="color:#388e3c;">Material supplied by: ${formData.clientName || 'Customer'}</p>`) : ''}
         ${part.partType === 'cone_roll' && part.cutFileReference ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">Layout Filename: ${part.cutFileReference}</p>` : ''}
         ${pricingHtml}
         ${part.partType === 'shop_rate' ? '<p style="margin:8px 0 0;padding:8px;background:#fff3e0;border:1px solid #ffcc80;border-radius:6px;font-size:0.85em;color:#e65100;">⚠️ Pricing is an estimate based on predicted hours. Actual cost may vary depending on hours required to complete the job.</p>' : ''}
@@ -1142,8 +1173,9 @@ function EstimateDetailsPage() {
         </div>
         <div className="actions-row">
           {!isNew && (
-            <button className="btn btn-outline" onClick={handleDownloadPDF} disabled={downloadingPDF}>
-              <FileDown size={18} /> {downloadingPDF ? 'Generating...' : 'Download PDF'}
+            <button className="btn btn-outline" onClick={pdfPreviewUrl ? closePdfPreview : generatePdfPreview} disabled={pdfGenerating}
+              style={pdfPreviewUrl ? { background: '#e3f2fd', borderColor: '#1976d2', color: '#1976d2' } : {}}>
+              <Eye size={18} /> {pdfGenerating ? 'Generating...' : pdfPreviewUrl ? 'Close Preview' : 'Generate PDF'}
             </button>
           )}
           {!isNew && <button className="btn btn-outline" onClick={printEstimate}><Printer size={18} /> Print</button>}
@@ -1189,6 +1221,37 @@ function EstimateDetailsPage() {
 
       {error && <div className="alert alert-error" style={{ whiteSpace: 'pre-line' }}>{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
+
+      {/* PDF Preview */}
+      {pdfPreviewUrl && (
+        <div style={{ marginBottom: 16, border: '2px solid #1976d2', borderRadius: 12, overflow: 'hidden', background: '#f5f5f5' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', background: '#1976d2', color: 'white' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: '0.9rem' }}>
+              <FileText size={16} /> PDF Preview
+              {pdfGenerating && <span style={{ fontSize: '0.8rem', opacity: 0.8 }}> — Regenerating...</span>}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={generatePdfPreview} disabled={pdfGenerating}
+                style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                ↻ Refresh
+              </button>
+              <button onClick={handleDownloadFromPreview}
+                style={{ background: 'white', color: '#1976d2', border: 'none', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><FileDown size={14} /> Download</span>
+              </button>
+              <button onClick={closePdfPreview}
+                style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', lineHeight: 1 }}>
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+          <iframe
+            src={pdfPreviewUrl}
+            style={{ width: '100%', height: '80vh', border: 'none', display: 'block' }}
+            title="Estimate PDF Preview"
+          />
+        </div>
+      )}
 
       {/* Status Workflow Bar */}
       {!isNew && estimate && (
@@ -1640,7 +1703,7 @@ function EstimateDetailsPage() {
                           📦 {part.materialDescription}
                           {!['fab_service', 'shop_rate'].includes(part.partType) && (
                             <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>
-                              {part._materialSource === 'we_order' || part.weSupplyMaterial ? 'Material supplied by: Carolina Rolling Company' : `Material supplied by: ${formData.clientName || 'Customer'}`}
+                              {part.materialSource === 'we_order' ? 'Material supplied by: Carolina Rolling Company' : `Material supplied by: ${formData.clientName || 'Customer'}`}
                             </div>
                           )}
                         </div>
@@ -2098,7 +2161,7 @@ function EstimateDetailsPage() {
               <button className="modal-close" onClick={() => setShowPartModal(false)}>&times;</button>
             </div>
 
-            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            <div className="modal-body" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
 
               {/* Common fields for all part types (plate_roll, angle_roll, flat_stock have their own) */}
               {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'cone_roll', 'tee_bar', 'press_brake', 'fab_service'].includes(partData.partType) && (

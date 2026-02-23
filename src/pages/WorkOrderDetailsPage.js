@@ -2646,7 +2646,7 @@ function WorkOrderDetailsPage() {
               </h3>
               <button className="btn btn-icon" onClick={() => setShowPartModal(false)}><X size={20} /></button>
             </div>
-            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            <div className="modal-body" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
 
               {/* Validation errors */}
               {partFormError && partFormError.length > 0 && (
