@@ -20,6 +20,13 @@ const FLAT_BAR_SIZES = [
   'Custom'
 ];
 
+const SQUARE_BAR_SIZES = [
+  '1/4', '3/8', '1/2', '5/8', '3/4', '7/8',
+  '1', '1-1/4', '1-1/2', '1-3/4',
+  '2', '2-1/2', '3', '3-1/2', '4',
+  'Custom'
+];
+
 const DEFAULT_GRADE_OPTIONS = ['A36', '304 S/S', '316 S/S', 'AR400', 'Custom'];
 
 function parseFlatBarSize(sizeStr) {
@@ -59,7 +66,23 @@ function calculateRise(radiusInches, chordInches) {
   return radiusInches - Math.sqrt(radiusInches * radiusInches - halfChord * halfChord);
 }
 
+function parseSquareBarSize(sizeStr) {
+  if (!sizeStr || sizeStr === 'Custom') return null;
+  const toDecimal = (s) => {
+    s = s.trim();
+    const mixedMatch = s.match(/^(\d+)-(\d+)\/(\d+)$/);
+    if (mixedMatch) return parseInt(mixedMatch[1]) + parseInt(mixedMatch[2]) / parseInt(mixedMatch[3]);
+    const fracMatch = s.match(/^(\d+)\/(\d+)$/);
+    if (fracMatch) return parseInt(fracMatch[1]) / parseInt(fracMatch[2]);
+    return parseFloat(s) || 0;
+  };
+  const side = toDecimal(sizeStr);
+  if (side > 0) return { width: side, thickness: side };
+  return null;
+}
+
 export default function FlatBarRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
+  const [barShape, setBarShape] = useState(partData._barShape || 'flat');
   const [customGrade, setCustomGrade] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
   const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');
@@ -103,14 +126,18 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     setPartData(prev => ({ ...prev, ...updates }));
   }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint]);
 
-  const parsedSize = useMemo(() => parseFlatBarSize(partData._barSize), [partData._barSize]);
+  const parsedSize = useMemo(() => {
+    if (barShape === 'square') return parseSquareBarSize(partData._barSize);
+    return parseFlatBarSize(partData._barSize);
+  }, [partData._barSize, barShape]);
 
-  // Profile size for CL offset: EW rolls on the width, HW rolls on thickness
+  // Profile size for CL offset: square bar always uses full side; flat bar: EW=thickness, HW=width
   const profileSize = useMemo(() => {
     if (!parsedSize) return 0;
+    if (barShape === 'square') return parsedSize.width;
     if (partData.rollType === 'hard_way') return parsedSize.width;
     return parsedSize.thickness; // easy way or no selection
-  }, [parsedSize, partData.rollType]);
+  }, [parsedSize, partData.rollType, barShape]);
 
   const clDiameter = useMemo(() => {
     const rv = parseFloat(rollValue) || 0;
@@ -168,17 +195,26 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
     const parts = [`${qty}pc:`];
-    if (parsedSize) {
-      parts.push(`${formatFraction(parsedSize.width)} x ${formatFraction(parsedSize.thickness)}`);
-    } else if (partData._customBarSize) {
-      parts.push(partData._customBarSize);
+    if (barShape === 'square') {
+      if (parsedSize) {
+        parts.push(`${formatFraction(parsedSize.width)} x ${formatFraction(parsedSize.width)}`);
+      } else if (partData._customBarSize) {
+        parts.push(partData._customBarSize);
+      }
+      parts.push('Square Bar');
+    } else {
+      if (parsedSize) {
+        parts.push(`${formatFraction(parsedSize.width)} x ${formatFraction(parsedSize.thickness)}`);
+      } else if (partData._customBarSize) {
+        parts.push(partData._customBarSize);
+      }
+      parts.push('Flat Bar');
     }
-    parts.push('Flat Bar');
     if (partData.length) parts.push(`x ${partData.length} long`);
     if (partData.material) parts.push(partData.material);
     if (partData._materialOrigin) parts.push(partData._materialOrigin);
     return parts.join(' ');
-  }, [partData._barSize, partData._customBarSize, partData.length, partData.material, partData._materialOrigin, partData.quantity, parsedSize]);
+  }, [partData._barSize, partData._customBarSize, partData.length, partData.material, partData._materialOrigin, partData.quantity, parsedSize, barShape]);
 
   // Input diameter (raw user value, not CL-adjusted) — for developed diameter in pitch calc
   const inputDiameter = useMemo(() => {
@@ -195,7 +231,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     const lines = [];
     
     const spec = rollMeasurePoint === 'inside' ? (rollMeasureType === 'radius' ? 'ISR' : 'ID') : rollMeasurePoint === 'outside' ? (rollMeasureType === 'radius' ? 'OSR' : 'OD') : (rollMeasureType === 'radius' ? 'CLR' : 'CLD');
-    const ewHw = partData.rollType === 'easy_way' ? 'EW' : partData.rollType === 'hard_way' ? 'HW' : '';
+    const ewHw = barShape === 'square' ? '' : (partData.rollType === 'easy_way' ? 'EW' : partData.rollType === 'hard_way' ? 'HW' : '');
     let rollLine = `Roll to ${rv}" ${spec}`;
     if (ewHw) rollLine += ` ${ewHw}`;
     lines.push(rollLine);
@@ -210,18 +246,34 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
       lines.push(`Tangents: ${ringCalc.tangent}" each end`);
     }
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded, barShape, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
 
   useEffect(() => {
     const updates = { materialDescription, _materialDescription: materialDescription };
-    if (partData._barSize && partData._barSize !== 'Custom') {
-      updates.sectionSize = partData._barSize;
-      if (parsedSize) { updates.width = String(parsedSize.width); updates.thickness = String(parsedSize.thickness); }
-    } else if (partData._customBarSize) {
-      updates.sectionSize = partData._customBarSize;
+    if (barShape === 'square') {
+      if (partData._barSize && partData._barSize !== 'Custom') {
+        const p = parseSquareBarSize(partData._barSize);
+        if (p) { updates.sectionSize = `${partData._barSize}x${partData._barSize}`; updates.width = String(p.width); updates.thickness = String(p.thickness); }
+      } else if (partData._customBarSize) {
+        updates.sectionSize = partData._customBarSize;
+      }
+    } else {
+      if (partData._barSize && partData._barSize !== 'Custom') {
+        updates.sectionSize = partData._barSize;
+        if (parsedSize) { updates.width = String(parsedSize.width); updates.thickness = String(parsedSize.thickness); }
+      } else if (partData._customBarSize) {
+        updates.sectionSize = partData._customBarSize;
+      }
     }
     setPartData(prev => ({ ...prev, ...updates }));
   }, [materialDescription]);
+
+  // Sync barShape to partData and clear rollType when switching to square
+  useEffect(() => {
+    const updates = { _barShape: barShape };
+    if (barShape === 'square') { updates.rollType = null; }
+    setPartData(prev => ({ ...prev, ...updates }));
+  }, [barShape]);
 
   useEffect(() => {
     setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
@@ -262,7 +314,38 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
       </div>
 
       <div className="form-group">
-        <label className="form-label">Flat Bar Size *</label>
+        <label className="form-label">Bar Shape *</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" style={{ flex: 1, padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.9rem',
+              border: `2px solid ${barShape === 'flat' ? '#1565c0' : '#ccc'}`, background: barShape === 'flat' ? '#e3f2fd' : '#fff', color: barShape === 'flat' ? '#1565c0' : '#666', cursor: 'pointer' }}
+            onClick={() => { setBarShape('flat'); setPartData(prev => ({ ...prev, _barSize: '', _customBarSize: '', _barShape: 'flat' })); }}>
+            ▬ Flat Bar
+          </button>
+          <button type="button" style={{ flex: 1, padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.9rem',
+              border: `2px solid ${barShape === 'square' ? '#1565c0' : '#ccc'}`, background: barShape === 'square' ? '#e3f2fd' : '#fff', color: barShape === 'square' ? '#1565c0' : '#666', cursor: 'pointer' }}
+            onClick={() => { setBarShape('square'); setPartData(prev => ({ ...prev, _barSize: '', _customBarSize: '', _barShape: 'square', rollType: null })); }}>
+            ◼ Square Bar
+          </button>
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">{barShape === 'square' ? 'Square Bar Size *' : 'Flat Bar Size *'}</label>
+        {barShape === 'square' ? (
+          <select className="form-select" value={SQUARE_BAR_SIZES.includes(partData._barSize) ? partData._barSize : (partData._barSize === 'Custom' ? 'Custom' : '')} onChange={(e) => {
+            if (e.target.value === 'Custom') {
+              setPartData({ ...partData, _barSize: 'Custom' });
+            } else {
+              setPartData({ ...partData, _barSize: e.target.value, _customBarSize: '' });
+            }
+          }}>
+            <option value="">Select...</option>
+            {SQUARE_BAR_SIZES.map(s => {
+              if (s === 'Custom') return <option key={s} value={s}>{s}</option>;
+              return <option key={s} value={s}>{formatFraction(parseSquareBarSize(s)?.width || 0)} × {formatFraction(parseSquareBarSize(s)?.width || 0)}</option>;
+            })}
+          </select>
+        ) : (
         <select className="form-select" value={selectedBarSize} onChange={(e) => {
           if (e.target.value === 'Custom') {
             setPartData({ ...partData, _barSize: 'Custom' });
@@ -277,8 +360,9 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
             return <option key={s} value={s}>{formatFraction(p.width)} × {formatFraction(p.thickness)}</option>;
           })}
         </select>
-        {selectedBarSize === 'Custom' && (
-          <input className="form-input" style={{ marginTop: 4 }} placeholder='e.g. 4x3/4 or 4" x 3/4"'
+        )}
+        {(partData._barSize === 'Custom') && (
+          <input className="form-input" style={{ marginTop: 4 }} placeholder={barShape === 'square' ? 'e.g. 2-1/2 or 2.5' : 'e.g. 4x3/4 or 4" x 3/4"'}
             value={partData._customBarSize || ''}
             onChange={(e) => setPartData({ ...partData, _customBarSize: e.target.value })} />
         )}
@@ -330,7 +414,8 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
           </div>
         </div>
 
-        {/* Easy Way / Hard Way */}
+        {/* Easy Way / Hard Way — only for flat bars */}
+        {barShape !== 'square' && (
         <div style={{ marginBottom: 12 }}>
           <label className="form-label">Roll Direction *</label>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -349,6 +434,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
             </div>
           )}
         </div>
+        )}
 
         {/* Rise */}
         {riseCalc && (

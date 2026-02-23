@@ -33,7 +33,7 @@ const PART_TYPES = {
   plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
   cone_roll: { label: 'Cone Layout', icon: '🔺', desc: 'Cone segment design with AutoCAD export', fields: ['material', 'thickness', 'width', 'length'] },
   angle_roll: { label: 'Angle Roll', icon: '📐', desc: 'Angle iron rolling', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
-  flat_bar: { label: 'Flat Bar', icon: '▬', desc: 'Flat bar bending', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
+  flat_bar: { label: 'Flat & Square Bar', icon: '▬', desc: 'Flat bar and square bar bending', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
   pipe_roll: { label: 'Pipes/Tubes/Round', icon: '🔧', desc: 'Pipe, tube, and solid round bar bending', fields: ['material', 'outerDiameter', 'wallThickness', 'length', 'radius', 'diameter', 'arcDegrees'] },
   tube_roll: { label: 'Square & Rect Tubing', icon: '⬜', desc: 'Square and rectangular tube rolling', fields: ['material', 'sectionSize', 'thickness', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
   channel_roll: { label: 'Channel', icon: '🔲', desc: 'C-channel rolling', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
@@ -596,9 +596,9 @@ function WorkOrderDetailsPage() {
       }
     }
     if (selectedPartType === 'flat_bar') {
-      if (!partData._barSize) warnings.push('Flat bar size is required');
-      if (partData._barSize === 'Custom' && !partData._customBarSize) warnings.push('Custom flat bar size is required');
-      if (!partData.rollType) warnings.push('Roll Direction is required');
+      if (!partData._barSize) warnings.push('Bar size is required');
+      if (partData._barSize === 'Custom' && !partData._customBarSize) warnings.push('Custom bar size is required');
+      if (partData._barShape !== 'square' && !partData.rollType) warnings.push('Roll Direction is required');
       if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
     }
     if (selectedPartType === 'channel_roll') {
@@ -2485,17 +2485,49 @@ function WorkOrderDetailsPage() {
                   )}
                 </div>
               ) : (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                  {(editData.taxExempt || order.taxExempt) ? (
-                    <>
+                <div style={{ padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={editData.taxExempt || false}
+                        onChange={async (e) => {
+                          const newExempt = e.target.checked;
+                          const updates = { taxExempt: newExempt };
+                          if (!newExempt) { updates.taxExemptReason = ''; updates.taxExemptCertNumber = ''; }
+                          setEditData(prev => ({ ...prev, ...updates }));
+                          try { await updateWorkOrder(id, { ...editData, ...updates }); showMessage(newExempt ? 'Marked tax exempt' : 'Tax exemption removed'); } catch {}
+                        }}
+                      />
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: editData.taxExempt ? '#c62828' : '#666' }}>Tax Exempt</span>
+                    </label>
+                    {!editData.taxExempt && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <input type="number" step="0.01" className="form-input"
+                          value={editData.taxRate || ''}
+                          onChange={(e) => setEditData(prev => ({ ...prev, taxRate: e.target.value }))}
+                          onBlur={async () => { try { await updateWorkOrder(id, { taxRate: editData.taxRate }); showMessage('Tax rate updated'); } catch {} }}
+                          style={{ width: 70, textAlign: 'right', fontSize: '0.85rem', padding: '2px 6px' }}
+                        />
+                        <span style={{ fontSize: '0.85rem', color: '#666' }}>%</span>
+                      </div>
+                    )}
+                  </div>
+                  {editData.taxExempt && (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input className="form-input" placeholder="Reason" value={editData.taxExemptReason || ''}
+                        onChange={(e) => setEditData(prev => ({ ...prev, taxExemptReason: e.target.value }))}
+                        onBlur={async () => { try { await updateWorkOrder(id, { taxExemptReason: editData.taxExemptReason }); } catch {} }}
+                        style={{ flex: 1, fontSize: '0.8rem', padding: '3px 6px' }} />
+                      <input className="form-input" placeholder="Cert #" value={editData.taxExemptCertNumber || ''}
+                        onChange={(e) => setEditData(prev => ({ ...prev, taxExemptCertNumber: e.target.value }))}
+                        onBlur={async () => { try { await updateWorkOrder(id, { taxExemptCertNumber: editData.taxExemptCertNumber }); } catch {} }}
+                        style={{ width: 100, fontSize: '0.8rem', padding: '3px 6px' }} />
+                    </div>
+                  )}
+                  {!editData.taxExempt && calculateTotals().taxAmount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#555', marginTop: 2 }}>
                       <span>Tax:</span>
-                      <span style={{ color: '#c62828', fontWeight: 600 }}>EXEMPT{(editData.taxExemptCertNumber || order.taxExemptCertNumber) ? ` (${editData.taxExemptReason || order.taxExemptReason || 'Resale'}${editData.taxExemptCertNumber || order.taxExemptCertNumber ? ' #' + (editData.taxExemptCertNumber || order.taxExemptCertNumber) : ''})` : (editData.taxExemptReason || order.taxExemptReason ? ` (${editData.taxExemptReason || order.taxExemptReason})` : '')}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Tax ({(parseFloat(order.taxRate) || defaultTaxRate).toFixed(2)}%):</span>
                       <span>{formatCurrency(calculateTotals().taxAmount)}</span>
-                    </>
+                    </div>
                   )}
                 </div>
               )}

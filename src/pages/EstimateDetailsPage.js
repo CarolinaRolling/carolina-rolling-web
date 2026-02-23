@@ -28,7 +28,7 @@ const PART_TYPES = {
   plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator' },
   cone_roll: { label: 'Cone Layout', icon: '🔺', desc: 'Cone segment design with AutoCAD export' },
   angle_roll: { label: 'Angle Roll', icon: '📐', desc: 'Angle iron rolling' },
-  flat_bar: { label: 'Flat Bar', icon: '▬', desc: 'Flat bar bending' },
+  flat_bar: { label: 'Flat & Square Bar', icon: '▬', desc: 'Flat bar and square bar bending' },
   pipe_roll: { label: 'Pipes/Tubes/Round', icon: '🔧', desc: 'Pipe, tube, and solid round bar bending' },
   tube_roll: { label: 'Square & Rect Tubing', icon: '⬜', desc: 'Square and rectangular tube rolling' },
   channel_roll: { label: 'Channel', icon: '🔲', desc: 'C-channel rolling' },
@@ -735,9 +735,9 @@ function EstimateDetailsPage() {
     }
 
     if (partData.partType === 'flat_bar') {
-      if (!partData._barSize) warnings.push('Flat bar size is required');
-      if (partData._barSize === 'Custom' && !partData._customBarSize) warnings.push('Custom flat bar size is required');
-      if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
+      if (!partData._barSize && !partData._barShape) warnings.push('Bar size is required');
+      if (partData._barSize === 'Custom' && !partData._customBarSize) warnings.push('Custom bar size is required');
+      if (partData._barShape !== 'square' && !partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
       if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
     }
 
@@ -789,9 +789,8 @@ function EstimateDetailsPage() {
     }
 
     if (partData.partType === 'rush_service') {
-      if (!partData._expediteEnabled && !partData._emergencyEnabled) warnings.push('Select at least Expedite or Emergency Service');
       if (partData._expediteEnabled && partData._expediteType === 'custom_pct' && !partData._expediteCustomPct) warnings.push('Custom percentage is required');
-      if (partData._expediteEnabled && partData._expediteType === 'custom_amt' && !partData._expediteCustomAmt) warnings.push('Custom amount is required');
+      if (partData._expediteEnabled && partData._expediteType === 'custom_amt' && !partData._expediteCustomAmt && partData._expediteCustomAmt !== '0') warnings.push('Custom amount is required');
     }
     
     // Generic validations for all types
