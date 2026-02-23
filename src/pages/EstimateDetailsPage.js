@@ -1061,8 +1061,8 @@ function EstimateDetailsPage() {
             <tr><td>Rolling:</td><td style="text-align:right;">${formatCurrency(part.rollingCost)}</td></tr>
             <tr><td>Other Services:</td><td style="text-align:right;">${formatCurrency(calc.otherTotal)}</td></tr>
             <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Part Total:</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`;
-      return `<div style="border:1px solid ${isLinkedService ? '#ce93d8' : '#ddd'};border-radius:${isLinkedService ? '4' : '8'}px;padding:${isLinkedService ? '12' : '16'}px;margin-bottom:${isLinkedService ? '4' : '12'}px;margin-left:${isLinkedService ? '32' : '0'}px;background:${isLinkedService ? '#fce4ec' : 'white'};">
-        <h4 style="margin:0 0 8px;color:${isLinkedService ? '#7b1fa2' : '#1976d2'};">${isLinkedService ? '↳ ' : ''}Part #${part.partNumber} - ${PART_TYPES[part.partType]?.label || part.partType}${isLinkedService && linkedParent ? ` <span style="font-weight:400;font-size:0.85em;color:#9c27b0;">for Part #${linkedParent.partNumber}</span>` : ''}</h4>
+      return `<div style="border:1px solid ${isLinkedService ? '#9e9e9e' : '#ddd'};border-radius:${isLinkedService ? '4' : '8'}px;padding:${isLinkedService ? '12' : '16'}px;margin-bottom:${isLinkedService ? '4' : '12'}px;margin-left:${isLinkedService ? '32' : '0'}px;background:${isLinkedService ? '#eeeeee' : 'white'};">
+        <h4 style="margin:0 0 8px;color:${isLinkedService ? '#424242' : '#1976d2'};">${isLinkedService ? '+ ' : ''}Part #${part.partNumber} - ${PART_TYPES[part.partType]?.label || part.partType}${isLinkedService && linkedParent ? ` <span style="font-weight:400;font-size:0.85em;color:#757575;">for Part #${linkedParent.partNumber}</span>` : ''}</h4>
         <p style="margin:0 0 4px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''} ${part.cutFileReference ? `<span style="color:#1565c0">Cut File: ${part.cutFileReference}</span>` : ''}</p>
         <p style="margin:0 0 4px;"><strong>Qty:</strong> ${part.quantity}${part.sectionSize ? ` | <strong>Size:</strong> ${part.partType === 'pipe_roll' && part._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${part._schedule} Pipe`) : part.sectionSize}` : ''}${part.thickness ? ` | <strong>Thk:</strong> ${part.thickness}` : ''}${part.outerDiameter ? ` | <strong>OD:</strong> ${part.outerDiameter}"` : ''}${part.wallThickness && part.wallThickness !== 'SOLID' ? ` | <strong>Wall:</strong> ${part.wallThickness}` : ''}${part.length ? ` | <strong>Length:</strong> ${part.length}` : ''}${part.material ? ` | <strong>Grade:</strong> ${part.material}` : ''}</p>
         ${part.partType === 'cone_roll' ? (() => {
@@ -1536,19 +1536,19 @@ function EstimateDetailsPage() {
               const adjPartTotal = adjUnitPrice * (parseInt(part.quantity) || 1);
               return (
                 <div key={part.id} style={{
-                  border: isLinkedService ? '2px solid #ce93d8' : '2px solid #e0e0e0',
+                  border: isLinkedService ? '2px solid #9e9e9e' : '2px solid #e0e0e0',
                   borderRadius: 12, padding: isLinkedService ? '12px 16px' : 16, marginBottom: isLinkedService ? 4 : 12,
                   marginLeft: isLinkedService ? 32 : 0, marginTop: isLinkedService ? -4 : 0,
-                  background: isLinkedService ? '#fce4ec' : 'white',
+                  background: isLinkedService ? '#eeeeee' : 'white',
                   borderTopLeftRadius: isLinkedService ? 4 : 12, borderTopRightRadius: isLinkedService ? 4 : 12,
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 8, borderBottom: isLinkedService ? '1px solid #e1bee7' : '1px solid #eee' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 8, borderBottom: isLinkedService ? '1px solid #bdbdbd' : '1px solid #eee' }}>
                     <div>
-                      <div style={{ fontSize: isLinkedService ? '0.95rem' : '1.1rem', fontWeight: 700, color: isLinkedService ? '#7b1fa2' : '#1976d2' }}>
-                        {isLinkedService && <span style={{ marginRight: 6 }}>↳</span>}
+                      <div style={{ fontSize: isLinkedService ? '0.95rem' : '1.1rem', fontWeight: 700, color: isLinkedService ? '#424242' : '#1976d2' }}>
+                        {isLinkedService && <span style={{ marginRight: 6 }}>+</span>}
                         Part #{part.partNumber} - {PART_TYPES[part.partType]?.label || part.partType}
                         {isLinkedService && linkedParent && (
-                          <span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#9c27b0', marginLeft: 8 }}>
+                          <span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#757575', marginLeft: 8 }}>
                             for Part #{linkedParent.partNumber}
                           </span>
                         )}
@@ -1698,6 +1698,11 @@ function EstimateDetailsPage() {
                   {/* Costs Section - ea pricing */}
                   {['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType) ? (
                     <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
+                      {part.clientPartNumber && (
+                        <div style={{ fontSize: '0.8rem', color: '#1565c0', fontWeight: 600, marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid #e0e0e0' }}>
+                          🏷️ Client Part#: {part.clientPartNumber}
+                        </div>
+                      )}
                       {part.materialDescription && (
                         <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
                           📦 {part.materialDescription}
@@ -1922,8 +1927,8 @@ function EstimateDetailsPage() {
                     const lr = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEa) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
                     const adjTotal = isEa ? ((calc.materialEach || 0) + (calc.laborEach || 0) * lr) * (parseInt(part.quantity) || 1) : calc.partTotal;
                     return (
-                      <div key={part.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', paddingLeft: isLS ? 12 : 0, color: isLS ? '#7b1fa2' : 'inherit', fontSize: isLS ? '0.75rem' : '0.8rem' }}>
-                        <span>{isLS ? '↳ ' : ''}Part #{part.partNumber}{isLS ? ` (${PART_TYPES[part.partType]?.label})` : ''}</span>
+                      <div key={part.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', paddingLeft: isLS ? 12 : 0, color: isLS ? '#616161' : 'inherit', fontSize: isLS ? '0.75rem' : '0.8rem' }}>
+                        <span>{isLS ? '+ ' : ''}Part #{part.partNumber}{isLS ? ` (${PART_TYPES[part.partType]?.label})` : ''}</span>
                         <span>{formatCurrency(adjTotal)}</span>
                       </div>
                     );
