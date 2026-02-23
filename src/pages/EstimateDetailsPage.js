@@ -128,8 +128,15 @@ function EstimateDetailsPage() {
 
   // Cleanup PDF blob URL on unmount
   useEffect(() => {
-    return () => { if (pdfPreviewUrl) window.URL.revokeObjectURL(pdfPreviewUrl); };
+    return () => { if (pdfPreviewUrl && pdfPreviewUrl.startsWith('blob:')) window.URL.revokeObjectURL(pdfPreviewUrl); };
   }, [pdfPreviewUrl]);
+
+  // Auto-load stored PDF when estimate files are loaded
+  useEffect(() => {
+    if (!isNew && files.length > 0 && !pdfPreviewUrl && !pdfGenerating) {
+      loadStoredPdf();
+    }
+  }, [files]);
 
   const loadDefaultSettings = async () => {
     try {
@@ -541,11 +548,32 @@ function EstimateDetailsPage() {
       }
       const response = await downloadEstimatePDF(id);
       const blob = new Blob([response.data], { type: 'application/pdf' });
-      // Revoke old URL to free memory
-      if (pdfPreviewUrl) window.URL.revokeObjectURL(pdfPreviewUrl);
-      const url = window.URL.createObjectURL(blob);
-      setPdfPreviewUrl(url);
-      pdfPreviewActive.current = true;
+
+      // Delete previous generated PDF copy if exists
+      const oldPdf = files.find(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-'));
+      if (oldPdf) {
+        try { await deleteEstimateFile(id, oldPdf.id); } catch {}
+      }
+
+      // Upload the generated PDF as an estimate file
+      const pdfFileName = `Generated-Estimate-${estimate?.estimateNumber || id}.pdf`;
+      const pdfFile = new File([blob], pdfFileName, { type: 'application/pdf' });
+      await uploadEstimateFiles(id, [pdfFile]);
+
+      // Reload estimate to get updated files list
+      await loadEstimate();
+      
+      // Get signed URL for the new PDF and show preview
+      const updatedFiles = (await getEstimateById(id)).data.data.files || [];
+      const newPdf = updatedFiles.find(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-'));
+      if (newPdf) {
+        const urlData = await getEstimateFileSignedUrl(id, newPdf.id);
+        const viewUrl = urlData.urls?.[0] || urlData.url;
+        if (pdfPreviewUrl) window.URL.revokeObjectURL(pdfPreviewUrl);
+        setPdfPreviewUrl(viewUrl);
+        pdfPreviewActive.current = true;
+      }
+      showMessage('PDF generated');
     } catch (err) {
       setError('Failed to generate PDF');
       console.error(err);
@@ -554,19 +582,26 @@ function EstimateDetailsPage() {
     }
   };
 
-  const handleDownloadFromPreview = () => {
-    if (!pdfPreviewUrl) return;
-    const link = document.createElement('a');
-    link.href = pdfPreviewUrl;
-    link.download = `Estimate-${estimate?.estimateNumber || id}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showMessage('PDF downloaded');
+  const handleDownloadFromPreview = async () => {
+    try {
+      const response = await downloadEstimatePDF(id);
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Estimate-${estimate?.estimateNumber || id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showMessage('PDF downloaded');
+    } catch {
+      // Fallback: open the preview URL
+      if (pdfPreviewUrl) window.open(pdfPreviewUrl, '_blank');
+    }
   };
 
   const closePdfPreview = () => {
-    if (pdfPreviewUrl) window.URL.revokeObjectURL(pdfPreviewUrl);
     setPdfPreviewUrl(null);
     pdfPreviewActive.current = false;
   };
@@ -575,6 +610,19 @@ function EstimateDetailsPage() {
   const regeneratePdfIfActive = async () => {
     if (pdfPreviewActive.current) {
       await generatePdfPreview();
+    }
+  };
+
+  // Load stored PDF on page load
+  const loadStoredPdf = async () => {
+    const storedPdf = files.find(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-'));
+    if (storedPdf && !pdfPreviewUrl) {
+      try {
+        const urlData = await getEstimateFileSignedUrl(id, storedPdf.id);
+        const viewUrl = urlData.urls?.[0] || urlData.url;
+        setPdfPreviewUrl(viewUrl);
+        pdfPreviewActive.current = true;
+      } catch {}
     }
   };
 
@@ -1175,7 +1223,15 @@ function EstimateDetailsPage() {
           {!isNew && (
             <button className="btn btn-outline" onClick={pdfPreviewUrl ? closePdfPreview : generatePdfPreview} disabled={pdfGenerating}
               style={pdfPreviewUrl ? { background: '#e3f2fd', borderColor: '#1976d2', color: '#1976d2' } : {}}>
-              <Eye size={18} /> {pdfGenerating ? 'Generating...' : pdfPreviewUrl ? 'Close Preview' : 'Generate PDF'}
+              {pdfGenerating ? (
+                <><Eye size={18} /> Generating...</>
+              ) : pdfPreviewUrl ? (
+                <><X size={18} /> Close Preview</>
+              ) : files.some(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-')) ? (
+                <><Eye size={18} /> View PDF</>
+              ) : (
+                <><Eye size={18} /> Generate PDF</>
+              )}
             </button>
           )}
           {!isNew && <button className="btn btn-outline" onClick={printEstimate}><Printer size={18} /> Print</button>}
@@ -1866,9 +1922,9 @@ function EstimateDetailsPage() {
                   <Upload size={14} /> Upload
                 </button>
               </div>
-              {files.length > 0 ? (
+              {files.filter(f => !(f.originalName || f.filename || '').startsWith('Generated-Estimate-')).length > 0 ? (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {files.map(file => (
+                  {files.filter(f => !(f.originalName || f.filename || '').startsWith('Generated-Estimate-')).map(file => (
                     <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#e3f2fd', borderRadius: 4, fontSize: '0.85rem' }}>
                       <span>{file.originalName || file.filename}</span>
                       <button onClick={() => handleViewFile(file)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><Eye size={14} /></button>
