@@ -2494,7 +2494,7 @@ function WorkOrderDetailsPage() {
                           const updates = { taxExempt: newExempt };
                           if (!newExempt) { updates.taxExemptReason = ''; updates.taxExemptCertNumber = ''; }
                           setEditData(prev => ({ ...prev, ...updates }));
-                          try { await updateWorkOrder(id, { ...editData, ...updates }); showMessage(newExempt ? 'Marked tax exempt' : 'Tax exemption removed'); } catch {}
+                          try { await updateWorkOrder(id, updates); await loadOrder(); showMessage(newExempt ? 'Marked tax exempt' : 'Tax exemption removed'); } catch(err) { console.error('Tax save error:', err); }
                         }}
                       />
                       <span style={{ fontWeight: 600, fontSize: '0.85rem', color: editData.taxExempt ? '#c62828' : '#666' }}>Tax Exempt</span>

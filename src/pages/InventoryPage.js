@@ -433,13 +433,22 @@ function InventoryPage() {
                     {s.receivedBy && ` • by ${s.receivedBy}`}
                   </div>
                 </div>
-                <button 
-                  className="btn btn-primary" 
-                  style={{ whiteSpace: 'nowrap', fontSize: '0.85rem', padding: '6px 14px' }}
-                  onClick={() => handleCreateWorkOrder(s.id)}
-                >
-                  Create Work Order
-                </button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button 
+                    className="btn btn-outline" 
+                    style={{ whiteSpace: 'nowrap', fontSize: '0.85rem', padding: '6px 14px' }}
+                    onClick={() => navigate(`/shipment/${s.id}`)}
+                  >
+                    Details
+                  </button>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ whiteSpace: 'nowrap', fontSize: '0.85rem', padding: '6px 14px' }}
+                    onClick={() => handleCreateWorkOrder(s.id)}
+                  >
+                    Create Work Order
+                  </button>
+                </div>
               </div>
             ))}
           </div>

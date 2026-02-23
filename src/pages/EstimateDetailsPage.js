@@ -91,7 +91,8 @@ function EstimateDetailsPage() {
     clientPurchaseOrderNumber: '',
     requestedDueDate: '',
     promisedDate: '',
-    notes: ''
+    notes: '',
+    materialReceived: false
   });
   
   // Part file upload state
@@ -961,7 +962,8 @@ function EstimateDetailsPage() {
       clientPurchaseOrderNumber: '',
       requestedDueDate: '',
       promisedDate: '',
-      notes: formData.notes
+      notes: formData.notes,
+      materialReceived: false
     });
     
     setShowConvertModal(true);
@@ -2652,6 +2654,34 @@ function EstimateDetailsPage() {
                   </p>
                 </div>
               )}
+
+              {/* Material Received Toggle */}
+              <div style={{ marginTop: 16 }}>
+                <label className="form-label" style={{ marginBottom: 8, display: 'block' }}>Has the material been received?</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" style={{
+                    flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer',
+                    border: `2px solid ${convertData.materialReceived ? '#2e7d32' : '#ccc'}`,
+                    background: convertData.materialReceived ? '#e8f5e9' : '#fff',
+                    color: convertData.materialReceived ? '#2e7d32' : '#666'
+                  }} onClick={() => setConvertData({ ...convertData, materialReceived: true })}>
+                    ✓ Yes — Material Received
+                  </button>
+                  <button type="button" style={{
+                    flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem', cursor: 'pointer',
+                    border: `2px solid ${!convertData.materialReceived ? '#e65100' : '#ccc'}`,
+                    background: !convertData.materialReceived ? '#fff3e0' : '#fff',
+                    color: !convertData.materialReceived ? '#e65100' : '#666'
+                  }} onClick={() => setConvertData({ ...convertData, materialReceived: false })}>
+                    ✗ No — Waiting for Material
+                  </button>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#888', marginTop: 4 }}>
+                  {convertData.materialReceived
+                    ? 'Work order will be set to "Received" status'
+                    : 'Work order will be set to "Waiting for Materials" status'}
+                </div>
+              </div>
             </div>
 
             <div className="modal-footer">

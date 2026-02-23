@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Calendar, Package, MapPin } from 'lucide-react';
-import { getWorkOrders, createWorkOrder } from '../services/api';
+import { getWorkOrders, createWorkOrder, searchClients, getNextDRNumber } from '../services/api';
 
 function WorkOrdersPage() {
   const navigate = useNavigate();
@@ -19,6 +19,7 @@ function WorkOrdersPage() {
   });
   const [newOrder, setNewOrder] = useState({
     clientName: '',
+    clientId: null,
     clientPurchaseOrderNumber: '',
     contactName: '',
     contactPhone: '',
@@ -28,6 +29,11 @@ function WorkOrdersPage() {
     requestedDueDate: '',
     promisedDate: '',
   });
+  const [clientSuggestions, setClientSuggestions] = useState([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const [nextDR, setNextDR] = useState(null);
+  const [useCustomDR, setUseCustomDR] = useState(false);
+  const [customDR, setCustomDR] = useState('');
 
   useEffect(() => {
     localStorage.setItem('workorders_statusFilter', statusFilter);
@@ -136,10 +142,15 @@ function WorkOrdersPage() {
     }
     try {
       setSaving(true);
-      const response = await createWorkOrder(newOrder);
+      const payload = {
+        ...newOrder,
+        assignDRNumber: !useCustomDR,
+        customDRNumber: useCustomDR && customDR ? parseInt(customDR) : null
+      };
+      const response = await createWorkOrder(payload);
       setShowNewModal(false);
       setNewOrder({
-        clientName: '', clientPurchaseOrderNumber: '', contactName: '',
+        clientName: '', clientId: null, clientPurchaseOrderNumber: '', contactName: '',
         contactPhone: '', contactEmail: '', notes: '', receivedBy: '',
         requestedDueDate: '', promisedDate: ''
       });
@@ -217,7 +228,12 @@ function WorkOrdersPage() {
           <h1 className="page-title">Work Orders</h1>
           <p style={{ color: '#666' }}>{orders.length} total orders</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowNewModal(true)}>
+        <button className="btn btn-primary" onClick={async () => {
+          setShowNewModal(true);
+          try { const res = await getNextDRNumber(); setNextDR(res.data.data.nextNumber); } catch { setNextDR(null); }
+          setUseCustomDR(false);
+          setCustomDR('');
+        }}>
           <Plus size={20} /> New Work Order
         </button>
       </div>
@@ -398,24 +414,89 @@ function WorkOrdersPage() {
       {/* New Work Order Modal */}
       {showNewModal && (
         <div className="modal-overlay" onClick={() => setShowNewModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500 }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <div className="modal-header">
               <h3 className="modal-title">New Work Order</h3>
               <button className="modal-close" onClick={() => setShowNewModal(false)}>&times;</button>
             </div>
             <form onSubmit={handleCreateOrder}>
               <div className="modal-body">
-                <div className="form-group">
+
+                {/* DR Number Preview */}
+                <div style={{ background: '#e3f2fd', padding: 14, borderRadius: 8, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '0.8rem', color: '#666' }}>DR Number</div>
+                    <div style={{ fontWeight: 700, fontSize: '1.3rem', color: '#1565c0' }}>
+                      DR-{useCustomDR ? (customDR || '?') : (nextDR || '...')}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.85rem' }}>
+                      <input type="checkbox" checked={useCustomDR} onChange={(e) => { setUseCustomDR(e.target.checked); if (!e.target.checked) setCustomDR(''); }} />
+                      <span>Use different DR#</span>
+                    </label>
+                    {useCustomDR && (
+                      <input type="number" className="form-input" value={customDR}
+                        onChange={(e) => setCustomDR(e.target.value)}
+                        placeholder="Enter DR#" autoFocus
+                        style={{ width: 120, marginTop: 4, textAlign: 'right', fontWeight: 700, fontSize: '1rem' }}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Client Name with Autofill */}
+                <div className="form-group" style={{ position: 'relative' }}>
                   <label className="form-label">Client Name *</label>
                   <input
                     type="text"
                     className="form-input"
                     value={newOrder.clientName}
-                    onChange={(e) => setNewOrder({ ...newOrder, clientName: e.target.value })}
+                    onChange={async (e) => {
+                      const val = e.target.value;
+                      setNewOrder({ ...newOrder, clientName: val, clientId: null });
+                      if (val.length >= 1) {
+                        try {
+                          const res = await searchClients(val);
+                          setClientSuggestions(res.data.data || []);
+                          setShowClientSuggestions(true);
+                        } catch { setClientSuggestions([]); }
+                      } else {
+                        setClientSuggestions([]);
+                        setShowClientSuggestions(false);
+                      }
+                    }}
+                    onFocus={async () => {
+                      try { const res = await searchClients(''); setClientSuggestions(res.data.data || []); setShowClientSuggestions(true); } catch {}
+                    }}
+                    onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
                     required
-                    autoFocus
+                    autoComplete="off"
+                    placeholder="Start typing to search clients..."
                   />
+                  {showClientSuggestions && clientSuggestions.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid #ddd', borderRadius: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                      {clientSuggestions.map(c => (
+                        <div key={c.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                          onMouseDown={() => {
+                            setNewOrder(prev => ({
+                              ...prev,
+                              clientName: c.name,
+                              clientId: c.id,
+                              contactName: c.contactName || prev.contactName,
+                              contactPhone: c.contactPhone || prev.contactPhone,
+                              contactEmail: c.contactEmail || prev.contactEmail,
+                            }));
+                            setShowClientSuggestions(false);
+                          }}>
+                          <strong>{c.name}</strong>
+                          {c.contactName && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{c.contactName}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Client PO Number</label>
                   <input
@@ -423,6 +504,7 @@ function WorkOrdersPage() {
                     className="form-input"
                     value={newOrder.clientPurchaseOrderNumber}
                     onChange={(e) => setNewOrder({ ...newOrder, clientPurchaseOrderNumber: e.target.value })}
+                    placeholder="Enter client's PO number..."
                   />
                 </div>
                 <div className="grid grid-2">
@@ -444,6 +526,15 @@ function WorkOrdersPage() {
                       onChange={(e) => setNewOrder({ ...newOrder, contactPhone: e.target.value })}
                     />
                   </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Contact Email</label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    value={newOrder.contactEmail}
+                    onChange={(e) => setNewOrder({ ...newOrder, contactEmail: e.target.value })}
+                  />
                 </div>
                 <div className="grid grid-2">
                   <div className="form-group">
@@ -480,7 +571,7 @@ function WorkOrdersPage() {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? 'Creating...' : 'Create Work Order'}
+                  {saving ? 'Creating...' : `Create Work Order (DR-${useCustomDR ? (customDR || '?') : (nextDR || '...')})`}
                 </button>
               </div>
             </form>
