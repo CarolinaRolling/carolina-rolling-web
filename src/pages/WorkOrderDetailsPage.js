@@ -1098,7 +1098,7 @@ function WorkOrderDetailsPage() {
   <div class="header-grid">
     <div class="header-item"><strong>Client</strong>${order.clientName}</div>
     ${clientPO ? `<div class="header-item"><strong>Client PO#</strong>${clientPO}</div>` : '<div></div>'}
-    ${order.promisedDate ? `<div class="header-item"><strong>Promised Date</strong>${new Date(order.promisedDate).toLocaleDateString()}</div>` : '<div></div>'}
+    ${order.promisedDate ? `<div class="header-item"><strong>Promised Date</strong>${new Date(order.promisedDate + 'T12:00:00').toLocaleDateString()}</div>` : '<div></div>'}
     ${order.contactName ? `<div class="header-item"><strong>Contact</strong>${order.contactName}${order.contactPhone ? ' — ' + order.contactPhone : ''}</div>` : '<div></div>'}
     ${order.storageLocation ? `<div class="header-item"><strong>Storage</strong>${order.storageLocation}</div>` : '<div></div>'}
     ${clientPaymentTerms ? `<div class="header-item"><strong>Payment Terms</strong><span style="font-weight:700;color:#1565c0">${clientPaymentTerms}</span></div>` : ''}
@@ -1108,7 +1108,7 @@ function WorkOrderDetailsPage() {
   <div style="display:flex;gap:24px;margin-bottom:20px;padding:10px 14px;background:#f5f5f5;border-radius:6px;font-size:1rem;">
     <div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Client</strong>${order.clientName}</div>
     ${order.storageLocation ? `<div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Storage</strong>${order.storageLocation}</div>` : ''}
-    ${order.promisedDate ? `<div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Promised</strong>${new Date(order.promisedDate).toLocaleDateString()}</div>` : ''}
+    ${order.promisedDate ? `<div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Promised</strong>${new Date(order.promisedDate + 'T12:00:00').toLocaleDateString()}</div>` : ''}
     <div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Status</strong>${order.status?.replace(/_/g, ' ').toUpperCase()}</div>
   </div>
   `}
@@ -1302,7 +1302,13 @@ function WorkOrderDetailsPage() {
     printWindow.print();
   };
 
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+  const formatDate = (d) => {
+    if (!d) return 'N/A';
+    // Date-only strings like "2026-02-27" are parsed as UTC midnight, which shifts back a day in US timezones
+    // Append T12:00:00 to force midday so timezone offset never flips the date
+    const dateStr = typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d + 'T12:00:00' : d;
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
   const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'N/A';
   // === Link Estimate Handlers ===
   const handleSearchEstimates = async (query) => {

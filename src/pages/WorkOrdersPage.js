@@ -207,7 +207,8 @@ function WorkOrdersPage() {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return null;
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const d = typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? dateStr + 'T12:00:00' : dateStr;
+    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   const filteredOrders = getFilteredOrders();

@@ -157,7 +157,8 @@ function SchedulingPage() {
 
   const formatDate = (dateString) => {
     if (!dateString) return '—';
-    return new Date(dateString).toLocaleDateString('en-US', {
+    const d = typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString) ? dateString + 'T12:00:00' : dateString;
+    return new Date(d).toLocaleDateString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric',
     });
   };

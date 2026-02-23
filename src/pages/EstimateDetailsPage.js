@@ -131,13 +131,6 @@ function EstimateDetailsPage() {
     return () => { if (pdfPreviewUrl && pdfPreviewUrl.startsWith('blob:')) window.URL.revokeObjectURL(pdfPreviewUrl); };
   }, [pdfPreviewUrl]);
 
-  // Auto-load stored PDF when estimate files are loaded
-  useEffect(() => {
-    if (!isNew && files.length > 0 && !pdfPreviewUrl && !pdfGenerating) {
-      loadStoredPdf();
-    }
-  }, [files]);
-
   const loadDefaultSettings = async () => {
     try {
       const response = await getSettings('tax_settings');
@@ -607,17 +600,39 @@ function EstimateDetailsPage() {
     }
   };
 
-  // Load stored PDF on page load — fetch via authenticated API, then make blob
-  const loadStoredPdf = async () => {
-    const storedPdf = files.find(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-'));
-    if (storedPdf && !pdfPreviewUrl) {
-      try {
-        const response = await downloadEstimatePDF(id);
-        const blob = new Blob([response.data], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
-        setPdfPreviewUrl(url);
-        pdfPreviewActive.current = true;
-      } catch {}
+  // View stored PDF preview
+  const viewStoredPdf = async () => {
+    try {
+      setPdfGenerating(true);
+      const response = await downloadEstimatePDF(id);
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      if (pdfPreviewUrl) window.URL.revokeObjectURL(pdfPreviewUrl);
+      const url = window.URL.createObjectURL(blob);
+      setPdfPreviewUrl(url);
+      pdfPreviewActive.current = true;
+    } catch (err) {
+      setError('Failed to load PDF preview');
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
+  // Download stored PDF
+  const downloadStoredPdf = async () => {
+    try {
+      const response = await downloadEstimatePDF(id);
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Estimate-${estimate?.estimateNumber || id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      showMessage('PDF downloaded');
+    } catch (err) {
+      setError('Failed to download PDF');
     }
   };
 
@@ -1216,17 +1231,8 @@ function EstimateDetailsPage() {
         </div>
         <div className="actions-row">
           {!isNew && (
-            <button className="btn btn-outline" onClick={pdfPreviewUrl ? closePdfPreview : generatePdfPreview} disabled={pdfGenerating}
-              style={pdfPreviewUrl ? { background: '#e3f2fd', borderColor: '#1976d2', color: '#1976d2' } : {}}>
-              {pdfGenerating ? (
-                <><Eye size={18} /> Generating...</>
-              ) : pdfPreviewUrl ? (
-                <><X size={18} /> Close Preview</>
-              ) : files.some(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-')) ? (
-                <><Eye size={18} /> View PDF</>
-              ) : (
-                <><Eye size={18} /> Generate PDF</>
-              )}
+            <button className="btn btn-outline" onClick={generatePdfPreview} disabled={pdfGenerating}>
+              <Eye size={18} /> {pdfGenerating ? 'Generating...' : 'Generate PDF'}
             </button>
           )}
           {!isNew && <button className="btn btn-outline" onClick={printEstimate}><Printer size={18} /> Print</button>}
@@ -1273,7 +1279,27 @@ function EstimateDetailsPage() {
       {error && <div className="alert alert-error" style={{ whiteSpace: 'pre-line' }}>{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      {/* PDF Preview */}
+      {/* Stored PDF File Bar */}
+      {!isNew && files.some(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-')) && !pdfPreviewUrl && (
+        <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: '#f0f7ff', border: '1px solid #bbdefb', borderRadius: 8 }}>
+          <FileText size={18} style={{ color: '#1976d2' }} />
+          <span style={{ flex: 1, fontWeight: 600, fontSize: '0.9rem', color: '#333' }}>
+            Estimate-{estimate?.estimateNumber || id}.pdf
+          </span>
+          <button onClick={viewStoredPdf} disabled={pdfGenerating}
+            title="Preview PDF"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#1976d2' }}>
+            <Eye size={18} />
+          </button>
+          <button onClick={downloadStoredPdf}
+            title="Download PDF"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#1976d2' }}>
+            <FileDown size={18} />
+          </button>
+        </div>
+      )}
+
+      {/* PDF Preview (expanded) */}
       {pdfPreviewUrl && (
         <div style={{ marginBottom: 16, border: '2px solid #1976d2', borderRadius: 12, overflow: 'hidden', background: '#f5f5f5' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', background: '#1976d2', color: 'white' }}>
