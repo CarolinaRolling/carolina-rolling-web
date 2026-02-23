@@ -548,31 +548,25 @@ function EstimateDetailsPage() {
       }
       const response = await downloadEstimatePDF(id);
       const blob = new Blob([response.data], { type: 'application/pdf' });
-
-      // Delete previous generated PDF copy if exists
-      const oldPdf = files.find(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-'));
-      if (oldPdf) {
-        try { await deleteEstimateFile(id, oldPdf.id); } catch {}
-      }
-
-      // Upload the generated PDF as an estimate file
-      const pdfFileName = `Generated-Estimate-${estimate?.estimateNumber || id}.pdf`;
-      const pdfFile = new File([blob], pdfFileName, { type: 'application/pdf' });
-      await uploadEstimateFiles(id, [pdfFile]);
-
-      // Reload estimate to get updated files list
-      await loadEstimate();
       
-      // Get signed URL for the new PDF and show preview
-      const updatedFiles = (await getEstimateById(id)).data.data.files || [];
-      const newPdf = updatedFiles.find(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-'));
-      if (newPdf) {
-        const urlData = await getEstimateFileSignedUrl(id, newPdf.id);
-        const viewUrl = urlData.urls?.[0] || urlData.url;
-        if (pdfPreviewUrl) window.URL.revokeObjectURL(pdfPreviewUrl);
-        setPdfPreviewUrl(viewUrl);
-        pdfPreviewActive.current = true;
+      // Revoke old blob URL
+      if (pdfPreviewUrl) window.URL.revokeObjectURL(pdfPreviewUrl);
+      const url = window.URL.createObjectURL(blob);
+      setPdfPreviewUrl(url);
+      pdfPreviewActive.current = true;
+
+      // Save a copy as an estimate file (fire-and-forget)
+      try {
+        const oldPdf = files.find(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-'));
+        if (oldPdf) { try { await deleteEstimateFile(id, oldPdf.id); } catch {} }
+        const pdfFileName = `Generated-Estimate-${estimate?.estimateNumber || id}.pdf`;
+        const pdfFile = new File([blob], pdfFileName, { type: 'application/pdf' });
+        await uploadEstimateFiles(id, [pdfFile]);
+        await loadEstimate();
+      } catch (storeErr) {
+        console.warn('Storing PDF copy failed:', storeErr);
       }
+
       showMessage('PDF generated');
     } catch (err) {
       setError('Failed to generate PDF');
@@ -596,12 +590,12 @@ function EstimateDetailsPage() {
       window.URL.revokeObjectURL(url);
       showMessage('PDF downloaded');
     } catch {
-      // Fallback: open the preview URL
       if (pdfPreviewUrl) window.open(pdfPreviewUrl, '_blank');
     }
   };
 
   const closePdfPreview = () => {
+    if (pdfPreviewUrl) window.URL.revokeObjectURL(pdfPreviewUrl);
     setPdfPreviewUrl(null);
     pdfPreviewActive.current = false;
   };
@@ -613,14 +607,15 @@ function EstimateDetailsPage() {
     }
   };
 
-  // Load stored PDF on page load
+  // Load stored PDF on page load — fetch via authenticated API, then make blob
   const loadStoredPdf = async () => {
     const storedPdf = files.find(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-'));
     if (storedPdf && !pdfPreviewUrl) {
       try {
-        const urlData = await getEstimateFileSignedUrl(id, storedPdf.id);
-        const viewUrl = urlData.urls?.[0] || urlData.url;
-        setPdfPreviewUrl(viewUrl);
+        const response = await downloadEstimatePDF(id);
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        setPdfPreviewUrl(url);
         pdfPreviewActive.current = true;
       } catch {}
     }
