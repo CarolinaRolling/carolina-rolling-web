@@ -7,7 +7,8 @@ import {
   uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
   downloadEstimatePDF, convertEstimateToWorkOrder,
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile,
-  searchClients, searchVendors, getSettings, resetEstimateConversion
+  searchClients, searchVendors, getSettings, resetEstimateConversion,
+  getNextDRNumber
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
@@ -89,6 +90,9 @@ function EstimateDetailsPage() {
   // Convert to Work Order state
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [nextDR, setNextDR] = useState(null);
+  const [useCustomDR, setUseCustomDR] = useState(false);
+  const [customDR, setCustomDR] = useState('');
   const [convertData, setConvertData] = useState({
     clientPurchaseOrderNumber: '',
     requestedDueDate: '',
@@ -1054,6 +1058,9 @@ function EstimateDetailsPage() {
       notes: formData.notes,
       materialReceived: false
     });
+    setUseCustomDR(false);
+    setCustomDR('');
+    try { const res = await getNextDRNumber(); setNextDR(res.data.data.nextNumber); } catch { setNextDR(null); }
     
     setShowConvertModal(true);
   };
@@ -1061,7 +1068,11 @@ function EstimateDetailsPage() {
   const handleConvertToWorkOrder = async () => {
     try {
       setConverting(true);
-      const response = await convertEstimateToWorkOrder(id, convertData);
+      const payload = {
+        ...convertData,
+        customDRNumber: useCustomDR && customDR ? parseInt(customDR) : null
+      };
+      const response = await convertEstimateToWorkOrder(id, payload);
       const workOrder = response.data.data.workOrder;
       setShowConvertModal(false);
       
@@ -2749,6 +2760,29 @@ function EstimateDetailsPage() {
                 </p>
               </div>
 
+              {/* DR Number Preview */}
+              <div style={{ background: '#e3f2fd', padding: 14, borderRadius: 8, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: '#666' }}>DR Number</div>
+                  <div style={{ fontWeight: 700, fontSize: '1.3rem', color: '#1565c0' }}>
+                    DR-{useCustomDR ? (customDR || '?') : (nextDR || '...')}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.85rem' }}>
+                    <input type="checkbox" checked={useCustomDR} onChange={(e) => { setUseCustomDR(e.target.checked); if (!e.target.checked) setCustomDR(''); }} />
+                    <span>Use different DR#</span>
+                  </label>
+                  {useCustomDR && (
+                    <input type="number" className="form-input" value={customDR}
+                      onChange={(e) => setCustomDR(e.target.value)}
+                      placeholder="Enter DR#" autoFocus
+                      style={{ width: 120, marginTop: 4, textAlign: 'right', fontWeight: 700, fontSize: '1rem' }}
+                    />
+                  )}
+                </div>
+              </div>
+
               <div className="form-group">
                 <label className="form-label">Client Purchase Order Number</label>
                 <input
@@ -2838,7 +2872,7 @@ function EstimateDetailsPage() {
                 style={{ background: '#2e7d32', color: 'white' }}
               >
                 <Package size={18} />
-                {converting ? 'Converting...' : 'Create Work Order'}
+                {converting ? 'Converting...' : `Create Work Order (DR-${useCustomDR ? (customDR || '?') : (nextDR || '...')})`}
               </button>
             </div>
           </div>
