@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Package, Truck, CheckCircle, Clock, FileText, Inbox, Image, AlertCircle } from 'lucide-react';
-import { getWorkOrders, getArchivedWorkOrders, getUnlinkedShipments, linkShipmentToWorkOrder, getRecentlyCompletedOrders } from '../services/api';
+import { getWorkOrders, getArchivedWorkOrders, getUnlinkedShipments, getRecentlyCompletedOrders } from '../services/api';
 
 // Status configuration
 const STATUSES = {
@@ -96,14 +96,8 @@ function InventoryPage() {
     }
   };
 
-  const handleCreateWorkOrder = async (shipmentId) => {
-    try {
-      const res = await linkShipmentToWorkOrder(shipmentId);
-      const workOrder = res.data.data.workOrder;
-      navigate(`/workorder/${workOrder.id}`);
-    } catch (err) {
-      console.error('Failed to create work order:', err);
-    }
+  const handleCreateWorkOrder = (shipmentId) => {
+    navigate(`/workorders?newFromShipment=${shipmentId}`);
   };
 
   const dismissCompletion = (orderId) => {

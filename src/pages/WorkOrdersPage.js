@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search, Calendar, Package, MapPin } from 'lucide-react';
-import { getWorkOrders, createWorkOrder, searchClients, getNextDRNumber } from '../services/api';
+import { getWorkOrders, createWorkOrder, searchClients, getNextDRNumber, getShipmentById } from '../services/api';
 
 function WorkOrdersPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,6 +35,35 @@ function WorkOrdersPage() {
   const [nextDR, setNextDR] = useState(null);
   const [useCustomDR, setUseCustomDR] = useState(false);
   const [customDR, setCustomDR] = useState('');
+  const [linkShipmentId, setLinkShipmentId] = useState(null);
+
+  // Auto-open modal when navigated from inventory with shipment
+  useEffect(() => {
+    const shipmentId = searchParams.get('newFromShipment');
+    if (shipmentId) {
+      setLinkShipmentId(shipmentId);
+      // Fetch next DR number
+      getNextDRNumber().then(res => setNextDR(res.data.data.nextNumber)).catch(() => setNextDR(null));
+      setUseCustomDR(false);
+      setCustomDR('');
+      // Fetch shipment data to pre-fill form
+      getShipmentById(shipmentId).then(res => {
+        const s = res.data.data;
+        setNewOrder(prev => ({
+          ...prev,
+          clientName: s.clientName || '',
+          clientPurchaseOrderNumber: s.clientPurchaseOrderNumber || '',
+          notes: s.description ? `Received: ${s.description}` : '',
+          receivedBy: s.receivedBy || '',
+        }));
+        setShowNewModal(true);
+      }).catch(() => {
+        setShowNewModal(true);
+      });
+      // Clean the URL param
+      setSearchParams({}, { replace: true });
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('workorders_statusFilter', statusFilter);
@@ -150,10 +180,12 @@ function WorkOrdersPage() {
       const payload = {
         ...newOrder,
         assignDRNumber: !useCustomDR,
-        customDRNumber: useCustomDR && customDR ? parseInt(customDR) : null
+        customDRNumber: useCustomDR && customDR ? parseInt(customDR) : null,
+        shipmentIds: linkShipmentId ? [linkShipmentId] : []
       };
       const response = await createWorkOrder(payload);
       setShowNewModal(false);
+      setLinkShipmentId(null);
       setNewOrder({
         clientName: '', clientId: null, clientPurchaseOrderNumber: '', contactName: '',
         contactPhone: '', contactEmail: '', notes: '', receivedBy: '',
@@ -451,14 +483,22 @@ function WorkOrdersPage() {
 
       {/* New Work Order Modal */}
       {showNewModal && (
-        <div className="modal-overlay" onClick={() => setShowNewModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowNewModal(false); setLinkShipmentId(null); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <div className="modal-header">
               <h3 className="modal-title">New Work Order</h3>
-              <button className="modal-close" onClick={() => setShowNewModal(false)}>&times;</button>
+              <button className="modal-close" onClick={() => { setShowNewModal(false); setLinkShipmentId(null); }}>&times;</button>
             </div>
             <form onSubmit={handleCreateOrder}>
               <div className="modal-body">
+
+                {/* Shipment linking banner */}
+                {linkShipmentId && (
+                  <div style={{ background: '#e8f5e9', padding: 10, borderRadius: 8, marginBottom: 12, fontSize: '0.85rem', color: '#2e7d32', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Package size={16} />
+                    <span>This work order will be linked to the receiving record</span>
+                  </div>
+                )}
 
                 {/* DR Number Preview */}
                 <div style={{ background: '#e3f2fd', padding: 14, borderRadius: 8, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -605,7 +645,7 @@ function WorkOrdersPage() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowNewModal(false)}>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowNewModal(false); setLinkShipmentId(null); }}>
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={saving}>

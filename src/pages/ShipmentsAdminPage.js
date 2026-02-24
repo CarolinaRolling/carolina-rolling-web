@@ -116,15 +116,8 @@ function ShipmentsAdminPage() {
     }
   };
 
-  const handleCreateWorkOrder = async (shipmentId) => {
-    try {
-      const res = await linkShipmentToWorkOrder(shipmentId);
-      const wo = res.data.data.workOrder;
-      showMessage(`Linked to DR-${wo.drNumber}`);
-      loadShipments();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleCreateWorkOrder = (shipmentId) => {
+    navigate(`/workorders?newFromShipment=${shipmentId}`);
   };
 
   const openLinkModal = (shipmentId) => {
