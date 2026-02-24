@@ -21,8 +21,8 @@ import ShopRateForm from '../components/ShopRateForm';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
-  uploadPartFiles, getPartFileSignedUrl, deletePartFile,
-  uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, deleteWorkOrderDocument, regeneratePODocument,
+  uploadPartFiles, getPartFileSignedUrl, downloadPartFile, deletePartFile,
+  uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, downloadWorkOrderDocument, deleteWorkOrderDocument, regeneratePODocument,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
@@ -401,10 +401,20 @@ function WorkOrderDetailsPage() {
 
   const handleViewDocument = async (documentId) => {
     try {
-      const response = await getWorkOrderDocumentSignedUrl(id, documentId);
-      window.open(response.data.data.url, '_blank');
+      const response = await downloadWorkOrderDocument(id, documentId);
+      const blob = new Blob([response.data], { type: response.headers['content-type'] || 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
     } catch (err) {
-      setError('Failed to open document');
+      // Fallback: open download URL with token query param
+      try {
+        const token = localStorage.getItem('token');
+        const baseUrl = process.env.REACT_APP_API_URL || '';
+        const url = `${baseUrl}/workorders/${id}/documents/${documentId}/download?token=${token}`;
+        window.open(url, '_blank');
+      } catch {
+        setError('Failed to open document');
+      }
     }
   };
 
@@ -769,10 +779,20 @@ function WorkOrderDetailsPage() {
 
   const handleViewFile = async (partId, fileId) => {
     try {
-      const response = await getPartFileSignedUrl(id, partId, fileId);
-      window.open(response.url, '_blank');
+      const response = await downloadPartFile(id, partId, fileId);
+      const blob = new Blob([response.data], { type: response.headers['content-type'] || 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
     } catch (err) {
-      setError('Failed to open file');
+      // Fallback: open download URL with token query param
+      try {
+        const token = localStorage.getItem('token');
+        const baseUrl = process.env.REACT_APP_API_URL || '';
+        const url = `${baseUrl}/workorders/${id}/parts/${partId}/files/${fileId}/download?token=${token}`;
+        window.open(url, '_blank');
+      } catch {
+        setError('Failed to open file');
+      }
     }
   };
 

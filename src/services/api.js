@@ -92,6 +92,8 @@ export const getDocumentSignedUrl = async (shipmentId, documentId) => {
   const response = await api.get(`/shipments/${shipmentId}/documents/${documentId}/signed-url`);
   return response.data.data;
 };
+export const downloadShipmentDocument = (shipmentId, documentId) =>
+  api.get(`/shipments/${shipmentId}/documents/${documentId}/download`, { responseType: 'blob' });
 
 // Locations
 export const getLocations = () => api.get('/settings/locations');
@@ -139,6 +141,8 @@ export const getPartFileSignedUrl = async (workOrderId, partId, fileId) => {
   const response = await api.get(`/workorders/${workOrderId}/parts/${partId}/files/${fileId}/signed-url`);
   return response.data.data;
 };
+export const downloadPartFile = (workOrderId, partId, fileId) =>
+  api.get(`/workorders/${workOrderId}/parts/${partId}/files/${fileId}/download`, { responseType: 'blob' });
 export const deletePartFile = (workOrderId, partId, fileId) => 
   api.delete(`/workorders/${workOrderId}/parts/${partId}/files/${fileId}`);
 
@@ -153,6 +157,8 @@ export const uploadWorkOrderDocuments = (workOrderId, files, documentType) => {
 };
 export const getWorkOrderDocumentSignedUrl = (workOrderId, documentId) => 
   api.get(`/workorders/${workOrderId}/documents/${documentId}/signed-url`);
+export const downloadWorkOrderDocument = (workOrderId, documentId) =>
+  api.get(`/workorders/${workOrderId}/documents/${documentId}/download`, { responseType: 'blob' });
 export const deleteWorkOrderDocument = (workOrderId, documentId) => 
   api.delete(`/workorders/${workOrderId}/documents/${documentId}`);
 export const regeneratePODocument = (workOrderId, documentId) => 
