@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Calendar, Clock, Search, 
-  AlertTriangle, Filter
+  AlertTriangle, Filter, Edit2, Check, X
 } from 'lucide-react';
-import { getWorkOrders } from '../services/api';
+import { getWorkOrders, updateWorkOrder } from '../services/api';
 
 // Match inventory page statuses exactly
 const STATUSES = {
@@ -46,6 +46,20 @@ function SchedulingPage() {
   const [statusFilter, setStatusFilter] = useState(() => {
     return localStorage.getItem('scheduling_statusFilter') || 'all';
   });
+  const [editingDate, setEditingDate] = useState(null); // { orderId, field, value }
+
+  const handleDateSave = async () => {
+    if (!editingDate) return;
+    try {
+      await updateWorkOrder(editingDate.orderId, { [editingDate.field]: editingDate.value || null });
+      setWorkOrders(prev => prev.map(o => 
+        o.id === editingDate.orderId ? { ...o, [editingDate.field]: editingDate.value || null } : o
+      ));
+      setEditingDate(null);
+    } catch (err) {
+      console.error('Failed to save date:', err);
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem('scheduling_sortBy', sortBy);
@@ -453,54 +467,79 @@ function SchedulingPage() {
                     {formatDate(order.receivedAt || order.createdAt)}
                   </div>
 
-                  {/* Requested Date */}
-                  <div>
-                    {order.requestedDueDate ? (
-                      <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '4px 8px',
-                        borderRadius: 4,
-                        fontSize: '0.85rem',
-                        ...getDateBadgeStyle(requestedStatus)
-                      }}>
-                        {requestedStatus === 'overdue' && <AlertTriangle size={14} />}
-                        {formatDate(order.requestedDueDate)}
+                  {/* Requested Date - click to edit */}
+                  <div onClick={(e) => e.stopPropagation()}>
+                    {editingDate?.orderId === order.id && editingDate?.field === 'requestedDueDate' ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <input type="date" value={editingDate.value || ''} 
+                          onChange={(e) => setEditingDate({ ...editingDate, value: e.target.value })}
+                          autoFocus
+                          style={{ fontSize: '0.8rem', padding: '3px 6px', border: '1px solid #1976d2', borderRadius: 4, width: 130 }}
+                        />
+                        <button onClick={handleDateSave} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#4caf50' }}><Check size={14} /></button>
+                        <button onClick={() => setEditingDate(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#999' }}><X size={14} /></button>
                       </div>
                     ) : (
-                      <span style={{ color: '#ccc' }}>—</span>
+                      <div style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => setEditingDate({ orderId: order.id, field: 'requestedDueDate', value: order.requestedDueDate || '' })}
+                        title="Click to edit"
+                      >
+                        {order.requestedDueDate ? (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem',
+                            ...getDateBadgeStyle(requestedStatus)
+                          }}>
+                            {requestedStatus === 'overdue' && <AlertTriangle size={14} />}
+                            {formatDate(order.requestedDueDate)}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#bbb', fontSize: '0.8rem' }}>+ Add</span>
+                        )}
+                      </div>
                     )}
                   </div>
 
-                  {/* Promised Date */}
-                  <div>
-                    {order.promisedDate ? (
-                      <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '4px 8px',
-                        borderRadius: 4,
-                        fontSize: '0.85rem',
-                        fontWeight: 500,
-                        ...getDateBadgeStyle(promisedStatus)
-                      }}>
-                        {promisedStatus === 'overdue' && <AlertTriangle size={14} />}
-                        {promisedStatus === 'today' && <Clock size={14} />}
-                        {formatDate(order.promisedDate)}
-                        {getDaysUntil(order.promisedDate) !== null && (
-                          <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>
-                            ({getDaysUntil(order.promisedDate) === 0 
-                              ? 'Today' 
-                              : getDaysUntil(order.promisedDate) < 0 
-                                ? `${Math.abs(getDaysUntil(order.promisedDate))}d late`
-                                : `${getDaysUntil(order.promisedDate)}d`})
-                          </span>
-                        )}
+                  {/* Promised Date - click to edit */}
+                  <div onClick={(e) => e.stopPropagation()}>
+                    {editingDate?.orderId === order.id && editingDate?.field === 'promisedDate' ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <input type="date" value={editingDate.value || ''} 
+                          onChange={(e) => setEditingDate({ ...editingDate, value: e.target.value })}
+                          autoFocus
+                          style={{ fontSize: '0.8rem', padding: '3px 6px', border: '1px solid #1976d2', borderRadius: 4, width: 130 }}
+                        />
+                        <button onClick={handleDateSave} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#4caf50' }}><Check size={14} /></button>
+                        <button onClick={() => setEditingDate(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#999' }}><X size={14} /></button>
                       </div>
                     ) : (
-                      <span style={{ color: '#ccc' }}>—</span>
+                      <div style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => setEditingDate({ orderId: order.id, field: 'promisedDate', value: order.promisedDate || '' })}
+                        title="Click to edit"
+                      >
+                        {order.promisedDate ? (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            padding: '4px 8px', borderRadius: 4, fontSize: '0.85rem', fontWeight: 500,
+                            ...getDateBadgeStyle(promisedStatus)
+                          }}>
+                            {promisedStatus === 'overdue' && <AlertTriangle size={14} />}
+                            {promisedStatus === 'today' && <Clock size={14} />}
+                            {formatDate(order.promisedDate)}
+                            {getDaysUntil(order.promisedDate) !== null && (
+                              <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>
+                                ({getDaysUntil(order.promisedDate) === 0 
+                                  ? 'Today' 
+                                  : getDaysUntil(order.promisedDate) < 0 
+                                    ? `${Math.abs(getDaysUntil(order.promisedDate))}d late`
+                                    : `${getDaysUntil(order.promisedDate)}d`})
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#bbb', fontSize: '0.8rem' }}>+ Add</span>
+                        )}
+                      </div>
                     )}
                   </div>
 
