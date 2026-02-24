@@ -104,7 +104,12 @@ function WorkOrderDetailsPage() {
   const [editingDR, setEditingDR] = useState(false);
   const [drInput, setDrInput] = useState('');
 
-  useEffect(() => { loadOrder(); loadLaborMinimums(); }, [id]);
+  useEffect(() => { 
+    loadOrder(); loadLaborMinimums(); 
+    // Auto-refresh every 30 seconds for live progress updates from shop tablets
+    const interval = setInterval(() => { loadOrder(); }, 30000);
+    return () => clearInterval(interval);
+  }, [id]);
 
   const loadDefaultTaxRate = async () => {
     try {
@@ -2091,6 +2096,38 @@ function WorkOrderDetailsPage() {
             <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
           </div>
         </div>
+        {/* Progress Bar */}
+        {order.parts?.length > 0 && (() => {
+          const totalParts = order.parts.length;
+          const completedParts = order.parts.filter(p => p.status === 'completed').length;
+          const inProgressParts = order.parts.filter(p => p.status === 'in_progress').length;
+          const pct = Math.round((completedParts / totalParts) * 100);
+          const isShippedOrArchived = ['shipped', 'archived'].includes(order.status);
+          const displayPct = isShippedOrArchived ? 100 : pct;
+          const displayCompleted = isShippedOrArchived ? totalParts : completedParts;
+          return (
+            <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid #eee' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: '0.85rem', color: '#555' }}>
+                  {displayCompleted} of {totalParts} part{totalParts !== 1 ? 's' : ''} complete
+                  {inProgressParts > 0 && !isShippedOrArchived && <span style={{ color: '#0288d1', marginLeft: 8 }}>({inProgressParts} in progress)</span>}
+                </span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: displayPct === 100 ? '#2e7d32' : displayPct > 0 ? '#1565c0' : '#999' }}>
+                  {displayPct}%
+                </span>
+              </div>
+              <div style={{ height: 8, background: '#e0e0e0', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${displayPct}%`,
+                  background: displayPct === 100 ? '#4caf50' : '#1976d2',
+                  borderRadius: 4,
+                  transition: 'width 0.5s ease'
+                }} />
+              </div>
+            </div>
+          );
+        })()}
         {hasNoParts ? (
           <div className="empty-state" style={{ padding: 40 }}>
             <Package size={48} color="#9c27b0" />

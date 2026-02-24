@@ -57,25 +57,26 @@ function SchedulingPage() {
 
   useEffect(() => {
     loadWorkOrders();
+    const interval = setInterval(() => loadWorkOrders(true), 30000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     filterAndSort();
   }, [workOrders, searchQuery, sortBy, statusFilter]);
 
-  const loadWorkOrders = async () => {
+  const loadWorkOrders = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await getWorkOrders();
       const all = response.data.data || [];
-      // Filter out done statuses
       const active = all.filter(o => !DONE_STATUSES.includes(o.status));
       setWorkOrders(active);
     } catch (err) {
-      setError('Failed to load work orders');
+      if (!silent) setError('Failed to load work orders');
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -359,7 +360,7 @@ function SchedulingPage() {
           {/* Table Header */}
           <div style={{ 
             display: 'grid', 
-            gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 140px',
+            gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 100px 140px',
             background: '#f5f5f5',
             padding: '12px 16px',
             fontWeight: 600,
@@ -373,6 +374,7 @@ function SchedulingPage() {
             <div>Received</div>
             <div>Requested</div>
             <div>Promised</div>
+            <div>Progress</div>
             <div>Status</div>
           </div>
 
@@ -388,7 +390,7 @@ function SchedulingPage() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 140px',
+                    gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 100px 140px',
                     padding: '16px',
                     borderBottom: isRush ? '2px solid #ef5350' : '1px solid #eee',
                     cursor: 'pointer',
@@ -500,6 +502,25 @@ function SchedulingPage() {
                     ) : (
                       <span style={{ color: '#ccc' }}>—</span>
                     )}
+                  </div>
+
+                  {/* Progress */}
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    {(() => {
+                      const total = order.parts?.length || 0;
+                      const done = (order.parts || []).filter(p => p.status === 'completed').length;
+                      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                      return total > 0 ? (
+                        <>
+                          <div style={{ fontSize: '0.75rem', color: pct === 100 ? '#2e7d32' : '#666', marginBottom: 2, fontWeight: pct === 100 ? 600 : 400 }}>
+                            {done}/{total}
+                          </div>
+                          <div style={{ height: 4, background: '#e0e0e0', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#4caf50' : '#1976d2', borderRadius: 2, transition: 'width 0.5s ease' }} />
+                          </div>
+                        </>
+                      ) : <span style={{ color: '#ccc', fontSize: '0.75rem' }}>—</span>;
+                    })()}
                   </div>
 
                   {/* Status */}

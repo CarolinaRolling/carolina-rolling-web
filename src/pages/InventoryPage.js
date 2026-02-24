@@ -48,11 +48,16 @@ function InventoryPage() {
 
   useEffect(() => {
     loadWorkOrders();
+    // Auto-refresh every 30 seconds for live progress updates
+    const interval = setInterval(() => {
+      loadWorkOrders(true);
+    }, 30000);
+    return () => clearInterval(interval);
   }, [statusFilter]);
 
-  const loadWorkOrders = async () => {
+  const loadWorkOrders = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       let response;
       if (statusFilter === 'archived') {
@@ -84,10 +89,10 @@ function InventoryPage() {
         console.error('Failed to load recently completed:', e);
       }
     } catch (err) {
-      setError('Failed to load inventory');
+      if (!silent) setError('Failed to load inventory');
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -582,18 +587,43 @@ function InventoryPage() {
                     </div>
                   )}
 
-                  {/* Parts count */}
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: 6, 
-                    fontSize: '0.85rem',
-                    color: '#666',
-                    marginBottom: 6
-                  }}>
-                    <Package size={14} />
-                    <span>{order.parts?.length || 0} part{(order.parts?.length || 0) !== 1 ? 's' : ''}</span>
-                  </div>
+                  {/* Parts progress */}
+                  {(() => {
+                    const totalParts = order.parts?.length || 0;
+                    const completedParts = (order.parts || []).filter(p => p.status === 'completed').length;
+                    const inProgressParts = (order.parts || []).filter(p => p.status === 'in_progress').length;
+                    const pct = totalParts > 0 ? Math.round((completedParts / totalParts) * 100) : 0;
+                    const isShippedOrArchived = ['shipped', 'archived'].includes(order.status);
+                    const displayPct = isShippedOrArchived ? 100 : pct;
+                    const displayCompleted = isShippedOrArchived ? totalParts : completedParts;
+                    return (
+                      <div style={{ marginBottom: 6 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                          <span style={{ fontSize: '0.8rem', color: '#666', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Package size={13} />
+                            {displayCompleted}/{totalParts} part{totalParts !== 1 ? 's' : ''} complete
+                          </span>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: displayPct === 100 ? '#2e7d32' : displayPct > 0 ? '#1565c0' : '#999' }}>
+                            {displayPct}%
+                          </span>
+                        </div>
+                        <div style={{ height: 6, background: '#e0e0e0', borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%',
+                            width: `${displayPct}%`,
+                            background: displayPct === 100 ? '#4caf50' : '#1976d2',
+                            borderRadius: 3,
+                            transition: 'width 0.5s ease'
+                          }} />
+                        </div>
+                        {inProgressParts > 0 && !isShippedOrArchived && (
+                          <div style={{ fontSize: '0.7rem', color: '#0288d1', marginTop: 2 }}>
+                            {inProgressParts} in progress
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Shop completion badge */}
                   {order.completedAt && (
