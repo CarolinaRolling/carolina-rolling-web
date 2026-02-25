@@ -356,15 +356,9 @@ function EstimateDetailsPage() {
 
     let bestSpecificRule = null;
     let bestGeneralRule = null;
-    let bestFallbackRule = null;  // Any rule for this part type, regardless of constraints
 
     for (const rule of laborMinimums) {
       if (rule.partType !== part.partType) continue;
-
-      // Track the highest minimum for this part type as absolute fallback
-      if (!bestFallbackRule || parseFloat(rule.minimum) > parseFloat(bestFallbackRule.minimum)) {
-        bestFallbackRule = rule;
-      }
 
       const hasMinSize = rule.minSize !== undefined && rule.minSize !== null && rule.minSize !== '' && parseFloat(rule.minSize) > 0;
       const hasMaxSize = rule.maxSize !== undefined && rule.maxSize !== null && rule.maxSize !== '' && parseFloat(rule.maxSize) > 0;
@@ -408,8 +402,9 @@ function EstimateDetailsPage() {
       }
     }
 
-    // Priority: specific match > general match > fallback (any rule for this part type)
-    return bestSpecificRule || bestGeneralRule || bestFallbackRule;
+    // Only return a specific match or a general (no-constraints) match
+    // Never fall back to a constrained rule that didn't match
+    return bestSpecificRule || bestGeneralRule || null;
   };
 
   // Estimate-level minimum check:
