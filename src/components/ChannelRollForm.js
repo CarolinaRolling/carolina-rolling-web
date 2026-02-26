@@ -446,6 +446,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
           <div className="form-group"><label className="form-label">Material Source</label><select className="form-select" value={partData.materialSource || 'customer_supplied'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}><option value="customer_supplied">Client Supplies</option><option value="we_order">We Order</option></select></div>
         </div>
         {partData.materialSource === 'we_order' && (
+          <>
           <div className="form-group" style={{ position: 'relative', marginTop: 8 }}>
             <label className="form-label">Vendor</label>
             <input className="form-input" value={partData._vendorSearch !== undefined ? partData._vendorSearch : (partData.vendor?.name || partData.supplierName || '')}
@@ -469,6 +470,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
               onChange={(e) => setPartData({ ...partData, vendorEstimateNumber: e.target.value })}
               placeholder="Optional - vendor's quote/estimate number" />
           </div>
+          </>
         )}
         <div className="form-group" style={{ marginTop: 12 }}><label className="form-label">Material Description (for ordering)</label><textarea className="form-textarea" value={partData.materialDescription || ''} onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })} rows={2} style={{ fontFamily: 'monospace', fontSize: '0.9rem' }} /><div style={{ fontSize: '0.75rem', color: '#999', marginTop: 2 }}>Auto-generated — edit as needed</div></div>
       </div>

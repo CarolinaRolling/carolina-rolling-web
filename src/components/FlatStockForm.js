@@ -575,6 +575,7 @@ export default function FlatStockForm({ partData, setPartData, vendorSuggestions
           </div>
         </div>
         {partData.materialSource === 'we_order' && (
+          <>
           <div className="form-group" style={{ position: 'relative', marginTop: 8 }}>
             <label className="form-label">Vendor</label>
             <input className="form-input"
@@ -614,6 +615,7 @@ export default function FlatStockForm({ partData, setPartData, vendorSuggestions
               onChange={(e) => setPartData({ ...partData, vendorEstimateNumber: e.target.value })}
               placeholder="Optional - vendor's quote/estimate number" />
           </div>
+          </>
         )}
         <div className="form-group" style={{ marginTop: 12 }}>
           <label className="form-label">Material Description (for ordering)</label>

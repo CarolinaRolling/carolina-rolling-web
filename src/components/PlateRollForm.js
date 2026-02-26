@@ -613,6 +613,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
 
         {/* Vendor Selector */}
         {partData.materialSource === 'we_order' && (
+          <>
           <div className="form-group" style={{ position: 'relative', marginTop: 8 }}>
             <label className="form-label">Vendor</label>
             <input className="form-input"
@@ -661,6 +662,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
               onChange={(e) => setPartData({ ...partData, vendorEstimateNumber: e.target.value })}
               placeholder="Optional - vendor's quote/estimate number" />
           </div>
+          </>
         )}
 
         {/* Material Description for email */}
