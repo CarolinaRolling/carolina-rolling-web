@@ -494,6 +494,13 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
               </div>
             )}
           </div>
+        
+          <div className="form-group" style={{ marginTop: 8 }}>
+            <label className="form-label">Vendor Estimate #</label>
+            <input className="form-input" value={partData.vendorEstimateNumber || ''}
+              onChange={(e) => setPartData({ ...partData, vendorEstimateNumber: e.target.value })}
+              placeholder="Optional - vendor's quote/estimate number" />
+          </div>
         )}
         <div className="form-group" style={{ marginTop: 12 }}><label className="form-label">Material Description (for ordering)</label><textarea className="form-textarea" value={partData.materialDescription || ''} onChange={function(e) { setPartData(Object.assign({}, partData, { materialDescription: e.target.value })); }} rows={2} style={{ fontFamily: 'monospace', fontSize: '0.9rem' }} /><div style={{ fontSize: '0.75rem', color: '#999', marginTop: 2 }}>Auto-generated — edit as needed</div></div>
       </div>

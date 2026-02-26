@@ -202,6 +202,13 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
               </div>
             )}
           </div>
+        
+          <div className="form-group" style={{ marginTop: 8 }}>
+            <label className="form-label">Vendor Estimate #</label>
+            <input className="form-input" value={partData.vendorEstimateNumber || ''}
+              onChange={(e) => setPartData({ ...partData, vendorEstimateNumber: e.target.value })}
+              placeholder="Optional - vendor's quote/estimate number" />
+          </div>
         )}
         <div className="form-group" style={{ marginTop: 12 }}>
           <label className="form-label">Material Description (for ordering)</label>

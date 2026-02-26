@@ -791,6 +791,13 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
               </div>
             )}
           </div>
+        
+          <div className="form-group" style={{ marginTop: 8 }}>
+            <label className="form-label">Vendor Estimate #</label>
+            <input className="form-input" value={partData.vendorEstimateNumber || ''}
+              onChange={(e) => setPartData({ ...partData, vendorEstimateNumber: e.target.value })}
+              placeholder="Optional - vendor's quote/estimate number" />
+          </div>
         )}
 
         {/* Material Description for email */}
