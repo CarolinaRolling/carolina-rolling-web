@@ -681,7 +681,7 @@ function EstimateDetailsPage() {
       partType: type, clientPartNumber: '', heatNumber: '', cutFileReference: '', quantity: 1,
       // Material - controlled by weSupplyMaterial checkbox
       weSupplyMaterial: false,
-      materialDescription: '', supplierName: '', materialUnitCost: '', 
+      materialDescription: '', supplierName: '', vendorEstimateNumber: '', materialUnitCost: '', 
       materialMarkupPercent: defaultSettings.defaultMaterialMarkup || 20,
       // Rolling cost
       rollingCost: '',
@@ -2190,12 +2190,16 @@ function EstimateDetailsPage() {
                     if (p.supplierName) {
                       const matEa = parseFloat(p.materialTotal) || 0;
                       const q = parseInt(p.quantity) || 1;
-                      acc[p.supplierName] = (acc[p.supplierName] || 0) + (matEa * q);
+                      const key = p.supplierName;
+                      if (!acc[key]) acc[key] = { total: 0, estNums: new Set() };
+                      acc[key].total += matEa * q;
+                      if (p.vendorEstimateNumber) acc[key].estNums.add(p.vendorEstimateNumber);
                     }
                     return acc;
-                  }, {})).map(([supplier, total]) => (
+                  }, {})).map(([supplier, info]) => (
                     <div key={supplier} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                      <span>{supplier}</span><span>{formatCurrency(total)}</span>
+                      <span>{supplier}{info.estNums.size > 0 && <span style={{ color: '#999', marginLeft: 6 }}>({[...info.estNums].join(', ')})</span>}</span>
+                      <span>{formatCurrency(info.total)}</span>
                     </div>
                   ))}
                 </div>
@@ -2514,6 +2518,16 @@ function EstimateDetailsPage() {
                           ))}
                         </div>
                       )}
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Vendor Estimate #</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        value={partData.vendorEstimateNumber || ''}
+                        onChange={(e) => setPartData({ ...partData, vendorEstimateNumber: e.target.value })}
+                        placeholder="Optional"
+                      />
                     </div>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Unit Cost ($)</label>

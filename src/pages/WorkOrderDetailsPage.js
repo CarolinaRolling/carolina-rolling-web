@@ -2256,6 +2256,7 @@ function WorkOrderDetailsPage() {
                           <strong style={{ color: part.materialOrdered ? '#2e7d32' : '#333' }}>📦 {part.materialDescription}</strong>
                         )}
                         {(part.vendor?.name || part.supplierName) && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#666' }}>from {part.vendor?.name || part.supplierName}</span>}
+                        {part.vendorEstimateNumber && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#1565c0', fontWeight: 600 }}>Est# {part.vendorEstimateNumber}</span>}
                       </div>
                       {part.materialSource === 'we_order' && (
                         part.materialOrdered ? (
