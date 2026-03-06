@@ -217,7 +217,9 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
     }); });
   }, [largeDia, largeDiaType, largeDiaMeasure, smallDia, smallDiaType, smallDiaMeasure, coneHeight, radialSegments, showAdvanced, heightCutMethod, heightSegments, customCuts, segmentSpecs, coneType, eccentricAngle]);
 
-  useEffect(function() { var total = heightSegs.length * (parseInt(radialSegments) || 1); setPartData(function(p) { return Object.assign({}, p, { quantity: String(total) }); }); }, [radialSegments, heightSegs]);
+  var coneCount = parseInt(partData._coneCount) || 1;
+  var segPerCone = heightSegs.length * (parseInt(radialSegments) || 1);
+  useEffect(function() { var total = segPerCone * coneCount; setPartData(function(p) { return Object.assign({}, p, { quantity: String(total) }); }); }, [radialSegments, heightSegs, coneCount]);
 
   var materialDescription = useMemo(function() {
     var parts = [];
@@ -235,12 +237,12 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
 
   var rollingDescription = useMemo(function() {
     if (!coneData) return '';
-    var rS = parseInt(radialSegments) || 1, l = [];
-    // Line 1: Cone type
-    if (coneType === 'eccentric') {
-      l.push('Eccentric' + (eccentricAngle ? ' = ' + eccentricAngle + ' deg' : ''));
+    var rS = parseInt(radialSegments) || 1, cc = parseInt(coneCount) || 1, l = [];
+    // Line 1: Cone type + count
+    if (cc > 1) {
+      l.push(cc + ' Cones - ' + (coneType === 'eccentric' ? 'Eccentric' + (eccentricAngle ? ' = ' + eccentricAngle + ' deg' : '') : 'Concentric'));
     } else {
-      l.push('Concentric');
+      l.push(coneType === 'eccentric' ? 'Eccentric' + (eccentricAngle ? ' = ' + eccentricAngle + ' deg' : '') : 'Concentric');
     }
     // Line 2: Segment info (only if segmented)
     if (rS > 1) {
@@ -251,8 +253,13 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       l.push(heightSegs.length + ' layers');
       segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': ' + s.segmentAngle.toFixed(1) + ' deg - Sheet ' + s.sheetWidth + '"x' + s.sheetHeight + '" | OR:' + s.outerRadius.toFixed(1) + '" IR:' + s.innerRadius.toFixed(1) + '"'); });
     }
+    // Total pieces summary
+    var segPerCone = heightSegs.length * rS;
+    if (cc > 1) {
+      l.push(cc + ' cones x ' + segPerCone + ' segments = ' + (cc * segPerCone) + ' total pieces');
+    }
     return l.join('\n');
-  }, [coneData, coneType, eccentricAngle, radialSegments, heightSegs, segmentSpecs]);
+  }, [coneData, coneType, eccentricAngle, radialSegments, coneCount, heightSegs, segmentSpecs]);
 
   useEffect(function() {
     var u = { materialDescription: materialDescription };
@@ -282,11 +289,20 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
 
   return (
     <>
-      {/* QUANTITY */}
+      {/* QUANTITY = Number of Cones */}
       <div className="form-group">
-        <label className="form-label">Total Pieces</label>
-        <input type="number" className="form-input" value={partData.quantity} style={{ background: '#e8f5e9', fontWeight: 600 }} disabled />
-        <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>🔺 Auto: {heightSegs.length} layer(s) × {radialSegments} seg(s) = {heightSegs.length * (parseInt(radialSegments) || 1)}</div>
+        <label className="form-label">Quantity (Cones)</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <input type="number" className="form-input" min="1"
+            value={coneCount}
+            onFocus={function(e) { e.target.select(); }}
+            onChange={function(e) { setPartData(Object.assign({}, partData, { _coneCount: Math.max(1, parseInt(e.target.value) || 1) })); }}
+            style={{ width: 70, textAlign: 'center', fontWeight: 700, fontSize: '1.1rem' }} />
+          <span style={{ fontSize: '0.85rem', color: '#555' }}>
+            × <strong style={{ color: '#2e7d32' }}>{segPerCone}</strong> segment{segPerCone !== 1 ? 's' : ''} per cone
+            = <strong style={{ color: '#1565c0', fontSize: '1rem' }}>{coneCount * segPerCone}</strong> total piece{coneCount * segPerCone !== 1 ? 's' : ''}
+          </span>
+        </div>
       </div>
 
       {/* THICKNESS */}
@@ -395,7 +411,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       {/* SEGMENT DETAILS — concentric only */}
       {segmentSpecs.length > 0 && coneType === 'concentric' && (
         <div style={secStyle}>
-          {secHead('📋', 'Segment Details (' + segmentSpecs.length + ' layer' + (segmentSpecs.length > 1 ? 's' : '') + ' \u00d7 ' + radialSegments + ' seg' + (radialSegments > 1 ? 's' : '') + ')', '#2e7d32')}
+          {secHead('📋', 'Segment Details (' + segmentSpecs.length + ' layer' + (segmentSpecs.length > 1 ? 's' : '') + ' \u00d7 ' + radialSegments + ' seg' + (radialSegments > 1 ? 's' : '') + (coneCount > 1 ? ' \u00d7 ' + coneCount + ' cones' : '') + ')', '#2e7d32')}
           {segmentSpecs.map(function(sp) { return (
             <div key={sp.layer} style={{ background: '#f0fdf4', padding: 12, borderRadius: 8, marginBottom: 8, border: '1px solid #bbf7d0' }}>
               <div style={{ fontWeight: 700, color: '#166534', marginBottom: 6, fontSize: '0.9rem' }}>Layer {sp.layer}: {sp.bottomHeight.toFixed(2)}" → {sp.topHeight.toFixed(2)}"</div>

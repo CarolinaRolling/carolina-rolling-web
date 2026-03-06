@@ -1312,6 +1312,154 @@ function WorkOrderDetailsPage() {
   // Print Production Copy (no pricing + part prints only)
   const printShopOrder = () => generatePrintPackage('production', false);
 
+  // Print Pickup Checklist - simple form with checkboxes for loading
+  const printPickupChecklist = () => {
+    setShowPrintMenu(false);
+    const drLabel = order.drNumber ? `DR-${order.drNumber}` : (order.orderNumber || '—');
+    const clientPO = order.clientPurchaseOrderNumber || '';
+    const parts = order?.parts || [];
+    const SERVICE_TYPES = ['fab_service', 'shop_rate', 'rush_service'];
+    const regularParts = parts.filter(p => !SERVICE_TYPES.includes(p.partType)).sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+    const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    const getPartDesc = (p) => {
+      const fd = p.formData || {};
+      let desc = fd._materialDescription || p.materialDescription || '';
+      if (!desc) {
+        const specs = [];
+        if (p.thickness) specs.push(p.thickness);
+        if (p.width) specs.push(`x ${p.width}"`);
+        if (p.length) specs.push(`x ${p.length}"`);
+        if (p.sectionSize) specs.push(p.sectionSize);
+        if (p.outerDiameter) specs.push(`${p.outerDiameter}" OD`);
+        if (p.material) specs.push(p.material);
+        desc = specs.join(' ') || p.partType || 'Part';
+      }
+      // Clean leading qty
+      desc = desc.replace(/^\(\d+\)\s*/, '').replace(/^\d+pc:?\s*/, '');
+      return desc;
+    };
+
+    const getPartType = (t) => {
+      const map = { plate_roll: 'Plate Roll', pipe_roll: 'Pipe/Tube', tube_roll: 'Sq/Rect Tube',
+        angle_roll: 'Angle Roll', channel_roll: 'Channel', beam_roll: 'Beam', flat_bar: 'Flat Bar',
+        cone_roll: 'Cone', tee_bar: 'Tee Bar', press_brake: 'Press Brake', flat_stock: 'Flat Stock' };
+      return map[t] || t || 'Part';
+    };
+
+    const getRolling = (p) => {
+      const fd = p.formData || {};
+      const desc = fd._rollingDescription || '';
+      return desc.split(/\n|\\n/).filter(l => l.trim()).slice(0, 1).join('') || '';
+    };
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Pickup Checklist - ${drLabel}</title>
+    <style>
+      @page { size: letter; margin: 0.5in; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #000; padding: 0.5in; }
+      .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #000; padding-bottom: 12px; margin-bottom: 16px; }
+      .company { font-size: 18px; font-weight: 700; }
+      .company-sub { font-size: 10px; color: #444; margin-top: 2px; }
+      .order-info { text-align: right; }
+      .dr { font-size: 28px; font-weight: 700; font-family: 'Courier New', monospace; }
+      .info-row { font-size: 11px; color: #333; margin-top: 2px; }
+      .title { text-align: center; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin: 12px 0 16px; }
+      table { width: 100%; border-collapse: collapse; }
+      th { background: #222; color: white; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+      th.check { width: 50px; text-align: center; }
+      th.qty { width: 50px; text-align: center; }
+      th.pn { width: 45px; text-align: center; }
+      td { padding: 10px; border-bottom: 1px solid #ccc; vertical-align: top; }
+      td.check { text-align: center; vertical-align: middle; }
+      td.qty { text-align: center; font-weight: 700; font-size: 14px; }
+      td.pn { text-align: center; font-weight: 700; color: #1565c0; }
+      .checkbox { width: 22px; height: 22px; border: 2px solid #000; display: inline-block; border-radius: 3px; }
+      .type-tag { font-size: 10px; color: #666; background: #f0f0f0; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-bottom: 3px; }
+      .desc { font-weight: 600; font-size: 12px; }
+      .rolling { font-size: 11px; color: #333; margin-top: 3px; }
+      .special { font-size: 10px; color: #c62828; font-weight: 600; margin-top: 3px; }
+      .footer { margin-top: 30px; border-top: 2px solid #000; padding-top: 16px; }
+      .sig-row { display: flex; justify-content: space-between; margin-top: 24px; gap: 40px; }
+      .sig-block { flex: 1; }
+      .sig-line { border-bottom: 1px solid #000; height: 30px; margin-bottom: 4px; }
+      .sig-label { font-size: 10px; color: #666; }
+      .notes-box { margin-top: 16px; border: 1px solid #ccc; border-radius: 4px; min-height: 60px; padding: 8px; }
+      .notes-label { font-size: 10px; color: #666; margin-bottom: 4px; }
+      .count-summary { text-align: center; font-size: 13px; margin: 12px 0; color: #333; }
+      @media print { body { padding: 0; } }
+    </style></head><body>
+    <div class="header">
+      <div>
+        <div class="company">Carolina Rolling Inc.</div>
+        <div class="company-sub">Pickup / Loading Checklist</div>
+      </div>
+      <div class="order-info">
+        <div class="dr">${drLabel}</div>
+        ${order.clientName ? `<div class="info-row"><strong>${order.clientName}</strong></div>` : ''}
+        ${clientPO ? `<div class="info-row">PO: ${clientPO}</div>` : ''}
+        <div class="info-row">${today}</div>
+      </div>
+    </div>
+
+    <div class="title">Loading Checklist</div>
+    <div class="count-summary">${regularParts.length} part${regularParts.length !== 1 ? 's' : ''} — ${regularParts.reduce((s, p) => s + (p.quantity || 1), 0)} total pieces</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="check">✓</th>
+          <th class="pn">#</th>
+          <th class="qty">QTY</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${regularParts.map(p => {
+          const desc = getPartDesc(p);
+          const rolling = getRolling(p);
+          const special = p.specialInstructions || '';
+          return `<tr>
+            <td class="check"><div class="checkbox"></div></td>
+            <td class="pn">${p.partNumber || ''}</td>
+            <td class="qty">${p.quantity || 1}</td>
+            <td>
+              <span class="type-tag">${getPartType(p.partType)}</span>
+              <div class="desc">${desc}</div>
+              ${rolling ? `<div class="rolling">${rolling}</div>` : ''}
+              ${special ? `<div class="special">⚠ ${special}</div>` : ''}
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <div class="notes-label">Notes / Discrepancies:</div>
+      <div class="notes-box"></div>
+      
+      <div class="sig-row">
+        <div class="sig-block">
+          <div class="sig-line"></div>
+          <div class="sig-label">Loaded By (Print Name)</div>
+        </div>
+        <div class="sig-block">
+          <div class="sig-line"></div>
+          <div class="sig-label">Picked Up By (Signature)</div>
+        </div>
+        <div class="sig-block">
+          <div class="sig-line"></div>
+          <div class="sig-label">Date / Time</div>
+        </div>
+      </div>
+    </div>
+
+    </body></html>`);
+    printWindow.document.close();
+    printWindow.onload = () => printWindow.print();
+  };
+
   const printPartLabel = (part) => {
     const printWindow = window.open('', '_blank');
     const clientPO = order.clientPurchaseOrderNumber || shipment?.clientPurchaseOrderNumber;
@@ -1601,6 +1749,25 @@ function WorkOrderDetailsPage() {
                 <option value="stored">Stored</option>
                 <option value="shipped">Shipped</option>
               </select>
+              <select className="form-select" 
+                value={order.priority || 'normal'} 
+                onChange={async (e) => {
+                  try {
+                    await updateWorkOrder(order.id, { priority: e.target.value });
+                    setOrder({ ...order, priority: e.target.value });
+                    showMessage(`Priority set to ${e.target.value}`);
+                  } catch (err) { setError('Failed to update priority'); }
+                }}
+                style={{ 
+                  width: 'auto',
+                  fontWeight: order.priority === 'urgent' ? 700 : order.priority === 'high' ? 600 : 400,
+                  color: order.priority === 'urgent' ? '#c62828' : order.priority === 'high' ? '#e65100' : '#333',
+                  borderColor: order.priority === 'urgent' ? '#c62828' : order.priority === 'high' ? '#e65100' : '#ddd'
+                }}>
+                <option value="normal">Normal Priority</option>
+                <option value="high">⚡ High Priority</option>
+                <option value="urgent">🔴 Urgent</option>
+              </select>
               {(order.status === 'stored' || (order.pickupHistory?.length > 0 && getPickupSummary().some(p => p.remaining > 0))) && (
                 <button className="btn btn-success" onClick={() => setShowPickupModal(true)}>
                   <Check size={18} />{order.pickupHistory?.length > 0 ? 'Continue Shipment' : 'Ship'}
@@ -1626,6 +1793,11 @@ function WorkOrderDetailsPage() {
                 </button>
                 <button onClick={() => generatePrintPackage('production', true)} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
                   ⬇️ Production Package PDF<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Same as above, saves to downloads</span>
+                </button>
+                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
+                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Pickup / Loading</div>
+                <button onClick={printPickupChecklist} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
+                  ☑️ Pickup Checklist<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Checkboxes for each part — for loading crew</span>
                 </button>
                 <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
                 <button onClick={() => { setShowPrintMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', color: '#666', fontSize: '0.9rem' }}>Cancel</button>

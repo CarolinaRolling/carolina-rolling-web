@@ -332,6 +332,54 @@ function InventoryPage() {
         {filteredOrders.length} item{filteredOrders.length !== 1 ? 's' : ''}
       </div>
 
+      {/* Material Needs Ordering Warning */}
+      {(() => {
+        const SERVICE_TYPES = ['fab_service', 'shop_rate', 'rush_service'];
+        const needsMaterialOrders = workOrders.filter(wo => {
+          if (['shipped', 'archived'].includes(wo.status)) return false;
+          return wo.parts?.some(p => 
+            p.materialSource === 'we_order' && 
+            !p.materialOrdered && 
+            !SERVICE_TYPES.includes(p.partType)
+          );
+        });
+        if (needsMaterialOrders.length === 0) return null;
+        return (
+          <div style={{
+            background: '#fff3e0', border: '2px solid #ff9800', borderRadius: 8,
+            padding: '14px 18px', marginBottom: 16
+          }}>
+            <div style={{ fontWeight: 700, color: '#e65100', fontSize: '1rem', marginBottom: 8 }}>
+              ⚠️ {needsMaterialOrders.length} Order{needsMaterialOrders.length > 1 ? 's' : ''} Need Material Ordered
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {needsMaterialOrders.map(wo => {
+                const unorderedParts = wo.parts.filter(p => 
+                  p.materialSource === 'we_order' && !p.materialOrdered && !SERVICE_TYPES.includes(p.partType)
+                );
+                return (
+                  <div key={wo.id} role="button" tabIndex={0}
+                    onClick={() => navigate(`/admin/work-orders/${wo.id}`)}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      background: '#fff8e1', padding: '8px 12px', borderRadius: 6, fontSize: '0.9rem', cursor: 'pointer' }}
+                  >
+                    <span>
+                      <strong style={{ color: '#1565c0' }}>{wo.drNumber ? `DR-${wo.drNumber}` : wo.orderNumber}</strong>
+                      <span style={{ margin: '0 8px', color: '#666' }}>—</span>
+                      <strong>{wo.clientName}</strong>
+                      <span style={{ color: '#888', marginLeft: 8 }}>
+                        ({unorderedParts.length} part{unorderedParts.length > 1 ? 's' : ''} need material)
+                      </span>
+                    </span>
+                    <span style={{ color: '#e65100', fontWeight: 600, fontSize: '0.8rem' }}>ORDER MATERIAL →</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Waiting for Instructions - unlinked shipments */}
       
       {/* Shop Floor Completed Notifications */}
@@ -540,7 +588,23 @@ function InventoryPage() {
                         </div>
                       )}
                     </div>
-                    {getStatusBadge(order.status)}
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {order.priority && order.priority !== 'normal' && (
+                        <span style={{
+                          background: order.priority === 'urgent' ? '#c62828' : order.priority === 'high' ? '#e65100' : '#1565c0',
+                          color: 'white',
+                          padding: '4px 10px',
+                          borderRadius: 12,
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          {order.priority === 'urgent' ? '🔴 URGENT' : '🟠 HIGH'}
+                        </span>
+                      )}
+                      {getStatusBadge(order.status)}
+                    </div>
                   </div>
 
                   {/* Client Name */}
