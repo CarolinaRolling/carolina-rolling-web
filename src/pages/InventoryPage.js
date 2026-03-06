@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Package, Truck, CheckCircle, Clock, FileText, Inbox, Image, AlertCircle } from 'lucide-react';
-import { getWorkOrders, getArchivedWorkOrders, getUnlinkedShipments, getRecentlyCompletedOrders } from '../services/api';
+import { getWorkOrders, getUnlinkedShipments, getRecentlyCompletedOrders } from '../services/api';
 
 // Status configuration
 const STATUSES = {
@@ -59,34 +59,24 @@ function InventoryPage() {
     try {
       if (!silent) setLoading(true);
       setError(null);
-      let response;
-      if (statusFilter === 'archived') {
-        try {
-          response = await getArchivedWorkOrders();
-        } catch (archiveErr) {
-          console.error('Archived endpoint failed, trying fallback:', archiveErr);
-          // Fallback: get all work orders and filter client-side
-          response = await getWorkOrders({ archived: 'true' });
-        }
-      } else {
-        response = await getWorkOrders({ archived: 'false' });
-      }
+      const response = await getWorkOrders({ 
+        archived: statusFilter === 'archived' ? 'true' : 'false',
+        view: 'list'
+      });
       setWorkOrders(response.data.data || []);
       
-      // Also load unlinked shipments
-      try {
-        const unlinkedRes = await getUnlinkedShipments();
-        setUnlinkedShipments(unlinkedRes.data.data || []);
-      } catch (e) {
-        console.error('Failed to load unlinked shipments:', e);
-      }
-      
-      // Load recently completed orders (shop floor notifications)
-      try {
-        const completedRes = await getRecentlyCompletedOrders();
-        setRecentlyCompleted(completedRes.data.data || []);
-      } catch (e) {
-        console.error('Failed to load recently completed:', e);
+      // Only load unlinked/recently-completed when viewing active orders
+      if (statusFilter !== 'archived') {
+        try {
+          const [unlinkedRes, completedRes] = await Promise.all([
+            getUnlinkedShipments(),
+            getRecentlyCompletedOrders()
+          ]);
+          setUnlinkedShipments(unlinkedRes.data.data || []);
+          setRecentlyCompleted(completedRes.data.data || []);
+        } catch (e) {
+          console.error('Failed to load supplementary data:', e);
+        }
       }
     } catch (err) {
       if (!silent) setError('Failed to load inventory');
