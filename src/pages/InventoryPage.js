@@ -349,7 +349,7 @@ function InventoryPage() {
                 );
                 return (
                   <div key={wo.id} role="button" tabIndex={0}
-                    onClick={() => navigate(`/admin/work-orders/${wo.id}`)}
+                    onClick={() => navigate(`/workorder/${wo.id}`)}
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       background: '#fff8e1', padding: '8px 12px', borderRadius: 6, fontSize: '0.9rem', cursor: 'pointer' }}
                   >

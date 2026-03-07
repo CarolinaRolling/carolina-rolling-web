@@ -266,6 +266,8 @@ export const assignPONumber = (data) => api.post('/po-numbers/assign', data);
 export const voidPONumber = (poNumber, reason, voidedBy) => api.post(`/po-numbers/${poNumber}/void`, { reason, voidedBy });
 export const getVoidedPONumbers = () => api.get('/po-numbers/voided');
 export const deletePONumber = (id) => api.delete(`/po-numbers/${id}`);
+export const archivePONumber = (id) => api.post(`/po-numbers/${id}/archive`);
+export const unarchivePONumber = (id) => api.post(`/po-numbers/${id}/unarchive`);
 export const releasePONumber = (poNumber) => api.delete(`/po-numbers/${poNumber}/release`);
 export const reassignPONumber = (oldPoNumber, newPoNumber) => api.put(`/po-numbers/${oldPoNumber}/reassign`, { newPoNumber });
 
