@@ -492,7 +492,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
             {(selGrd === 'Custom' || isCustomGrd) && <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter grade" value={isCustomGrd ? partData.material : customGrade} onChange={function(e) { setCustomGrade(e.target.value); setPartData(Object.assign({}, partData, { material: e.target.value })); }} />}
           </div>
           <div className="form-group"><label className="form-label">Origin</label><select className="form-select" value={partData._materialOrigin || ''} onChange={function(e) { setPartData(Object.assign({}, partData, { _materialOrigin: e.target.value })); }}><option value="">Select...</option><option value="Domestic">Domestic</option><option value="Import">Import</option></select></div>
-          <div className="form-group"><label className="form-label">Material Source</label><select className="form-select" value={partData.materialSource || 'customer_supplied'} onChange={function(e) { setPartData(Object.assign({}, partData, { materialSource: e.target.value })); }}><option value="customer_supplied">Client Supplies</option><option value="we_order">We Order</option></select></div>
+          <div className="form-group"><label className="form-label">Material Source</label><select className="form-select" value={partData.materialSource || 'customer_supplied'} onChange={function(e) { setPartData(Object.assign({}, partData, { materialSource: e.target.value })); }}><option value="customer_supplied">Client Supplies</option><option value="we_order">We Order</option><option value="in_stock">In Stock (We Supply)</option></select></div>
         </div>
         {partData.materialSource === 'we_order' && (
           <>

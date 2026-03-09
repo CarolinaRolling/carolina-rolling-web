@@ -902,7 +902,7 @@ function EstimateDetailsPage() {
       // Capture the shape file before cleaning dataToSend
       const pendingShapeFile = dataToSend._shapeFile;
       delete dataToSend._shapeFile; // File objects can't be serialized to JSON
-      if (!dataToSend.materialSource || !['we_order', 'customer_supplied'].includes(dataToSend.materialSource)) {
+      if (!dataToSend.materialSource || !['we_order', 'customer_supplied', 'in_stock'].includes(dataToSend.materialSource)) {
         dataToSend.materialSource = 'customer_supplied';
       }
       // Sanitize ENUM fields — empty strings break Postgres ENUMs, must be null
@@ -1155,7 +1155,7 @@ function EstimateDetailsPage() {
           </p>
         ` : ''}
         ${part._pitchEnabled ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;">🌀 Pitch: ${part._pitchDirection === 'clockwise' ? 'CW' : 'CCW'}${part._pitchMethod === 'runrise' && part._pitchRise ? ' | Run: ' + part._pitchRun + '" / Rise: ' + part._pitchRise + '"' : ''}${part._pitchMethod === 'degree' && part._pitchAngle ? ' | Angle: ' + part._pitchAngle + '°' : ''}${part._pitchMethod === 'space' && part._pitchSpaceValue ? ' | ' + (part._pitchSpaceType === 'center' ? 'C-C' : 'Between') + ': ' + part._pitchSpaceValue + '"' : ''}${part._pitchDevelopedDia > 0 ? ' | <strong style="color:#2e7d32;">Dev Ø: ' + parseFloat(part._pitchDevelopedDia).toFixed(4) + '"</strong>' : ''}</p>` : ''}
-        ${!['fab_service', 'shop_rate'].includes(part.partType) ? (part.materialSource === 'we_order' ? `<p style="color:#388e3c;">Material supplied by: Carolina Rolling Company</p>` : `<p style="color:#388e3c;">Material supplied by: ${formData.clientName || 'Customer'}</p>`) : ''}
+        ${!['fab_service', 'shop_rate'].includes(part.partType) ? (part.materialSource === 'we_order' ? `<p style="color:#388e3c;">Material supplied by: Carolina Rolling Company</p>` : part.materialSource === 'in_stock' ? `<p style="color:#388e3c;">Material supplied by: Carolina Rolling Company</p>` : `<p style="color:#388e3c;">Material supplied by: ${formData.clientName || 'Customer'}</p>`) : ''}
         ${part.partType === 'cone_roll' && part.cutFileReference ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">Layout Filename: ${part.cutFileReference}</p>` : ''}
         ${pricingHtml}
         ${part.partType === 'shop_rate' ? '<p style="margin:8px 0 0;padding:8px;background:#fff3e0;border:1px solid #ffcc80;border-radius:6px;font-size:0.85em;color:#e65100;">⚠️ Pricing is an estimate based on predicted hours. Actual cost may vary depending on hours required to complete the job.</p>' : ''}
@@ -1791,7 +1791,7 @@ function EstimateDetailsPage() {
                           📦 {part.materialDescription}
                           {!['fab_service', 'shop_rate'].includes(part.partType) && (
                             <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>
-                              {part.materialSource === 'we_order' ? 'Material supplied by: Carolina Rolling Company' : `Material supplied by: ${formData.clientName || 'Customer'}`}
+                              {part.materialSource === 'we_order' ? 'Material supplied by: Carolina Rolling Company' : part.materialSource === 'in_stock' ? 'Material supplied by: Carolina Rolling Company' : `Material supplied by: ${formData.clientName || 'Customer'}`}
                             </div>
                           )}
                         </div>

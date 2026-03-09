@@ -673,6 +673,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
             <select className="form-select" value={partData.materialSource || 'customer_supplied'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
               <option value="customer_supplied">Client Supplies</option>
               <option value="we_order">We Order</option>
+              <option value="in_stock">In Stock (We Supply)</option>
             </select>
           </div>
         </div>
