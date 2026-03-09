@@ -705,13 +705,19 @@ function EstimateDetailsPage() {
       _lengthOption: '', _customLength: ''
     });
     setPartFormError(null);
+    setVendorSuggestions([]);
+    setShowVendorSuggestions(false);
     setShowPartModal(true);
   };
 
   const openEditPartModal = (part) => {
     setEditingPart(part);
+    // Clear vendor search state from previous part edit
+    setVendorSuggestions([]);
+    setShowVendorSuggestions(false);
     const editData = {
       ...part,
+      _vendorSearch: undefined, // ensure clean vendor search state
       weSupplyMaterial: part.weSupplyMaterial || false,
       materialUnitCost: part.materialUnitCost || '',
       materialMarkupPercent: part.materialMarkupPercent ?? defaultSettings.defaultMaterialMarkup ?? 20,
@@ -899,6 +905,8 @@ function EstimateDetailsPage() {
       
       // Ensure materialSource has a valid value before sending
       const dataToSend = { ...partData };
+      // Remove UI-only fields that shouldn't be saved to database
+      delete dataToSend._vendorSearch;
       // Capture the shape file before cleaning dataToSend
       const pendingShapeFile = dataToSend._shapeFile;
       delete dataToSend._shapeFile; // File objects can't be serialized to JSON
@@ -949,6 +957,8 @@ function EstimateDetailsPage() {
         setEditingPart(null);
         setPartData({});
         setPartFormError(null);
+        setVendorSuggestions([]);
+        setShowVendorSuggestions(false);
         showMessage('Part added — select next part type');
         setShowPartTypePicker(true);
       } else {
@@ -956,6 +966,8 @@ function EstimateDetailsPage() {
         setEditingPart(null);
         setPartData({});
         setPartFormError(null);
+        setVendorSuggestions([]);
+        setShowVendorSuggestions(false);
         showMessage(editingPart ? 'Part updated' : 'Part added');
       }
     } catch (err) { 

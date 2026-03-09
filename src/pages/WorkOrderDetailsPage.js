@@ -554,6 +554,8 @@ function WorkOrderDetailsPage() {
       serviceWelding: false, serviceWeldingCost: '', serviceWeldingVendor: '', serviceWeldingPercent: 100,
       otherServicesCost: '', otherServicesMarkupPercent: 15
     });
+    setVendorSuggestions([]);
+    setShowVendorSuggestions(false);
     setShowPartModal(true);
   };
 
@@ -561,10 +563,13 @@ function WorkOrderDetailsPage() {
     setEditingPart(part);
     setSelectedPartType(part.partType);
     setPartFormError(null);
+    setVendorSuggestions([]);
+    setShowVendorSuggestions(false);
     // Merge formData back into partData for editing
-    const editData = { ...part, quantity: part.quantity || 1 };
+    const editData = { ...part, quantity: part.quantity || 1, _vendorSearch: undefined };
     if (part.formData && typeof part.formData === 'object') {
       Object.assign(editData, part.formData);
+      delete editData._vendorSearch; // never restore search state from DB
     }
     setPartData(editData);
     setShowPartModal(true);
@@ -671,13 +676,15 @@ function WorkOrderDetailsPage() {
       
       // Build data matching estimate save flow
       const dataToSend = { partType: selectedPartType, ...partData, quantity: parseInt(partData.quantity) || 1 };
+      // Remove UI-only fields that shouldn't be saved to database
+      delete dataToSend._vendorSearch;
       // Capture shape file before cleaning
       const pendingShapeFile = dataToSend._shapeFile;
       delete dataToSend._shapeFile; // File objects can't be serialized
       
       // Sanitize ENUM fields - empty strings break Postgres ENUMs
       if (!dataToSend.rollType) dataToSend.rollType = null;
-      if (!dataToSend.materialSource || !['we_order', 'customer_supplied'].includes(dataToSend.materialSource)) {
+      if (!dataToSend.materialSource || !['we_order', 'customer_supplied', 'in_stock'].includes(dataToSend.materialSource)) {
         dataToSend.materialSource = 'customer_supplied';
       }
       
@@ -696,7 +703,6 @@ function WorkOrderDetailsPage() {
       }
       
       let savedPartId = editingPart?.id;
-      console.log('Saving part data:', dataToSend);
       if (editingPart) {
         await updateWorkOrderPart(id, editingPart.id, dataToSend);
       } else {
@@ -727,6 +733,8 @@ function WorkOrderDetailsPage() {
         setEditingPart(null);
         setPartData({});
         setPartFormError(null);
+        setVendorSuggestions([]);
+        setShowVendorSuggestions(false);
         showMessage('Part added — select next part type');
         setShowPartTypePicker(true);
       } else {
@@ -734,6 +742,8 @@ function WorkOrderDetailsPage() {
         setEditingPart(null);
         setPartData({});
         setPartFormError(null);
+        setVendorSuggestions([]);
+        setShowVendorSuggestions(false);
         showMessage(editingPart ? 'Part updated' : 'Part added');
       }
     } catch (err) {
