@@ -2245,7 +2245,7 @@ function EstimateDetailsPage() {
       {/* Add/Edit Part Modal */}
       {showPartModal && (
         <div className="modal-overlay">
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
+          <div className="modal modal-flex" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
             <div className="modal-header">
               <h3 className="modal-title">
                 {editingPart ? 'Edit Part' : 'Add Part'} — {PART_TYPES[partData.partType]?.icon} {PART_TYPES[partData.partType]?.label || partData.partType}
@@ -2253,7 +2253,7 @@ function EstimateDetailsPage() {
               <button className="modal-close" onClick={() => setShowPartModal(false)}>&times;</button>
             </div>
 
-            <div className="modal-body" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+            <div className="modal-body">
 
               {/* Common fields for all part types (plate_roll, angle_roll, flat_stock have their own) */}
               {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'cone_roll', 'tee_bar', 'press_brake', 'fab_service'].includes(partData.partType) && (

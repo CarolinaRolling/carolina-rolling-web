@@ -2875,14 +2875,14 @@ function WorkOrderDetailsPage() {
       {/* Add/Edit Part Modal */}
       {showPartModal && (
         <div className="modal-overlay">
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 800 }}>
+          <div className="modal modal-flex" onClick={e => e.stopPropagation()} style={{ maxWidth: 800 }}>
             <div className="modal-header">
               <h3>
                 {editingPart ? 'Edit Part' : 'Add Part'} — {PART_TYPES[selectedPartType]?.icon} {PART_TYPES[selectedPartType]?.label || selectedPartType}
               </h3>
               <button className="btn btn-icon" onClick={() => setShowPartModal(false)}><X size={20} /></button>
             </div>
-            <div className="modal-body" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+            <div className="modal-body">
 
               {/* Validation errors */}
               {partFormError && partFormError.length > 0 && (
