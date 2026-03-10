@@ -135,7 +135,7 @@ function EstimatesPage() {
   };
 
   const filteredEstimates = getFilteredEstimates();
-  const activeCount = estimates.filter(e => e.status !== 'archived').length;
+  const activeCount = estimates.filter(e => e.status !== 'archived' && e.status !== 'accepted').length;
 
   if (loading) {
     return <div className="loading"><div className="spinner"></div></div>;
@@ -161,10 +161,10 @@ function EstimatesPage() {
 
       {/* Tabs */}
       <div className="tabs">
-        <button className={`tab ${!showArchived ? 'active' : ''}`} onClick={() => setShowArchived(false)}>
+        <button className={`tab ${!showArchived ? 'active' : ''}`} onClick={() => { setShowArchived(false); setStatusFilter('all'); }}>
           Active
         </button>
-        <button className={`tab ${showArchived ? 'active' : ''}`} onClick={() => setShowArchived(true)}>
+        <button className={`tab ${showArchived ? 'active' : ''}`} onClick={() => { setShowArchived(true); setStatusFilter('all'); }}>
           <Archive size={14} style={{ marginRight: 4 }} />
           Archived
         </button>
@@ -184,13 +184,26 @@ function EstimatesPage() {
           </div>
           {!showArchived && (
             <div className="tabs" style={{ marginBottom: 0, borderBottom: 'none', paddingBottom: 0 }}>
-              {['all', 'draft', 'sent', 'accepted', 'declined'].map(status => (
+              {['all', 'draft', 'sent', 'declined'].map(status => (
                 <button
                   key={status}
                   className={`tab ${statusFilter === status ? 'active' : ''}`}
                   onClick={() => setStatusFilter(status)}
                 >
                   {status.charAt(0).toUpperCase() + status.slice(1)}
+                </button>
+              ))}
+            </div>
+          )}
+          {showArchived && (
+            <div className="tabs" style={{ marginBottom: 0, borderBottom: 'none', paddingBottom: 0 }}>
+              {['all', 'accepted', 'archived'].map(status => (
+                <button
+                  key={status}
+                  className={`tab ${statusFilter === status ? 'active' : ''}`}
+                  onClick={() => setStatusFilter(status)}
+                >
+                  {status === 'accepted' ? 'Converted to WO' : status.charAt(0).toUpperCase() + status.slice(1)}
                 </button>
               ))}
             </div>
@@ -203,7 +216,7 @@ function EstimatesPage() {
           <Archive size={20} />
           <div>
             <strong>Archived Estimates</strong>
-            <div style={{ fontSize: '0.8rem' }}>Estimates older than 1 month are automatically archived. Archived estimates are kept for 2 years.</div>
+            <div style={{ fontSize: '0.8rem' }}>Converted estimates and estimates older than 1 month appear here. Archived estimates are kept for 2 years.</div>
           </div>
         </div>
       )}

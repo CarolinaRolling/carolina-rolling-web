@@ -26,7 +26,8 @@ import {
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
-  getWorkOrderPrintPackage, updateDRNumber, recordPickup
+  getWorkOrderPrintPackage, updateDRNumber, recordPickup,
+  exportWorkOrderIIF
 } from '../services/api';
 
 const PART_TYPES = {
@@ -1808,6 +1809,28 @@ function WorkOrderDetailsPage() {
                 <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Pickup / Loading</div>
                 <button onClick={printPickupChecklist} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
                   ☑️ Pickup Checklist<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Checkboxes for each part — for loading crew</span>
+                </button>
+                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
+                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>QuickBooks</div>
+                <button onClick={async () => {
+                  try {
+                    setShowPrintMenu(false);
+                    const response = await exportWorkOrderIIF(order.id);
+                    const blob = new Blob([response.data], { type: 'text/plain' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `invoice-${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber}-${(order.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.iif`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                    showMessage('QuickBooks IIF file downloaded');
+                  } catch (err) {
+                    setError(err.response?.data?.error?.message || 'Failed to export IIF');
+                  }
+                }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
+                  📗 Export Invoice (.iif)<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Import into QuickBooks Desktop via File → Utilities → Import</span>
                 </button>
                 <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
                 <button onClick={() => { setShowPrintMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', color: '#666', fontSize: '0.9rem' }}>Cancel</button>

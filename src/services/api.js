@@ -328,3 +328,10 @@ export const createApiKey = (data) => api.post('/auth/api-keys', data);
 export const revokeApiKey = (id) => api.delete(`/auth/api-keys/${id}`);
 
 export default api;
+
+
+// QuickBooks IIF Export
+export const exportWorkOrderIIF = (id) => api.get(`/quickbooks/export/${id}`, { responseType: 'blob' });
+export const exportBatchIIF = (workOrderIds) => api.post('/quickbooks/export-batch', { workOrderIds }, { responseType: 'blob' });
+export const previewIIF = (id) => api.get(`/quickbooks/preview/${id}`);
+export const exportCustomersIIF = () => api.post('/quickbooks/export-customers', {}, { responseType: 'blob' });
