@@ -332,6 +332,7 @@ export const downloadResaleReport = () => api.get('/verify-permits/report-pdf', 
 
 // API Key Management
 export const getApiKeys = () => api.get('/auth/api-keys');
+export const getApiKeySetupQR = (id) => api.get(`/auth/api-keys/${id}/setup-qr`);
 export const createApiKey = (data) => api.post('/auth/api-keys', data);
 export const updateApiKey = (id, data) => api.put(`/auth/api-keys/${id}`, data);
 export const revokeApiKey = (id) => api.delete(`/auth/api-keys/${id}`);

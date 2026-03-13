@@ -5,7 +5,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, createApiKey, updateApiKey, revokeApiKey, setup2FA, verify2FA, disable2FA, get2FAStatus } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, setup2FA, verify2FA, disable2FA, get2FAStatus } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -516,6 +516,49 @@ function AdminPage({ section = 'users-logs' }) {
       loadApiKeys();
     } catch (err) {
       setError('Failed to revoke API key');
+    }
+  };
+
+  const handleShowSetupQR = async (keyId, keyName) => {
+    try {
+      const response = await getApiKeySetupQR(keyId);
+      const { qrPayload, deviceName } = response.data.data;
+      
+      const w = window.open('', '_blank', 'width=420,height=520');
+      w.document.write(`<!DOCTYPE html><html><head><title>Setup QR - ${deviceName}</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 24px; margin: 0; background: #f5f5f5; }
+          .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); max-width: 360px; margin: 0 auto; }
+          h2 { color: #1976d2; margin: 0 0 4px; font-size: 18px; }
+          .device { color: #333; font-size: 14px; margin-bottom: 16px; }
+          #qrcode { display: flex; justify-content: center; margin: 16px 0; }
+          .instructions { font-size: 12px; color: #666; line-height: 1.6; text-align: left; background: #f0f7ff; padding: 12px; border-radius: 8px; margin-top: 16px; }
+          .instructions strong { color: #1565c0; }
+        </style></head><body>
+        <div class="card">
+          <h2>📱 Tablet Setup</h2>
+          <div class="device">${deviceName}</div>
+          <div id="qrcode"></div>
+          <div class="instructions">
+            <strong>How to use:</strong><br/>
+            1. Open the Scanner on the tablet<br/>
+            2. Point camera at this QR code<br/>
+            3. Tap "Restart App" when prompted<br/>
+            4. Tablet is configured!
+          </div>
+        </div>
+        <script>
+          new QRCode(document.getElementById("qrcode"), {
+            text: ${JSON.stringify(qrPayload)},
+            width: 240, height: 240,
+            correctLevel: QRCode.CorrectLevel.L
+          });
+        <\/script>
+      </body></html>`);
+      w.document.close();
+    } catch (err) {
+      setError('Failed to generate setup QR');
     }
   };
 
@@ -1805,6 +1848,9 @@ function AdminPage({ section = 'users-logs' }) {
               }}>
                 Copy to Clipboard
               </button>
+              <button className="btn" style={{ marginLeft: 8, background: '#1976d2', color: 'white' }} onClick={() => handleShowSetupQR(createdApiKey.id, createdApiKey.name)}>
+                📱 Generate Setup QR
+              </button>
             </div>
           )}
 
@@ -1871,6 +1917,10 @@ function AdminPage({ section = 'users-logs' }) {
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: 6 }}>
+                          {key.isActive && (
+                            <button style={{ padding: '4px 10px', fontSize: '0.8rem', background: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                              onClick={() => handleShowSetupQR(key.id, key.name)}>📱 Setup QR</button>
+                          )}
                           {key.isActive ? (
                             <button className="btn btn-danger" style={{ padding: '4px 12px', fontSize: '0.8rem' }}
                               onClick={() => handleRevokeApiKey(key.id, key.name)}>Revoke</button>
