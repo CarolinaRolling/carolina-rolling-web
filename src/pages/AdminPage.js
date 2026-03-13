@@ -5,7 +5,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -569,12 +569,12 @@ function AdminPage({ section = 'users-logs' }) {
       const response = await getApiKeySetupQR(keyId);
       const { qrPayload, deviceName } = response.data.data;
       
-      const w = window.open('', '_blank', 'width=480,height=580');
+      const w = window.open('', '_blank', 'width=520,height=640');
       w.document.write(`<!DOCTYPE html><html><head><title>Setup QR - ${deviceName}</title>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
         <style>
           body { font-family: Arial, sans-serif; text-align: center; padding: 24px; margin: 0; background: #f5f5f5; }
-          .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); max-width: 360px; margin: 0 auto; }
+          .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); max-width: 460px; margin: 0 auto; }
           h2 { color: #1976d2; margin: 0 0 4px; font-size: 18px; }
           .device { color: #333; font-size: 14px; margin-bottom: 16px; }
           #qrcode { display: flex; justify-content: center; margin: 16px 0; }
@@ -596,8 +596,8 @@ function AdminPage({ section = 'users-logs' }) {
         <script>
           new QRCode(document.getElementById("qrcode"), {
             text: ${JSON.stringify(qrPayload)},
-            width: 300, height: 300,
-            correctLevel: QRCode.CorrectLevel.M
+            width: 380, height: 380,
+            correctLevel: QRCode.CorrectLevel.L
           });
         <\/script>
       </body></html>`);
@@ -2016,6 +2016,15 @@ function AdminPage({ section = 'users-logs' }) {
                                   loadApiKeys();
                                 } catch { setError('Failed to reactivate key'); }
                               }}>Reactivate</button>
+                            <button style={{ padding: '4px 12px', fontSize: '0.8rem', background: '#ffebee', color: '#c62828', border: '1px solid #ef9a9a', borderRadius: 4, cursor: 'pointer' }}
+                              onClick={async () => {
+                                if (!window.confirm(`Permanently delete API key "${key.name}"? This cannot be undone.`)) return;
+                                try {
+                                  await deleteApiKeyPermanent(key.id);
+                                  setSuccess(`API key "${key.name}" deleted`);
+                                  loadApiKeys();
+                                } catch { setError('Failed to delete key'); }
+                              }}>🗑️ Delete</button>
                           )}
                         </div>
                       </td>
