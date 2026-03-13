@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Upload, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
+import HeatNumberInput from './HeatNumberInput';
 
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
@@ -543,7 +544,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
         {secHead('🏷️', 'Tracking', '#616161')}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div className="form-group"><label className="form-label">Client Part Number</label><input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={function(e) { setPartData(Object.assign({}, partData, { clientPartNumber: e.target.value })); }} placeholder="Optional" /></div>
-          <div className="form-group"><label className="form-label">Heat Number</label><input type="text" className="form-input" value={partData.heatNumber || ''} onChange={function(e) { setPartData(Object.assign({}, partData, { heatNumber: e.target.value })); }} placeholder="Optional" /></div>
+          <HeatNumberInput partData={partData} setPartData={setPartData} />
         </div>
       </div>
     </>

@@ -100,6 +100,8 @@ function getMaterialCategory(grade) {
 }
 
 // ── COMPONENT ──────────────────────────────────────────────────────────────────
+import HeatNumberInput from './HeatNumberInput';
+
 export default function PipeRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const dynamicPipeSizes = useSectionSizes('pipe', DEFAULT_ALL_PIPE_SIZES);
   const ALL_SIZES = dynamicPipeSizes;
@@ -1227,10 +1229,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
             <label className="form-label">Client Part Number</label>
             <input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" />
           </div>
-          <div className="form-group">
-            <label className="form-label">Heat Number</label>
-            <input type="text" className="form-input" value={partData.heatNumber || ''} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} placeholder="Optional" />
-          </div>
+          <HeatNumberInput partData={partData} setPartData={setPartData} />
         </div>
       </div>
     </>

@@ -24,6 +24,7 @@ import ConeRollForm from '../components/ConeRollForm';
 import TeeBarRollForm from '../components/TeeBarRollForm';
 import PressBrakeForm from '../components/PressBrakeForm';
 import RushServiceForm from '../components/RushServiceForm';
+import HeatNumberInput from '../components/HeatNumberInput';
 
 const PART_TYPES = {
   plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator' },
@@ -2397,9 +2398,7 @@ function EstimateDetailsPage() {
                     onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Heat Number</label>
-                  <input type="text" className="form-input" value={partData.heatNumber || ''}
-                    onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} />
+                  <HeatNumberInput partData={partData} setPartData={setPartData} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Cut File Reference</label>

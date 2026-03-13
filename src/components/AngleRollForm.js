@@ -45,6 +45,8 @@ function calculateRise(radiusInches, chordInches) {
   return rise;
 }
 
+import HeatNumberInput from './HeatNumberInput';
+
 export default function AngleRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const dynamicAngleSizes = useSectionSizes('angle', DEFAULT_ANGLE_SIZES);
   const ANGLE_SIZE_OPTIONS = [...dynamicAngleSizes, 'Custom'];
@@ -878,10 +880,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
             <label className="form-label">Client Part Number</label>
             <input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" />
           </div>
-          <div className="form-group">
-            <label className="form-label">Heat Number</label>
-            <input type="text" className="form-input" value={partData.heatNumber || ''} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} placeholder="Optional" />
-          </div>
+          <HeatNumberInput partData={partData} setPartData={setPartData} />
         </div>
       </div>
     </>

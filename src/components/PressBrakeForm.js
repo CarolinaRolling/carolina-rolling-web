@@ -10,6 +10,8 @@ const THICKNESS_OPTIONS = [
 
 const DEFAULT_GRADE_OPTIONS = ['A36', 'A572 Gr 50', '304 S/S', '316 S/S', 'AR400', 'Custom'];
 
+import HeatNumberInput from './HeatNumberInput';
+
 export default function PressBrakeForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const [customThickness, setCustomThickness] = useState('');
   const [customGrade, setCustomGrade] = useState('');
@@ -263,9 +265,7 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
           <div className="form-group"><label className="form-label">Client Part Number</label>
             <input type="text" className="form-input" value={partData.clientPartNumber || ''}
               onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" /></div>
-          <div className="form-group"><label className="form-label">Heat Number</label>
-            <input type="text" className="form-input" value={partData.heatNumber || ''}
-              onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} placeholder="Optional" /></div>
+          <HeatNumberInput partData={partData} setPartData={setPartData} />
         </div>
       </div>
     </>

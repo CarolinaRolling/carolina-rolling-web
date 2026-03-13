@@ -46,6 +46,8 @@ function calculateRise(radiusInches, chordInches) {
   return radiusInches - Math.sqrt(radiusInches * radiusInches - halfChord * halfChord);
 }
 
+import HeatNumberInput from './HeatNumberInput';
+
 export default function BeamRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const dynamicBeamSizes = useSectionSizes('beam', DEFAULT_BEAM_SIZES);
   const BEAM_SIZES = [...dynamicBeamSizes, 'Custom'];
@@ -516,7 +518,7 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
         </div>
       </div>
 
-      <div style={sectionStyle}>{sectionTitle('🏷️', 'Tracking', '#616161')}<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div className="form-group"><label className="form-label">Client Part Number</label><input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" /></div><div className="form-group"><label className="form-label">Heat Number</label><input type="text" className="form-input" value={partData.heatNumber || ''} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} placeholder="Optional" /></div></div></div>
+      <div style={sectionStyle}>{sectionTitle('🏷️', 'Tracking', '#616161')}<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div className="form-group"><label className="form-label">Client Part Number</label><input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" /></div><HeatNumberInput partData={partData} setPartData={setPartData} /></div></div>
     </>
   );
 }

@@ -18,6 +18,7 @@ import PressBrakeForm from '../components/PressBrakeForm';
 import FlatStockForm from '../components/FlatStockForm';
 import FabServiceForm from '../components/FabServiceForm';
 import ShopRateForm from '../components/ShopRateForm';
+import HeatNumberInput from '../components/HeatNumberInput';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
@@ -688,6 +689,13 @@ function WorkOrderDetailsPage() {
       if (!dataToSend.materialSource || !['we_order', 'customer_supplied', 'in_stock'].includes(dataToSend.materialSource)) {
         dataToSend.materialSource = 'customer_supplied';
       }
+      // Clean heatBreakdown — convert qty strings to ints, remove empty rows
+      if (dataToSend.heatBreakdown) {
+        const cleaned = dataToSend.heatBreakdown
+          .filter(r => r.heat && r.heat.trim())
+          .map(r => ({ heat: r.heat.trim(), qty: parseInt(r.qty) || 0 }));
+        dataToSend.heatBreakdown = cleaned.length > 0 ? cleaned : null;
+      }
       
       // Recalculate partTotal at save time for ea-priced parts
       const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
@@ -1101,7 +1109,9 @@ function WorkOrderDetailsPage() {
           </div>
           <div style="font-size:0.95rem;font-weight:700;margin:4px 0;color:#333">${materialLine}</div>
           ${part.clientPartNumber ? `<div style="margin-bottom:2px;font-size:0.85rem"><strong>Client Part#:</strong> ${part.clientPartNumber}</div>` : ''}
-          ${part.heatNumber ? `<div style="margin-bottom:2px;font-size:0.85rem"><strong>Heat#:</strong> ${part.heatNumber}</div>` : ''}
+          ${part.heatBreakdown && part.heatBreakdown.length > 0 
+            ? `<div style="margin-bottom:2px;font-size:0.85rem"><strong>Heat#:</strong> ${part.heatBreakdown.map(h => `<span style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:3px;padding:0 6px;margin-right:4px;font-weight:600;color:#795548">${h.heat}: ${h.qty}pc</span>`).join('')}</div>` 
+            : part.heatNumber ? `<div style="margin-bottom:2px;font-size:0.85rem"><strong>Heat#:</strong> ${part.heatNumber}</div>` : ''}
           ${part.cutFileReference ? `<div style="margin-bottom:2px;font-size:0.85rem;color:#1565c0"><strong>📐 Cut File:</strong> ${part.cutFileReference}</div>` : ''}
           ${rollingBlock}
           ${orientationBlock}
@@ -1488,7 +1498,9 @@ function WorkOrderDetailsPage() {
       <body><div class="lg">${part.clientPartNumber || `Part ${part.partNumber}`}</div>
       <div class="sm">${order.drNumber ? `DR-${order.drNumber}` : order.orderNumber}</div>
       ${clientPO ? `<div class="sm">PO: ${clientPO}</div>` : ''}
-      ${part.heatNumber ? `<div class="sm">Heat: ${part.heatNumber}</div>` : ''}
+      ${part.heatBreakdown && part.heatBreakdown.length > 0 
+        ? `<div class="sm">Heat: ${part.heatBreakdown.map(h => `<span style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:3px;padding:0 4px;font-weight:600;color:#795548">${h.heat}: ${h.qty}pc</span>`).join(' ')}</div>` 
+        : part.heatNumber ? `<div class="sm">Heat: ${part.heatNumber}</div>` : ''}
       <div class="sm">Qty: ${part.quantity}</div></body></html>`);
     printWindow.document.close();
     printWindow.print();
@@ -2562,7 +2574,17 @@ function WorkOrderDetailsPage() {
                       )}
                     </div>
                     {part.clientPartNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Client Part#: {part.clientPartNumber}</div>}
-                    {part.heatNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Heat#: {part.heatNumber}</div>}
+                    {part.heatBreakdown && part.heatBreakdown.length > 0 ? (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                        {part.heatBreakdown.map((h, i) => (
+                          <span key={i} style={{ background: '#fff3e0', border: '1px solid #ffe0b2', borderRadius: 4, padding: '1px 8px', fontSize: '0.8rem', fontWeight: 600, color: '#795548' }}>
+                            {h.heat}: {h.qty}pc
+                          </span>
+                        ))}
+                      </div>
+                    ) : part.heatNumber ? (
+                      <div style={{ color: '#666', fontSize: '0.875rem' }}>Heat#: {part.heatNumber}</div>
+                    ) : null}
                     {part.cutFileReference && <div style={{ color: '#1565c0', fontSize: '0.875rem' }}>📐 Cut File: {part.cutFileReference}</div>}
                   </div>
                   <div className="actions-row">
@@ -3086,7 +3108,7 @@ function WorkOrderDetailsPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Heat Number</label>
-                  <input type="text" className="form-input" value={partData.heatNumber || ''} onChange={(e) => setPartData({ ...partData, heatNumber: e.target.value })} />
+                  <HeatNumberInput partData={partData} setPartData={setPartData} />
                 </div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label className="form-label">Cut File Reference <span style={{ fontWeight: 400, color: '#999' }}>(DXF/STEP filename for vendor)</span></label>
