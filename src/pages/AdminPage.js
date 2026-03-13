@@ -2008,6 +2008,7 @@ function AdminPage({ section = 'users-logs' }) {
                             <button className="btn btn-danger" style={{ padding: '4px 12px', fontSize: '0.8rem' }}
                               onClick={() => handleRevokeApiKey(key.id, key.name)}>Revoke</button>
                           ) : (
+                            <>
                             <button className="btn btn-success" style={{ padding: '4px 12px', fontSize: '0.8rem' }}
                               onClick={async () => {
                                 try {
@@ -2025,6 +2026,7 @@ function AdminPage({ section = 'users-logs' }) {
                                   loadApiKeys();
                                 } catch { setError('Failed to delete key'); }
                               }}>🗑️ Delete</button>
+                            </>
                           )}
                         </div>
                       </td>
