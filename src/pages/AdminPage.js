@@ -107,6 +107,8 @@ function AdminPage({ section = 'users-logs' }) {
   const [newApiKey, setNewApiKey] = useState({ name: '', clientName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '' });
   const [createdApiKey, setCreatedApiKey] = useState(null); // holds key after creation (only shown once)
   const [apiKeysLoading, setApiKeysLoading] = useState(false);
+  const [editingApiKey, setEditingApiKey] = useState(null);
+  const [editApiKeyData, setEditApiKeyData] = useState({});
   const [approvedIPs, setApprovedIPs] = useState([]);
   const [newIP, setNewIP] = useState('');
 
@@ -509,6 +511,20 @@ function AdminPage({ section = 'users-logs' }) {
       setSuccess(`Removed ${ip} from approved IPs`);
     } catch (err) {
       setError('Failed to update approved IPs');
+    }
+  };
+
+  const handleSaveEditApiKey = async () => {
+    try {
+      setSaving(true);
+      await updateApiKey(editingApiKey.id, editApiKeyData);
+      setSuccess(`API key "${editApiKeyData.name}" updated`);
+      setEditingApiKey(null);
+      loadApiKeys();
+    } catch (err) {
+      setError('Failed to update API key');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1981,7 +1997,9 @@ function AdminPage({ section = 'users-logs' }) {
                         {key.lastIP && <div style={{ fontSize: '0.7rem', color: '#999' }}>{key.lastIP}</div>}
                       </td>
                       <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button style={{ padding: '4px 10px', fontSize: '0.8rem', background: '#f5f5f5', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
+                            onClick={() => { setEditingApiKey(key); setEditApiKeyData({ name: key.name || '', deviceName: key.deviceName || '', operatorName: key.operatorName || '', clientName: key.clientName || '', permissions: key.permissions || 'read', allowedIPs: key.allowedIPs || '' }); }}>✏️ Edit</button>
                           {key.isActive && (
                             <button style={{ padding: '4px 10px', fontSize: '0.8rem', background: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                               onClick={() => handleShowSetupQR(key.id, key.name)}>📱 Setup QR</button>
@@ -2070,6 +2088,64 @@ function AdminPage({ section = 'users-logs' }) {
               <button className="btn btn-outline" onClick={() => setShowNewApiKeyModal(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={() => { handleCreateApiKey(); setShowNewApiKeyModal(false); }} disabled={saving || !newApiKey.name.trim()}>
                 {saving ? 'Creating...' : 'Create Key'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit API Key Modal */}
+      {editingApiKey && (
+        <div className="modal-overlay" onClick={() => setEditingApiKey(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Edit API Key</h3>
+              <button className="modal-close" onClick={() => setEditingApiKey(null)}>&times;</button>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Name *</label>
+              <input type="text" className="form-input" value={editApiKeyData.name}
+                onChange={(e) => setEditApiKeyData({ ...editApiKeyData, name: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Device Name</label>
+              <input type="text" className="form-input" placeholder="Leave empty for client portal keys"
+                value={editApiKeyData.deviceName}
+                onChange={(e) => setEditApiKeyData({ ...editApiKeyData, deviceName: e.target.value })} />
+              <small style={{ color: '#e65100' }}>Keys with a device name are treated as tablet keys and checked against the global approved IPs. Clear this to exempt from IP checks.</small>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Operator Name</label>
+              <input type="text" className="form-input" placeholder="e.g. Jason, Miguel"
+                value={editApiKeyData.operatorName}
+                onChange={(e) => setEditApiKeyData({ ...editApiKeyData, operatorName: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Allowed IPs (per-key override)</label>
+              <input type="text" className="form-input" placeholder="Leave blank to use global list only"
+                value={editApiKeyData.allowedIPs}
+                onChange={(e) => setEditApiKeyData({ ...editApiKeyData, allowedIPs: e.target.value })} />
+              <small style={{ color: '#666' }}>Optional — comma-separated. Added on top of the global approved IPs.</small>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Client Scope</label>
+              <input type="text" className="form-input" placeholder="Leave empty for all clients"
+                value={editApiKeyData.clientName}
+                onChange={(e) => setEditApiKeyData({ ...editApiKeyData, clientName: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Permissions</label>
+              <select className="form-select" value={editApiKeyData.permissions}
+                onChange={(e) => setEditApiKeyData({ ...editApiKeyData, permissions: e.target.value })}>
+                <option value="read">Read Only</option>
+                <option value="read_write">Read + Write</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button className="btn btn-outline" onClick={() => setEditingApiKey(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSaveEditApiKey} disabled={saving || !editApiKeyData.name?.trim()}>
+                {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
