@@ -3,6 +3,7 @@ import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import { useSectionSizes } from '../hooks/useSectionSizes';
+import HeatNumberInput from './HeatNumberInput';
 
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
@@ -44,8 +45,6 @@ function calculateRise(radiusInches, chordInches) {
   const rise = radiusInches - Math.sqrt(radiusInches * radiusInches - halfChord * halfChord);
   return rise;
 }
-
-import HeatNumberInput from './HeatNumberInput';
 
 export default function AngleRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const dynamicAngleSizes = useSectionSizes('angle', DEFAULT_ANGLE_SIZES);

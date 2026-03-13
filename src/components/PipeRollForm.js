@@ -3,6 +3,7 @@ import RollToOverride from './RollToOverride';
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import { useSectionSizes } from '../hooks/useSectionSizes';
+import HeatNumberInput from './HeatNumberInput';
 
 // Sagitta formula: h = R - sqrt(R² - (c/2)²)
 function calculateRise(radiusInches, chordInches) {
@@ -100,8 +101,6 @@ function getMaterialCategory(grade) {
 }
 
 // ── COMPONENT ──────────────────────────────────────────────────────────────────
-import HeatNumberInput from './HeatNumberInput';
-
 export default function PipeRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const dynamicPipeSizes = useSectionSizes('pipe', DEFAULT_ALL_PIPE_SIZES);
   const ALL_SIZES = dynamicPipeSizes;

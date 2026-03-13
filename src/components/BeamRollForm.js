@@ -3,6 +3,7 @@ import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import { useSectionSizes } from '../hooks/useSectionSizes';
+import HeatNumberInput from './HeatNumberInput';
 
 const DEFAULT_BEAM_SIZES = [
   // W - Wide Flange (common)
@@ -45,8 +46,6 @@ function calculateRise(radiusInches, chordInches) {
   if (halfChord >= radiusInches) return null;
   return radiusInches - Math.sqrt(radiusInches * radiusInches - halfChord * halfChord);
 }
-
-import HeatNumberInput from './HeatNumberInput';
 
 export default function BeamRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const dynamicBeamSizes = useSectionSizes('beam', DEFAULT_BEAM_SIZES);

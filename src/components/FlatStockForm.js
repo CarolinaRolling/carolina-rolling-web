@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
+import HeatNumberInput from './HeatNumberInput';
 
 // ── SIZE DATA ──────────────────────────────────────────────────────────────────
 
@@ -81,8 +82,6 @@ const STOCK_TYPES = [
   { key: 'channel', label: 'Channel', icon: '🔩' },
   { key: 'beam', label: 'I-Beam', icon: '🏗️' },
 ];
-
-import HeatNumberInput from './HeatNumberInput';
 
 export default function FlatStockForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const [customGrade, setCustomGrade] = useState('');

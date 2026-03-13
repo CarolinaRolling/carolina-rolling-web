@@ -3,6 +3,7 @@ import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
+import HeatNumberInput from './HeatNumberInput';
 
 const FLAT_BAR_SIZES = [
   '1/2x1/4', '3/4x1/4', '3/4x3/8',
@@ -80,8 +81,6 @@ function parseSquareBarSize(sizeStr) {
   if (side > 0) return { width: side, thickness: side };
   return null;
 }
-
-import HeatNumberInput from './HeatNumberInput';
 
 export default function FlatBarRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const [barShape, setBarShape] = useState(partData._barShape || 'flat');

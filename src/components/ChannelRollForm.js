@@ -4,6 +4,7 @@ import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import { useSectionSizes } from '../hooks/useSectionSizes';
+import HeatNumberInput from './HeatNumberInput';
 
 const DEFAULT_CHANNEL_SIZES = [
   'C3x4.1', 'C3x5', 'C3x6',
@@ -39,8 +40,6 @@ function calculateRise(radiusInches, chordInches) {
   if (halfChord >= radiusInches) return null;
   return radiusInches - Math.sqrt(radiusInches * radiusInches - halfChord * halfChord);
 }
-
-import HeatNumberInput from './HeatNumberInput';
 
 export default function ChannelRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const dynamicChannelSizes = useSectionSizes('channel', DEFAULT_CHANNEL_SIZES);

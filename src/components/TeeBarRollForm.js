@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
+import HeatNumberInput from './HeatNumberInput';
 
 const TEE_SIZES = [
   'WT2x6.5', 'WT2.5x8', 'WT3x4.5', 'WT3x6', 'WT3x7.5', 'WT3x8', 'WT3x10',
@@ -53,8 +54,6 @@ function calculateRise(radiusInches, chordInches) {
   if (halfChord >= radiusInches) return null;
   return radiusInches - Math.sqrt(radiusInches * radiusInches - halfChord * halfChord);
 }
-
-import HeatNumberInput from './HeatNumberInput';
 
 export default function TeeBarRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const [customGrade, setCustomGrade] = useState('');

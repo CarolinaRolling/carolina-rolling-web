@@ -4,6 +4,7 @@ import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import { useSectionSizes } from '../hooks/useSectionSizes';
+import HeatNumberInput from './HeatNumberInput';
 
 const THICKNESS_OPTIONS = [
   '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
@@ -47,8 +48,6 @@ function calculateRise(radiusInches, chordInches) {
   if (halfChord >= radiusInches) return null;
   return radiusInches - Math.sqrt(radiusInches * radiusInches - halfChord * halfChord);
 }
-
-import HeatNumberInput from './HeatNumberInput';
 
 export default function SquareTubeRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const dynamicSqRect = useSectionSizes('sq_rect_tube', DEFAULT_SQ_RECT);
