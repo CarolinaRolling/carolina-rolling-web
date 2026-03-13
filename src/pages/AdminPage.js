@@ -1888,7 +1888,7 @@ function AdminPage({ section = 'users-logs' }) {
               🌐 Approved IP Addresses
             </h3>
             <p style={{ color: '#666', marginBottom: 12, fontSize: '0.85rem' }}>
-              These IPs are allowed for <strong>all</strong> tablet API keys. Add your shop's public IP here instead of setting it on each key individually.
+              These IPs are allowed for <strong>tablet API keys</strong> (keys with a Device Name set). Client portal keys without a device name are exempt from IP restrictions so customers can connect from anywhere.
             </p>
             
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
