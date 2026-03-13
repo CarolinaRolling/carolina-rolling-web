@@ -130,6 +130,7 @@ function parseThickness(t) {
 export default function FabServiceForm({ partData, setPartData, estimateParts = [], showMessage, setError }) {
   const [weldRates, setWeldRates] = useState({});
   const prevSyncRef = useRef('');
+  const isEditingPriceRef = useRef(false);
 
   useEffect(() => {
     const loadRates = async () => {
@@ -233,20 +234,26 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
   }, [autoRate, linkedPartIdStr]);
 
   // Sync computed values — use ref to prevent infinite loops
+  // IMPORTANT: Do NOT sync laborTotal back for manual pricing — it overwrites user input
+  // Also skip sync while user is actively editing pricing to prevent value jumping
   useEffect(() => {
+    if (isEditingPriceRef.current) return;
     const syncKey = lineTotal.toFixed(2) + '|' + serviceDescription + '|' + (serviceConfig ? serviceConfig.label : '');
     if (syncKey !== prevSyncRef.current) {
       prevSyncRef.current = syncKey;
-      setPartData(prev => ({
-        ...prev,
+      const updates = {
         partTotal: lineTotal.toFixed(2),
-        laborTotal: laborEach.toFixed(2),
         materialDescription: serviceDescription,
         _materialDescription: serviceDescription,
         _rollingDescription: serviceConfig ? serviceConfig.label : '',
-      }));
+      };
+      // Only sync laborTotal for weld calc (auto-computed), not manual pricing
+      if (weldCalc) {
+        updates.laborTotal = laborEach.toFixed(2);
+      }
+      setPartData(prev => ({ ...prev, ...updates }));
     }
-  }, [lineTotal, laborEach, serviceDescription, serviceConfig]);
+  }, [lineTotal, laborEach, serviceDescription, serviceConfig, weldCalc]);
 
   const update = (fields) => {
     setPartData(prev => ({ ...prev, ...fields }));
@@ -428,8 +435,10 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
             <div className="form-group">
               <label className="form-label">Weld Price Per Foot</label>
               <div style={{ position: 'relative' }}>
-                <input type="number" step="0.01" className="form-input" value={partData._weldPricePerFoot || ''}
+                <input type="number" step="any" className="form-input" value={partData._weldPricePerFoot || ''}
                   onChange={(e) => update({ _weldPricePerFoot: e.target.value, _weldPriceManualOverride: true })}
+                  onFocus={(e) => { isEditingPriceRef.current = true; }}
+                  onBlur={() => { isEditingPriceRef.current = false; }}
                   placeholder="0.00" style={{ paddingLeft: 20 }} />
                 <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
               </div>
@@ -488,8 +497,11 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
             <div className="form-group">
               <label className="form-label">Labor Cost (per piece)</label>
               <div style={{ position: 'relative' }}>
-                <input type="number" step="0.01" className="form-input" value={partData.laborTotal || ''}
-                  onChange={(e) => update({ laborTotal: e.target.value })} placeholder="0.00" style={{ paddingLeft: 20 }} />
+                <input type="number" step="any" className="form-input" value={partData.laborTotal || ''}
+                  onChange={(e) => update({ laborTotal: e.target.value })} 
+                  onFocus={(e) => { isEditingPriceRef.current = true; e.target.select(); }}
+                  onBlur={() => { isEditingPriceRef.current = false; }} 
+                  placeholder="0.00" style={{ paddingLeft: 20 }} />
                 <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
               </div>
             </div>

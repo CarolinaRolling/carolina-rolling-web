@@ -5,7 +5,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, createApiKey, revokeApiKey } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, createApiKey, updateApiKey, revokeApiKey, setup2FA, verify2FA, disable2FA, get2FAStatus } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -26,10 +26,17 @@ export const logNasError = (error, details = {}) => {
   console.error('NAS Error logged:', entry);
 };
 
-function AdminPage() {
+function AdminPage({ section = 'users-logs' }) {
   const navigate = useNavigate();
   const { user: currentUser, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState('tax');
+  
+  // Tab groups by section
+  const SECTION_TABS = {
+    'users-logs': ['users', 'logs', 'schedule', 'apikeys', 'system'],
+    'shop-config': ['tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates']
+  };
+  const allowedTabs = SECTION_TABS[section] || SECTION_TABS['users-logs'];
+  const [activeTab, setActiveTab] = useState(allowedTabs[0]);
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
   const [logsTotal, setLogsTotal] = useState(0);
@@ -97,9 +104,20 @@ function AdminPage() {
   // API Keys
   const [apiKeys, setApiKeys] = useState([]);
   const [showNewApiKeyModal, setShowNewApiKeyModal] = useState(false);
-  const [newApiKey, setNewApiKey] = useState({ name: '', clientName: '', permissions: 'read' });
+  const [newApiKey, setNewApiKey] = useState({ name: '', clientName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '' });
   const [createdApiKey, setCreatedApiKey] = useState(null); // holds key after creation (only shown once)
   const [apiKeysLoading, setApiKeysLoading] = useState(false);
+
+  // Two-Factor Auth
+  const [twoFAState, setTwoFAState] = useState({ enabled: false, setupData: null, verifyCode: '', disablePassword: '' });
+
+  // Reset tab when section changes
+  useEffect(() => {
+    const tabs = SECTION_TABS[section] || SECTION_TABS['users-logs'];
+    if (!tabs.includes(activeTab)) {
+      setActiveTab(tabs[0]);
+    }
+  }, [section]);
 
   useEffect(() => {
     if (!isAdmin()) {
@@ -127,9 +145,10 @@ function AdminPage() {
       loadWeldRates();
     } else if (activeTab === 'system') {
       setSystemLogs([...window.nasErrorLog]);
+      get2FAStatus().then(resp => {
+        setTwoFAState(prev => ({ ...prev, enabled: resp.data.data.enabled }));
+      }).catch(() => {});
       setLoading(false);
-    } else if (activeTab === 'permits') {
-      loadBatchStatus();
     } else if (activeTab === 'apikeys') {
       loadApiKeys();
     }
@@ -474,10 +493,13 @@ function AdminPage() {
       const response = await createApiKey({
         name: newApiKey.name.trim(),
         clientName: newApiKey.clientName.trim() || null,
-        permissions: newApiKey.permissions
+        permissions: newApiKey.permissions,
+        allowedIPs: newApiKey.allowedIPs.trim() || null,
+        operatorName: newApiKey.operatorName.trim() || null,
+        deviceName: newApiKey.deviceName.trim() || null
       });
       setCreatedApiKey(response.data.data);
-      setNewApiKey({ name: '', clientName: '', permissions: 'read' });
+      setNewApiKey({ name: '', clientName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '' });
       loadApiKeys();
     } catch (err) {
       setError('Failed to create API key');
@@ -662,147 +684,48 @@ function AdminPage() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Admin Panel</h1>
+        <h1 className="page-title">{section === 'shop-config' ? '🔧 Shop Configuration' : '👥 Users & Logs'}</h1>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      {/* Quick Links */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h3 style={{ marginBottom: 12 }}>Quick Links</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn btn-outline" onClick={() => navigate('/admin/clients-vendors')}>
-            👥 Clients & Vendors
-          </button>
-          <button className="btn btn-outline" onClick={() => navigate('/admin/dr-numbers')}>
-            📋 DR Numbers
-          </button>
-          <button className="btn btn-outline" onClick={() => navigate('/admin/po-numbers')}>
-            🔢 PO Numbers
-          </button>
-          <button className="btn btn-outline" onClick={() => navigate('/admin/email')}>
-            📧 Email Settings
-          </button>
-          <button className="btn btn-outline" onClick={() => navigate('/admin/shipments')}>
-            📦 Shipments
-          </button>
-        </div>
-      </div>
-
-      {/* Tabs */}
+      {/* Tabs based on section */}
       <div className="tabs" style={{ flexWrap: 'wrap', gap: '2px 0' }}>
-        {/* ── SHOP CONFIGURATION ── */}
-        <span style={{ fontSize: '0.65rem', color: '#999', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 10px 4px', fontWeight: 700, userSelect: 'none' }}>Shop Config</span>
-        <button 
-          className={`tab ${activeTab === 'tax' ? 'active' : ''}`}
-          onClick={() => setActiveTab('tax')}
-        >
-          <DollarSign size={16} style={{ marginRight: 6 }} />
-          Tax & Rates
-        </button>
-        <button 
-          className={`tab ${activeTab === 'minimums' ? 'active' : ''}`}
-          onClick={() => setActiveTab('minimums')}
-        >
-          <Shield size={16} style={{ marginRight: 6 }} />
-          Labor Minimums
-        </button>
-        <button 
-          className={`tab ${activeTab === 'rolllimits' ? 'active' : ''}`}
-          onClick={() => setActiveTab('rolllimits')}
-        >
-          🔧 Roll Limits
-        </button>
-        <button 
-          className={`tab ${activeTab === 'mandreldies' ? 'active' : ''}`}
-          onClick={() => setActiveTab('mandreldies')}
-        >
-          ⚙️ Mandrel Dies
-        </button>
-        <button 
-          className={`tab ${activeTab === 'grades' ? 'active' : ''}`}
-          onClick={() => setActiveTab('grades')}
-        >
-          📊 Material Grades
-        </button>
-        <button 
-          className={`tab ${activeTab === 'weldrates' ? 'active' : ''}`}
-          onClick={() => setActiveTab('weldrates')}
-        >
-          🔥 Weld Rates
-        </button>
-
-        {/* ── DIVIDER ── */}
-        <span style={{ borderLeft: '2px solid #ddd', height: 24, margin: '6px 8px', alignSelf: 'center' }} />
-
-        {/* ── COMPLIANCE ── */}
-        <span style={{ fontSize: '0.65rem', color: '#999', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 10px 4px', fontWeight: 700, userSelect: 'none' }}>Compliance</span>
-        <button 
-          className={`tab ${activeTab === 'permits' ? 'active' : ''}`}
-          onClick={() => setActiveTab('permits')}
-        >
-          🔐 Permit Verify
-        </button>
-
-        {/* ── DIVIDER ── */}
-        <span style={{ borderLeft: '2px solid #ddd', height: 24, margin: '6px 8px', alignSelf: 'center' }} />
-
-        {/* ── NOTIFICATIONS ── */}
-        <span style={{ fontSize: '0.65rem', color: '#999', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 10px 4px', fontWeight: 700, userSelect: 'none' }}>Notifications</span>
-        <button 
-          className={`tab ${activeTab === 'schedule' ? 'active' : ''}`}
-          onClick={() => setActiveTab('schedule')}
-        >
-          <Clock size={16} style={{ marginRight: 6 }} />
-          Daily Digest
-        </button>
-
-        {/* ── DIVIDER ── */}
-        <span style={{ borderLeft: '2px solid #ddd', height: 24, margin: '6px 8px', alignSelf: 'center' }} />
-
-        {/* ── USERS & LOGS ── */}
-        <span style={{ fontSize: '0.65rem', color: '#999', textTransform: 'uppercase', letterSpacing: 1, padding: '8px 10px 4px', fontWeight: 700, userSelect: 'none' }}>Users & Logs</span>
-        <button 
-          className={`tab ${activeTab === 'users' ? 'active' : ''}`}
-          onClick={() => setActiveTab('users')}
-        >
-          <Users size={16} style={{ marginRight: 6 }} />
-          Users
-        </button>
-        <button 
-          className={`tab ${activeTab === 'logs' ? 'active' : ''}`}
-          onClick={() => setActiveTab('logs')}
-        >
-          <Activity size={16} style={{ marginRight: 6 }} />
-          Activity Logs
-        </button>
-        <button 
-          className={`tab ${activeTab === 'system' ? 'active' : ''}`}
-          onClick={() => setActiveTab('system')}
-        >
-          <AlertTriangle size={16} style={{ marginRight: 6 }} />
-          System Logs
-          {window.nasErrorLog?.length > 0 && (
-            <span style={{ 
-              marginLeft: 6, 
-              background: '#e53935', 
-              color: 'white', 
-              borderRadius: 10, 
-              padding: '2px 8px',
-              fontSize: '0.75rem'
-            }}>
-              {window.nasErrorLog.length}
-            </span>
-          )}
-        </button>
-        <button 
-          className={`tab ${activeTab === 'apikeys' ? 'active' : ''}`}
-          onClick={() => setActiveTab('apikeys')}
-        >
-          <Key size={16} style={{ marginRight: 6 }} />
-          API Keys
-        </button>
+        {section === 'shop-config' && (<>
+          <button className={`tab ${activeTab === 'tax' ? 'active' : ''}`} onClick={() => setActiveTab('tax')}>
+            <DollarSign size={16} style={{ marginRight: 6 }} />Tax & Rates
+          </button>
+          <button className={`tab ${activeTab === 'minimums' ? 'active' : ''}`} onClick={() => setActiveTab('minimums')}>
+            <Shield size={16} style={{ marginRight: 6 }} />Labor Minimums
+          </button>
+          <button className={`tab ${activeTab === 'rolllimits' ? 'active' : ''}`} onClick={() => setActiveTab('rolllimits')}>🔧 Roll Limits</button>
+          <button className={`tab ${activeTab === 'mandreldies' ? 'active' : ''}`} onClick={() => setActiveTab('mandreldies')}>⚙️ Mandrel Dies</button>
+          <button className={`tab ${activeTab === 'grades' ? 'active' : ''}`} onClick={() => setActiveTab('grades')}>📊 Material Grades</button>
+          <button className={`tab ${activeTab === 'weldrates' ? 'active' : ''}`} onClick={() => setActiveTab('weldrates')}>🔥 Weld Rates</button>
+        </>)}
+        {section === 'users-logs' && (<>
+          <button className={`tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
+            <Users size={16} style={{ marginRight: 6 }} />Users
+          </button>
+          <button className={`tab ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}>
+            <Activity size={16} style={{ marginRight: 6 }} />Activity Logs
+          </button>
+          <button className={`tab ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>
+            <Clock size={16} style={{ marginRight: 6 }} />Daily Digest
+          </button>
+          <button className={`tab ${activeTab === 'apikeys' ? 'active' : ''}`} onClick={() => setActiveTab('apikeys')}>
+            <Key size={16} style={{ marginRight: 6 }} />API Keys
+          </button>
+          <button className={`tab ${activeTab === 'system' ? 'active' : ''}`} onClick={() => setActiveTab('system')}>
+            <AlertTriangle size={16} style={{ marginRight: 6 }} />System & 2FA
+            {window.nasErrorLog?.length > 0 && (
+              <span style={{ marginLeft: 6, background: '#e53935', color: 'white', borderRadius: 10, padding: '2px 8px', fontSize: '0.75rem' }}>
+                {window.nasErrorLog.length}
+              </span>
+            )}
+          </button>
+        </>)}
       </div>
 
       {loading ? (
@@ -1703,6 +1626,83 @@ function AdminPage() {
 
       {activeTab === 'system' && !loading && (
         <div>
+          {/* Two-Factor Authentication */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3 style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Shield size={20} />
+              Two-Factor Authentication (2FA)
+            </h3>
+            {!twoFAState.enabled ? (
+              !twoFAState.setupData ? (
+                <div>
+                  <p style={{ color: '#666', marginBottom: 12 }}>
+                    Add an extra layer of security to your account. When enabled, you'll need to enter a 6-digit code from your authenticator app each time you log in.
+                  </p>
+                  <button className="btn btn-primary" onClick={async () => {
+                    try {
+                      const resp = await setup2FA();
+                      setTwoFAState(prev => ({ ...prev, setupData: resp.data.data }));
+                    } catch (err) { setError('Failed to start 2FA setup'); }
+                  }}>
+                    <Shield size={18} /> Enable 2FA
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p style={{ fontWeight: 600, marginBottom: 12 }}>1. Scan this QR code with your authenticator app:</p>
+                  <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                    <img src={twoFAState.setupData.qrCode} alt="2FA QR Code" style={{ maxWidth: 200 }} />
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 4 }}>Can't scan? Enter this key manually:</p>
+                  <div style={{ background: '#f5f5f5', padding: '8px 12px', borderRadius: 6, fontFamily: 'monospace', fontSize: '0.85rem', marginBottom: 16, wordBreak: 'break-all' }}>
+                    {twoFAState.setupData.secret}
+                  </div>
+                  <p style={{ fontWeight: 600, marginBottom: 8 }}>2. Enter the 6-digit code from the app to verify:</p>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <input type="text" className="form-input" value={twoFAState.verifyCode}
+                      onChange={(e) => setTwoFAState(prev => ({ ...prev, verifyCode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                      placeholder="000000" maxLength={6} inputMode="numeric"
+                      style={{ maxWidth: 160, textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.3em', fontFamily: 'monospace' }} />
+                    <button className="btn btn-success" disabled={twoFAState.verifyCode.length !== 6} onClick={async () => {
+                      try {
+                        await verify2FA(twoFAState.verifyCode);
+                        setTwoFAState({ enabled: true, setupData: null, verifyCode: '' });
+                        setSuccess('Two-factor authentication enabled!');
+                      } catch (err) { setError(err.response?.data?.error?.message || 'Invalid code'); }
+                    }}>Verify & Enable</button>
+                    <button className="btn btn-outline" onClick={() => setTwoFAState(prev => ({ ...prev, setupData: null, verifyCode: '' }))}>Cancel</button>
+                  </div>
+                </div>
+              )
+            ) : (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                  <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '6px 12px', borderRadius: 6, fontWeight: 600, fontSize: '0.9rem' }}>
+                    ✓ 2FA is enabled
+                  </span>
+                </div>
+                <p style={{ color: '#666', marginBottom: 12, fontSize: '0.9rem' }}>
+                  Your account is protected with two-factor authentication. To disable, enter your password below.
+                </p>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <input type="password" className="form-input" value={twoFAState.disablePassword || ''}
+                    onChange={(e) => setTwoFAState(prev => ({ ...prev, disablePassword: e.target.value }))}
+                    placeholder="Enter password to disable" style={{ maxWidth: 250 }} />
+                  <button className="btn btn-danger" disabled={!twoFAState.disablePassword}
+                    onClick={async () => {
+                      if (!window.confirm('Are you sure you want to disable 2FA? Your account will only be protected by your password.')) return;
+                      try {
+                        await disable2FA(twoFAState.disablePassword);
+                        setTwoFAState({ enabled: false, setupData: null, verifyCode: '', disablePassword: '' });
+                        setSuccess('Two-factor authentication disabled.');
+                      } catch (err) { setError(err.response?.data?.error?.message || 'Failed to disable 2FA'); }
+                    }}>Disable 2FA</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* System Logs */}
           <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
             <button className="btn btn-outline" onClick={refreshSystemLogs}>
               <RefreshCw size={18} />
@@ -1828,20 +1828,24 @@ function AdminPage() {
               <table className="data-table" style={{ width: '100%' }}>
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Client Scope</th>
+                    <th>Name / Device</th>
+                    <th>Operator</th>
                     <th>Permissions</th>
                     <th>Status</th>
-                    <th>Last Used</th>
-                    <th>Created</th>
+                    <th>Last Used / IP</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {apiKeys.map(key => (
-                    <tr key={key.id} style={{ opacity: key.isActive ? 1 : 0.5 }}>
-                      <td style={{ fontWeight: 500 }}>{key.name}</td>
-                      <td>{key.clientName || <span style={{ color: '#999' }}>All clients</span>}</td>
+                    <tr key={key.id} style={{ opacity: key.isActive ? 1 : 0.6 }}>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{key.name}</div>
+                        {key.deviceName && <div style={{ fontSize: '0.75rem', color: '#666' }}>📱 {key.deviceName}</div>}
+                        {key.clientName && <div style={{ fontSize: '0.75rem', color: '#1565c0' }}>🔒 {key.clientName}</div>}
+                        {key.allowedIPs && <div style={{ fontSize: '0.7rem', color: '#e65100' }}>🌐 {key.allowedIPs}</div>}
+                      </td>
+                      <td>{key.operatorName || <span style={{ color: '#ccc' }}>—</span>}</td>
                       <td>
                         <span style={{
                           padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 500,
@@ -1859,23 +1863,28 @@ function AdminPage() {
                         }}>
                           {key.isActive ? 'Active' : 'Revoked'}
                         </span>
+                        {key.revokedReason && <div style={{ fontSize: '0.7rem', color: '#c62828', marginTop: 2 }}>{key.revokedReason}</div>}
                       </td>
-                      <td style={{ color: '#666', fontSize: '0.85rem' }}>
+                      <td style={{ fontSize: '0.8rem', color: '#666' }}>
                         {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : 'Never'}
-                      </td>
-                      <td style={{ color: '#666', fontSize: '0.85rem' }}>
-                        {new Date(key.createdAt).toLocaleDateString()}
+                        {key.lastIP && <div style={{ fontSize: '0.7rem', color: '#999' }}>{key.lastIP}</div>}
                       </td>
                       <td>
-                        {key.isActive && (
-                          <button 
-                            className="btn btn-danger" 
-                            style={{ padding: '4px 12px', fontSize: '0.8rem' }}
-                            onClick={() => handleRevokeApiKey(key.id, key.name)}
-                          >
-                            Revoke
-                          </button>
-                        )}
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {key.isActive ? (
+                            <button className="btn btn-danger" style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                              onClick={() => handleRevokeApiKey(key.id, key.name)}>Revoke</button>
+                          ) : (
+                            <button className="btn btn-success" style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                              onClick={async () => {
+                                try {
+                                  await updateApiKey(key.id, { isActive: true });
+                                  setSuccess(`API key "${key.name}" reactivated`);
+                                  loadApiKeys();
+                                } catch { setError('Failed to reactivate key'); }
+                              }}>Reactivate</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1906,34 +1915,39 @@ function AdminPage() {
             </div>
             <div className="form-group">
               <label className="form-label">Name *</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g. Customer Portal, GNB Portal"
-                value={newApiKey.name}
-                onChange={(e) => setNewApiKey({ ...newApiKey, name: e.target.value })}
-              />
+              <input type="text" className="form-input" placeholder="e.g. Shop Tablet 1, Customer Portal"
+                value={newApiKey.name} onChange={(e) => setNewApiKey({ ...newApiKey, name: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Device Name</label>
+              <input type="text" className="form-input" placeholder="e.g. Shop Tablet 1, Brake Press Tablet"
+                value={newApiKey.deviceName} onChange={(e) => setNewApiKey({ ...newApiKey, deviceName: e.target.value })} />
+              <small style={{ color: '#666' }}>Identifies which physical device uses this key.</small>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Operator Name</label>
+              <input type="text" className="form-input" placeholder="e.g. Jesus, Mike"
+                value={newApiKey.operatorName} onChange={(e) => setNewApiKey({ ...newApiKey, operatorName: e.target.value })} />
+              <small style={{ color: '#666' }}>Fixed operator for this tablet. Logged when parts are marked complete.</small>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Allowed IPs</label>
+              <input type="text" className="form-input" placeholder="e.g. 72.133.45.67 or 192.168.1.0/24"
+                value={newApiKey.allowedIPs} onChange={(e) => setNewApiKey({ ...newApiKey, allowedIPs: e.target.value })} />
+              <small style={{ color: '#c62828' }}>If set, key is auto-revoked when used from a different IP. Comma-separate multiple IPs. Leave blank to allow any IP.</small>
             </div>
             <div className="form-group">
               <label className="form-label">Client Scope (optional)</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Leave empty for all clients, or enter client name"
-                value={newApiKey.clientName}
-                onChange={(e) => setNewApiKey({ ...newApiKey, clientName: e.target.value })}
-              />
+              <input type="text" className="form-input" placeholder="Leave empty for all clients"
+                value={newApiKey.clientName} onChange={(e) => setNewApiKey({ ...newApiKey, clientName: e.target.value })} />
               <small style={{ color: '#666' }}>If set, this key can only see work orders for this specific client.</small>
             </div>
             <div className="form-group">
               <label className="form-label">Permissions</label>
-              <select
-                className="form-input"
-                value={newApiKey.permissions}
-                onChange={(e) => setNewApiKey({ ...newApiKey, permissions: e.target.value })}
-              >
+              <select className="form-input" value={newApiKey.permissions}
+                onChange={(e) => setNewApiKey({ ...newApiKey, permissions: e.target.value })}>
                 <option value="read">Read Only — can view work orders and documents</option>
-                <option value="read_write">Read & Write — can also update data</option>
+                <option value="read_write">Read & Write — can also update data (shop tablets)</option>
                 <option value="admin">Admin — full access</option>
               </select>
             </div>

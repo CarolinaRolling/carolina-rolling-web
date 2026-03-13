@@ -1122,93 +1122,214 @@ function EstimateDetailsPage() {
       const linkedParent = isLinkedService ? parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
       const calc = calculatePartTotal(part);
       const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
-      // Adjust labor proportionally when minimum applies
       const laborRatio = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEaPricing) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
       const adjLaborEach = calc.laborEach * laborRatio;
       const adjUnitPrice = (calc.materialEach || 0) + adjLaborEach;
       const adjPartTotal = adjUnitPrice * (parseInt(part.quantity) || 1);
-      const pricingHtml = isEaPricing
-        ? `<table style="width:100%;margin-top:8px;">
-            ${calc.materialEach > 0 ? `<tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialEach)}</td></tr>` : ''}
-            <tr><td>${part.partType === 'fab_service' ? 'Service' : part.partType === 'shop_rate' ? 'Shop Rate' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}:</td><td style="text-align:right;">${formatCurrency(adjLaborEach)}</td></tr>
-            <tr style="border-top:1px solid #ddd;"><td><strong>Unit Price:</strong></td><td style="text-align:right;"><strong>${formatCurrency(adjUnitPrice)}</strong></td></tr>
-            <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Line Total (${part.quantity} × ${formatCurrency(adjUnitPrice)}):</td><td style="text-align:right;">${formatCurrency(adjPartTotal)}</td></tr></table>`
-        : `<table style="width:100%;margin-top:8px;"><tr><td>Material:</td><td style="text-align:right;">${formatCurrency(calc.materialTotal)}</td></tr>
-            <tr><td>Rolling:</td><td style="text-align:right;">${formatCurrency(part.rollingCost)}</td></tr>
-            <tr><td>Other Services:</td><td style="text-align:right;">${formatCurrency(calc.otherTotal)}</td></tr>
-            <tr style="font-weight:bold;border-top:1px solid #ddd;"><td>Part Total:</td><td style="text-align:right;">${formatCurrency(calc.partTotal)}</td></tr></table>`;
-      return `<div style="border:1px solid ${isLinkedService ? '#9e9e9e' : '#ddd'};border-radius:${isLinkedService ? '4' : '8'}px;padding:${isLinkedService ? '12' : '16'}px;margin-bottom:${isLinkedService ? '4' : '12'}px;margin-left:${isLinkedService ? '32' : '0'}px;background:${isLinkedService ? '#eeeeee' : 'white'};">
-        <h4 style="margin:0 0 8px;color:${isLinkedService ? '#424242' : '#1976d2'};">${isLinkedService ? '+ ' : ''}Part #${part.partNumber} - ${PART_TYPES[part.partType]?.label || part.partType}${isLinkedService && linkedParent ? ` <span style="font-weight:400;font-size:0.85em;color:#757575;">for Part #${linkedParent.partNumber}</span>` : ''}</h4>
-        <p style="margin:0 0 4px;color:#666;">${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}` : ''} ${part.heatNumber ? `Heat#: ${part.heatNumber}` : ''} ${part.cutFileReference ? `<span style="color:#1565c0">Cut File: ${part.cutFileReference}</span>` : ''}</p>
-        <p style="margin:0 0 4px;"><strong>Qty:</strong> ${part.quantity}${part.sectionSize ? ` | <strong>Size:</strong> ${part.partType === 'pipe_roll' && part._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${part._schedule} Pipe`) : part.sectionSize}` : ''}${part.thickness ? ` | <strong>Thk:</strong> ${part.thickness}` : ''}${part.outerDiameter ? ` | <strong>OD:</strong> ${part.outerDiameter}"` : ''}${part.wallThickness && part.wallThickness !== 'SOLID' ? ` | <strong>Wall:</strong> ${part.wallThickness}` : ''}${part.length ? ` | <strong>Length:</strong> ${part.length}` : ''}${part.material ? ` | <strong>Grade:</strong> ${part.material}` : ''}</p>
-        ${part.partType === 'cone_roll' ? (() => {
-          const thk = part.thickness || '';
-          const ldType = (part._coneLargeDiaType || 'inside') === 'inside' ? 'ID' : (part._coneLargeDiaType === 'outside' ? 'OD' : 'CLD');
-          const sdType = (part._coneSmallDiaType || 'inside') === 'inside' ? 'ID' : (part._coneSmallDiaType === 'outside' ? 'OD' : 'CLD');
-          const ld = parseFloat(part._coneLargeDia) || 0;
-          const sd = parseFloat(part._coneSmallDia) || 0;
-          const vh = parseFloat(part._coneHeight) || 0;
-          const grade = part.material || '';
-          const origin = part._materialOrigin || '';
-          let c = thk ? thk + ' ' : '';
-          c += 'Cone - ';
-          if (ld && sd && vh) c += ld.toFixed(1) + '" ' + ldType + ' x ' + sd.toFixed(1) + '" ' + sdType + ' x ' + vh.toFixed(1) + '" VH';
-          if (grade) c += ' ' + grade;
-          if (origin) c += ' ' + origin;
-          return `<p style="margin:0 0 4px;font-size:0.9em;color:#555;">📦 ${part.quantity}pc: ${c}</p>`;
-        })() : (part.materialDescription ? `<p style="margin:0 0 4px;font-size:0.9em;color:#555;">📦 ${part.materialDescription}</p>` : '')}
-        ${part._rollToMethod === 'template' ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;font-weight:bold;">📐 Roll Per Template / Sample${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}</p>` : part._rollToMethod === 'print' ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;font-weight:bold;">📄 Roll per print: (see attached)${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}</p>` : (part.diameter || part.radius) ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">🔄 ${part.diameter || part.radius}" ${(() => { const mp = part._rollMeasurePoint || 'inside'; const isRad = !!part.radius && !part.diameter; if (mp === 'inside') return isRad ? 'ISR' : 'ID'; if (mp === 'outside') return isRad ? 'OSR' : 'OD'; return isRad ? 'CLR' : 'CLD'; })()}${part.rollType ? ' (' + (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) + ')' : ''}${part.arcDegrees ? ' | Arc: ' + part.arcDegrees + '°' : ''}</p>` : ''}
-        ${(() => { const desc = part._rollingDescription || part.specialInstructions || ''; const lines = desc.split('\n').filter(l => l.includes('Rise:') || l.includes('Complete Ring') || l.includes('Cone:') || l.includes('Sheet Size:')); return lines.length ? `<p style="margin:0 0 4px;color:#6a1b9a;font-size:0.85em;">📐 ${lines.map(l => l.trim()).join(' | ')}</p>` : ''; })()}
-        ${part._completeRings && part._ringsNeeded ? `<p style="margin:0 0 4px;color:#2e7d32;font-size:0.9em;font-weight:bold;">⭕ ${part._ringsNeeded} complete ring(s) required</p>` : ''}
-        ${(part.partType === 'angle_roll' || part.partType === 'channel_roll') && part._orientationOption ? `<div style="margin:8px 0;max-width:220px;"><img src="/images/angle-orientation/${part.partType === 'channel_roll' ? 'Channel' : ''}${part.rollType === 'easy_way' ? 'EWOD' : 'HWID'}Op${part._orientationOption}.png" style="width:100%;border:1px solid #ddd;border-radius:4px;" /><div style="font-size:0.75em;color:#666;text-align:center;">${part.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID'} Option ${part._orientationOption}</div></div>` : ''}
-        ${part.partType === 'cone_roll' ? `
-          <p style="margin:0 0 4px;color:#4a148c;font-size:0.9em;">
-            ${part._coneType === 'eccentric' ? 'Eccentric' + (part._coneEccentricAngle ? ' = ' + part._coneEccentricAngle + '°' : '') : 'Concentric'}${(parseInt(part._coneRadialSegments) || 1) > 1 ? ' | ' + part._coneRadialSegments + ' @ ' + (360 / (parseInt(part._coneRadialSegments) || 1)).toFixed(0) + '°' : ''}
-          </p>
-        ` : ''}
-        ${part._pitchEnabled ? `<p style="margin:0 0 4px;color:#e65100;font-size:0.9em;">🌀 Pitch: ${part._pitchDirection === 'clockwise' ? 'CW' : 'CCW'}${part._pitchMethod === 'runrise' && part._pitchRise ? ' | Run: ' + part._pitchRun + '" / Rise: ' + part._pitchRise + '"' : ''}${part._pitchMethod === 'degree' && part._pitchAngle ? ' | Angle: ' + part._pitchAngle + '°' : ''}${part._pitchMethod === 'space' && part._pitchSpaceValue ? ' | ' + (part._pitchSpaceType === 'center' ? 'C-C' : 'Between') + ': ' + part._pitchSpaceValue + '"' : ''}${part._pitchDevelopedDia > 0 ? ' | <strong style="color:#2e7d32;">Dev Ø: ' + parseFloat(part._pitchDevelopedDia).toFixed(4) + '"</strong>' : ''}</p>` : ''}
-        ${!['fab_service', 'shop_rate'].includes(part.partType) ? (part.materialSource === 'we_order' ? `<p style="color:#388e3c;">Material supplied by: Carolina Rolling Company</p>` : part.materialSource === 'in_stock' ? `<p style="color:#388e3c;">Material supplied by: Carolina Rolling Company</p>` : `<p style="color:#388e3c;">Material supplied by: ${formData.clientName || 'Customer'}</p>`) : ''}
-        ${part.partType === 'cone_roll' && part.cutFileReference ? `<p style="margin:0 0 4px;color:#1565c0;font-size:0.9em;">Layout Filename: ${part.cutFileReference}</p>` : ''}
-        ${pricingHtml}
-        ${part.partType === 'shop_rate' ? '<p style="margin:8px 0 0;padding:8px;background:#fff3e0;border:1px solid #ffcc80;border-radius:6px;font-size:0.85em;color:#e65100;">⚠️ Pricing is an estimate based on predicted hours. Actual cost may vary depending on hours required to complete the job.</p>' : ''}
+      
+      // Build description lines (matching PDF style)
+      const descLines = [];
+      
+      if (part.clientPartNumber) descLines.push(`Client Part#: ${part.clientPartNumber}`);
+      
+      // Material description
+      if (part.partType === 'cone_roll') {
+        const thk = part.thickness || '';
+        const ldType = (part._coneLargeDiaType || 'inside') === 'inside' ? 'ID' : (part._coneLargeDiaType === 'outside' ? 'OD' : 'CLD');
+        const sdType = (part._coneSmallDiaType || 'inside') === 'inside' ? 'ID' : (part._coneSmallDiaType === 'outside' ? 'OD' : 'CLD');
+        const ld = parseFloat(part._coneLargeDia) || 0;
+        const sd = parseFloat(part._coneSmallDia) || 0;
+        const vh = parseFloat(part._coneHeight) || 0;
+        let c = thk ? thk + ' ' : '';
+        c += 'Cone - ';
+        if (ld && sd && vh) c += ld.toFixed(1) + '" ' + ldType + ' x ' + sd.toFixed(1) + '" ' + sdType + ' x ' + vh.toFixed(1) + '" VH';
+        if (part.material) c += ' ' + part.material;
+        if (part._materialOrigin) c += ' ' + part._materialOrigin;
+        descLines.push(c);
+      } else if (part.materialDescription) {
+        descLines.push(part.materialDescription);
+      } else {
+        const specs = [];
+        if (part.material) specs.push(part.material);
+        if (part.sectionSize) specs.push(part.partType === 'pipe_roll' && part._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${part._schedule} Pipe`) : part.sectionSize);
+        if (part.thickness) specs.push(part.thickness);
+        if (part.width) specs.push(`${part.width}" wide`);
+        if (part.length) specs.push(part.length.toString().includes('"') || part.length.toString().includes("'") ? part.length : `${part.length}" long`);
+        if (part.outerDiameter) specs.push(`${part.outerDiameter}" OD`);
+        if (part.wallThickness && part.wallThickness !== 'SOLID') specs.push(`${part.wallThickness}" wall`);
+        if (part.wallThickness === 'SOLID') specs.push('Solid Bar');
+        if (specs.length) descLines.push(specs.join(' x '));
+      }
+      
+      // Rolling info
+      const rollVal = part.diameter || part.radius;
+      if (rollVal) {
+        const mp = part._rollMeasurePoint || 'inside';
+        const isRad = !!part.radius && !part.diameter;
+        const specLbl = mp === 'inside' ? (isRad ? 'ISR' : 'ID') : mp === 'outside' ? (isRad ? 'OSR' : 'OD') : (isRad ? 'CLR' : 'CLD');
+        const dirLbl = part.rollType ? (part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')) : '';
+        let rl = 'Roll: ' + rollVal + '" ' + specLbl;
+        if (dirLbl) rl += ' (' + dirLbl + ')';
+        if (part.arcDegrees) rl += ' | Arc: ' + part.arcDegrees + '°';
+        descLines.push(rl);
+      } else if (part._rollToMethod === 'template') {
+        descLines.push('Roll Per Template / Sample');
+      } else if (part._rollToMethod === 'print') {
+        descLines.push('Roll per print (see attached)');
+      }
+      
+      if (part._completeRings && part._ringsNeeded) descLines.push(part._ringsNeeded + ' complete ring(s) required');
+      if ((part.partType === 'angle_roll' || part.partType === 'channel_roll') && part._orientationOption) {
+        descLines.push('Orientation: ' + (part.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID') + ' Option ' + part._orientationOption);
+      }
+      if (part.partType === 'cone_roll') {
+        const cType = part._coneType === 'eccentric' ? 'Eccentric' + (part._coneEccentricAngle ? ' = ' + part._coneEccentricAngle + '°' : '') : 'Concentric';
+        const rSegs = parseInt(part._coneRadialSegments) || 1;
+        descLines.push(cType + (rSegs > 1 ? ' | ' + rSegs + ' @ ' + (360/rSegs).toFixed(0) + '°' : ''));
+        if (part.cutFileReference) descLines.push('Layout: ' + part.cutFileReference);
+      }
+      
+      if (part._pitchEnabled) {
+        let pLine = 'Pitch: ' + (part._pitchDirection === 'clockwise' ? 'CW' : 'CCW');
+        if (part._pitchMethod === 'runrise' && part._pitchRise) pLine += ' | Run: ' + part._pitchRun + '" / Rise: ' + part._pitchRise + '"';
+        if (part._pitchDevelopedDia > 0) pLine += ' | Dev Ø: ' + parseFloat(part._pitchDevelopedDia).toFixed(4) + '"';
+        descLines.push(pLine);
+      }
+      
+      // Material source
+      if (!['fab_service', 'shop_rate'].includes(part.partType)) {
+        descLines.push('Material by: ' + (part.materialSource === 'customer_supplied' ? (formData.clientName || 'Customer') : 'Carolina Rolling Company'));
+      }
+      
+      if (part.specialInstructions) descLines.push('Note: ' + (part.specialInstructions.length > 80 ? part.specialInstructions.substring(0, 80) + '...' : part.specialInstructions));
+      
+      // Pricing detail line
+      const priceParts = [];
+      if (calc.materialEach > 0) priceParts.push('Material: ' + formatCurrency(calc.materialEach));
+      if (adjLaborEach > 0) priceParts.push((part.partType === 'fab_service' ? 'Service' : part.partType === 'shop_rate' ? 'Shop Rate' : part.partType === 'flat_stock' ? 'Handling' : 'Rolling') + ': ' + formatCurrency(adjLaborEach));
+      
+      const partTypeLabel = PART_TYPES[part.partType]?.label || part.partType;
+      
+      return `<div class="part-row${isLinkedService ? ' service' : ''}">
+        <div class="pr-item${isLinkedService ? ' svc' : ''}">${isLinkedService ? '+' : '#' + part.partNumber}</div>
+        <div class="pr-desc">
+          <div class="pr-type${isLinkedService ? ' svc' : ''}">${partTypeLabel}${isLinkedService && linkedParent ? ' <span style="font-weight:400;color:#999;">(for Part #' + linkedParent.partNumber + ')</span>' : ''}</div>
+          <div class="pr-detail">${descLines.join('<br/>')}</div>
+          ${priceParts.length ? '<div class="pr-pricing">' + priceParts.join(' &nbsp;|&nbsp; ') + ' &nbsp;|&nbsp; <strong>Unit: ' + formatCurrency(adjUnitPrice) + '</strong></div>' : ''}
+          ${part.partType === 'shop_rate' ? '<div class="shop-rate-warn">* Pricing based on estimated hours — actual cost may vary</div>' : ''}
+        </div>
+        <div class="pr-qty">${part.quantity}</div>
+        <div class="pr-unit">${formatCurrency(adjUnitPrice)}</div>
+        <div class="pr-amt">${formatCurrency(adjPartTotal)}</div>
       </div>`;
     }).join('');
     
     const taxLine = formData.taxExempt 
-      ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Tax</span><span style="color:#c62828;font-weight:bold;">EXEMPT</span></div>`
-      : `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Tax (${formData.taxRate}%)</span><span>${formatCurrency(totals.taxAmount)}</span></div>`;
+      ? `<div class="total-row"><span>Tax</span><span style="color:#c62828;font-weight:bold;">EXEMPT</span></div>`
+      : `<div class="total-row"><span>Tax (${formData.taxRate}%)</span><span>${formatCurrency(totals.taxAmount)}</span></div>`;
     
     const discountLine = totals.discountAmt > 0
-      ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;color:#c62828;"><span>Discount${formData.discountReason ? ` (${formData.discountReason})` : ''}</span><span>-${formatCurrency(totals.discountAmt)}</span></div>` : '';
+      ? `<div class="total-row" style="color:#c62828;"><span>Discount${formData.discountReason ? ` (${formData.discountReason})` : ''}</span><span>-${formatCurrency(totals.discountAmt)}</span></div>` : '';
 
     const minimumLine = totals.minInfo.minimumApplies
-      ? `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #ddd;font-size:0.85em;color:#e65100;"><span>Minimum Labor Charge Applied (${totals.minInfo.highestMinRule?.label || ''})</span><span>${formatCurrency(totals.minInfo.adjustedLabor)}</span></div>` : '';
+      ? `<div class="total-row" style="font-size:11px;color:#e65100;"><span>Minimum Labor Charge (${totals.minInfo.highestMinRule?.label || ''})</span><span>${formatCurrency(totals.minInfo.adjustedLabor)}</span></div>` : '';
 
     const w = window.open('', '_blank');
     w.document.write(`<!DOCTYPE html><html><head><title>Estimate ${estimate?.estimateNumber}</title>
-      <style>body{font-family:Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto}</style></head><body>
-      <h1 style="color:#1976d2;">Carolina Rolling</h1><p>Estimate: <strong>${estimate?.estimateNumber}</strong></p>
-      <h2>Client: ${formData.clientName}</h2>
-      ${formData.contactName ? `<p>Contact: ${formData.contactName}</p>` : ''}
-      ${formData.projectDescription ? `<p>Project: ${formData.projectDescription}</p>` : ''}
-      <h3>Parts</h3>${partsHtml}
-      ${formData.truckingCost > 0 ? `<div style="background:#fff3e0;padding:12px;border-radius:8px;margin:12px 0;"><strong>🚚 Trucking:</strong> ${formData.truckingDescription || ''} - ${formatCurrency(formData.truckingCost)} (Not Taxed)</div>` : ''}
-      <div style="background:#f0f7ff;padding:16px;border-radius:8px;margin-top:20px;">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; padding: 32px 40px; max-width: 850px; margin: 0 auto; font-size: 13px; color: #333; }
+        @page { size: letter; margin: 0.5in; }
+        @media print { body { padding: 0; } }
+        .est-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+        .est-title { font-size: 20px; font-weight: 700; color: #1976d2; }
+        .est-num { font-size: 13px; font-weight: 700; color: #333; }
+        .est-date { font-size: 11px; color: #888; }
+        .divider { border: none; border-top: 1px solid #ccc; margin: 8px 0; }
+        .info-grid { display: flex; gap: 24px; padding: 8px 0; margin-bottom: 6px; font-size: 12px; }
+        .info-item label { display: block; font-size: 9px; text-transform: uppercase; color: #999; letter-spacing: 0.5px; font-weight: 600; }
+        .info-item span { font-weight: 600; color: #333; }
+        .parts-header { display: flex; background: #f5f5f5; padding: 6px 0; border-bottom: 2px solid #ccc; margin-top: 14px; font-size: 9px; text-transform: uppercase; color: #888; font-weight: 700; letter-spacing: 0.5px; }
+        .ph-item { width: 42px; padding-left: 4px; }
+        .ph-desc { flex: 1; padding-left: 8px; }
+        .ph-qty { width: 40px; text-align: center; }
+        .ph-unit { width: 65px; text-align: right; }
+        .ph-amt { width: 70px; text-align: right; padding-right: 4px; }
+        .part-row { display: flex; padding: 8px 0; border-bottom: 1px solid #eee; page-break-inside: avoid; }
+        .part-row.service { background: #f5f5f5; padding-left: 20px; }
+        .pr-item { width: 42px; font-weight: 700; color: #1976d2; font-size: 11px; padding-left: 4px; flex-shrink: 0; }
+        .pr-item.svc { color: #666; }
+        .pr-desc { flex: 1; padding-left: 8px; }
+        .pr-type { font-weight: 700; font-size: 11px; color: #333; }
+        .pr-type.svc { color: #555; font-size: 10px; }
+        .pr-detail { font-size: 10px; color: #666; line-height: 1.5; margin-top: 2px; }
+        .pr-pricing { font-size: 10px; color: #555; margin-top: 3px; display: flex; gap: 12px; }
+        .pr-pricing strong { color: #1565c0; }
+        .pr-qty { width: 40px; text-align: center; font-weight: 600; font-size: 12px; flex-shrink: 0; }
+        .pr-unit { width: 65px; text-align: right; font-size: 11px; flex-shrink: 0; }
+        .pr-amt { width: 70px; text-align: right; font-weight: 700; font-size: 11px; padding-right: 4px; flex-shrink: 0; }
+        .totals-box { margin-top: 16px; padding: 12px 16px; border: 1px solid #ccc; border-radius: 6px; }
+        .total-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+        .total-row.grand { padding: 8px 0; border-top: 2px solid #1976d2; margin-top: 4px; font-size: 16px; font-weight: 700; color: #1976d2; }
+        .cc-box { margin-top: 10px; font-size: 11px; color: #666; text-align: right; }
+        .notes-box { margin-top: 12px; padding: 10px; background: #f9f9f9; border-radius: 4px; font-size: 11px; }
+        .shop-rate-warn { font-size: 10px; color: #e65100; margin-top: 2px; font-style: italic; }
+      </style></head><body>
+
+      <div class="est-header">
+        <span class="est-title">ESTIMATE</span>
+        <span class="est-num">${estimate?.estimateNumber}</span>
+        <span class="est-date">Date: ${new Date(estimate?.createdAt).toLocaleDateString()}</span>
+        ${formData.taxExempt ? '<span style="color:#c62828;font-weight:700;font-size:11px;margin-left:auto;">TAX EXEMPT</span>' : ''}
+      </div>
+      <hr class="divider" />
+
+      <div class="info-grid">
+        <div class="info-item"><label>Client</label><span>${formData.clientName}</span></div>
+        ${formData.contactName ? `<div class="info-item"><label>Contact</label><span>${formData.contactName}</span></div>` : ''}
+        ${formData.contactEmail ? `<div class="info-item"><label>Email</label><span>${formData.contactEmail}</span></div>` : ''}
+        ${formData.contactPhone ? `<div class="info-item"><label>Phone</label><span>${formData.contactPhone}</span></div>` : ''}
+      </div>
+      ${formData.projectDescription ? `<div style="font-size:11px;color:#666;margin-bottom:8px;"><strong>Project:</strong> ${formData.projectDescription}</div>` : ''}
+
+      <div class="parts-header">
+        <div class="ph-item">ITEM</div>
+        <div class="ph-desc">DESCRIPTION</div>
+        <div class="ph-qty">QTY</div>
+        <div class="ph-unit">UNIT</div>
+        <div class="ph-amt">AMOUNT</div>
+      </div>
+
+      ${partsHtml}
+
+      ${formData.truckingCost > 0 ? `
+        <div class="part-row">
+          <div class="pr-item"></div>
+          <div class="pr-desc"><span class="pr-type">Trucking / Delivery</span>${formData.truckingDescription ? `<div class="pr-detail">${formData.truckingDescription}</div>` : ''}<div class="pr-detail" style="color:#e65100;">Not Taxed</div></div>
+          <div class="pr-qty"></div>
+          <div class="pr-unit"></div>
+          <div class="pr-amt">${formatCurrency(formData.truckingCost)}</div>
+        </div>
+      ` : ''}
+
+      <div class="totals-box">
         ${minimumLine}
-        ${totals.expediteAmount > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0;color:#e65100;border-bottom:1px solid #ffcc80"><span>🚨 ${totals.expediteLabel}</span><strong>${formatCurrency(totals.expediteAmount)}</strong></div>` : ''}
-        ${totals.emergencyAmount > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0;color:#c62828;border-bottom:1px solid #ffcc80"><span>🚨 ${totals.emergencyLabel}</span><strong>${formatCurrency(totals.emergencyAmount)}</strong></div>` : ''}
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Parts Subtotal</span><span>${formatCurrency(totals.partsSubtotal)}</span></div>
+        ${totals.expediteAmount > 0 ? `<div class="total-row" style="color:#e65100;"><span>🚨 ${totals.expediteLabel}</span><strong>${formatCurrency(totals.expediteAmount)}</strong></div>` : ''}
+        ${totals.emergencyAmount > 0 ? `<div class="total-row" style="color:#c62828;"><span>🚨 ${totals.emergencyLabel}</span><strong>${formatCurrency(totals.emergencyAmount)}</strong></div>` : ''}
+        <div class="total-row"><span>Parts Subtotal</span><span>${formatCurrency(totals.partsSubtotal)}</span></div>
+        ${totals.trucking > 0 ? `<div class="total-row"><span>Trucking</span><span>${formatCurrency(totals.trucking)}</span></div>` : ''}
         ${discountLine}
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ddd;"><span>Trucking</span><span>${formatCurrency(totals.trucking)}</span></div>
         ${taxLine}
-        <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:1.3em;font-weight:bold;color:#1976d2;"><span>Grand Total</span><span>${formatCurrency(totals.grandTotal)}</span></div>
+        <div class="total-row grand"><span>Grand Total</span><span>${formatCurrency(totals.grandTotal)}</span></div>
       </div>
-      <div style="text-align:right;margin-top:16px;padding-top:12px;border-top:1px solid #ccc;font-size:0.9em;color:#555;line-height:1.8;">
-        <div style="font-weight:600;color:#333;">Total with Credit Card Fees</div>
-        <div>In-Person (2.6% + $0.15): <strong>${formatCurrency(totals.ccInPersonTotal)}</strong></div>
-        <div>Manual (3.5% + $0.15): <strong>${formatCurrency(totals.ccManualTotal)}</strong></div>
+
+      <div class="cc-box">
+        <strong>Total with Credit Card Fees:</strong>
+        In-Person (2.6% + $0.15): <strong>${formatCurrency(totals.ccInPersonTotal)}</strong> |
+        Manual (3.5% + $0.15): <strong>${formatCurrency(totals.ccManualTotal)}</strong>
       </div>
-      ${formData.notes ? `<div style="margin-top:20px;padding:12px;background:#f9f9f9;border-radius:8px;"><strong>Terms:</strong> ${formData.notes}</div>` : ''}
+
+      ${formData.notes ? `<div class="notes-box"><strong>Terms:</strong> ${formData.notes}</div>` : ''}
       </body></html>`);
     w.document.close();
     w.print();
@@ -1551,7 +1672,7 @@ function EstimateDetailsPage() {
                       <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, borderTop: '2px solid #c8e6c9' }}
                         onMouseDown={() => {
                           setShowClientSuggestions(false);
-                          navigate(`/admin/clients-vendors?addClient=${encodeURIComponent(formData.clientName)}`);
+                          navigate(`/clients-vendors?addClient=${encodeURIComponent(formData.clientName)}`);
                         }}>
                         + Add "{formData.clientName}" as new client
                       </div>

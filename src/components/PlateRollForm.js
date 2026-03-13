@@ -164,6 +164,23 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     return { ringsPerLength, stockLengthsNeeded, totalRingsFromStock, waste, ringLength, stock, usedPerLength, wastePerLength };
   }, [nestingEnabled, isCompleteRing, calcResult, stockLength, partData.quantity]);
 
+  // Persist nesting results to formData for PO generator
+  useEffect(() => {
+    if (nestingCalc) {
+      setPartData(prev => ({ ...prev, 
+        _stockLengthsNeeded: nestingCalc.stockLengthsNeeded,
+        _ringsPerLength: nestingCalc.ringsPerLength,
+        _ringLength: nestingCalc.ringLength
+      }));
+    } else {
+      setPartData(prev => ({ ...prev, 
+        _stockLengthsNeeded: null,
+        _ringsPerLength: null,
+        _ringLength: null
+      }));
+    }
+  }, [nestingCalc]);
+
   // Build material description string — includes quantity
   const materialDescription = useMemo(() => {
     const descParts = [];
@@ -217,7 +234,8 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     const lines = [];
     
     const spec = rollMeasurePoint === 'inside' ? (rollMeasureType === 'radius' ? 'ISR' : 'ID') : rollMeasurePoint === 'outside' ? (rollMeasureType === 'radius' ? 'OSR' : 'OD') : (rollMeasureType === 'radius' ? 'CLR' : 'CLD');
-    lines.push(`Roll to ${rv}" ${spec} EW`);
+    const ewHw = partData.rollType === 'easy_way' ? 'EW' : partData.rollType === 'hard_way' ? 'HW' : partData.rollType === 'on_edge' ? 'OE' : '';
+    lines.push(`Roll to ${rv}" ${spec}${ewHw ? ' ' + ewHw : ''}`);
     if (showAngle && angleValue) lines.push(`Arc: ${angleValue}°`);
     if (partData._protectivePaper && partData._protectivePaperSide) {
       const sideLabel = partData._protectivePaperSide === 'double' ? 'Double Sided' : partData._protectivePaperSide === 'inside' ? 'Inside' : 'Outside';
@@ -228,7 +246,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     }
     lines.push(...getPitchDescriptionLines(partData, clDiameter));
     return lines.join('\n');
-  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, clDiameter, showAngle, angleValue, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia, partData._protectivePaper, partData._protectivePaperSide, nestingCalc]);
+  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, clDiameter, showAngle, angleValue, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia, partData._protectivePaper, partData._protectivePaperSide, nestingCalc]);
 
   useEffect(() => {
     setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
@@ -678,10 +696,52 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       {/* === PRICING === */}
       <div style={sectionStyle}>
         {sectionTitle('💰', 'Pricing', '#1976d2')}
+
+        {/* Stock length pricing when nesting is active */}
+        {nestingCalc && (
+          <div style={{ background: '#e8f5e9', padding: 12, borderRadius: 8, marginBottom: 12, border: '1px solid #a5d6a7' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#2e7d32', marginBottom: 8 }}>📦 Stock Length Pricing</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Cost per Full Length</label>
+                <input type="number" step="any" className="form-input" value={partData._stockLengthCost || ''} onFocus={(e) => e.target.select()}
+                  onChange={(e) => {
+                    const costPerLength = parseFloat(e.target.value) || 0;
+                    const perRing = nestingCalc.ringsPerLength > 0 ? Math.round(costPerLength / nestingCalc.ringsPerLength * 100) / 100 : 0;
+                    setPartData({ ...partData, _stockLengthCost: e.target.value, materialTotal: perRing.toFixed(2) });
+                  }} placeholder="0.00" />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label"># Stock Lengths</label>
+                <input type="text" className="form-input" value={nestingCalc.stockLengthsNeeded} disabled style={{ background: '#f5f5f5', fontWeight: 700 }} />
+              </div>
+            </div>
+            {partData._stockLengthCost > 0 && (
+              <div style={{ marginTop: 8, padding: 8, background: '#fff', borderRadius: 6, fontSize: '0.85rem', color: '#333' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                  <span>Cost per full length ({nestingCalc.stock}" stock)</span>
+                  <span>${parseFloat(partData._stockLengthCost).toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                  <span>÷ {nestingCalc.ringsPerLength} rings per length</span>
+                  <span>= <strong>${(parseFloat(partData._stockLengthCost) / nestingCalc.ringsPerLength).toFixed(2)}/ring</strong></span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderTop: '1px solid #c8e6c9', marginTop: 4, fontWeight: 600, color: '#2e7d32' }}>
+                  <span>Total material ({nestingCalc.stockLengthsNeeded} lengths × ${parseFloat(partData._stockLengthCost).toFixed(2)})</span>
+                  <span>${(nestingCalc.stockLengthsNeeded * parseFloat(partData._stockLengthCost)).toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
           <div className="form-group">
-            <label className="form-label">Material Cost (each)</label>
-            <input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
+            <label className="form-label">Material Cost (each){nestingCalc ? ' — per ring' : ''}</label>
+            <input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value, _stockLengthCost: '' })} placeholder="0.00" />
+            {nestingCalc && partData._stockLengthCost > 0 && (
+              <div style={{ fontSize: '0.7rem', color: '#2e7d32', marginTop: 2 }}>Auto-calculated from stock length cost</div>
+            )}
           </div>
           <div className="form-group">
             <label className="form-label">Markup %</label>

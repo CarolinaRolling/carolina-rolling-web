@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, AlertTriangle, Trash2, RefreshCw, Save, Unlock, Search, Edit2 } from 'lucide-react';
 import { getPONumbers, getPONumberStats, setNextPONumber, voidPONumber, releasePONumber, reassignPONumber, getVoidedPONumbers } from '../services/api';
 
 function PONumbersPage() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({ lastUsed: 0, nextNumber: 1, voidedCount: 0, activeCount: 0 });
   const [activePOs, setActivePOs] = useState([]);
   const [voidedNumbers, setVoidedNumbers] = useState([]);
@@ -287,10 +289,15 @@ function PONumbersPage() {
                     <td>{po.supplier || '—'}</td>
                     <td>{po.clientName || '—'}</td>
                     <td>
-                      {po.inboundOrderId
-                        ? <span style={{ color: '#388e3c', fontSize: '0.85rem' }}>✓ Inbound</span>
+                      {po.workOrder
+                        ? <span style={{ color: '#1565c0', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
+                            onClick={() => navigate(`/workorders/${po.workOrder.id}`)}>
+                            {po.workOrder.drNumber ? `DR-${po.workOrder.drNumber}` : po.workOrder.orderNumber} ↗
+                          </span>
                         : po.workOrderId
                         ? <span style={{ color: '#388e3c', fontSize: '0.85rem' }}>✓ Work Order</span>
+                        : po.inboundOrderId
+                        ? <span style={{ color: '#388e3c', fontSize: '0.85rem' }}>✓ Inbound</span>
                         : <span style={{ color: '#e65100', fontSize: '0.85rem', fontWeight: 600 }}>⚠ No Order</span>
                       }
                     </td>

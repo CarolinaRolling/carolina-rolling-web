@@ -33,8 +33,14 @@ api.interceptors.response.use(
 );
 
 // Auth
-export const login = (username, password) => api.post('/auth/login', { username, password });
+export const login = (username, password, totpCode) => api.post('/auth/login', { username, password, totpCode });
 export const getCurrentUser = () => api.get('/auth/me');
+
+// 2FA
+export const setup2FA = () => api.post('/auth/2fa/setup');
+export const verify2FA = (code) => api.post('/auth/2fa/verify', { code });
+export const disable2FA = (password) => api.post('/auth/2fa/disable', { password });
+export const get2FAStatus = () => api.get('/auth/2fa/status');
 export const changePassword = (currentPassword, newPassword) => 
   api.put('/auth/change-password', { currentPassword, newPassword });
 
@@ -163,6 +169,8 @@ export const deleteWorkOrderDocument = (workOrderId, documentId) =>
   api.delete(`/workorders/${workOrderId}/documents/${documentId}`);
 export const regeneratePODocument = (workOrderId, documentId) => 
   api.post(`/workorders/${workOrderId}/documents/${documentId}/regenerate`);
+export const createPODocument = (workOrderId, poNumber) => 
+  api.post(`/workorders/${workOrderId}/create-po-pdf`, { poNumber });
 
 // Work Order Material Ordering
 export const orderWorkOrderMaterial = (workOrderId, data) => 
@@ -325,6 +333,7 @@ export const downloadResaleReport = () => api.get('/verify-permits/report-pdf', 
 // API Key Management
 export const getApiKeys = () => api.get('/auth/api-keys');
 export const createApiKey = (data) => api.post('/auth/api-keys', data);
+export const updateApiKey = (id, data) => api.put(`/auth/api-keys/${id}`, data);
 export const revokeApiKey = (id) => api.delete(`/auth/api-keys/${id}`);
 
 export default api;
@@ -335,3 +344,14 @@ export const exportWorkOrderIIF = (id) => api.get(`/quickbooks/export/${id}`, { 
 export const exportBatchIIF = (workOrderIds) => api.post('/quickbooks/export-batch', { workOrderIds }, { responseType: 'blob' });
 export const previewIIF = (id) => api.get(`/quickbooks/preview/${id}`);
 export const exportCustomersIIF = () => api.post('/quickbooks/export-customers', {}, { responseType: 'blob' });
+
+// Shop Supplies
+export const getShopSupplies = (params) => api.get('/shop-supplies', { params });
+export const getLowStockSupplies = () => api.get('/shop-supplies/low-stock');
+export const getShopSupplyByQR = (qrCode) => api.get(`/shop-supplies/qr/${qrCode}`);
+export const createShopSupply = (data) => api.post('/shop-supplies', data);
+export const updateShopSupply = (id, data) => api.put(`/shop-supplies/${id}`, data);
+export const consumeShopSupply = (id, data) => api.post(`/shop-supplies/${id}/consume`, data);
+export const refillShopSupply = (id, data) => api.post(`/shop-supplies/${id}/refill`, data);
+export const getShopSupplyLogs = (id) => api.get(`/shop-supplies/${id}/logs`);
+export const deleteShopSupply = (id) => api.delete(`/shop-supplies/${id}`);

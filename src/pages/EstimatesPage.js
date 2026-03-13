@@ -10,6 +10,8 @@ function EstimatesPage() {
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [searching, setSearching] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(null);
@@ -34,6 +36,30 @@ function EstimatesPage() {
     if (message) { const t = setTimeout(() => setMessage(null), 3000); return () => clearTimeout(t); }
   }, [message]);
 
+  // Debounced server-side search across ALL statuses
+  const searchTimer = useRef(null);
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 2) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const response = await getEstimates({ search: searchQuery });
+        setSearchResults(response.data.data || []);
+      } catch (err) {
+        console.error('Search error:', err);
+        setSearchResults(null);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(searchTimer.current);
+  }, [searchQuery]);
+
   const loadEstimates = async () => {
     try {
       setLoading(true);
@@ -48,6 +74,15 @@ function EstimatesPage() {
   };
 
   const getFilteredEstimates = () => {
+    // When searching, use server-side results (includes archived/accepted)
+    if (searchQuery && searchQuery.length >= 2 && searchResults !== null) {
+      let filtered = [...searchResults];
+      if (statusFilter !== 'all') {
+        filtered = filtered.filter(e => e.status === statusFilter);
+      }
+      return filtered;
+    }
+
     let filtered = [...estimates];
     
     if (statusFilter !== 'all') {
@@ -173,15 +208,23 @@ function EstimatesPage() {
       {/* Filters */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div className="search-box" style={{ flex: 1, minWidth: 200, marginBottom: 0 }}>
+          <div className="search-box" style={{ flex: 1, minWidth: 200, marginBottom: 0, position: 'relative' }}>
             <Search size={18} className="search-box-icon" />
             <input
               type="text"
-              placeholder="Search by client, estimate number..."
+              placeholder="Search by client, estimate#, project..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#999', fontSize: '1.1rem', padding: 4 }}>✕</button>
+            )}
           </div>
+          {searchQuery && searchQuery.length >= 2 && (
+            <span style={{ fontSize: '0.8rem', color: '#1565c0', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              {searching ? '⏳ Searching...' : `🔍 All statuses (${getFilteredEstimates().length} found)`}
+            </span>
+          )}
           {!showArchived && (
             <div className="tabs" style={{ marginBottom: 0, borderBottom: 'none', paddingBottom: 0 }}>
               {['all', 'draft', 'sent', 'declined'].map(status => (
@@ -420,7 +463,7 @@ function EstimatesPage() {
                       <div style={{ padding: '10px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, borderTop: '1px solid #c8e6c9' }}
                         onMouseDown={() => {
                           setShowClientSuggestions(false);
-                          navigate(`/admin/clients-vendors?addClient=${encodeURIComponent(newEstData.clientName)}`);
+                          navigate(`/clients-vendors?addClient=${encodeURIComponent(newEstData.clientName)}`);
                         }}>
                         + Add "{newEstData.clientName}" as new client
                       </div>
@@ -437,7 +480,7 @@ function EstimatesPage() {
                     <div style={{ padding: '10px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600 }}
                       onMouseDown={() => {
                         setShowClientSuggestions(false);
-                        navigate(`/admin/clients-vendors?addClient=${encodeURIComponent(newEstData.clientName)}`);
+                        navigate(`/clients-vendors?addClient=${encodeURIComponent(newEstData.clientName)}`);
                       }}>
                       + Add "{newEstData.clientName}" as new client
                     </div>

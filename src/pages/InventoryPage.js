@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Package, Truck, CheckCircle, Clock, FileText, Inbox, Image, AlertCircle } from 'lucide-react';
-import { getWorkOrders, getUnlinkedShipments, getRecentlyCompletedOrders } from '../services/api';
+import { getWorkOrders, getUnlinkedShipments, getRecentlyCompletedOrders, getLowStockSupplies } from '../services/api';
 
 // Status configuration
 const STATUSES = {
@@ -24,12 +24,15 @@ function InventoryPage() {
   const [workOrders, setWorkOrders] = useState([]);
   const [unlinkedShipments, setUnlinkedShipments] = useState([]);
   const [recentlyCompleted, setRecentlyCompleted] = useState([]);
+  const [lowStockSupplies, setLowStockSupplies] = useState([]);
   const [dismissedCompletions, setDismissedCompletions] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dismissed_completions') || '[]'); } catch { return []; }
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null); // null = not searching, [] = no results
+  const [searching, setSearching] = useState(false);
   
   const [statusFilter, setStatusFilter] = useState(() => {
     return localStorage.getItem('inventory_statusFilter') || 'active';
@@ -68,12 +71,14 @@ function InventoryPage() {
       // Only load unlinked/recently-completed when viewing active orders
       if (statusFilter !== 'archived') {
         try {
-          const [unlinkedRes, completedRes] = await Promise.all([
+          const [unlinkedRes, completedRes, lowStockRes] = await Promise.all([
             getUnlinkedShipments(),
-            getRecentlyCompletedOrders()
+            getRecentlyCompletedOrders(),
+            getLowStockSupplies()
           ]);
           setUnlinkedShipments(unlinkedRes.data.data || []);
           setRecentlyCompleted(completedRes.data.data || []);
+          setLowStockSupplies(lowStockRes.data.data || []);
         } catch (e) {
           console.error('Failed to load supplementary data:', e);
         }
@@ -90,6 +95,30 @@ function InventoryPage() {
     navigate(`/workorders?newFromShipment=${shipmentId}`);
   };
 
+  // Debounced server-side search across ALL statuses (including archived/shipped)
+  const searchTimer = useRef(null);
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 2) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const response = await getWorkOrders({ search: searchQuery, limit: 50, view: 'list' });
+        setSearchResults(response.data.data || []);
+      } catch (err) {
+        console.error('Search error:', err);
+        setSearchResults(null);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(searchTimer.current);
+  }, [searchQuery]);
+
   const dismissCompletion = (orderId) => {
     const updated = [...dismissedCompletions, orderId];
     setDismissedCompletions(updated);
@@ -99,6 +128,23 @@ function InventoryPage() {
   const visibleCompletions = recentlyCompleted.filter(o => !dismissedCompletions.includes(o.id));
 
   const getFilteredOrders = () => {
+    // When searching, use server-side results (includes archived/shipped)
+    if (searchQuery && searchQuery.length >= 2 && searchResults !== null) {
+      let filtered = [...searchResults];
+      // Sort
+      filtered.sort((a, b) => {
+        switch (sortBy) {
+          case 'dr_desc': return (b.drNumber || 0) - (a.drNumber || 0);
+          case 'dr_asc': return (a.drNumber || 0) - (b.drNumber || 0);
+          case 'client': return (a.clientName || '').localeCompare(b.clientName || '');
+          case 'date': return new Date(b.createdAt) - new Date(a.createdAt);
+          case 'location': return (a.storageLocation || '').localeCompare(b.storageLocation || '');
+          default: return (b.drNumber || 0) - (a.drNumber || 0);
+        }
+      });
+      return filtered;
+    }
+
     let filtered = [...workOrders];
 
     // Filter by status
@@ -292,16 +338,24 @@ function InventoryPage() {
       {/* Search and Sort */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="search-box" style={{ flex: 1, minWidth: 200, marginBottom: 0 }}>
+          <div className="search-box" style={{ flex: 1, minWidth: 200, marginBottom: 0, position: 'relative' }}>
             <Search size={18} className="search-box-icon" />
             <input
               type="text"
-              placeholder="Search by DR#, client, PO#, location..."
+              placeholder="Search by DR#, client, PO#, estimate#, location..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="search-box-input"
             />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#999', fontSize: '1.1rem', padding: 4 }}>✕</button>
+            )}
           </div>
+          {searchQuery && searchQuery.length >= 2 && (
+            <span style={{ fontSize: '0.8rem', color: '#1565c0', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              {searching ? '⏳ Searching...' : `🔍 All statuses (${filteredOrders.length} found)`}
+            </span>
+          )}
           <select 
             className="form-select" 
             value={sortBy} 
@@ -371,6 +425,36 @@ function InventoryPage() {
       })()}
 
       {/* Waiting for Instructions - unlinked shipments */}
+
+      {/* Shop Supplies Low Stock Warning */}
+      {lowStockSupplies.length > 0 && statusFilter !== 'archived' && (
+        <div style={{
+          background: '#fce4ec', border: '2px solid #e91e63', borderRadius: 8,
+          padding: '14px 18px', marginBottom: 16
+        }}>
+          <div style={{ fontWeight: 700, color: '#c2185b', fontSize: '1rem', marginBottom: 8 }}>
+            🛒 {lowStockSupplies.length} Shop Supplie{lowStockSupplies.length > 1 ? 's' : ''} Low / Out of Stock
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {lowStockSupplies.map(item => (
+              <div key={item.id} role="button" tabIndex={0}
+                onClick={() => navigate('/shop-supplies')}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  background: item.quantity === 0 ? '#ffebee' : '#fff8e1', padding: '8px 12px', borderRadius: 6, fontSize: '0.9rem', cursor: 'pointer' }}
+              >
+                <span>
+                  <strong>{item.name}</strong>
+                  {item.category && <span style={{ color: '#888', marginLeft: 8, fontSize: '0.8rem' }}>({item.category})</span>}
+                </span>
+                <span style={{ fontWeight: 700, color: item.quantity === 0 ? '#c62828' : '#e65100' }}>
+                  {item.quantity === 0 ? 'OUT OF STOCK' : `${item.quantity} ${item.unit} left`}
+                  <span style={{ fontWeight: 400, marginLeft: 8, color: '#888', fontSize: '0.8rem' }}>min: {item.minQuantity}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       
       {/* Shop Floor Completed Notifications */}
       {visibleCompletions.length > 0 && statusFilter !== 'archived' && (
