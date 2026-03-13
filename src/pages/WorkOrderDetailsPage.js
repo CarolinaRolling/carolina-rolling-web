@@ -1319,7 +1319,11 @@ function WorkOrderDetailsPage() {
       let desc = fd._rollingDescription || '';
       // Correct stale EW/HW direction using actual rollType
       if (desc && p.rollType) {
-        const dir = getRollDir(p);
+        const dir = (() => {
+          if (!p.rollType) return '';
+          if (p.partType === 'tee_bar') return p.rollType === 'easy_way' ? 'SO' : p.rollType === 'on_edge' ? 'SU' : 'SI';
+          return p.rollType === 'easy_way' ? 'EW' : p.rollType === 'on_edge' ? 'OE' : 'HW';
+        })();
         if (dir) {
           const allDirs = ['EW', 'HW', 'OE', 'SO', 'SI', 'SU'];
           const dirRx = new RegExp('\\b(' + allDirs.join('|') + ')\\b', 'g');
