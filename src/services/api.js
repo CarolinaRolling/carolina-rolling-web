@@ -336,6 +336,8 @@ export const getApiKeySetupQR = (id) => api.get(`/auth/api-keys/${id}/setup-qr`)
 export const createApiKey = (data) => api.post('/auth/api-keys', data);
 export const updateApiKey = (id, data) => api.put(`/auth/api-keys/${id}`, data);
 export const revokeApiKey = (id) => api.delete(`/auth/api-keys/${id}`);
+export const getApprovedIPs = () => api.get('/auth/approved-ips');
+export const updateApprovedIPs = (ips) => api.put('/auth/approved-ips', { ips });
 
 export default api;
 

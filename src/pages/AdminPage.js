@@ -5,7 +5,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, setup2FA, verify2FA, disable2FA, get2FAStatus } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -107,6 +107,8 @@ function AdminPage({ section = 'users-logs' }) {
   const [newApiKey, setNewApiKey] = useState({ name: '', clientName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '' });
   const [createdApiKey, setCreatedApiKey] = useState(null); // holds key after creation (only shown once)
   const [apiKeysLoading, setApiKeysLoading] = useState(false);
+  const [approvedIPs, setApprovedIPs] = useState([]);
+  const [newIP, setNewIP] = useState('');
 
   // Two-Factor Auth
   const [twoFAState, setTwoFAState] = useState({ enabled: false, setupData: null, verifyCode: '', disablePassword: '' });
@@ -474,12 +476,39 @@ function AdminPage({ section = 'users-logs' }) {
   const loadApiKeys = async () => {
     try {
       setLoading(true);
-      const response = await getApiKeys();
-      setApiKeys(response.data.data || []);
+      const [keysRes, ipsRes] = await Promise.all([getApiKeys(), getApprovedIPs()]);
+      setApiKeys(keysRes.data.data || []);
+      setApprovedIPs(ipsRes.data.data || []);
     } catch (err) {
       setError('Failed to load API keys');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddIP = async () => {
+    const ip = newIP.trim();
+    if (!ip) return;
+    if (approvedIPs.includes(ip)) { setError('IP already in list'); return; }
+    try {
+      const updated = [...approvedIPs, ip];
+      await updateApprovedIPs(updated);
+      setApprovedIPs(updated);
+      setNewIP('');
+      setSuccess(`Added ${ip} to approved IPs`);
+    } catch (err) {
+      setError('Failed to update approved IPs');
+    }
+  };
+
+  const handleRemoveIP = async (ip) => {
+    try {
+      const updated = approvedIPs.filter(i => i !== ip);
+      await updateApprovedIPs(updated);
+      setApprovedIPs(updated);
+      setSuccess(`Removed ${ip} from approved IPs`);
+    } catch (err) {
+      setError('Failed to update approved IPs');
     }
   };
 
@@ -1855,6 +1884,42 @@ function AdminPage({ section = 'users-logs' }) {
           )}
 
           <div className="card">
+            <h3 style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              🌐 Approved IP Addresses
+            </h3>
+            <p style={{ color: '#666', marginBottom: 12, fontSize: '0.85rem' }}>
+              These IPs are allowed for <strong>all</strong> tablet API keys. Add your shop's public IP here instead of setting it on each key individually.
+            </p>
+            
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <input type="text" className="form-input" placeholder="e.g. 72.45.123.89 or 192.168.1.0/24"
+                value={newIP} onChange={(e) => setNewIP(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddIP(); }}
+                style={{ maxWidth: 280 }} />
+              <button className="btn btn-primary" onClick={handleAddIP} disabled={!newIP.trim()} style={{ padding: '6px 16px' }}>
+                + Add IP
+              </button>
+            </div>
+
+            {approvedIPs.length === 0 ? (
+              <div style={{ padding: 16, background: '#fff3e0', borderRadius: 8, fontSize: '0.85rem', color: '#e65100' }}>
+                No approved IPs set — tablet API keys will only use their individual IP restrictions (or allow all if blank).
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {approvedIPs.map(ip => (
+                  <div key={ip} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 6, padding: '4px 10px', fontSize: '0.9rem' }}>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#2e7d32' }}>{ip}</span>
+                    <button onClick={() => handleRemoveIP(ip)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c62828', fontSize: '1.1rem', padding: '0 2px', lineHeight: 1 }}
+                      title="Remove">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card" style={{ marginTop: 16 }}>
             <h3 style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Key size={20} />
               API Keys
@@ -1984,7 +2049,7 @@ function AdminPage({ section = 'users-logs' }) {
               <label className="form-label">Allowed IPs</label>
               <input type="text" className="form-input" placeholder="e.g. 72.133.45.67 or 192.168.1.0/24"
                 value={newApiKey.allowedIPs} onChange={(e) => setNewApiKey({ ...newApiKey, allowedIPs: e.target.value })} />
-              <small style={{ color: '#c62828' }}>If set, key is auto-revoked when used from a different IP. Comma-separate multiple IPs. Leave blank to allow any IP.</small>
+              <small style={{ color: '#666' }}>Optional — per-key override. The global Approved IPs list applies to all keys automatically. Only add IPs here if this key needs additional IPs beyond the global list.</small>
             </div>
             <div className="form-group">
               <label className="form-label">Client Scope (optional)</label>
