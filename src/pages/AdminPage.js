@@ -553,7 +553,7 @@ function AdminPage({ section = 'users-logs' }) {
       const response = await getApiKeySetupQR(keyId);
       const { qrPayload, deviceName } = response.data.data;
       
-      const w = window.open('', '_blank', 'width=420,height=520');
+      const w = window.open('', '_blank', 'width=480,height=580');
       w.document.write(`<!DOCTYPE html><html><head><title>Setup QR - ${deviceName}</title>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
         <style>
@@ -580,8 +580,8 @@ function AdminPage({ section = 'users-logs' }) {
         <script>
           new QRCode(document.getElementById("qrcode"), {
             text: ${JSON.stringify(qrPayload)},
-            width: 240, height: 240,
-            correctLevel: QRCode.CorrectLevel.L
+            width: 300, height: 300,
+            correctLevel: QRCode.CorrectLevel.M
           });
         <\/script>
       </body></html>`);
