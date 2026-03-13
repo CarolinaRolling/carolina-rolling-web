@@ -299,6 +299,8 @@ export const updateNotificationEmail = (email) => api.put('/settings/notificatio
 // General Settings
 export const getSettings = (key) => api.get(`/settings/${key}`);
 export const updateSettings = (key, value) => api.put(`/settings/${key}`, { value });
+export const getPrinterConfig = () => api.get('/settings/printer-config');
+export const updatePrinterConfig = (config) => api.put('/settings/printer-config', config);
 
 // Schedule Email Settings
 export const getScheduleEmailSettings = () => api.get('/settings/schedule-email');

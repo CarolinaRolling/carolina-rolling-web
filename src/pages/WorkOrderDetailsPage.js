@@ -1424,7 +1424,6 @@ function WorkOrderDetailsPage() {
       <div><strong>Client</strong>${order.clientName || '—'}</div>
       ${clientPO ? `<div><strong>PO#</strong>${clientPO}</div>` : ''}
       ${order.storageLocation ? `<div><strong>Storage</strong>${order.storageLocation}</div>` : ''}
-      ${order.promisedDate ? `<div><strong>Promised</strong>${new Date(order.promisedDate + 'T12:00:00').toLocaleDateString()}</div>` : ''}
     </div>
 
     <div class="count-summary">${remainingParts.length} part${remainingParts.length !== 1 ? 's' : ''} — ${totalPieces} total pieces${hasPartialHistory ? ' remaining' : ''}</div>

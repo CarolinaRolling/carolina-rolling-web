@@ -5,7 +5,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -33,7 +33,7 @@ function AdminPage({ section = 'users-logs' }) {
   // Tab groups by section
   const SECTION_TABS = {
     'users-logs': ['users', 'logs', 'schedule', 'apikeys', 'system'],
-    'shop-config': ['tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates']
+    'shop-config': ['tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates', 'printer']
   };
   const allowedTabs = SECTION_TABS[section] || SECTION_TABS['users-logs'];
   const [activeTab, setActiveTab] = useState(allowedTabs[0]);
@@ -111,6 +111,7 @@ function AdminPage({ section = 'users-logs' }) {
   const [editApiKeyData, setEditApiKeyData] = useState({});
   const [approvedIPs, setApprovedIPs] = useState([]);
   const [newIP, setNewIP] = useState('');
+  const [printerConfig, setPrinterConfig] = useState({ printerIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, qrLabelWidthMm: 29 });
 
   // Two-Factor Auth
   const [twoFAState, setTwoFAState] = useState({ enabled: false, setupData: null, verifyCode: '', disablePassword: '' });
@@ -155,6 +156,8 @@ function AdminPage({ section = 'users-logs' }) {
       setLoading(false);
     } else if (activeTab === 'apikeys') {
       loadApiKeys();
+    } else if (activeTab === 'printer') {
+      loadPrinterConfig();
     }
   }, [activeTab, logsPage]);
 
@@ -528,6 +531,30 @@ function AdminPage({ section = 'users-logs' }) {
     }
   };
 
+  const loadPrinterConfig = async () => {
+    try {
+      setLoading(true);
+      const response = await getPrinterConfig();
+      setPrinterConfig(response.data.data || { printerIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, qrLabelWidthMm: 29 });
+    } catch (err) {
+      setPrinterConfig({ printerIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, qrLabelWidthMm: 29 });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSavePrinterConfig = async () => {
+    try {
+      setSaving(true);
+      await updatePrinterConfig(printerConfig);
+      setSuccess('Printer configuration saved — tablets will pick it up on next refresh');
+    } catch (err) {
+      setError('Failed to save printer config');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCreateApiKey = async () => {
     if (!newApiKey.name.trim()) {
       setError('API key name is required');
@@ -791,6 +818,7 @@ function AdminPage({ section = 'users-logs' }) {
           <button className={`tab ${activeTab === 'mandreldies' ? 'active' : ''}`} onClick={() => setActiveTab('mandreldies')}>⚙️ Mandrel Dies</button>
           <button className={`tab ${activeTab === 'grades' ? 'active' : ''}`} onClick={() => setActiveTab('grades')}>📊 Material Grades</button>
           <button className={`tab ${activeTab === 'weldrates' ? 'active' : ''}`} onClick={() => setActiveTab('weldrates')}>🔥 Weld Rates</button>
+          <button className={`tab ${activeTab === 'printer' ? 'active' : ''}`} onClick={() => setActiveTab('printer')}>🖨️ Printer</button>
         </>)}
         {section === 'users-logs' && (<>
           <button className={`tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
@@ -1858,6 +1886,133 @@ function AdminPage({ section = 'users-logs' }) {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'printer' && !loading && (
+        <div>
+          <div className="card">
+            <h3 style={{ marginBottom: 16 }}>🖨️ Label Printer Configuration</h3>
+            <p style={{ color: '#666', marginBottom: 16, fontSize: '0.85rem' }}>
+              These settings are shared with all tablets. Tablets pull this config automatically when they open a work order.
+            </p>
+
+            <div className="form-group">
+              <label className="form-label">Printer IP Address</label>
+              <input type="text" className="form-input" placeholder="e.g. 192.168.1.50"
+                value={printerConfig.printerIp} onChange={(e) => setPrinterConfig({ ...printerConfig, printerIp: e.target.value })}
+                style={{ maxWidth: 280 }} />
+              <small style={{ color: '#666' }}>Brother QL-810W network IP. Find it on the printer's LCD or router admin.</small>
+            </div>
+
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 16 }}>
+              <div style={{ flex: 1, minWidth: 250, background: '#e3f2fd', borderRadius: 8, padding: 16 }}>
+                <h4 style={{ marginBottom: 12, color: '#1565c0' }}>📦 QR Code Labels</h4>
+                <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Settings for shipment and supply QR stickers.</p>
+                
+                <div className="form-group">
+                  <label className="form-label">Label Type</label>
+                  <select className="form-select" value={printerConfig.qrLabelType}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, qrLabelType: e.target.value })}>
+                    <option value="CONTINUOUS_29">29mm Continuous (DK-22210)</option>
+                    <option value="CONTINUOUS_38">38mm Continuous (DK-22225)</option>
+                    <option value="CONTINUOUS_50">50mm Continuous (DK-22223)</option>
+                    <option value="CONTINUOUS_62">62mm Continuous (DK-22205)</option>
+                    <option value="CONTINUOUS_12">12mm Continuous (DK-22214)</option>
+                    <option value="DK_11202_62x100">62mm x 100mm Die-Cut (DK-11202)</option>
+                    <option value="DK_11209_29x62">29mm x 62mm Die-Cut (DK-11209)</option>
+                    <option value="QR_29x25">QR 29mm x 25mm</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Cut Length (mm) — for continuous tape</label>
+                  <input type="number" className="form-input" value={printerConfig.qrLabelLengthMm}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, qrLabelLengthMm: parseInt(e.target.value) || 25 })}
+                    style={{ maxWidth: 120 }} />
+                  <small style={{ color: '#666' }}>Length each QR label is cut to. Ignored for die-cut labels.</small>
+                </div>
+              </div>
+
+              <div style={{ flex: 1, minWidth: 250, background: '#fff3e0', borderRadius: 8, padding: 16 }}>
+                <h4 style={{ marginBottom: 12, color: '#e65100' }}>🏷️ Part Info Labels</h4>
+                <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>
+                  Uses the <strong>same tape</strong> as QR labels but auto-sizes the length to fit the content (Part#, PO, Heat#). No length limit.
+                </p>
+                <div style={{ background: 'white', borderRadius: 6, padding: 12, fontSize: '0.85rem' }}>
+                  <div style={{ fontWeight: 600, color: '#333' }}>How it works:</div>
+                  <div style={{ color: '#666', marginTop: 4 }}>
+                    The printer cuts each label to exactly the length needed for the text — short labels for simple tags, longer for multi-line heat info. Same tape roll, no waste.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 20, display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" onClick={handleSavePrinterConfig} disabled={saving}>
+                {saving ? 'Saving...' : '💾 Save Printer Config'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'printer' && !loading && (
+        <div>
+          <div className="card">
+            <h3 style={{ marginBottom: 16 }}>🖨️ Label Printer Configuration</h3>
+            <p style={{ color: '#666', marginBottom: 16, fontSize: '0.85rem' }}>
+              These settings are shared with all tablets. Tablets pull this config automatically.
+            </p>
+
+            <div className="form-group">
+              <label className="form-label">Printer IP Address</label>
+              <input type="text" className="form-input" placeholder="e.g. 192.168.1.50" style={{ maxWidth: 280 }}
+                value={printerConfig.printerIp} onChange={(e) => setPrinterConfig({ ...printerConfig, printerIp: e.target.value })} />
+              <small style={{ color: '#666' }}>Brother QL-810W network IP. All tablets will use this printer.</small>
+            </div>
+
+            <div style={{ marginTop: 16, padding: 16, background: '#f0f7ff', borderRadius: 8, border: '1px solid #bbdefb' }}>
+              <h4 style={{ marginBottom: 12, color: '#1565c0' }}>QR Code Labels (Shipment / Supply Tags)</h4>
+              <div className="grid grid-3" style={{ gap: 16 }}>
+                <div className="form-group">
+                  <label className="form-label">Label Type</label>
+                  <select className="form-select" value={printerConfig.qrLabelType}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, qrLabelType: e.target.value })}>
+                    <option value="CONTINUOUS_29">29mm Continuous (DK-22210)</option>
+                    <option value="CONTINUOUS_38">38mm Continuous (DK-22225)</option>
+                    <option value="CONTINUOUS_50">50mm Continuous (DK-22223)</option>
+                    <option value="CONTINUOUS_62">62mm Continuous (DK-22205)</option>
+                    <option value="DK_11202_62x100">62mm x 100mm Die-Cut (DK-11202)</option>
+                    <option value="DK_11209_29x62">29mm x 62mm Die-Cut (DK-11209)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Tape Width (mm)</label>
+                  <input type="number" className="form-input" value={printerConfig.qrLabelWidthMm}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, qrLabelWidthMm: parseInt(e.target.value) || 29 })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Cut Length (mm)</label>
+                  <input type="number" className="form-input" value={printerConfig.qrLabelLengthMm}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, qrLabelLengthMm: parseInt(e.target.value) || 25 })} />
+                  <small style={{ color: '#666' }}>For continuous tape only — how long to cut each QR label.</small>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 16, padding: 16, background: '#f1f8e9', borderRadius: 8, border: '1px solid #c5e1a5' }}>
+              <h4 style={{ marginBottom: 8, color: '#33691e' }}>Part Info Labels (Heat# / Client Part# Tags)</h4>
+              <p style={{ fontSize: '0.85rem', color: '#666' }}>
+                Part labels use the <strong>same tape type</strong> as QR labels but auto-calculate length based on content.
+                A 3-line label will print at ~40mm, shorter labels for fewer lines. No fixed length limit.
+              </p>
+            </div>
+
+            <button className="btn btn-primary" onClick={handleSavePrinterConfig} disabled={saving} style={{ marginTop: 20 }}>
+              {saving ? 'Saving...' : '💾 Save Printer Config'}
+            </button>
           </div>
         </div>
       )}
