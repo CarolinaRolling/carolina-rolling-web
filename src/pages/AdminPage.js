@@ -111,7 +111,7 @@ function AdminPage({ section = 'users-logs' }) {
   const [editApiKeyData, setEditApiKeyData] = useState({});
   const [approvedIPs, setApprovedIPs] = useState([]);
   const [newIP, setNewIP] = useState('');
-  const [printerConfig, setPrinterConfig] = useState({ printerIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, qrLabelWidthMm: 29 });
+  const [printerConfig, setPrinterConfig] = useState({ qrPrinterIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, partPrinterIp: '', partLabelType: 'DK_11202_62x100' });
 
   // Two-Factor Auth
   const [twoFAState, setTwoFAState] = useState({ enabled: false, setupData: null, verifyCode: '', disablePassword: '' });
@@ -535,9 +535,9 @@ function AdminPage({ section = 'users-logs' }) {
     try {
       setLoading(true);
       const response = await getPrinterConfig();
-      setPrinterConfig(response.data.data || { printerIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, qrLabelWidthMm: 29 });
+      setPrinterConfig(response.data.data || { qrPrinterIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, partPrinterIp: '', partLabelType: 'DK_11202_62x100' });
     } catch (err) {
-      setPrinterConfig({ printerIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, qrLabelWidthMm: 29 });
+      setPrinterConfig({ qrPrinterIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, partPrinterIp: '', partLabelType: 'DK_11202_62x100' });
     } finally {
       setLoading(false);
     }
@@ -1895,22 +1895,21 @@ function AdminPage({ section = 'users-logs' }) {
           <div className="card">
             <h3 style={{ marginBottom: 16 }}>🖨️ Label Printer Configuration</h3>
             <p style={{ color: '#666', marginBottom: 16, fontSize: '0.85rem' }}>
-              These settings are shared with all tablets. Tablets pull this config automatically when they open a work order.
+              Configure two independent Brother printers — one for QR code stickers, one for part info labels. All tablets pull this config automatically.
             </p>
 
-            <div className="form-group">
-              <label className="form-label">Printer IP Address</label>
-              <input type="text" className="form-input" placeholder="e.g. 192.168.1.50"
-                value={printerConfig.printerIp} onChange={(e) => setPrinterConfig({ ...printerConfig, printerIp: e.target.value })}
-                style={{ maxWidth: 280 }} />
-              <small style={{ color: '#666' }}>Brother QL-810W network IP. Find it on the printer's LCD or router admin.</small>
-            </div>
-
-            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 16 }}>
-              <div style={{ flex: 1, minWidth: 250, background: '#e3f2fd', borderRadius: 8, padding: 16 }}>
-                <h4 style={{ marginBottom: 12, color: '#1565c0' }}>📦 QR Code Labels</h4>
-                <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Settings for shipment and supply QR stickers.</p>
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              {/* QR Code Printer */}
+              <div style={{ flex: 1, minWidth: 280, background: '#e3f2fd', borderRadius: 8, padding: 16 }}>
+                <h4 style={{ marginBottom: 12, color: '#1565c0' }}>📦 QR Code Printer</h4>
+                <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>For shipment and supply QR stickers.</p>
                 
+                <div className="form-group">
+                  <label className="form-label">Printer IP Address</label>
+                  <input type="text" className="form-input" placeholder="e.g. 192.168.1.50"
+                    value={printerConfig.qrPrinterIp} onChange={(e) => setPrinterConfig({ ...printerConfig, qrPrinterIp: e.target.value })} />
+                </div>
+
                 <div className="form-group">
                   <label className="form-label">Label Type</label>
                   <select className="form-select" value={printerConfig.qrLabelType}
@@ -1927,7 +1926,7 @@ function AdminPage({ section = 'users-logs' }) {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Cut Length (mm) — for continuous tape</label>
+                  <label className="form-label">Cut Length (mm)</label>
                   <input type="number" className="form-input" value={printerConfig.qrLabelLengthMm}
                     onChange={(e) => setPrinterConfig({ ...printerConfig, qrLabelLengthMm: parseInt(e.target.value) || 25 })}
                     style={{ maxWidth: 120 }} />
@@ -1935,16 +1934,31 @@ function AdminPage({ section = 'users-logs' }) {
                 </div>
               </div>
 
-              <div style={{ flex: 1, minWidth: 250, background: '#fff3e0', borderRadius: 8, padding: 16 }}>
-                <h4 style={{ marginBottom: 12, color: '#e65100' }}>🏷️ Part Info Labels</h4>
-                <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>
-                  Uses the <strong>same tape</strong> as QR labels but auto-sizes the length to fit the content (Part#, PO, Heat#). No length limit.
-                </p>
-                <div style={{ background: 'white', borderRadius: 6, padding: 12, fontSize: '0.85rem' }}>
-                  <div style={{ fontWeight: 600, color: '#333' }}>How it works:</div>
-                  <div style={{ color: '#666', marginTop: 4 }}>
-                    The printer cuts each label to exactly the length needed for the text — short labels for simple tags, longer for multi-line heat info. Same tape roll, no waste.
-                  </div>
+              {/* Part Label Printer */}
+              <div style={{ flex: 1, minWidth: 280, background: '#fff3e0', borderRadius: 8, padding: 16 }}>
+                <h4 style={{ marginBottom: 12, color: '#e65100' }}>🏷️ Part Label Printer</h4>
+                <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>For part info tags (Part#, PO, Heat#). Auto-sizes length to fit content.</p>
+                
+                <div className="form-group">
+                  <label className="form-label">Printer IP Address</label>
+                  <input type="text" className="form-input" placeholder="e.g. 192.168.1.51"
+                    value={printerConfig.partPrinterIp} onChange={(e) => setPrinterConfig({ ...printerConfig, partPrinterIp: e.target.value })} />
+                  <small style={{ color: '#666' }}>Can be the same IP as QR printer if using one printer.</small>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Label Type</label>
+                  <select className="form-select" value={printerConfig.partLabelType}
+                    onChange={(e) => setPrinterConfig({ ...printerConfig, partLabelType: e.target.value })}>
+                    <option value="DK_11202_62x100">62mm x 100mm Die-Cut (DK-11202)</option>
+                    <option value="DK_11209_29x62">29mm x 62mm Die-Cut (DK-11209)</option>
+                    <option value="DK_11201_29x90">29mm x 90mm Die-Cut (DK-11201)</option>
+                    <option value="CONTINUOUS_62">62mm Continuous (DK-22205)</option>
+                    <option value="CONTINUOUS_50">50mm Continuous (DK-22223)</option>
+                    <option value="CONTINUOUS_38">38mm Continuous (DK-22225)</option>
+                    <option value="CONTINUOUS_29">29mm Continuous (DK-22210)</option>
+                  </select>
+                  <small style={{ color: '#666' }}>For continuous tape, the printer auto-cuts to fit content — no length limit.</small>
                 </div>
               </div>
             </div>
