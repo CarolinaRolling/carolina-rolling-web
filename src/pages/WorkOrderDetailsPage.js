@@ -512,7 +512,7 @@ function WorkOrderDetailsPage() {
 
   // Reorder — duplicate WO to new estimate with cleared material pricing
   const handleReorder = async () => {
-    if (!window.confirm('Create a new estimate from this work order?\n\nAll part specs and labor will be copied. Material pricing will be cleared so you can get updated quotes.')) return;
+    if (!window.confirm(`Create a reorder estimate from this work order?\n\nA new estimate will be created with all part specs and pricing copied from the original estimate${order.estimateNumber ? ` (${order.estimateNumber})` : ''}. You can then update pricing and send to the client.\n\nThe original work order and estimate will not be modified.`)) return;
     try {
       setReordering(true);
       const res = await duplicateWorkOrderToEstimate(id);

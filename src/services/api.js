@@ -289,7 +289,7 @@ export const getEmailLogs = () => api.get('/email/logs');
 
 // Backup
 export const getBackupInfo = () => api.get('/backup/info');
-export const downloadBackup = (params) => api.get('/backup', { params, responseType: 'blob' });
+export const downloadBackup = (params) => api.get('/backup', { params });
 export const restoreBackup = (data) => api.post('/backup/restore', data);
 
 // Email Settings
