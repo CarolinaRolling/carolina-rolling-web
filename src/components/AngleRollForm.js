@@ -556,52 +556,71 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
                 );
               })}
             </div>
-            {partData._orientationOption && (
-              <button type="button" onClick={() => {
-                const imgFile = partData.rollType === 'easy_way' ? `EWODOp${partData._orientationOption}.png` : `HWIDOp${partData._orientationOption}.png`;
+            <button type="button" onClick={() => {
                 const dir = partData.rollType === 'easy_way' ? 'Easy Way' : 'Hard Way';
                 const mp = rollMeasurePoint === 'outside' ? 'OD' : 'ID';
                 const size = partData._angleSize || partData.sectionSize || '';
                 const rollVal = rollValue || '';
-                const w = window.open('', '_blank', 'width=600,height=700');
+                const img1 = partData.rollType === 'easy_way' ? 'EWODOp1.png' : 'HWIDOp1.png';
+                const img2 = partData.rollType === 'easy_way' ? 'EWODOp2.png' : 'HWIDOp2.png';
+                const w = window.open('', '_blank', 'width=700,height=900');
                 w.document.write(`<!DOCTYPE html><html><head><title>Orientation Confirmation</title>
 <style>
-  @page { size: letter; margin: 1in; }
-  body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; color: #333; }
-  .header { text-align: center; margin-bottom: 30px; }
-  .title { font-size: 18px; font-weight: 700; color: #1976d2; }
-  .subtitle { font-size: 12px; color: #666; margin-top: 4px; }
-  .specs { background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; line-height: 1.8; }
+  @page { size: letter; margin: 0.75in; }
+  body { font-family: Arial, sans-serif; max-width: 650px; margin: 30px auto; color: #333; }
+  .header { text-align: center; margin-bottom: 24px; }
+  .title { font-size: 20px; font-weight: 700; color: #1976d2; }
+  .subtitle { font-size: 11px; color: #666; margin-top: 4px; }
+  .specs { background: #f5f5f5; padding: 14px 18px; border-radius: 8px; margin-bottom: 24px; font-size: 13px; line-height: 1.8; }
   .specs strong { color: #1565c0; }
-  .diagram { text-align: center; margin: 20px 0; }
-  .diagram img { max-width: 400px; border: 2px solid #1976d2; border-radius: 8px; }
-  .selected { text-align: center; font-size: 16px; font-weight: 700; color: #2e7d32; margin: 16px 0; }
+  .instruction { text-align: center; font-size: 14px; font-weight: 600; color: #333; margin-bottom: 20px; }
+  .options { display: flex; gap: 24px; justify-content: center; }
+  .option-card { flex: 1; max-width: 280px; border: 3px solid #ccc; border-radius: 12px; overflow: hidden; text-align: center; }
+  .option-card img { width: 100%; display: block; }
+  .option-label { padding: 12px; font-size: 16px; font-weight: 700; color: #333; background: #f5f5f5; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .checkbox { width: 24px; height: 24px; border: 3px solid #333; border-radius: 4px; display: inline-block; }
   .confirm { margin-top: 40px; border-top: 2px solid #ccc; padding-top: 20px; }
-  .sig-line { border-bottom: 1px solid #333; height: 30px; margin: 30px 0 4px; width: 60%; }
+  .sig-row { display: flex; gap: 30px; margin-top: 24px; }
+  .sig-block { flex: 1; }
+  .sig-line { border-bottom: 1px solid #333; height: 30px; margin-bottom: 4px; }
   .sig-label { font-size: 10px; color: #888; }
   @media print { button { display: none; } }
 </style></head><body>
 <div class="header">
   <div class="title">ROLL ORIENTATION CONFIRMATION</div>
-  <div class="subtitle">Carolina Rolling Co. Inc. — Please confirm the orientation below</div>
+  <div class="subtitle">Carolina Rolling Co. Inc.</div>
 </div>
 <div class="specs">
   <strong>Section:</strong> ${size}<br/>
   <strong>Roll Direction:</strong> ${dir} (${mp})<br/>
-  <strong>Diameter/Radius:</strong> ${rollVal}"<br/>
-  <strong>Selected:</strong> Option ${partData._orientationOption}
+  <strong>Diameter/Radius:</strong> ${rollVal}"
 </div>
-<div class="diagram">
-  <img src="/images/angle-orientation/${imgFile}" alt="Option ${partData._orientationOption}" />
+<div class="instruction">Please select the correct orientation by checking one option below:</div>
+<div class="options">
+  <div class="option-card">
+    <img src="/images/angle-orientation/${img1}" alt="Option 1" />
+    <div class="option-label"><div class="checkbox"></div> Option 1</div>
+  </div>
+  <div class="option-card">
+    <img src="/images/angle-orientation/${img2}" alt="Option 2" />
+    <div class="option-label"><div class="checkbox"></div> Option 2</div>
+  </div>
 </div>
-<div class="selected">✅ Option ${partData._orientationOption} — ${dir} ${mp}</div>
 <div class="confirm">
-  <p style="font-size:13px;color:#666;">Please review the orientation above and sign below to confirm this is correct before we proceed with rolling.</p>
-  <div class="sig-line"></div>
-  <div class="sig-label">Client Signature / Approval</div>
-  <div style="margin-top:20px;">
-    <div class="sig-line"></div>
-    <div class="sig-label">Date</div>
+  <p style="font-size:12px;color:#666;text-align:center;">Please check the correct orientation above, sign below, and return to Carolina Rolling before we proceed.</p>
+  <div class="sig-row">
+    <div class="sig-block">
+      <div class="sig-line"></div>
+      <div class="sig-label">Client Name (Print)</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-line"></div>
+      <div class="sig-label">Signature</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-line"></div>
+      <div class="sig-label">Date</div>
+    </div>
   </div>
 </div>
 <script>setTimeout(function(){window.print();},500);</script>
@@ -615,7 +634,6 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
               }}>
                 📄 Print Orientation PDF for Client
               </button>
-            )}
           </div>
         )}
 
