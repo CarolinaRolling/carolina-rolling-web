@@ -289,7 +289,7 @@ function BackupPage() {
                       {uploadedBackup.counts.estimates > 0 && <li>{uploadedBackup.counts.estimates} estimates</li>}
                       {uploadedBackup.counts.inboundOrders > 0 && <li>{uploadedBackup.counts.inboundOrders} inbound orders</li>}
                       {uploadedBackup.counts.settings > 0 && <li>{uploadedBackup.counts.settings} settings</li>}
-                      {uploadedBackup.counts._files && <li style={{ color: '#1565c0', fontWeight: 600 }}>{uploadedBackup.counts._files.downloaded} PDF/CAD files included</li>}
+                      {uploadedBackup.counts._files && <li style={{ color: '#1565c0', fontWeight: 600 }}>{uploadedBackup.counts._files.downloaded} PDF/CAD files included{uploadedBackup.counts._files.failed > 0 && <span style={{ color: '#c62828' }}> ({uploadedBackup.counts._files.failed} failed)</span>}</li>}
                       {uploadedBackup.files && Object.keys(uploadedBackup.files).length > 0 && !uploadedBackup.counts._files && <li style={{ color: '#1565c0', fontWeight: 600 }}>{Object.keys(uploadedBackup.files).length} PDF/CAD files included</li>}
                     </ul>
                   </div>
