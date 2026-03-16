@@ -73,7 +73,7 @@ function WalterJoke() {
         style={{
           position: 'fixed',
           top: 12,
-          left: 252,
+          right: 12,
           width: 48,
           height: 48,
           borderRadius: '50%',
@@ -105,22 +105,22 @@ function WalterJoke() {
         <div style={{
           position: 'fixed',
           top: 12,
-          left: 312,
+          right: 72,
           zIndex: 1100,
           maxWidth: 340,
           animation: 'walterFadeIn 0.3s ease-out',
         }}>
-          {/* Bubble arrow */}
+          {/* Bubble arrow pointing right */}
           <div style={{
             position: 'absolute',
-            left: -8,
+            right: -8,
             top: 16,
             width: 0,
             height: 0,
             borderTop: '8px solid transparent',
             borderBottom: '8px solid transparent',
-            borderRight: '8px solid #fff',
-            filter: 'drop-shadow(-2px 0 1px rgba(0,0,0,0.1))',
+            borderLeft: '8px solid #fff',
+            filter: 'drop-shadow(2px 0 1px rgba(0,0,0,0.1))',
           }} />
           {/* Bubble body */}
           <div style={{
@@ -166,7 +166,7 @@ function WalterJoke() {
 
       <style>{`
         @keyframes walterFadeIn {
-          from { opacity: 0; transform: translateX(-10px); }
+          from { opacity: 0; transform: translateX(10px); }
           to { opacity: 1; transform: translateX(0); }
         }
       `}</style>
