@@ -361,3 +361,9 @@ export const consumeShopSupply = (id, data) => api.post(`/shop-supplies/${id}/co
 export const refillShopSupply = (id, data) => api.post(`/shop-supplies/${id}/refill`, data);
 export const getShopSupplyLogs = (id) => api.get(`/shop-supplies/${id}/logs`);
 export const deleteShopSupply = (id) => api.delete(`/shop-supplies/${id}`);
+export const uploadShopSupplyImage = (id, file) => {
+  const formData = new FormData();
+  formData.append('image', file);
+  return api.post(`/shop-supplies/${id}/image`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+export const deleteShopSupplyImage = (id) => api.delete(`/shop-supplies/${id}/image`);

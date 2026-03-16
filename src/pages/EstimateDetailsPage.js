@@ -1242,27 +1242,29 @@ function EstimateDetailsPage() {
         body { font-family: Arial, Helvetica, sans-serif; padding: 32px 40px; max-width: 850px; margin: 0 auto; font-size: 13px; color: #333; }
         @page { size: letter; margin: 0.5in; }
         @media print { body { padding: 0; } }
-        .est-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
-        .est-title { font-size: 20px; font-weight: 700; color: #1976d2; }
-        .est-num { font-size: 13px; font-weight: 700; color: #333; }
-        .est-date { font-size: 11px; color: #888; }
+        .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+        .doc-title { font-size: 20px; font-weight: 700; color: #1976d2; }
+        .doc-right { text-align: right; }
+        .doc-num { font-size: 13px; font-weight: 700; color: #333; }
+        .doc-date { font-size: 11px; color: #888; }
         .divider { border: none; border-top: 1px solid #ccc; margin: 8px 0; }
-        .info-grid { display: flex; gap: 24px; padding: 8px 0; margin-bottom: 6px; font-size: 12px; }
+        .info-grid { display: flex; gap: 24px; padding: 8px 0; margin-bottom: 6px; font-size: 12px; flex-wrap: wrap; }
         .info-item label { display: block; font-size: 9px; text-transform: uppercase; color: #999; letter-spacing: 0.5px; font-weight: 600; }
         .info-item span { font-weight: 600; color: #333; }
-        .parts-header { display: flex; background: #f5f5f5; padding: 6px 0; border-bottom: 2px solid #ccc; margin-top: 14px; font-size: 9px; text-transform: uppercase; color: #888; font-weight: 700; letter-spacing: 0.5px; }
+        .section-title { font-size: 11px; text-transform: uppercase; color: #1976d2; font-weight: 700; letter-spacing: 0.5px; margin: 14px 0 6px; }
+        .parts-header { display: flex; background: #f5f5f5; padding: 6px 0; border-bottom: 2px solid #ccc; font-size: 9px; text-transform: uppercase; color: #888; font-weight: 700; letter-spacing: 0.5px; }
         .ph-item { width: 42px; padding-left: 4px; }
         .ph-desc { flex: 1; padding-left: 8px; }
         .ph-qty { width: 40px; text-align: center; }
         .ph-unit { width: 65px; text-align: right; }
         .ph-amt { width: 70px; text-align: right; padding-right: 4px; }
         .part-row { display: flex; padding: 8px 0; border-bottom: 1px solid #eee; page-break-inside: avoid; }
-        .part-row.service { background: #f5f5f5; padding-left: 20px; }
+        .part-row.service { background: #f9f5fb; padding-left: 20px; }
         .pr-item { width: 42px; font-weight: 700; color: #1976d2; font-size: 11px; padding-left: 4px; flex-shrink: 0; }
-        .pr-item.svc { color: #666; }
+        .pr-item.svc { color: #7b1fa2; }
         .pr-desc { flex: 1; padding-left: 8px; }
         .pr-type { font-weight: 700; font-size: 11px; color: #333; }
-        .pr-type.svc { color: #555; font-size: 10px; }
+        .pr-type.svc { color: #7b1fa2; font-size: 10px; }
         .pr-detail { font-size: 10px; color: #666; line-height: 1.5; margin-top: 2px; }
         .pr-pricing { font-size: 10px; color: #555; margin-top: 3px; display: flex; gap: 12px; }
         .pr-pricing strong { color: #1565c0; }
@@ -1277,12 +1279,14 @@ function EstimateDetailsPage() {
         .shop-rate-warn { font-size: 10px; color: #e65100; margin-top: 2px; font-style: italic; }
       </style></head><body>
 
-      <div class="est-header">
-        <span class="est-title">ESTIMATE</span>
-        <span class="est-num">${estimate?.estimateNumber}</span>
-        <span class="est-date">Date: ${new Date(estimate?.createdAt).toLocaleDateString()}</span>
-        ${formData.taxExempt ? '<span style="color:#c62828;font-weight:700;font-size:11px;margin-left:auto;">TAX EXEMPT</span>' : ''}
+      <div class="doc-header">
+        <span class="doc-title">ESTIMATE</span>
+        <div class="doc-right">
+          <div class="doc-num">${estimate?.estimateNumber}</div>
+          <div class="doc-date">Date: ${new Date(estimate?.createdAt).toLocaleDateString()}</div>
+        </div>
       </div>
+      ${formData.taxExempt ? '<div style="color:#c62828;font-weight:700;font-size:11px;text-align:right;margin-top:-4px;">TAX EXEMPT</div>' : ''}
       <hr class="divider" />
 
       <div class="info-grid">
@@ -1293,6 +1297,7 @@ function EstimateDetailsPage() {
       </div>
       ${formData.projectDescription ? `<div style="font-size:11px;color:#666;margin-bottom:8px;"><strong>Project:</strong> ${formData.projectDescription}</div>` : ''}
 
+      <div class="section-title">SERVICES & MATERIALS</div>
       <div class="parts-header">
         <div class="ph-item">ITEM</div>
         <div class="ph-desc">DESCRIPTION</div>

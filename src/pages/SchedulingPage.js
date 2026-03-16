@@ -41,7 +41,7 @@ function SchedulingPage() {
   const [searchQuery, setSearchQuery] = useState('');
   
   const [sortBy, setSortBy] = useState(() => {
-    return localStorage.getItem('scheduling_sortBy') || 'promised_asc';
+    return localStorage.getItem('scheduling_sortBy') || 'smart';
   });
   const [statusFilter, setStatusFilter] = useState(() => {
     return localStorage.getItem('scheduling_statusFilter') || 'all';
@@ -85,6 +85,20 @@ function SchedulingPage() {
       const response = await getWorkOrders();
       const all = response.data.data || [];
       const active = all.filter(o => !DONE_STATUSES.includes(o.status));
+      
+      // Auto-set high priority for orders received > 7 days ago that are still normal
+      const now = new Date();
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      active.forEach(order => {
+        const received = new Date(order.receivedAt || order.createdAt);
+        const age = now - received;
+        if (age > sevenDaysMs && (!order.priority || order.priority === 'normal')) {
+          // Fire and forget — update in background
+          order.priority = 'high';
+          updateWorkOrder(order.id, { priority: 'high' }).catch(() => {});
+        }
+      });
+      
       setWorkOrders(active);
     } catch (err) {
       if (!silent) setError('Failed to load work orders');
@@ -128,6 +142,24 @@ function SchedulingPage() {
       const bRush = b.parts?.some(p => p.partType === 'rush_service');
       if (aRush && !bRush) return -1;
       if (!aRush && bRush) return 1;
+
+      if (sortBy === 'smart') {
+        // Priority sort: urgent → high → normal/low, then by promised date, then by age
+        const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+        const aPri = priorityOrder[a.priority] ?? 2;
+        const bPri = priorityOrder[b.priority] ?? 2;
+        if (aPri !== bPri) return aPri - bPri;
+
+        // Within same priority: earliest promise date first
+        const aPromised = a.promisedDate ? new Date(a.promisedDate).getTime() : Infinity;
+        const bPromised = b.promisedDate ? new Date(b.promisedDate).getTime() : Infinity;
+        if (aPromised !== bPromised) return aPromised - bPromised;
+
+        // Same promise date or both no promise: oldest received first
+        const aAge = new Date(a.receivedAt || a.createdAt || 0).getTime();
+        const bAge = new Date(b.receivedAt || b.createdAt || 0).getTime();
+        return aAge - bAge;
+      }
 
       switch (sortBy) {
         case 'name_asc':
@@ -230,6 +262,8 @@ function SchedulingPage() {
     getDateStatus(o.requestedDueDate) === 'urgent'
   ).length;
   const rushCount = workOrders.filter(o => o.parts?.some(p => p.partType === 'rush_service')).length;
+  const urgentPriorityCount = workOrders.filter(o => o.priority === 'urgent' && !o.parts?.some(p => p.partType === 'rush_service')).length;
+  const highPriorityCount = workOrders.filter(o => o.priority === 'high').length;
 
   if (loading) {
     return (
@@ -338,6 +372,7 @@ function SchedulingPage() {
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >
+            <option value="smart">🎯 Smart (Priority → Promised → Age)</option>
             <optgroup label="By DR Number">
               <option value="dr_desc">DR# (Newest)</option>
               <option value="dr_asc">DR# (Oldest)</option>
@@ -398,6 +433,21 @@ function SchedulingPage() {
             const requestedStatus = getDateStatus(order.requestedDueDate);
             const statusCfg = getStatusConfig(order.status);
             const isRush = order.parts?.some(p => p.partType === 'rush_service');
+            const priority = order.priority || 'normal';
+
+            // Row background: rush=red, urgent=orange, high=yellow, normal=alternating
+            const rowBg = isRush ? '#ffebee' 
+              : priority === 'urgent' ? '#fff3e0'
+              : priority === 'high' ? '#fffde7'
+              : (index % 2 === 0 ? 'white' : '#fafafa');
+            const rowHoverBg = isRush ? '#ffcdd2'
+              : priority === 'urgent' ? '#ffe0b2'
+              : priority === 'high' ? '#fff9c4'
+              : '#f0f7ff';
+            const rowBorder = isRush ? '4px solid #c62828'
+              : priority === 'urgent' ? '4px solid #e65100'
+              : priority === 'high' ? '4px solid #f9a825'
+              : undefined;
 
             return (
               <div key={order.id}>
@@ -408,18 +458,18 @@ function SchedulingPage() {
                     padding: '16px',
                     borderBottom: isRush ? '2px solid #ef5350' : '1px solid #eee',
                     cursor: 'pointer',
-                    background: isRush ? '#ffebee' : (index % 2 === 0 ? 'white' : '#fafafa'),
+                    background: rowBg,
                     transition: 'background 0.2s',
                     alignItems: 'center',
-                    borderLeft: isRush ? '4px solid #c62828' : undefined
+                    borderLeft: rowBorder
                   }}
                   onClick={() => navigate(`/workorders/${order.id}`)}
-                  onMouseEnter={(e) => e.currentTarget.style.background = isRush ? '#ffcdd2' : '#f0f7ff'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = isRush ? '#ffebee' : (index % 2 === 0 ? 'white' : '#fafafa')}
+                  onMouseEnter={(e) => e.currentTarget.style.background = rowHoverBg}
+                  onMouseLeave={(e) => e.currentTarget.style.background = rowBg}
                 >
                   {/* DR# / Client */}
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                       {order.drNumber ? (
                         <span style={{ 
                           fontWeight: 700, 
@@ -439,6 +489,22 @@ function SchedulingPage() {
                           borderRadius: 4, fontSize: '0.7rem', fontWeight: 700
                         }}>
                           🚨 RUSH
+                        </span>
+                      )}
+                      {!isRush && priority === 'urgent' && (
+                        <span style={{
+                          background: '#e65100', color: 'white', padding: '2px 8px',
+                          borderRadius: 4, fontSize: '0.7rem', fontWeight: 700
+                        }}>
+                          🔴 URGENT
+                        </span>
+                      )}
+                      {!isRush && priority === 'high' && (
+                        <span style={{
+                          background: '#f9a825', color: '#333', padding: '2px 8px',
+                          borderRadius: 4, fontSize: '0.7rem', fontWeight: 700
+                        }}>
+                          ⚡ HIGH
                         </span>
                       )}
                     </div>

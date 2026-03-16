@@ -1079,60 +1079,53 @@ function WorkOrderDetailsPage() {
         </div>
       ` : '';
 
-      // Pricing row (only if includePricing)
-      let pricingHtml = '';
-      if (includePricing && (part.partTotal || part.laborTotal || part.materialTotal)) {
-        const matCost = parseFloat(part.materialTotal) || 0;
-        const matMarkup = parseFloat(part.materialMarkupPercent) || 0;
-        const matEach = matCost * (1 + matMarkup / 100);
-        const labEach = parseFloat(part.laborTotal) || 0;
-        const unitPrice = matEach + labEach;
-        const qty = parseInt(part.quantity) || 1;
-        pricingHtml = `
-          <div style="margin-top:4px;padding:4px 10px;background:#e3f2fd;border-radius:4px;display:flex;gap:16px;flex-wrap:wrap;font-size:0.8rem">
-            ${matCost ? `<span>Material: ${formatCurrency(matCost)}${matMarkup > 0 ? ` +${matMarkup}%=${formatCurrency(matEach)}` : ''}</span>` : ''}
-            ${labEach ? `<span>Labor: ${formatCurrency(labEach)}</span>` : ''}
-            <span style="font-weight:bold;color:#1565c0">Unit: ${formatCurrency(unitPrice)} × ${qty} = ${formatCurrency(unitPrice * qty)}</span>
-          </div>
-        `;
-      }
+      // Pricing calculations (always calculate, only display if includePricing)
+      const matCost = parseFloat(part.materialTotal) || 0;
+      const matMarkup = parseFloat(part.materialMarkupPercent) || 0;
+      const matEach = matCost * (1 + matMarkup / 100);
+      const labEach = parseFloat(part.laborTotal) || 0;
+      const unitPrice = matEach + labEach;
+      const qty = parseInt(part.quantity) || 1;
+      const partTotal = unitPrice * qty;
+      let pricingHtml = (part.partTotal || part.laborTotal || part.materialTotal) ? 'yes' : '';
 
       // Special instructions - skip if it duplicates rolling description
       const specialInstr = part.specialInstructions || '';
       const hasUniqueInstructions = specialInstr && specialInstr.trim() !== rollingDescFull.trim();
 
       return `
-        <div style="border:1px solid ${isLinkedService ? '#ce93d8' : '#bbb'};padding:${isLinkedService ? '8' : '10'}px;margin-bottom:${isLinkedService ? '2' : '8'}px;margin-left:${isLinkedService ? '24' : '0'}px;border-radius:${isLinkedService ? '4' : '6'}px;page-break-inside:avoid;position:relative;background:${isLinkedService ? '#fce4ec' : 'white'}">
-          ${checkboxHtml}
-          <div style="font-size:${isLinkedService ? '0.9rem' : '1rem'};font-weight:bold;color:${isLinkedService ? '#7b1fa2' : '#1976d2'};margin-bottom:2px;padding-bottom:4px;border-bottom:1px solid ${isLinkedService ? '#ce93d8' : '#ddd'}">
-            ${isLinkedService ? '↳ ' : ''}Part #${part.partNumber} — ${PART_TYPES[part.partType]?.label || part.partType}${isLinkedService && linkedParent ? ` <span style="font-weight:400;font-size:0.85em;color:#9c27b0;">for Part #${linkedParent.partNumber}</span>` : ''}
+        <div class="part-row${isLinkedService ? ' service' : ''}">
+          <div class="pr-item${isLinkedService ? ' svc' : ''}">${isLinkedService ? '+' : '#' + part.partNumber}</div>
+          <div class="pr-desc">
+            <div class="pr-type${isLinkedService ? ' svc' : ''}">${isLinkedService ? '↳ ' : ''}${PART_TYPES[part.partType]?.label || part.partType}${isLinkedService && linkedParent ? ` <span style="font-weight:400;color:#9c27b0;font-size:9px">(for Part #${linkedParent.partNumber})</span>` : ''}</div>
+            <div class="pr-detail">
+              ${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}<br/>` : ''}
+              ${materialLine}
+              ${part.heatBreakdown && part.heatBreakdown.length > 0 
+                ? `<br/>Heat#: ${part.heatBreakdown.map(h => `<span style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:2px;padding:0 4px;font-weight:600;color:#795548">${h.heat}: ${h.qty}pc</span>`).join(' ')}` 
+                : part.heatNumber ? `<br/>Heat#: ${part.heatNumber}` : ''}
+              ${part.cutFileReference ? `<br/><span style="color:#1565c0">Cut File: ${part.cutFileReference}</span>` : ''}
+            </div>
+            ${rollingLines.length > 0 ? `<div class="roll-block">${rollingLines.join('<br/>')}</div>` : ''}
+            ${orientationBlock}
+            ${coneSegmentBlock}
+            ${hasUniqueInstructions ? `<div style="margin-top:3px;font-size:10px;font-weight:600;color:#333">Note: ${specialInstr}</div>` : ''}
+            ${includePricing && part.partType !== 'fab_service' ? `<div style="margin-top:2px;font-size:9px;color:#888">Material supplied by: ${part.materialSource === 'customer_supplied' ? (order.clientName || 'Customer') : 'Carolina Rolling Company'}</div>` : ''}
+            ${pdfFiles.length > 0 ? `<div style="margin-top:2px;font-size:9px;color:#2e7d32">📎 ${pdfFiles.map(f => f.originalName).join(', ')}</div>` : ''}
+            ${part.partType === 'press_brake' && part._pressBrakeFileName ? `<div style="margin-top:2px;font-size:9px;color:#1565c0">🗂️ Brake File: ${part._pressBrakeFileName}</div>` : ''}
+            ${includePricing && pricingHtml ? `<div class="pr-pricing">${(() => {
+              const matCost2 = parseFloat(part.materialTotal) || 0;
+              const matMarkup2 = parseFloat(part.materialMarkupPercent) || 0;
+              const matEach2 = matCost2 * (1 + matMarkup2 / 100);
+              const labEach2 = parseFloat(part.laborTotal) || 0;
+              return `${matCost2 ? `<span>Material: ${formatCurrency(matCost2)}${matMarkup2 > 0 ? ' +' + matMarkup2 + '%' : ''}</span>` : ''}${labEach2 ? `<span>Labor: ${formatCurrency(labEach2)}</span>` : ''}`;
+            })()}</div>` : ''}
           </div>
-          <div style="font-size:0.95rem;font-weight:700;margin:4px 0;color:#333">${materialLine}</div>
-          ${part.clientPartNumber ? `<div style="margin-bottom:2px;font-size:0.85rem"><strong>Client Part#:</strong> ${part.clientPartNumber}</div>` : ''}
-          ${part.heatBreakdown && part.heatBreakdown.length > 0 
-            ? `<div style="margin-bottom:2px;font-size:0.85rem"><strong>Heat#:</strong> ${part.heatBreakdown.map(h => `<span style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:3px;padding:0 6px;margin-right:4px;font-weight:600;color:#795548">${h.heat}: ${h.qty}pc</span>`).join('')}</div>` 
-            : part.heatNumber ? `<div style="margin-bottom:2px;font-size:0.85rem"><strong>Heat#:</strong> ${part.heatNumber}</div>` : ''}
-          ${part.cutFileReference ? `<div style="margin-bottom:2px;font-size:0.85rem;color:#1565c0"><strong>📐 Cut File:</strong> ${part.cutFileReference}</div>` : ''}
-          ${rollingBlock}
-          ${orientationBlock}
-          ${coneSegmentBlock}
-          ${specsHtml}
-          ${includePricing && part.partType !== 'fab_service' ? `<div style="margin-bottom:4px;font-size:0.8rem;color:#555">📦 Material supplied by: <strong>${part.materialSource === 'customer_supplied' ? (order.clientName || 'Customer') : 'Carolina Rolling Company'}</strong></div>` : ''}
-          ${part.materialSource === 'customer_supplied' ? '<div style="font-size:0.8rem;color:#666;margin:2px 0"><em>Customer Supplied Material</em></div>' : ''}
-          ${hasUniqueInstructions ? `
-            <div style="margin-top:4px;white-space:pre-wrap;font-size:0.9rem;font-weight:600;color:#333">${specialInstr}</div>
+          <div class="pr-qty">${parseInt(part.quantity) || 1}</div>
+          ${includePricing ? `
+            <div class="pr-unit">${formatCurrency(unitPrice)}</div>
+            <div class="pr-amt">${formatCurrency(partTotal)}</div>
           ` : ''}
-          ${part.partType === 'press_brake' && part._pressBrakeFileName ? `
-            <div style="margin-top:4px;padding:4px 8px;background:#e3f2fd;border:1px solid #90caf9;border-radius:4px;font-size:0.85rem">
-              🗂️ <strong>Brake File:</strong> ${part._pressBrakeFileName}
-            </div>
-          ` : ''}
-          ${pdfFiles.length > 0 ? `
-            <div style="margin-top:4px;padding:6px;background:#e8f5e9;border-radius:4px;font-size:0.8rem">
-              📎 <strong>Prints:</strong> ${pdfFiles.map(f => f.originalName).join(', ')}
-            </div>
-          ` : ''}
-          ${pricingHtml}
         </div>
       `;
     }).join('') || '<p style="color:#666">No parts added yet</p>';
@@ -1142,43 +1135,75 @@ function WorkOrderDetailsPage() {
 <head>
   <title>${title} - ${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber}</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; max-width: 850px; margin: 0 auto; font-size: 14px; }
-    h1 { color: #1976d2; border-bottom: 3px solid #1976d2; padding-bottom: 10px; margin-bottom: 16px; }
-    .header-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-    .header-item { padding: 8px 10px; background: #f5f5f5; border-radius: 4px; font-size: 0.9rem; }
-    .header-item strong { color: #333; display: block; font-size: 0.75rem; text-transform: uppercase; color: #888; margin-bottom: 2px; }
-    @media print { body { padding: 10px; } .no-print { display: none; } }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; padding: 32px 40px; max-width: 850px; margin: 0 auto; font-size: 13px; color: #333; }
+    @page { size: letter; margin: 0.5in; }
+    @media print { body { padding: 0; } .no-print { display: none; } }
+    .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+    .doc-title { font-size: 20px; font-weight: 700; color: #1976d2; }
+    .doc-right { text-align: right; }
+    .doc-num { font-size: 13px; font-weight: 700; color: #333; }
+    .doc-date { font-size: 11px; color: #888; }
+    .divider { border: none; border-top: 1px solid #ccc; margin: 8px 0; }
+    .info-grid { display: flex; gap: 24px; padding: 8px 0; margin-bottom: 6px; font-size: 12px; flex-wrap: wrap; }
+    .info-item label { display: block; font-size: 9px; text-transform: uppercase; color: #999; letter-spacing: 0.5px; font-weight: 600; }
+    .info-item span { font-weight: 600; color: #333; }
+    .section-title { font-size: 11px; text-transform: uppercase; color: #1976d2; font-weight: 700; letter-spacing: 0.5px; margin: 14px 0 6px; }
+    .parts-header { display: flex; background: #f5f5f5; padding: 6px 0; border-bottom: 2px solid #ccc; font-size: 9px; text-transform: uppercase; color: #888; font-weight: 700; letter-spacing: 0.5px; }
+    .ph-item { width: 42px; padding-left: 4px; }
+    .ph-desc { flex: 1; padding-left: 8px; }
+    .ph-qty { width: 40px; text-align: center; }
+    .ph-unit { width: 65px; text-align: right; }
+    .ph-amt { width: 70px; text-align: right; padding-right: 4px; }
+    .part-row { display: flex; padding: 8px 0; border-bottom: 1px solid #eee; page-break-inside: avoid; }
+    .part-row.service { background: #f9f5fb; padding-left: 20px; }
+    .pr-item { width: 42px; font-weight: 700; color: #1976d2; font-size: 11px; padding-left: 4px; flex-shrink: 0; }
+    .pr-item.svc { color: #7b1fa2; }
+    .pr-desc { flex: 1; padding-left: 8px; }
+    .pr-type { font-weight: 700; font-size: 11px; color: #333; }
+    .pr-type.svc { color: #7b1fa2; font-size: 10px; }
+    .pr-detail { font-size: 10px; color: #666; line-height: 1.5; margin-top: 2px; }
+    .pr-pricing { font-size: 10px; color: #555; margin-top: 3px; display: flex; gap: 12px; }
+    .pr-pricing strong { color: #1565c0; }
+    .pr-qty { width: 40px; text-align: center; font-weight: 600; font-size: 12px; flex-shrink: 0; }
+    .pr-unit { width: 65px; text-align: right; font-size: 11px; flex-shrink: 0; }
+    .pr-amt { width: 70px; text-align: right; font-weight: 700; font-size: 11px; padding-right: 4px; flex-shrink: 0; }
+    .totals-box { margin-top: 16px; padding: 12px 16px; border: 1px solid #ccc; border-radius: 6px; }
+    .total-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+    .total-row.grand { padding: 8px 0; border-top: 2px solid #1976d2; margin-top: 4px; font-size: 16px; font-weight: 700; color: #1976d2; }
+    .cc-box { margin-top: 10px; font-size: 11px; color: #666; text-align: right; }
+    .notes-box { margin-top: 10px; padding: 8px; background: #f9f9f9; border-radius: 4px; font-size: 11px; border-left: 3px solid #1976d2; }
+    .roll-block { background: #e8f5e9; padding: 6px 10px; border-radius: 4px; margin-top: 3px; font-size: 10px; color: #1b5e20; font-weight: 600; }
   </style>
 </head>
 <body>
-  <h1>${includePricing ? '📋' : '🔧'} ${title}: ${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber}</h1>
-  
-  ${includePricing ? `
-  <div class="header-grid">
-    <div class="header-item"><strong>Client</strong>${order.clientName}</div>
-    ${clientPO ? `<div class="header-item"><strong>Client PO#</strong>${clientPO}</div>` : '<div></div>'}
-    ${order.promisedDate ? `<div class="header-item"><strong>Promised Date</strong>${new Date(order.promisedDate + 'T12:00:00').toLocaleDateString()}</div>` : '<div></div>'}
-    ${order.contactName ? `<div class="header-item"><strong>Contact</strong>${order.contactName}${order.contactPhone ? ' — ' + order.contactPhone : ''}</div>` : '<div></div>'}
-    ${order.storageLocation ? `<div class="header-item"><strong>Storage</strong>${order.storageLocation}</div>` : '<div></div>'}
-    ${clientPaymentTerms ? `<div class="header-item"><strong>Payment Terms</strong><span style="font-weight:700;color:#1565c0">${clientPaymentTerms}</span></div>` : '<div></div>'}
-  </div>
-  ` : `
-  <div style="display:flex;gap:24px;margin-bottom:20px;padding:10px 14px;background:#f5f5f5;border-radius:6px;font-size:1rem;">
-    <div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Client</strong>${order.clientName}</div>
-    ${order.storageLocation ? `<div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Storage</strong>${order.storageLocation}</div>` : ''}
-    ${order.promisedDate ? `<div><strong style="color:#888;font-size:0.75rem;text-transform:uppercase;display:block">Promised</strong>${new Date(order.promisedDate + 'T12:00:00').toLocaleDateString()}</div>` : ''}
-  </div>
-  `}
-
-  ${order.notes ? `
-    <div style="padding:10px;background:#e3f2fd;border-radius:4px;margin-bottom:16px;border-left:4px solid #1976d2">
-      <strong>Notes:</strong> ${order.notes}
+  <div class="doc-header">
+    <span class="doc-title">${includePricing ? 'WORK ORDER' : 'PRODUCTION ORDER'}</span>
+    <div class="doc-right">
+      <div class="doc-num">${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber}</div>
+      <div class="doc-date">${order.estimateNumber ? 'Est: ' + order.estimateNumber : ''}</div>
     </div>
-  ` : ''}
+  </div>
+  <hr class="divider" />
 
-  <h2 style="color:#1976d2;border-bottom:2px solid #1976d2;padding-bottom:6px;margin-top:24px">
-    Parts
-  </h2>
+  <div class="info-grid">
+    <div class="info-item"><label>Client</label><span>${order.clientName}</span></div>
+    ${clientPO ? `<div class="info-item"><label>Client PO#</label><span>${clientPO}</span></div>` : ''}
+    ${order.storageLocation ? `<div class="info-item"><label>Storage</label><span>${order.storageLocation}</span></div>` : ''}
+    ${includePricing && order.promisedDate ? `<div class="info-item"><label>Promised</label><span>${new Date(order.promisedDate + 'T12:00:00').toLocaleDateString()}</span></div>` : ''}
+    ${includePricing && order.contactName ? `<div class="info-item"><label>Contact</label><span>${order.contactName}${order.contactPhone ? ' — ' + order.contactPhone : ''}</span></div>` : ''}
+    ${includePricing && clientPaymentTerms ? `<div class="info-item"><label>Payment Terms</label><span style="color:#1565c0">${clientPaymentTerms}</span></div>` : ''}
+  </div>
+
+  ${order.notes ? `<div class="notes-box"><strong>Notes:</strong> ${order.notes}</div>` : ''}
+
+  <div class="section-title">SERVICES & MATERIALS</div>
+  <div class="parts-header">
+    <div class="ph-item">ITEM</div>
+    <div class="ph-desc">DESCRIPTION</div>
+    <div class="ph-qty">QTY</div>
+    ${includePricing ? '<div class="ph-unit">UNIT</div><div class="ph-amt">AMOUNT</div>' : ''}
+  </div>
   
   ${partsHtml}
 

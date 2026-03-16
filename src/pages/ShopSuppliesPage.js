@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Package, Plus, RefreshCw, AlertTriangle, Trash2, Edit, History, Printer } from 'lucide-react';
-import { getShopSupplies, createShopSupply, updateShopSupply, refillShopSupply, getShopSupplyLogs, deleteShopSupply } from '../services/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { Package, Plus, RefreshCw, AlertTriangle, Trash2, Edit, History, Printer, Camera, X } from 'lucide-react';
+import { getShopSupplies, createShopSupply, updateShopSupply, refillShopSupply, getShopSupplyLogs, deleteShopSupply, uploadShopSupplyImage, deleteShopSupplyImage } from '../services/api';
 
 const CATEGORIES = ['Gas', 'Paint', 'Safety', 'Welding', 'Cutting', 'Cleaning', 'Hardware', 'Other'];
 const UNITS = ['each', 'tanks', 'cans', 'boxes', 'rolls', 'gallons', 'bags', 'pairs', 'bottles', 'packs'];
@@ -153,6 +153,78 @@ function ShopSuppliesPage() {
     win.document.close();
   };
 
+  // Image upload handler
+  const imageInputRef = useRef(null);
+  const [uploadingImage, setUploadingImage] = useState(null);
+  
+  const handleImageUpload = async (itemId, file) => {
+    try {
+      setUploadingImage(itemId);
+      await uploadShopSupplyImage(itemId, file);
+      setSuccess('Image uploaded');
+      loadSupplies();
+    } catch (err) {
+      setError('Failed to upload image');
+    } finally {
+      setUploadingImage(null);
+    }
+  };
+
+  const handleDeleteImage = async (itemId) => {
+    if (!window.confirm('Remove this image?')) return;
+    try {
+      await deleteShopSupplyImage(itemId);
+      setSuccess('Image removed');
+      loadSupplies();
+    } catch (err) {
+      setError('Failed to remove image');
+    }
+  };
+
+  // Print large label: 2.5" x 4" (62mm x 100mm) — image left, QR right, name below QR
+  const printImageLabel = (item) => {
+    const labelHtml = `<!DOCTYPE html><html><head><title>Print Label - ${item.name}</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+<style>
+  @page { size: 4in 2.5in; margin: 0; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; margin: 0; padding: 0; width: 4in; height: 2.5in; }
+  .label { display: flex; align-items: center; width: 4in; height: 2.5in; padding: 0.1in; gap: 0.15in; }
+  .image-side { width: 1.6in; height: 2.3in; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .image-side img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .image-side .no-img { width: 1.4in; height: 1.4in; background: #f0f0f0; border: 2px dashed #ccc; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 10pt; }
+  .qr-side { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #qrcode { display: flex; justify-content: center; }
+  .item-name { font-size: 13pt; font-weight: bold; margin-top: 0.08in; text-align: center; line-height: 1.15; }
+  .item-cat { font-size: 8pt; color: #666; margin-top: 0.03in; }
+  .scan-text { font-size: 7pt; color: #999; margin-top: 0.05in; }
+</style></head><body>
+<div class="label">
+  <div class="image-side">
+    ${item.imageUrl 
+      ? `<img src="${item.imageUrl}" alt="${item.name.replace(/"/g, '&quot;')}" />`
+      : `<div class="no-img">No Image</div>`}
+  </div>
+  <div class="qr-side">
+    <div id="qrcode"></div>
+    <div class="item-name">${item.name.replace(/"/g, '&quot;')}</div>
+    ${item.category ? `<div class="item-cat">${item.category}</div>` : ''}
+    <div class="scan-text">Scan to use</div>
+  </div>
+</div>
+<script>
+  new QRCode(document.getElementById("qrcode"), {
+    text: "${item.qrCode}",
+    width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M
+  });
+  setTimeout(function() { window.print(); }, 800);
+<\/script></body></html>`;
+
+    const win = window.open('', '_blank', 'width=500,height=350');
+    win.document.write(labelHtml);
+    win.document.close();
+  };
+
   // Filtered supplies
   const filtered = supplies.filter(s => {
     if (filterCategory !== 'all' && s.category !== filterCategory) return false;
@@ -222,12 +294,13 @@ function ShopSuppliesPage() {
           <table className="table" style={{ width: '100%' }}>
             <thead>
               <tr>
+                <th style={{ width: 70 }}>Image</th>
                 <th>Item</th>
                 <th>Category</th>
                 <th style={{ textAlign: 'center' }}>In Stock</th>
                 <th style={{ textAlign: 'center' }}>Min</th>
                 <th>Last Activity</th>
-                <th style={{ width: 220 }}>Actions</th>
+                <th style={{ width: 280 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -236,6 +309,24 @@ function ShopSuppliesPage() {
                 const isEmpty = item.quantity === 0;
                 return (
                   <tr key={item.id} style={{ background: isEmpty ? '#ffebee' : isLow ? '#fff3e0' : 'transparent' }}>
+                    <td>
+                      <div style={{ width: 56, height: 56, borderRadius: 6, overflow: 'hidden', border: '1px solid #ddd', cursor: 'pointer', position: 'relative' }}
+                        onClick={() => { imageInputRef.current.dataset.itemId = item.id; imageInputRef.current.click(); }}>
+                        {uploadingImage === item.id ? (
+                          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>⏳</div>
+                        ) : item.imageUrl ? (
+                          <>
+                            <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <button onClick={(e) => { e.stopPropagation(); handleDeleteImage(item.id); }}
+                              style={{ position: 'absolute', top: -4, right: -4, background: '#c62828', color: 'white', border: 'none', borderRadius: '50%', width: 18, height: 18, fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }}>×</button>
+                          </>
+                        ) : (
+                          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9f9f9', color: '#bbb' }}>
+                            <Camera size={20} />
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td>
                       <div style={{ fontWeight: 600 }}>{item.name}</div>
                       {item.description && <div style={{ fontSize: '0.8rem', color: '#666' }}>{item.description}</div>}
@@ -280,6 +371,12 @@ function ShopSuppliesPage() {
                           style={{ padding: '4px 8px', fontSize: '0.75rem' }} title="Print QR Label">
                           <Printer size={13} />
                         </button>
+                        {item.imageUrl && (
+                          <button className="btn btn-sm" onClick={() => printImageLabel(item)}
+                            style={{ padding: '4px 8px', fontSize: '0.75rem', background: '#f3e5f5', color: '#7b1fa2', border: '1px solid #ce93d8' }} title="Print 4x2.5 Label with Image">
+                            🖼️
+                          </button>
+                        )}
                         <button className="btn btn-sm btn-outline" onClick={() => openLogs(item)}
                           style={{ padding: '4px 8px', fontSize: '0.75rem' }} title="History">
                           <History size={13} />
@@ -442,6 +539,15 @@ function ShopSuppliesPage() {
           </div>
         </div>
       )}
+
+      {/* Hidden file input for image uploads */}
+      <input type="file" ref={imageInputRef} accept="image/*" style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          const itemId = e.target.dataset.itemId;
+          if (file && itemId) handleImageUpload(itemId, file);
+          e.target.value = '';
+        }} />
     </div>
   );
 }

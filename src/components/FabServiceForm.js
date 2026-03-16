@@ -4,6 +4,8 @@ import { getSettings } from '../services/api';
 const SERVICE_TYPES = [
   { key: 'weld_100', label: '100% Weld', icon: '🔥', color: '#c62828', hasWeldCalc: true },
   { key: 'tack_weld', label: 'Tack Weld', icon: '⚡', color: '#e65100', hasWeldCalc: false },
+  { key: 'bevel', label: 'Bevel', icon: '📐', color: '#4527a0', hasWeldCalc: false },
+  { key: 'bracing', label: 'Bracing', icon: '🔩', color: '#00695c', hasWeldCalc: false },
   { key: 'fit', label: 'Fit Only', icon: '🔧', color: '#1565c0', hasWeldCalc: false },
   { key: 'cut_to_fit', label: 'Cut to Fit', icon: '✂️', color: '#2e7d32', hasWeldCalc: false },
   { key: 'finishing', label: 'Finishing', icon: '✨', color: '#6a1b9a', hasWeldCalc: false },
@@ -212,6 +214,14 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
         const sideLabel = partData._finishSide === 'one' ? 'One Side' : 'Both Sides';
         d.push(sideLabel);
       }
+    } else if (serviceType === 'bevel') {
+      if (partData._bevelType) d.push(partData._bevelType);
+      if (partData._bevelEdge) d.push(partData._bevelEdge);
+      if (partData._bevelNotes) d.push(partData._bevelNotes);
+    } else if (serviceType === 'bracing') {
+      if (partData._bracingSize) d.push(partData._bracingSize + ' Angle Iron');
+      if (partData._bracingMaterial) d.push(partData._bracingMaterial);
+      if (partData._bracingNotes) d.push(partData._bracingNotes);
     } else {
       if (selectedSeam && !isCustomSeam) d.push(selectedSeam.label);
       if (isCustomSeam && partData._customSeamLength) d.push('Custom Seam: ' + partData._customSeamLength + '"');
@@ -219,7 +229,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
     }
     if (partData._serviceNotes) d.push(partData._serviceNotes);
     return d.join(' \u2014 ');
-  }, [serviceConfig, serviceType, linkedPart, selectedSeam, isCustomSeam, partData._customSeamLength, partData._bevelNotes, partData._serviceNotes, partData._finishType, partData._finishTypeCustom, partData._finishSide]);
+  }, [serviceConfig, serviceType, linkedPart, selectedSeam, isCustomSeam, partData._customSeamLength, partData._bevelNotes, partData._serviceNotes, partData._finishType, partData._finishTypeCustom, partData._finishSide, partData._bevelType, partData._bevelEdge, partData._bracingSize, partData._bracingMaterial, partData._bracingNotes]);
 
   // Pricing
   const qty = parseInt(partData.quantity) || 1;
@@ -422,6 +432,102 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
                 ✨ {partData._finishType === 'Custom' ? (partData._finishTypeCustom || 'Custom Finish') : partData._finishType} — {partData._finishSide === 'one' ? 'One Side' : 'Both Sides'}
               </strong>
               <span style={{ color: '#888', marginLeft: 8 }}>(Part #{linkedPart.partNumber})</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bevel Options */}
+      {linkedPart && serviceType === 'bevel' && (
+        <div style={{ ...sectionStyle }}>
+          {sTitle('📐', 'Bevel Details', '#4527a0')}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label className="form-label">Bevel Type</label>
+              <select className="form-select" value={partData._bevelType || ''}
+                onChange={(e) => update({ _bevelType: e.target.value })}>
+                <option value="">Select type...</option>
+                <option value="Single Bevel">Single Bevel</option>
+                <option value="Double Bevel">Double Bevel</option>
+                <option value="V-Groove">V-Groove</option>
+                <option value="J-Groove">J-Groove</option>
+                <option value="U-Groove">U-Groove</option>
+                <option value="Bevel per print">Bevel per print</option>
+                <option value="Custom">Custom</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Edge Location</label>
+              <select className="form-select" value={partData._bevelEdge || ''}
+                onChange={(e) => update({ _bevelEdge: e.target.value })}>
+                <option value="">Select edge...</option>
+                <option value="ID">ID (Inside Diameter)</option>
+                <option value="OD">OD (Outside Diameter)</option>
+                <option value="Both Edges">Both Edges</option>
+                <option value="Top Edge">Top Edge</option>
+                <option value="Bottom Edge">Bottom Edge</option>
+                <option value="All Edges">All Edges</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-group" style={{ marginTop: 8 }}>
+            <label className="form-label">Bevel Notes</label>
+            <input type="text" className="form-input" value={partData._bevelNotes || ''}
+              onChange={(e) => update({ _bevelNotes: e.target.value })} placeholder="e.g. 37.5° bevel, land 1/16, etc." />
+          </div>
+        </div>
+      )}
+
+      {/* Bracing Options */}
+      {linkedPart && serviceType === 'bracing' && (
+        <div style={{ ...sectionStyle }}>
+          {sTitle('🔩', 'Bracing Details', '#00695c')}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group">
+              <label className="form-label">Angle Iron Size</label>
+              <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                {['2x2', '3x3'].map(sz => (
+                  <button key={sz} type="button"
+                    onClick={() => update({ _bracingSize: sz })}
+                    style={{
+                      flex: 1, padding: '10px 12px', borderRadius: 6, cursor: 'pointer',
+                      border: '2px solid ' + (partData._bracingSize === sz ? '#00695c' : '#ccc'),
+                      background: partData._bracingSize === sz ? '#e0f2f1' : '#fff',
+                      color: partData._bracingSize === sz ? '#00695c' : '#666',
+                      fontWeight: partData._bracingSize === sz ? 700 : 500,
+                      fontSize: '0.9rem'
+                    }}>
+                    {sz}" Angle
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Bracing Material</label>
+              <select className="form-select" value={partData._bracingMaterial || ''}
+                onChange={(e) => update({ _bracingMaterial: e.target.value })}>
+                <option value="">Select material...</option>
+                <option value="A36 CS">A36 Carbon Steel</option>
+                <option value="304 SS">304 Stainless Steel</option>
+                <option value="316 SS">316 Stainless Steel</option>
+                <option value="Customer Supplied">Customer Supplied</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-group" style={{ marginTop: 8 }}>
+            <label className="form-label">Bracing Notes</label>
+            <input type="text" className="form-input" value={partData._bracingNotes || ''}
+              onChange={(e) => update({ _bracingNotes: e.target.value })} placeholder="e.g. 4 braces equally spaced, tack welded, etc." />
+          </div>
+          {partData._bracingSize && (
+            <div style={{ background: '#e0f2f1', padding: 10, borderRadius: 8, fontSize: '0.85rem', marginTop: 8, border: '1px solid #80cbc4' }}>
+              <strong style={{ color: '#00695c' }}>
+                🔩 {partData._bracingSize}" Angle Iron Bracing
+                {partData._bracingMaterial ? ` — ${partData._bracingMaterial}` : ''}
+              </strong>
+              {partData._bracingMaterial && partData._bracingMaterial !== 'Customer Supplied' && (
+                <div style={{ fontSize: '0.8rem', color: '#555', marginTop: 4 }}>Material required — include cost in service price</div>
+              )}
             </div>
           )}
         </div>
