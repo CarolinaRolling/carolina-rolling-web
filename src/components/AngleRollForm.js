@@ -566,35 +566,59 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
                 const w = window.open('', '_blank', 'width=700,height=900');
                 w.document.write(`<!DOCTYPE html><html><head><title>Orientation Confirmation</title>
 <style>
-  @page { size: letter; margin: 0.75in; }
-  body { font-family: Arial, sans-serif; max-width: 650px; margin: 30px auto; color: #333; }
-  .header { text-align: center; margin-bottom: 24px; }
-  .title { font-size: 20px; font-weight: 700; color: #1976d2; }
-  .subtitle { font-size: 11px; color: #666; margin-top: 4px; }
-  .specs { background: #f5f5f5; padding: 14px 18px; border-radius: 8px; margin-bottom: 24px; font-size: 13px; line-height: 1.8; }
-  .specs strong { color: #1565c0; }
-  .instruction { text-align: center; font-size: 14px; font-weight: 600; color: #333; margin-bottom: 20px; }
+  @page { size: letter; margin: 0.6in; }
+  body { font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; color: #333; padding: 20px 0; }
+  .company-header { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .company-logo { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; }
+  .company-info { flex: 1; }
+  .company-name { font-size: 16px; font-weight: 700; color: #333; }
+  .company-contact { font-size: 8.5px; color: #888; margin-top: 3px; line-height: 1.6; }
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+  .doc-title { font-size: 18px; font-weight: 700; color: #1976d2; }
+  .doc-date { font-size: 11px; color: #888; text-align: right; }
+  .divider { border: none; border-top: 1px solid #ccc; margin: 8px 0; }
+  .specs { display: flex; gap: 24px; padding: 10px 0; font-size: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .specs .item label { display: block; font-size: 9px; text-transform: uppercase; color: #999; letter-spacing: 0.5px; font-weight: 600; }
+  .specs .item span { font-weight: 600; color: #333; }
+  .instruction { text-align: center; font-size: 13px; font-weight: 600; color: #333; margin: 16px 0 20px; }
   .options { display: flex; gap: 24px; justify-content: center; }
   .option-card { flex: 1; max-width: 280px; border: 3px solid #ccc; border-radius: 12px; overflow: hidden; text-align: center; }
   .option-card img { width: 100%; display: block; }
   .option-label { padding: 12px; font-size: 16px; font-weight: 700; color: #333; background: #f5f5f5; display: flex; align-items: center; justify-content: center; gap: 10px; }
   .checkbox { width: 24px; height: 24px; border: 3px solid #333; border-radius: 4px; display: inline-block; }
-  .confirm { margin-top: 40px; border-top: 2px solid #ccc; padding-top: 20px; }
-  .sig-row { display: flex; gap: 30px; margin-top: 24px; }
+  .confirm { margin-top: 36px; border-top: 2px solid #ccc; padding-top: 16px; }
+  .sig-row { display: flex; gap: 30px; margin-top: 20px; }
   .sig-block { flex: 1; }
-  .sig-line { border-bottom: 1px solid #333; height: 30px; margin-bottom: 4px; }
+  .sig-line { border-bottom: 1px solid #333; height: 28px; margin-bottom: 4px; }
   .sig-label { font-size: 10px; color: #888; }
+  .footer { margin-top: 30px; text-align: center; font-size: 8px; color: #aaa; border-top: 1px solid #eee; padding-top: 8px; }
   @media print { button { display: none; } }
 </style></head><body>
-<div class="header">
-  <div class="title">ROLL ORIENTATION CONFIRMATION</div>
-  <div class="subtitle">Carolina Rolling Co. Inc.</div>
+
+<div class="company-header">
+  <img src="/logo.png" class="company-logo" onerror="this.style.display='none'" />
+  <div class="company-info">
+    <div class="company-name">Carolina Rolling Co. Inc.</div>
+    <div class="company-contact">
+      9152 Sonrisa St., Bellflower, CA 90706<br/>
+      Phone: (562) 633-1044 &nbsp;|&nbsp; Email: keepitrolling@carolinarolling.com
+    </div>
+  </div>
 </div>
+<hr class="divider" />
+
+<div class="doc-header">
+  <div class="doc-title">ROLL ORIENTATION CONFIRMATION</div>
+  <div class="doc-date">${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+</div>
+<hr class="divider" />
+
 <div class="specs">
-  <strong>Section:</strong> ${size}<br/>
-  <strong>Roll Direction:</strong> ${dir} (${mp})<br/>
-  <strong>Diameter/Radius:</strong> ${rollVal}"
+  <div class="item"><label>Section</label><span>${size}</span></div>
+  <div class="item"><label>Roll Direction</label><span>${dir} (${mp})</span></div>
+  <div class="item"><label>Diameter/Radius</label><span>${rollVal}"</span></div>
 </div>
+
 <div class="instruction">Please select the correct orientation by checking one option below:</div>
 <div class="options">
   <div class="option-card">
@@ -623,6 +647,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     </div>
   </div>
 </div>
+<div class="footer">Carolina Rolling Co. Inc. | 9152 Sonrisa St., Bellflower, CA 90706 | (562) 633-1044 | keepitrolling@carolinarolling.com</div>
 <script>setTimeout(function(){window.print();},500);</script>
 </body></html>`);
                 w.document.close();
