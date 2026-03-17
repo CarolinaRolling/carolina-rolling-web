@@ -347,7 +347,8 @@ export default api;
 
 
 // QuickBooks IIF Export
-export const exportWorkOrderIIF = (id) => api.get(`/quickbooks/export/${id}`, { responseType: 'blob' });
+export const exportWorkOrderIIF = (id) => api.get(`/quickbooks/export/${id}`, { responseType: 'text', transformResponse: [(data) => data] });
+export const previewWorkOrderIIF = (id) => api.get(`/quickbooks/preview/${id}`);
 export const exportBatchIIF = (workOrderIds) => api.post('/quickbooks/export-batch', { workOrderIds }, { responseType: 'blob' });
 export const previewIIF = (id) => api.get(`/quickbooks/preview/${id}`);
 export const exportCustomersIIF = () => api.post('/quickbooks/export-customers', {}, { responseType: 'blob' });

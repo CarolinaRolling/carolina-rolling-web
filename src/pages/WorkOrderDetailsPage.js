@@ -1865,7 +1865,8 @@ function WorkOrderDetailsPage() {
                   try {
                     setShowPrintMenu(false);
                     const response = await exportWorkOrderIIF(order.id);
-                    const blob = new Blob([response.data], { type: 'text/plain' });
+                    const iifContent = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+                    const blob = new Blob([iifContent], { type: 'text/plain' });
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
