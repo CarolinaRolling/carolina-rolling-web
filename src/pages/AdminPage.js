@@ -776,6 +776,17 @@ function AdminPage({ section = 'users-logs' }) {
     }
   };
 
+  const handleToggleHeadEstimator = async (user) => {
+    try {
+      await updateUser(user.id, { isHeadEstimator: !user.isHeadEstimator });
+      await loadUsers();
+      setSuccess(`${user.username} ${user.isHeadEstimator ? 'removed as' : 'set as'} Head Estimator`);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError('Failed to update user');
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString('en-US', {
@@ -1452,6 +1463,18 @@ function AdminPage({ section = 'users-logs' }) {
                           <User size={16} color="#666" />
                         )}
                         <span style={{ fontWeight: 500 }}>{user.username}</span>
+                        {user.isHeadEstimator && (
+                          <span style={{ 
+                            fontSize: '0.65rem', 
+                            background: '#fff3e0', 
+                            color: '#e65100',
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            fontWeight: 600
+                          }}>
+                            📋 Head Estimator
+                          </span>
+                        )}
                         {user.id === currentUser?.id && (
                           <span style={{ 
                             fontSize: '0.7rem', 
@@ -1471,13 +1494,28 @@ function AdminPage({ section = 'users-logs' }) {
                       </span>
                     </td>
                     <td>
-                      <button
-                        className={`btn btn-sm ${user.isActive ? 'btn-success' : 'btn-secondary'}`}
-                        onClick={() => handleToggleActive(user)}
-                        disabled={user.id === currentUser?.id}
-                      >
-                        {user.isActive ? 'Active' : 'Disabled'}
-                      </button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className={`btn btn-sm ${user.isActive ? 'btn-success' : 'btn-secondary'}`}
+                          onClick={() => handleToggleActive(user)}
+                          disabled={user.id === currentUser?.id}
+                        >
+                          {user.isActive ? 'Active' : 'Disabled'}
+                        </button>
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => handleToggleHeadEstimator(user)}
+                          title={user.isHeadEstimator ? 'Remove Head Estimator' : 'Set as Head Estimator'}
+                          style={{
+                            background: user.isHeadEstimator ? '#ff9800' : '#f5f5f5',
+                            color: user.isHeadEstimator ? 'white' : '#999',
+                            border: `1px solid ${user.isHeadEstimator ? '#ff9800' : '#ddd'}`,
+                            fontSize: '0.7rem'
+                          }}
+                        >
+                          📋 {user.isHeadEstimator ? 'Head Est.' : 'Set Est.'}
+                        </button>
+                      </div>
                     </td>
                     <td>{formatDate(user.createdAt)}</td>
                     <td>
