@@ -275,13 +275,9 @@ function TodoBar() {
                       style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 4, padding: '4px 8px', cursor: 'pointer' }}>
                       <Edit2 size={14} color="#1565c0" />
                     </button>
-                    <button onClick={() => handleComplete(todo.id)} title="Mark complete"
+                    <button onClick={() => { if (window.confirm(`Complete task: "${todo.title}"?`)) handleComplete(todo.id); }} title="Mark complete"
                       style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 4, padding: '4px 8px', cursor: 'pointer' }}>
                       <Check size={14} color="#2e7d32" />
-                    </button>
-                    <button onClick={() => handleDelete(todo.id)} title="Delete"
-                      style={{ background: '#ffebee', border: '1px solid #ef9a9a', borderRadius: 4, padding: '4px 8px', cursor: 'pointer' }}>
-                      <X size={14} color="#c62828" />
                     </button>
                   </div>
                 )}
