@@ -25,6 +25,7 @@ import ClientsVendorsPage from './pages/ClientsVendorsPage';
 import AutoCADToolsPage from './pages/AutoCADToolsPage';
 import ShipmentsAdminPage from './pages/ShipmentsAdminPage';
 import ShopSuppliesPage from './pages/ShopSuppliesPage';
+import InvoiceCenterPage from './pages/InvoiceCenterPage';
 import SectionSizesPage from './pages/SectionSizesPage';
 import './App.css';
 
@@ -148,6 +149,12 @@ function AppRoutes() {
       <Route path="/shop-supplies" element={
         <ProtectedRoute>
           <Layout><ShopSuppliesPage /></Layout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/invoicing" element={
+        <ProtectedRoute>
+          <Layout><InvoiceCenterPage /></Layout>
         </ProtectedRoute>
       } />
       

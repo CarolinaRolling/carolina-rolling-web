@@ -27,7 +27,7 @@ import {
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
-  getWorkOrderPrintPackage, updateDRNumber, recordPickup,
+  getWorkOrderPrintPackage, updateDRNumber, recordPickup, recordPayment, clearPayment,
   exportWorkOrderIIF
 } from '../services/api';
 
@@ -106,11 +106,12 @@ function WorkOrderDetailsPage() {
   const [editingDR, setEditingDR] = useState(false);
   const [drInput, setDrInput] = useState('');
   const [codConfirmOpen, setCodConfirmOpen] = useState(false);
-  const [codPaid, setCodPaid] = useState(false);
   const [codOverrideInput, setCodOverrideInput] = useState('');
   const [codOverridePassword, setCodOverridePassword] = useState('');
   const [codAction, setCodAction] = useState(null); // 'checklist' or 'pickup'
   const [codShowOverride, setCodShowOverride] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ date: new Date().toISOString().split('T')[0], method: '', reference: '' });
 
   useEffect(() => { 
     loadOrder(); loadLaborMinimums(); 
@@ -896,6 +897,10 @@ function WorkOrderDetailsPage() {
     });
   };
 
+  // COD payment status — used in print HTML and UI
+  const isCODClient = clientPaymentTerms && clientPaymentTerms.toUpperCase().includes('COD');
+  const codPaid = order?.codPaid === true;
+
   // Helper: build work order print HTML
   const buildWorkOrderPrintHtml = (includePricing) => {
     const clientPO = order.clientPurchaseOrderNumber || shipment?.clientPurchaseOrderNumber;
@@ -1201,6 +1206,13 @@ function WorkOrderDetailsPage() {
   </div>
   <hr class="divider" />
 
+  ${isCODClient ? `
+  <div style="background:#c62828;color:white;padding:10px 16px;text-align:center;font-weight:900;font-size:16px;letter-spacing:2px;border:3px solid #b71c1c;border-radius:4px;margin-bottom:8px">
+    💰 COD — COLLECT PAYMENT BEFORE RELEASING ORDER 💰
+    ${codPaid ? '<div style="font-size:12px;font-weight:600;margin-top:4px;color:#a5d6a7">✅ PAYMENT RECORDED — ' + (order.paymentMethod || '').toUpperCase() + (order.paymentReference ? ' #' + order.paymentReference : '') + ' on ' + (order.paymentDate ? new Date(order.paymentDate).toLocaleDateString() : 'N/A') + '</div>' : '<div style="font-size:12px;font-weight:600;margin-top:4px;color:#ffcdd2">⚠️ PAYMENT NOT YET CONFIRMED</div>'}
+  </div>
+  ` : ''}
+
   <div class="info-grid">
     <div class="info-item"><label>Client</label><span>${order.clientName}</span></div>
     ${clientPO ? `<div class="info-item"><label>Client PO#</label><span>${clientPO}</span></div>` : ''}
@@ -1330,7 +1342,6 @@ function WorkOrderDetailsPage() {
   const printShopOrder = () => generatePrintPackage('production', false);
 
   // COD payment check — intercepts pickup actions for COD clients
-  const isCODClient = clientPaymentTerms && clientPaymentTerms.toUpperCase().includes('COD');
   
   const handleCODCheck = (action) => {
     if (!isCODClient || codPaid) {
@@ -1342,7 +1353,35 @@ function WorkOrderDetailsPage() {
     // COD client, not yet confirmed — show confirmation dialog
     setCodAction(action);
     setCodOverrideInput('');
+    setCodShowOverride(false);
     setCodConfirmOpen(true);
+  };
+
+  const handleRecordPayment = async () => {
+    if (!paymentForm.method) { setError('Select a payment method'); return; }
+    try {
+      await recordPayment(id, { paymentDate: paymentForm.date, paymentMethod: paymentForm.method, paymentReference: paymentForm.reference });
+      setPaymentDialogOpen(false);
+      showMessage('Payment recorded');
+      loadOrder();
+      // If this was triggered from a pickup action, proceed
+      if (codAction) {
+        setTimeout(() => {
+          if (codAction === 'checklist') printPickupChecklist();
+          else if (codAction === 'pickup') setShowPickupModal(true);
+          setCodAction(null);
+        }, 500);
+      }
+    } catch (err) { setError('Failed to record payment: ' + (err.response?.data?.error?.message || err.message)); }
+  };
+
+  const handleClearPayment = async () => {
+    if (!window.confirm('Clear payment record? This will require re-confirmation before pickup.')) return;
+    try {
+      await clearPayment(id);
+      showMessage('Payment record cleared');
+      loadOrder();
+    } catch (err) { setError('Failed to clear payment'); }
   };
 
   // Print Pickup Checklist - simple form with checkboxes for loading
@@ -1792,11 +1831,46 @@ function WorkOrderDetailsPage() {
   return (
     <div>
       {/* COD Banner — full width, above header */}
-      {clientPaymentTerms && clientPaymentTerms.toUpperCase().includes('COD') && (
-        <div style={{ background: '#c62828', color: 'white', padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 0, borderRadius: '8px 8px 0 0', border: '3px solid #b71c1c' }}>
-          <span style={{ fontSize: '1.8rem' }}>💰</span>
-          <span style={{ fontSize: '1.4rem', fontWeight: 900, letterSpacing: 2 }}>COD — COLLECT PAYMENT BEFORE SHIPPING</span>
-          <span style={{ fontSize: '1.8rem' }}>💰</span>
+      {isCODClient && (
+        <div style={{ borderRadius: '8px 8px 0 0', border: '3px solid #b71c1c', borderBottom: 'none', overflow: 'hidden', marginBottom: 0 }}>
+          <div style={{ background: '#c62828', color: 'white', padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <span style={{ fontSize: '1.8rem' }}>💰</span>
+            <span style={{ fontSize: '1.4rem', fontWeight: 900, letterSpacing: 2 }}>COD — COLLECT PAYMENT BEFORE SHIPPING</span>
+            <span style={{ fontSize: '1.8rem' }}>💰</span>
+          </div>
+          {codPaid ? (
+            <div style={{ background: '#E8F5E9', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '2px solid #A5D6A7' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: '1.5rem' }}>✅</span>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#2E7D32', fontSize: '1rem' }}>PAYMENT CONFIRMED</div>
+                  <div style={{ fontSize: '0.85rem', color: '#555' }}>
+                    {order.paymentMethod && <span style={{ background: '#C8E6C9', padding: '2px 8px', borderRadius: 4, fontWeight: 600, marginRight: 8 }}>{order.paymentMethod}</span>}
+                    {order.paymentReference && <span style={{ marginRight: 8 }}>Ref: <strong>{order.paymentReference}</strong></span>}
+                    {order.paymentDate && <span>on {new Date(order.paymentDate).toLocaleDateString()}</span>}
+                    {order.paymentRecordedBy && <span style={{ color: '#888', marginLeft: 8 }}> — by {order.paymentRecordedBy}</span>}
+                  </div>
+                </div>
+              </div>
+              <button className="btn btn-sm btn-outline" onClick={handleClearPayment} style={{ color: '#c62828', borderColor: '#c62828', fontSize: '0.75rem' }}>
+                Clear Payment
+              </button>
+            </div>
+          ) : (
+            <div style={{ background: '#FFF3E0', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '2px solid #FFB74D' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: '1.5rem' }}>⚠️</span>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#E65100', fontSize: '1rem' }}>PAYMENT NOT CONFIRMED</div>
+                  <div style={{ fontSize: '0.85rem', color: '#666' }}>Record payment before authorizing pickup</div>
+                </div>
+              </div>
+              <button className="btn" onClick={() => { setPaymentForm({ date: new Date().toISOString().split('T')[0], method: '', reference: '' }); setPaymentDialogOpen(true); }}
+                style={{ background: '#388E3C', color: 'white', border: 'none', fontWeight: 700, padding: '10px 20px', fontSize: '0.95rem' }}>
+                💳 Record Payment
+              </button>
+            </div>
+          )}
         </div>
       )}
       <div className="detail-header">
@@ -1873,30 +1947,43 @@ function WorkOrderDetailsPage() {
           <div style={{ position: 'relative' }}>
             <button className="btn btn-primary" onClick={() => setShowPrintMenu(!showPrintMenu)}><Printer size={18} />Print</button>
             {showPrintMenu && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, background: 'white', border: '1px solid #ddd', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 100, minWidth: 280 }}>
-                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Open in Browser (Print)</div>
-                <button onClick={printFullWorkOrder} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  📋 Full Work Order<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Details + pricing + prints + POs</span>
+              <div style={{ position: 'absolute', top: '100%', right: 0, background: 'white', border: '1px solid #ddd', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 100, minWidth: 340, padding: 8 }}>
+                
+                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Full Work Order</div>
+                <div style={{ display: 'flex', gap: 6, padding: '4px 8px 8px' }}>
+                  <button onClick={printFullWorkOrder} style={{ flex: 1, padding: '14px 12px', border: '2px solid #1565C0', background: '#E3F2FD', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontWeight: 700, fontSize: '0.9rem', color: '#1565C0' }}>
+                    🖨️ Print
+                  </button>
+                  <button onClick={() => generatePrintPackage('full', true)} style={{ flex: 1, padding: '14px 12px', border: '2px solid #1565C0', background: 'white', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontWeight: 700, fontSize: '0.9rem', color: '#1565C0' }}>
+                    ⬇️ Download
+                  </button>
+                </div>
+                <div style={{ padding: '2px 12px', fontSize: '0.75rem', color: '#888', marginBottom: 4 }}>Details + pricing + all documents + POs</div>
+                
+                <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
+                
+                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Production Copy</div>
+                <div style={{ display: 'flex', gap: 6, padding: '4px 8px 8px' }}>
+                  <button onClick={printShopOrder} style={{ flex: 1, padding: '14px 12px', border: '2px solid #E65100', background: '#FFF3E0', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontWeight: 700, fontSize: '0.9rem', color: '#E65100' }}>
+                    🖨️ Print
+                  </button>
+                  <button onClick={() => generatePrintPackage('production', true)} style={{ flex: 1, padding: '14px 12px', border: '2px solid #E65100', background: 'white', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontWeight: 700, fontSize: '0.9rem', color: '#E65100' }}>
+                    ⬇️ Download
+                  </button>
+                </div>
+                <div style={{ padding: '2px 12px', fontSize: '0.75rem', color: '#888', marginBottom: 4 }}>Details (no pricing) + all documents</div>
+                
+                <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
+                
+                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Pickup / Loading</div>
+                <button onClick={() => handleCODCheck('checklist')} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #388E3C', background: '#E8F5E9', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#388E3C', textAlign: 'center', margin: '4px 0' }}>
+                  ☑️ Pickup Checklist
+                  {isCODClient && !codPaid && <span style={{ display: 'block', fontWeight: 600, fontSize: '0.75rem', color: '#c62828', marginTop: 2 }}>⚠️ COD — Payment confirmation required</span>}
                 </button>
-                <button onClick={printShopOrder} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  🔧 Production Copy<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Details (no pricing) + part prints only</span>
-                </button>
-                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
-                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Save to File</div>
-                <button onClick={() => generatePrintPackage('full', true)} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  ⬇️ Full Package PDF<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Same as above, saves to downloads</span>
-                </button>
-                <button onClick={() => generatePrintPackage('production', true)} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  ⬇️ Production Package PDF<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Same as above, saves to downloads</span>
-                </button>
-                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
-                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Pickup / Loading</div>
-                <button onClick={() => handleCODCheck('checklist')} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  ☑️ Pickup Checklist<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Checkboxes for each part — for loading crew</span>
-                  {isCODClient && !codPaid && <><br/><span style={{ fontWeight: 600, fontSize: '0.75rem', color: '#c62828' }}>⚠️ COD — Payment confirmation required</span></>}
-                </button>
-                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
-                <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>QuickBooks</div>
+                
+                <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
+                
+                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>QuickBooks</div>
                 <button onClick={async () => {
                   try {
                     setShowPrintMenu(false);
@@ -1915,11 +2002,12 @@ function WorkOrderDetailsPage() {
                   } catch (err) {
                     setError(err.response?.data?.error?.message || 'Failed to export IIF');
                   }
-                }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
-                  📗 Export Invoice (.iif)<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Import into QuickBooks Desktop via File → Utilities → Import</span>
+                }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #2E7D32', background: 'white', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#2E7D32', textAlign: 'center', margin: '4px 0' }}>
+                  📗 Export Invoice (.iif)
                 </button>
-                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
-                <button onClick={() => { setShowPrintMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', color: '#666', fontSize: '0.9rem' }}>Cancel</button>
+                
+                <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
+                <button onClick={() => { setShowPrintMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: '#f5f5f5', borderRadius: 8, cursor: 'pointer', color: '#666', fontSize: '0.9rem', textAlign: 'center', fontWeight: 600 }}>Cancel</button>
               </div>
             )}
           </div>
@@ -3665,10 +3753,9 @@ function WorkOrderDetailsPage() {
       {/* COD Payment Confirmation Dialog */}
       {codConfirmOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={() => setCodConfirmOpen(false)}>
+          onClick={() => { setCodConfirmOpen(false); setCodShowOverride(false); }}>
           <div style={{ background: 'white', borderRadius: 12, padding: 0, maxWidth: 440, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}
             onClick={e => e.stopPropagation()}>
-            {/* Header */}
             <div style={{ background: '#c62828', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0', textAlign: 'center' }}>
               <div style={{ fontSize: '2rem', marginBottom: 4 }}>💰</div>
               <div style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: 1 }}>COD — PAYMENT REQUIRED</div>
@@ -3682,15 +3769,14 @@ function WorkOrderDetailsPage() {
 
               <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
                 <button className="btn" onClick={() => {
-                  setCodPaid(true);
                   setCodConfirmOpen(false);
-                  if (codAction === 'checklist') printPickupChecklist();
-                  else if (codAction === 'pickup') setShowPickupModal(true);
+                  setCodShowOverride(false);
+                  setPaymentForm({ date: new Date().toISOString().split('T')[0], method: '', reference: '' });
+                  setPaymentDialogOpen(true);
                 }} style={{ flex: 1, background: '#388E3C', color: 'white', border: 'none', padding: '14px', fontSize: '1rem', fontWeight: 700, borderRadius: 8 }}>
-                  ✅ Yes — Paid
+                  ✅ Yes — Record Payment
                 </button>
                 <button className="btn" onClick={() => {
-                  setCodPaid(false);
                   setCodShowOverride(true);
                 }} style={{ flex: 1, background: '#c62828', color: 'white', border: 'none', padding: '14px', fontSize: '1rem', fontWeight: 700, borderRadius: 8 }}>
                   ❌ No — Not Paid
@@ -3708,26 +3794,18 @@ function WorkOrderDetailsPage() {
                       onKeyDown={e => {
                         if (e.key === 'Enter' && codOverrideInput) {
                           if (codOverridePassword && codOverrideInput === codOverridePassword) {
-                            setCodPaid(true);
-                            setCodConfirmOpen(false);
-                            setCodShowOverride(false);
+                            setCodConfirmOpen(false); setCodShowOverride(false);
                             if (codAction === 'checklist') printPickupChecklist();
                             else if (codAction === 'pickup') setShowPickupModal(true);
-                          } else {
-                            setError('Incorrect override password');
-                          }
+                          } else { setError('Incorrect override password'); }
                         }
                       }} />
                     <button className="btn" onClick={() => {
                       if (codOverridePassword && codOverrideInput === codOverridePassword) {
-                        setCodPaid(true);
-                        setCodConfirmOpen(false);
-                        setCodShowOverride(false);
+                        setCodConfirmOpen(false); setCodShowOverride(false);
                         if (codAction === 'checklist') printPickupChecklist();
                         else if (codAction === 'pickup') setShowPickupModal(true);
-                      } else {
-                        setError('Incorrect override password');
-                      }
+                      } else { setError('Incorrect override password'); }
                     }} style={{ background: '#E65100', color: 'white', border: 'none', fontWeight: 600 }}>
                       Override
                     </button>
@@ -3744,6 +3822,68 @@ function WorkOrderDetailsPage() {
                 style={{ width: '100%', marginTop: 12, padding: '10px', background: 'none', border: '1px solid #ccc', borderRadius: 8, cursor: 'pointer', color: '#666', fontSize: '0.9rem' }}>
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Recording Dialog */}
+      {paymentDialogOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => { setPaymentDialogOpen(false); setCodAction(null); }}>
+          <div style={{ background: 'white', borderRadius: 12, padding: 0, maxWidth: 460, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ background: '#388E3C', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0', textAlign: 'center' }}>
+              <div style={{ fontSize: '2rem', marginBottom: 4 }}>💳</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: 1 }}>RECORD PAYMENT</div>
+              <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: 4 }}>{order?.clientName} — {order?.drNumber ? 'DR-' + order.drNumber : order?.orderNumber}</div>
+            </div>
+
+            <div style={{ padding: '24px' }}>
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Payment Date</label>
+                <input type="date" className="form-input" value={paymentForm.date}
+                  onChange={e => setPaymentForm({ ...paymentForm, date: e.target.value })} />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Payment Method *</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {['Check', 'Cash', 'Wire Transfer', 'Credit Card', 'ACH', 'Zelle'].map(method => (
+                    <button key={method} onClick={() => setPaymentForm({ ...paymentForm, method })}
+                      style={{
+                        padding: '12px 8px', border: paymentForm.method === method ? '2px solid #388E3C' : '2px solid #ddd',
+                        background: paymentForm.method === method ? '#E8F5E9' : 'white', borderRadius: 8, cursor: 'pointer',
+                        fontWeight: paymentForm.method === method ? 700 : 400, fontSize: '0.9rem',
+                        color: paymentForm.method === method ? '#2E7D32' : '#333'
+                      }}>
+                      {method === 'Check' && '📝 '}{method === 'Cash' && '💵 '}{method === 'Wire Transfer' && '🏦 '}
+                      {method === 'Credit Card' && '💳 '}{method === 'ACH' && '🔄 '}{method === 'Zelle' && '⚡ '}
+                      {method}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 20 }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>
+                  {paymentForm.method === 'Check' ? 'Check Number' : paymentForm.method === 'Wire Transfer' ? 'Wire Reference' : paymentForm.method === 'ACH' ? 'ACH Transaction ID' : paymentForm.method === 'Credit Card' ? 'Last 4 Digits / Auth Code' : 'Transaction ID / Reference'}
+                </label>
+                <input type="text" className="form-input" 
+                  placeholder={paymentForm.method === 'Check' ? 'e.g. 4521' : paymentForm.method === 'Cash' ? 'Optional — receipt number' : 'e.g. TXN-12345'}
+                  value={paymentForm.reference} onChange={e => setPaymentForm({ ...paymentForm, reference: e.target.value })} />
+              </div>
+
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button className="btn" onClick={handleRecordPayment} disabled={!paymentForm.method}
+                  style={{ flex: 1, background: paymentForm.method ? '#388E3C' : '#ccc', color: 'white', border: 'none', padding: '14px', fontSize: '1rem', fontWeight: 700, borderRadius: 8 }}>
+                  ✅ Confirm Payment
+                </button>
+                <button onClick={() => { setPaymentDialogOpen(false); setCodAction(null); }}
+                  style={{ padding: '14px 20px', background: 'none', border: '1px solid #ccc', borderRadius: 8, cursor: 'pointer', color: '#666', fontSize: '0.9rem' }}>
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

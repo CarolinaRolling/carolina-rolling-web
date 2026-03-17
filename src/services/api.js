@@ -251,6 +251,8 @@ export const archiveOldEstimates = () => api.post('/estimates/archive-old');
 export const shipWorkOrder = (id, data) => api.post(`/workorders/${id}/ship`, data);
 export const archiveWorkOrder = (id) => api.post(`/workorders/${id}/archive`);
 export const recordPickup = (id, data) => api.post(`/workorders/${id}/pickup`, data);
+export const recordPayment = (id, data) => api.post(`/workorders/${id}/record-payment`, data);
+export const clearPayment = (id) => api.post(`/workorders/${id}/clear-payment`);
 export const getArchivedWorkOrders = (params) => api.get('/workorders/archived', { params });
 export const getRecentlyCompletedOrders = () => api.get('/workorders/recently-completed');
 export const duplicateWorkOrderToEstimate = (id) => api.post(`/workorders/${id}/duplicate-to-estimate`);
@@ -384,3 +386,10 @@ export const getScrapConfig = () => api.get('/settings/scrap-config');
 export const updateScrapConfig = (data) => api.put('/settings/scrap-config', data);
 export const getScrapLog = () => api.get('/settings/scrap-log');
 export const requestScrapPickup = (scrapType) => api.post('/settings/scrap-request', { scrapType });
+
+// Invoicing
+export const getInvoiceQueue = () => api.get('/workorders/invoicing/queue');
+export const getInvoiceHistory = () => api.get('/workorders/invoicing/history');
+export const recordInvoice = (id, formData) => api.post(`/workorders/${id}/invoice`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const uploadInvoicePdf = (id, formData) => api.post(`/workorders/${id}/invoice-pdf`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const clearInvoice = (id) => api.delete(`/workorders/${id}/invoice`);
