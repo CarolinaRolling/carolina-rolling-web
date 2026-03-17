@@ -617,7 +617,7 @@ const ClientsVendorsPage = () => {
                             </div>
                           )}
                           {(() => {
-                            const clean = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                            const clean = (s) => (s || '').toLowerCase().replace(/\b(incorporated|inc|corporation|corp|company|co|limited|ltd|llc|llp|lp|plc|dba|the)\b/g, '').replace(/[^a-z0-9]/g, '');
                             const clientLower = clean(formData.name);
                             const ownerLower = clean(formData.permitOwnerName);
                             const dbaLower = clean(formData.permitDbaName);
@@ -836,7 +836,7 @@ const ClientsVendorsPage = () => {
                   </thead>
                   <tbody>
                     {clientsWithPermits.map(c => {
-                      const clean = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                      const clean = (s) => (s || '').toLowerCase().replace(/\b(incorporated|inc|corporation|corp|company|co|limited|ltd|llc|llp|lp|plc|dba|the)\b/g, '').replace(/[^a-z0-9]/g, '');
                       const clientClean = clean(c.name);
                       const ownerClean = clean(c.permitOwnerName);
                       const dbaClean = clean(c.permitDbaName);
