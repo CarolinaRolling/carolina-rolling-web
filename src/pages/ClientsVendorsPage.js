@@ -564,9 +564,14 @@ const ClientsVendorsPage = () => {
                 <label className="form-label">Payment Terms</label>
                 <select className="form-select" value={formData.paymentTerms || ''} onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}>
                   <option value="">Not Set</option>
-                  <option value="COD">COD</option>
-                  <option value="1/2% 10 Net 30">1/2% 10 Net 30</option>
-                  <option value="Net 60">Net 60</option>
+                  <option value="C.O.D.">C.O.D.</option>
+                  <option value="1% 10 NET 30">1% 10 NET 30</option>
+                  <option value="1% 10 DAYS NET 30">1% 10 DAYS NET 30</option>
+                  <option value="1/2% 10 NET 30">1/2% 10 NET 30</option>
+                  <option value="2% 10 DAYS NET 30">2% 10 DAYS NET 30</option>
+                  <option value="10 DAYS">10 DAYS</option>
+                  <option value="15 DAYS">15 DAYS</option>
+                  <option value="NET 60 DAYS">NET 60 DAYS</option>
                 </select>
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -577,8 +582,8 @@ const ClientsVendorsPage = () => {
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label">QuickBooks Desktop Name <span style={{ fontWeight: 400, color: '#999', fontSize: '0.8rem' }}>(must match QB exactly — used for IIF export)</span></label>
                 <input className="form-input" placeholder="e.g. NOWELL STEEL AND SUPPLY"
-                  value={formData.quickbooksName || ''} onChange={(e) => setFormData({ ...formData, quickbooksName: e.target.value })}
-                  style={{ fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: 0.5 }} />
+                  value={formData.quickbooksName || ''} onChange={(e) => setFormData({ ...formData, quickbooksName: e.target.value.toUpperCase() })}
+                  style={{ fontFamily: 'monospace', letterSpacing: 0.5 }} />
                 {formData.quickbooksName && (
                   <div style={{ fontSize: '0.75rem', color: '#1565C0', marginTop: 4 }}>
                     📗 IIF exports will use: <strong>{formData.quickbooksName}</strong>

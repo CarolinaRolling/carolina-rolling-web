@@ -19,6 +19,7 @@ import AdminPage from './pages/AdminPage';
 import SchedulingPage from './pages/SchedulingPage';
 import DRNumbersPage from './pages/DRNumbersPage';
 import PONumbersPage from './pages/PONumbersPage';
+import InvoiceNumbersPage from './pages/InvoiceNumbersPage';
 import PurchaseOrdersPage from './pages/PurchaseOrdersPage';
 import EmailSettingsPage from './pages/EmailSettingsPage';
 import ClientsVendorsPage from './pages/ClientsVendorsPage';
@@ -197,6 +198,12 @@ function AppRoutes() {
       <Route path="/admin/po-numbers" element={
         <AdminRoute>
           <Layout><PONumbersPage /></Layout>
+        </AdminRoute>
+      } />
+      
+      <Route path="/admin/invoice-numbers" element={
+        <AdminRoute>
+          <Layout><InvoiceNumbersPage /></Layout>
         </AdminRoute>
       } />
       

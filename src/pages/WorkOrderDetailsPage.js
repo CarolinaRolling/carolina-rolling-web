@@ -898,7 +898,7 @@ function WorkOrderDetailsPage() {
   };
 
   // COD payment status — used in print HTML and UI
-  const isCODClient = clientPaymentTerms && clientPaymentTerms.toUpperCase().includes('COD');
+  const isCODClient = clientPaymentTerms && (clientPaymentTerms.toUpperCase().includes('COD') || clientPaymentTerms.toUpperCase().includes('C.O.D'));
   const codPaid = order?.codPaid === true;
 
   // Helper: build work order print HTML

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getInvoiceQueue, getInvoiceHistory, recordInvoice, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, emailInvoice } from '../services/api';
+import { getInvoiceQueue, getInvoiceHistory, recordInvoice, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, assignInvoiceNumber } from '../services/api';
 
 const InvoiceCenterPage = () => {
   const navigate = useNavigate();
@@ -50,18 +50,25 @@ const InvoiceCenterPage = () => {
 
   const handleExportIIF = async (wo) => {
     try {
+      // Assign invoice number if not already assigned
+      if (!wo.invoiceNumber) {
+        const assignRes = await assignInvoiceNumber(wo.id);
+        wo.invoiceNumber = assignRes.data.data.invoiceNumber;
+        setSuccess(`Invoice #${wo.invoiceNumber} assigned`);
+      }
       const response = await exportWorkOrderIIF(wo.id);
       const iifContent = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
       const blob = new Blob([iifContent], { type: 'text/plain' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `invoice-${wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber}-${(wo.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.iif`;
+      a.download = `invoice-${wo.invoiceNumber || wo.drNumber || wo.orderNumber}-${(wo.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.iif`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       a.remove();
-      setSuccess(`IIF exported for ${wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber}`);
+      setSuccess(`IIF exported — Invoice #${wo.invoiceNumber} for ${wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber}`);
+      loadData();
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Failed to export IIF');
     }
@@ -192,7 +199,7 @@ const InvoiceCenterPage = () => {
               {filteredQueue.map(wo => {
                 const total = getWOTotal(wo);
                 const drLabel = wo.drNumber ? `DR-${wo.drNumber}` : wo.orderNumber;
-                const isCOD = wo.paymentTerms?.toUpperCase().includes('COD') || false;
+                const isCOD = wo.paymentTerms?.toUpperCase().replace(/\./g, '').includes('COD') || false;
                 return (
                   <div key={wo.id} className="card" style={{ padding: '14px 20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>

@@ -52,6 +52,7 @@ function Layout({ children }) {
                 </li>
                 <li><NavLink to="/admin/dr-numbers" className={({ isActive }) => isActive ? 'active' : ''}><Hash size={20} /><span>DR Numbers</span></NavLink></li>
                 <li><NavLink to="/admin/po-numbers" className={({ isActive }) => isActive ? 'active' : ''}><Hash size={20} /><span>PO Numbers</span></NavLink></li>
+                <li><NavLink to="/admin/invoice-numbers" className={({ isActive }) => isActive ? 'active' : ''}><FileText size={20} /><span>Invoice Numbers</span></NavLink></li>
                 <li><NavLink to="/admin/users-logs" className={({ isActive }) => isActive ? 'active' : ''}><Shield size={20} /><span>Users & Logs</span></NavLink></li>
                 <li><NavLink to="/admin/shop-config" className={({ isActive }) => isActive ? 'active' : ''}><Wrench size={20} /><span>Shop Config</span></NavLink></li>
                 <li><NavLink to="/admin/settings" className={({ isActive }) => isActive ? 'active' : ''}><Settings size={20} /><span>Settings</span></NavLink></li>
