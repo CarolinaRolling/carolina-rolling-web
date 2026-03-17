@@ -54,7 +54,7 @@ const ClientsVendorsPage = () => {
         name: addClientName,
         contactName: '', contactPhone: '', contactEmail: '',
         address: '', taxStatus: 'taxable', resaleCertificate: '',
-        customTaxRate: '', paymentTerms: '', notes: ''
+        customTaxRate: '', paymentTerms: '', apEmail: '', quickbooksName: '', notes: ''
       });
       setShowModal(true);
       // Clear the query param so it doesn't re-trigger
@@ -95,7 +95,7 @@ const ClientsVendorsPage = () => {
       taxStatus: 'taxable',
       resaleCertificate: '',
       customTaxRate: '',
-      paymentTerms: '',
+      paymentTerms: '', apEmail: '', quickbooksName: '',
       notes: ''
     });
     setShowModal(true);
@@ -371,6 +371,8 @@ const ClientsVendorsPage = () => {
                       {client.contactName && <div>{client.contactName}</div>}
                       {client.contactPhone && <div style={{ fontSize: '0.85rem', color: '#666' }}>{formatPhone(client.contactPhone)}</div>}
                       {client.contactEmail && <div style={{ fontSize: '0.85rem', color: '#666' }}>{client.contactEmail}</div>}
+                      {client.apEmail && <div style={{ fontSize: '0.75rem', color: '#1565c0' }}>📧 AP: {client.apEmail}</div>}
+                      {client.quickbooksName && <div style={{ fontSize: '0.75rem', color: '#2E7D32', fontFamily: 'monospace' }}>📗 QB: {client.quickbooksName}</div>}
                       {client.contacts && client.contacts.length > 0 && (
                         <div style={{ fontSize: '0.75rem', color: '#1565c0', marginTop: 2 }}>+{client.contacts.length} more contact{client.contacts.length > 1 ? 's' : ''}</div>
                       )}
@@ -566,6 +568,22 @@ const ClientsVendorsPage = () => {
                   <option value="1/2% 10 Net 30">1/2% 10 Net 30</option>
                   <option value="Net 60">Net 60</option>
                 </select>
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label className="form-label">Accounts Payable Email <span style={{ fontWeight: 400, color: '#999', fontSize: '0.8rem' }}>(for sending invoices)</span></label>
+                <input className="form-input" type="email" placeholder="ap@clientcompany.com"
+                  value={formData.apEmail || ''} onChange={(e) => setFormData({ ...formData, apEmail: e.target.value })} />
+              </div>
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label className="form-label">QuickBooks Desktop Name <span style={{ fontWeight: 400, color: '#999', fontSize: '0.8rem' }}>(must match QB exactly — used for IIF export)</span></label>
+                <input className="form-input" placeholder="e.g. NOWELL STEEL AND SUPPLY"
+                  value={formData.quickbooksName || ''} onChange={(e) => setFormData({ ...formData, quickbooksName: e.target.value })}
+                  style={{ fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: 0.5 }} />
+                {formData.quickbooksName && (
+                  <div style={{ fontSize: '0.75rem', color: '#1565C0', marginTop: 4 }}>
+                    📗 IIF exports will use: <strong>{formData.quickbooksName}</strong>
+                  </div>
+                )}
               </div>
               {formData.taxStatus === 'resale' && (
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>

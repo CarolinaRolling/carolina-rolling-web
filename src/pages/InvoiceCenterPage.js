@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getInvoiceQueue, getInvoiceHistory, recordInvoice, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF } from '../services/api';
+import { getInvoiceQueue, getInvoiceHistory, recordInvoice, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, emailInvoice } from '../services/api';
 
 const InvoiceCenterPage = () => {
   const navigate = useNavigate();
@@ -21,6 +21,10 @@ const InvoiceCenterPage = () => {
   // PDF upload modal (for history items)
   const [pdfUploadWO, setPdfUploadWO] = useState(null);
   const [pdfFile, setPdfFile] = useState(null);
+
+  // Email invoice modal
+  const [emailModal, setEmailModal] = useState(null);
+  const [emailAddress, setEmailAddress] = useState('');
 
   useEffect(() => {
     loadData();
@@ -108,6 +112,25 @@ const InvoiceCenterPage = () => {
     } catch (err) { setError('Failed to clear invoice'); }
   };
 
+  const handleEmailInvoice = async (wo, overrideEmail) => {
+    try {
+      setSaving(true);
+      const res = await emailInvoice(wo.id, overrideEmail || null);
+      setSuccess(res.data.message || 'Invoice emailed');
+      setEmailModal(null);
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || 'Failed to email invoice';
+      if (msg.includes('No email')) {
+        // No AP email on file — open email modal to enter one
+        setEmailModal(wo);
+        setEmailAddress('');
+        setError('');
+      } else {
+        setError(msg);
+      }
+    } finally { setSaving(false); }
+  };
+
   const formatCurrency = (v) => '$' + (parseFloat(v) || 0).toFixed(2);
 
   const getWOTotal = (wo) => {
@@ -176,7 +199,7 @@ const InvoiceCenterPage = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1, minWidth: 200 }}>
                         <div>
                           <span style={{ fontFamily: 'Courier New, monospace', fontWeight: 700, fontSize: '1.1rem', color: '#1565C0', cursor: 'pointer' }}
-                            onClick={() => navigate(`/shipment/${wo.id}`)}>
+                            onClick={() => navigate(`/workorders/${wo.id}`)}>
                             {drLabel}
                           </span>
                           <div style={{ fontSize: '0.85rem', color: '#555' }}>
@@ -248,7 +271,7 @@ const InvoiceCenterPage = () => {
                     <tr key={wo.id}>
                       <td>
                         <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1565C0', cursor: 'pointer' }}
-                          onClick={() => navigate(`/shipment/${wo.id}`)}>
+                          onClick={() => navigate(`/workorders/${wo.id}`)}>
                           {drLabel}
                         </span>
                       </td>

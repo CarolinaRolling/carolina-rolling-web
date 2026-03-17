@@ -393,3 +393,4 @@ export const getInvoiceHistory = () => api.get('/workorders/invoicing/history');
 export const recordInvoice = (id, formData) => api.post(`/workorders/${id}/invoice`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const uploadInvoicePdf = (id, formData) => api.post(`/workorders/${id}/invoice-pdf`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const clearInvoice = (id) => api.delete(`/workorders/${id}/invoice`);
+export const emailInvoice = (id, email) => api.post(`/workorders/${id}/email-invoice`, { email });
