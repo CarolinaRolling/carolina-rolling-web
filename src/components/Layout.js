@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, DollarSign, Database, Hash, ShoppingCart, FileCode, Truck, Users, Wrench } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
+import TodoBar from './TodoBar';
 
 function Layout({ children }) {
   const navigate = useNavigate();
@@ -110,6 +111,7 @@ function Layout({ children }) {
       </aside>
       <main className="main-content">
         <WalterJoke />
+        <TodoBar />
         {children}
       </main>
     </div>

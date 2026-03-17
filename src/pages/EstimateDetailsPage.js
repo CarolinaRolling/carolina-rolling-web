@@ -8,7 +8,7 @@ import {
   downloadEstimatePDF, convertEstimateToWorkOrder,
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
-  getNextDRNumber
+  getNextDRNumber, createTodo
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
@@ -91,6 +91,7 @@ function EstimateDetailsPage() {
   // Convert to Work Order state
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [sentForReview, setSentForReview] = useState(false);
   const [nextDR, setNextDR] = useState(null);
   const [useCustomDR, setUseCustomDR] = useState(false);
   const [customDR, setCustomDR] = useState('');
@@ -1000,6 +1001,11 @@ function EstimateDetailsPage() {
   };
 
   const handleViewFile = async (file) => {
+    // S3 files: open directly
+    if (file.url && file.url.includes('amazonaws.com')) {
+      window.open(file.url, '_blank');
+      return;
+    }
     try {
       const data = await getEstimateFileSignedUrl(id, file.id);
       window.open(data.url, '_blank');
@@ -1028,17 +1034,20 @@ function EstimateDetailsPage() {
   };
 
   const handleViewPartFile = async (partId, file) => {
+    // S3 files: open directly — no proxy needed
+    if (file.url && file.url.includes('amazonaws.com')) {
+      window.open(file.url, '_blank');
+      return;
+    }
     try {
       const response = await viewEstimatePartFile(id, partId, file.id);
       const url = response.data?.data?.url || response.data?.url;
       if (url) {
         window.open(url, '_blank');
       } else {
-        // Fallback to direct URL
         window.open(file.url, '_blank');
       }
     } catch (err) {
-      // Fallback to direct URL if proxy fails
       window.open(file.url, '_blank');
     }
   };
@@ -1050,6 +1059,27 @@ function EstimateDetailsPage() {
       await loadEstimate();
       showMessage('File deleted');
     } catch (err) { setError('Failed to delete file'); }
+  };
+
+  // Send estimate for pricing review
+  const handleSendForReview = async () => {
+    try {
+      const estNum = formData.estimateNumber || 'Unknown';
+      const clientName = formData.clientName || 'Unknown Client';
+      await createTodo({
+        title: `Confirm/Add pricing to ${estNum} — ${clientName}`,
+        description: `${parts.length} part(s). Review pricing and accept or deny.`,
+        type: 'estimate_review',
+        priority: 'high',
+        estimateId: id,
+        estimateNumber: estNum
+      });
+      setSentForReview(true);
+      showMessage('Sent for review — task added to shared to-do list');
+      setTimeout(() => setSentForReview(false), 5000);
+    } catch (err) {
+      setError('Failed to send for review');
+    }
   };
 
   // Convert to Work Order Handlers
@@ -1381,6 +1411,12 @@ function EstimateDetailsPage() {
             </button>
           )}
           {!isNew && <button className="btn btn-outline" onClick={printEstimate}><Printer size={18} /> Print</button>}
+          {!isNew && (
+            <button className="btn" onClick={handleSendForReview} disabled={sentForReview}
+              style={{ background: sentForReview ? '#c8e6c9' : '#ff9800', color: sentForReview ? '#2e7d32' : 'white' }}>
+              {sentForReview ? '✓ Sent for Review' : '📋 Send for Review'}
+            </button>
+          )}
           <button className="btn btn-secondary" onClick={() => handleSave(false)} disabled={saving}>
             <Save size={18} /> {saving ? 'Saving...' : isNew ? 'Generate New Estimate' : 'Save'}
           </button>
@@ -2034,16 +2070,21 @@ function EstimateDetailsPage() {
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         {part.files.map(file => (
                           <div key={file.id} style={{
-                            display: 'flex', alignItems: 'center', gap: 8, background: 'white',
+                            display: 'flex', alignItems: 'center', gap: 6, background: 'white',
                             padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: '0.8rem'
                           }}>
-                            <FileText size={14} style={{ color: '#1976d2' }} />
-                            <button onClick={() => handleViewPartFile(part.id, file)}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1976d2', textDecoration: 'underline', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem', padding: 0 }}>
+                            <FileText size={14} style={{ color: '#1976d2', flexShrink: 0 }} />
+                            <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
                               {file.originalName || file.filename}
+                            </span>
+                            <button onClick={() => handleViewPartFile(part.id, file)}
+                              title="View file"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1976d2', padding: 2, flexShrink: 0 }}>
+                              <Eye size={14} />
                             </button>
                             <button onClick={() => handleDeletePartFile(part.id, file.id)}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d32f2f', padding: 2 }}>
+                              title="Delete file"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d32f2f', padding: 2, flexShrink: 0 }}>
                               <X size={14} />
                             </button>
                           </div>

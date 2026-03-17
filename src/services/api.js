@@ -368,3 +368,12 @@ export const uploadShopSupplyImage = (id, file) => {
   return api.post(`/shop-supplies/${id}/image`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 };
 export const deleteShopSupplyImage = (id) => api.delete(`/shop-supplies/${id}/image`);
+
+// Todos
+export const getTodos = (params) => api.get('/todos', { params });
+export const createTodo = (data) => api.post('/todos', data);
+export const updateTodo = (id, data) => api.put(`/todos/${id}`, data);
+export const completeTodo = (id) => api.post(`/todos/${id}/complete`);
+export const acceptTodo = (id) => api.post(`/todos/${id}/accept`);
+export const denyTodo = (id, reason) => api.post(`/todos/${id}/deny`, { reason });
+export const deleteTodo = (id) => api.delete(`/todos/${id}`);

@@ -796,7 +796,12 @@ function WorkOrderDetailsPage() {
     }
   };
 
-  const handleViewFile = async (partId, fileId) => {
+  const handleViewFile = async (partId, fileId, fileUrl) => {
+    // S3 files: open directly
+    if (fileUrl && fileUrl.includes('amazonaws.com')) {
+      window.open(fileUrl, '_blank');
+      return;
+    }
     try {
       const response = await downloadPartFile(id, partId, fileId);
       const blob = new Blob([response.data], { type: response.headers['content-type'] || 'application/octet-stream' });
@@ -2790,7 +2795,7 @@ function WorkOrderDetailsPage() {
                         <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: isStep ? '#f3e5f5' : '#f5f5f5', padding: '4px 8px', borderRadius: 4, fontSize: '0.75rem', border: isStep ? '1px solid #ce93d8' : 'none' }}>
                           {isStep && <span title="STEP/3D File">🧊</span>}
                           <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isStep ? '#7b1fa2' : 'inherit', fontWeight: isStep ? 600 : 400 }}>{file.originalName}</span>
-                          <button onClick={() => handleViewFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}><Eye size={12} /></button>
+                          <button onClick={() => handleViewFile(part.id, file.id, file.url)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}><Eye size={12} /></button>
                           <button onClick={() => handleDeleteFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d32f2f' }}><X size={12} /></button>
                         </div>
                         );
