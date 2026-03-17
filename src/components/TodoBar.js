@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Plus, Check, X, ClipboardList, Eye, ChevronDown, ChevronUp } from 'lucide-react';
-import { getTodos, createTodo, completeTodo, acceptTodo, denyTodo, deleteTodo } from '../services/api';
+import { Plus, Check, X, ClipboardList, Eye, ChevronDown, ChevronUp, Edit2 } from 'lucide-react';
+import { getTodos, createTodo, updateTodo, completeTodo, acceptTodo, denyTodo, deleteTodo } from '../services/api';
 
 function TodoBar() {
   const [todos, setTodos] = useState([]);
@@ -13,6 +13,9 @@ function TodoBar() {
   const [newPriority, setNewPriority] = useState('normal');
   const [denyingId, setDenyingId] = useState(null);
   const [denyReason, setDenyReason] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editPriority, setEditPriority] = useState('normal');
   const navigate = useNavigate();
   const { user, isHeadEstimator, isAdmin } = useAuth();
 
@@ -64,6 +67,21 @@ function TodoBar() {
   };
   const handleDelete = async (id) => {
     try { await deleteTodo(id); loadTodos(); } catch (err) {}
+  };
+
+  const startEdit = (todo) => {
+    setEditingId(todo.id);
+    setEditTitle(todo.title);
+    setEditPriority(todo.priority);
+  };
+
+  const handleSaveEdit = async (id) => {
+    if (!editTitle.trim()) return;
+    try {
+      await updateTodo(id, { title: editTitle.trim(), priority: editPriority });
+      setEditingId(null);
+      loadTodos();
+    } catch (err) {}
   };
 
   if (loading) return null;
@@ -186,15 +204,41 @@ function TodoBar() {
                 background: colors.bg, borderLeft: `3px solid ${colors.border}`
               }}>
                 <span style={{ fontSize: '0.9rem', flexShrink: 0 }}>{typeIcons[todo.type] || colors.icon}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: colors.text }}>{todo.title}</div>
-                  {todo.description && <div style={{ fontSize: '0.8rem', color: '#666', marginTop: 2 }}>{todo.description}</div>}
-                  <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>
-                    {todo.createdBy && `by ${todo.createdBy}`}
-                    {todo.assignedTo && ` → ${todo.assignedTo}`}
-                    {' · '}{new Date(todo.createdAt).toLocaleDateString()}
+
+                {/* Content — edit mode or display */}
+                {editingId === todo.id ? (
+                  <div style={{ flex: 1, display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(todo.id); if (e.key === 'Escape') setEditingId(null); }}
+                      autoFocus
+                      style={{ flex: 1, padding: '4px 8px', border: '1px solid #90caf9', borderRadius: 4, fontSize: '0.85rem' }} />
+                    <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)}
+                      style={{ padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '0.75rem' }}>
+                      <option value="low">Low</option>
+                      <option value="normal">Normal</option>
+                      <option value="high">High</option>
+                      <option value="urgent">Urgent</option>
+                    </select>
+                    <button onClick={() => handleSaveEdit(todo.id)}
+                      style={{ background: '#1976d2', color: 'white', border: 'none', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                      Save
+                    </button>
+                    <button onClick={() => setEditingId(null)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#999' }}>
+                      <X size={14} />
+                    </button>
                   </div>
-                </div>
+                ) : (
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: colors.text }}>{todo.title}</div>
+                    {todo.description && <div style={{ fontSize: '0.8rem', color: '#666', marginTop: 2 }}>{todo.description}</div>}
+                    <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>
+                      {todo.createdBy && `by ${todo.createdBy}`}
+                      {todo.assignedTo && ` → ${todo.assignedTo}`}
+                      {' · '}{new Date(todo.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                )}
 
                 {isEstimateReview && todo.estimateId && (
                   <button onClick={() => navigate(`/estimates/${todo.estimateId}`)}
@@ -227,6 +271,10 @@ function TodoBar() {
                   </div>
                 ) : (
                   <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    <button onClick={() => startEdit(todo)} title="Edit task"
+                      style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 4, padding: '4px 8px', cursor: 'pointer' }}>
+                      <Edit2 size={14} color="#1565c0" />
+                    </button>
                     <button onClick={() => handleComplete(todo.id)} title="Mark complete"
                       style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 4, padding: '4px 8px', cursor: 'pointer' }}>
                       <Check size={14} color="#2e7d32" />
