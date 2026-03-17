@@ -836,9 +836,13 @@ const ClientsVendorsPage = () => {
                   </thead>
                   <tbody>
                     {clientsWithPermits.map(c => {
-                      const nameMismatch = c.permitOwnerName && c.name && 
-                        !c.permitOwnerName.toLowerCase().includes(c.name.toLowerCase().split(' ')[0]) &&
-                        !c.name.toLowerCase().includes((c.permitOwnerName || '').toLowerCase().split(' ')[0]);
+                      const clean = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                      const clientClean = clean(c.name);
+                      const ownerClean = clean(c.permitOwnerName);
+                      const dbaClean = clean(c.permitDbaName);
+                      const matchesOwner = ownerClean && (ownerClean.includes(clientClean) || clientClean.includes(ownerClean));
+                      const matchesDba = dbaClean && (dbaClean.includes(clientClean) || clientClean.includes(dbaClean));
+                      const nameMismatch = clientClean && (ownerClean || dbaClean) && !matchesOwner && !matchesDba;
                       return (
                         <tr key={c.id} style={nameMismatch ? { background: '#fff8e1' } : {}}>
                           <td style={{ fontWeight: 600 }}>{c.name}</td>
@@ -852,7 +856,10 @@ const ClientsVendorsPage = () => {
                               {c.permitStatus || 'Not Verified'}
                             </span>
                           </td>
-                          <td style={{ fontSize: '0.85rem', color: '#555' }}>{c.permitOwnerName || '—'}</td>
+                          <td style={{ fontSize: '0.85rem', color: '#555' }}>
+                            {c.permitOwnerName || '—'}
+                            {c.permitDbaName && <div style={{ fontSize: '0.75rem', color: '#888' }}>DBA: {c.permitDbaName}</div>}
+                          </td>
                           <td style={{ fontSize: '0.85rem', color: '#666' }}>
                             {c.permitLastVerified ? new Date(c.permitLastVerified).toLocaleDateString() : 'Never'}
                           </td>
