@@ -92,6 +92,10 @@ function EstimateDetailsPage() {
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [converting, setConverting] = useState(false);
   const [sentForReview, setSentForReview] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState(null); // null, 'saving', 'saved'
+  const formLoadedRef = useRef(false); // tracks when formData is set from server vs user edit
+  const [clientEditing, setClientEditing] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null); // full client object with contacts
   const [nextDR, setNextDR] = useState(null);
   const [useCustomDR, setUseCustomDR] = useState(false);
   const [customDR, setCustomDR] = useState('');
@@ -182,6 +186,7 @@ function EstimateDetailsPage() {
       const response = await getEstimateById(id);
       const data = response.data.data;
       setEstimate(data);
+      formLoadedRef.current = false; // suppress autosave during server load
       setFormData({
         clientName: data.clientName || '', contactName: data.contactName || '',
         contactEmail: data.contactEmail || '', contactPhone: data.contactPhone || '',
@@ -208,7 +213,10 @@ function EstimateDetailsPage() {
           const clientRes = await searchClients(data.clientName);
           const clients = clientRes.data?.data || [];
           const client = clients.find(c => c.name === data.clientName);
-          if (client?.paymentTerms) setClientPaymentTerms(client.paymentTerms);
+          if (client) {
+            setSelectedClient(client);
+            if (client.paymentTerms) setClientPaymentTerms(client.paymentTerms);
+          }
           // Auto tax exempt for verified resale clients (only if not already saved on estimate)
           if (client && !data.taxExempt) {
             const clientIsExempt = client.taxStatus === 'resale' || client.taxStatus === 'exempt' ||
@@ -233,11 +241,29 @@ function EstimateDetailsPage() {
     } finally {
       setLoading(false);
       initialLoadDone.current = true;
+      // Enable autosave after a brief delay to let state settle
+      setTimeout(() => { formLoadedRef.current = true; }, 500);
       if (isReload) {
         requestAnimationFrame(() => window.scrollTo(0, scrollY));
       }
     }
   };
+
+  // Autosave formData changes after 2 second debounce (only for existing estimates)
+  useEffect(() => {
+    if (isNew || !formLoadedRef.current || !id) return;
+    const timer = setTimeout(async () => {
+      try {
+        setAutoSaveStatus('saving');
+        await updateEstimate(id, { ...formData, status: estimate?.status || 'draft' });
+        setAutoSaveStatus('saved');
+        setTimeout(() => setAutoSaveStatus(null), 2000);
+      } catch (err) {
+        setAutoSaveStatus(null);
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [formData]);
 
   // Round up material cost after markup
   const roundUpMaterial = (value, rounding) => {
@@ -1417,9 +1443,15 @@ function EstimateDetailsPage() {
               {sentForReview ? '✓ Sent for Review' : '📋 Send for Review'}
             </button>
           )}
-          <button className="btn btn-secondary" onClick={() => handleSave(false)} disabled={saving}>
+          <button className="btn btn-secondary" onClick={() => handleSave(false)} disabled={saving}
+            style={!isNew ? { background: '#f5f5f5', color: '#666', border: '1px solid #ddd' } : {}}>
             <Save size={18} /> {saving ? 'Saving...' : isNew ? 'Generate New Estimate' : 'Save'}
           </button>
+          {!isNew && autoSaveStatus && (
+            <span style={{ fontSize: '0.75rem', color: autoSaveStatus === 'saving' ? '#ff9800' : '#4caf50', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {autoSaveStatus === 'saving' ? '⏳ Saving...' : '✓ Saved'}
+            </span>
+          )}
           {!isNew && !estimate?.workOrderId && (
             <button className="btn" onClick={openConvertModal} disabled={converting}
               style={{ background: '#2e7d32', color: 'white' }}>

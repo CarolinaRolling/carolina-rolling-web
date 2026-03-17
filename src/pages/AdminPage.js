@@ -1465,14 +1465,17 @@ function AdminPage({ section = 'users-logs' }) {
                         <span style={{ fontWeight: 500 }}>{user.username}</span>
                         {user.isHeadEstimator && (
                           <span style={{ 
-                            fontSize: '0.65rem', 
-                            background: '#fff3e0', 
-                            color: '#e65100',
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                            fontWeight: 600
+                            fontSize: '0.7rem', 
+                            background: '#ff9800', 
+                            color: 'white',
+                            padding: '2px 8px',
+                            borderRadius: 10,
+                            fontWeight: 700,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 3
                           }}>
-                            📋 Head Estimator
+                            ⭐ Head Estimator
                           </span>
                         )}
                         {user.id === currentUser?.id && (
