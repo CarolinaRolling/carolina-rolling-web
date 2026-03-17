@@ -18,13 +18,10 @@ const InvoiceCenterPage = () => {
   const [invoiceFile, setInvoiceFile] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // PDF upload modal (for history items)
   const [pdfUploadWO, setPdfUploadWO] = useState(null);
   const [pdfFile, setPdfFile] = useState(null);
 
   // Email invoice modal
-  const [emailModal, setEmailModal] = useState(null);
-  const [emailAddress, setEmailAddress] = useState('');
 
   useEffect(() => {
     loadData();
@@ -119,24 +116,6 @@ const InvoiceCenterPage = () => {
     } catch (err) { setError('Failed to clear invoice'); }
   };
 
-  const handleEmailInvoice = async (wo, overrideEmail) => {
-    try {
-      setSaving(true);
-      const res = await emailInvoice(wo.id, overrideEmail || null);
-      setSuccess(res.data.message || 'Invoice emailed');
-      setEmailModal(null);
-    } catch (err) {
-      const msg = err.response?.data?.error?.message || 'Failed to email invoice';
-      if (msg.includes('No email')) {
-        // No AP email on file — open email modal to enter one
-        setEmailModal(wo);
-        setEmailAddress('');
-        setError('');
-      } else {
-        setError(msg);
-      }
-    } finally { setSaving(false); }
-  };
 
   const formatCurrency = (v) => '$' + (parseFloat(v) || 0).toFixed(2);
 
