@@ -96,6 +96,8 @@ function EstimateDetailsPage() {
   const formLoadedRef = useRef(false); // tracks when formData is set from server vs user edit
   const [clientEditing, setClientEditing] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null); // full client object with contacts
+  const [clientLocked, setClientLocked] = useState(false);
+  const [clientContacts, setClientContacts] = useState([]); // contacts from selected client
   const [nextDR, setNextDR] = useState(null);
   const [useCustomDR, setUseCustomDR] = useState(false);
   const [customDR, setCustomDR] = useState('');
@@ -215,7 +217,19 @@ function EstimateDetailsPage() {
           const client = clients.find(c => c.name === data.clientName);
           if (client) {
             setSelectedClient(client);
+            // Build contacts list: primary + additional
+            const allContacts = [];
+            if (client.contactName) {
+              allContacts.push({ name: client.contactName, email: client.contactEmail || '', phone: client.contactPhone || '', isPrimary: true });
+            }
+            if (client.contacts && client.contacts.length > 0) {
+              client.contacts.forEach(c => { if (c.name) allContacts.push({ ...c, isPrimary: false }); });
+            }
+            setClientContacts(allContacts);
+            setClientLocked(true);
             if (client.paymentTerms) setClientPaymentTerms(client.paymentTerms);
+          } else {
+            setClientLocked(!!data.clientName);
           }
           // Auto tax exempt for verified resale clients (only if not already saved on estimate)
           if (client && !data.taxExempt) {
@@ -1443,12 +1457,13 @@ function EstimateDetailsPage() {
               {sentForReview ? '✓ Sent for Review' : '📋 Send for Review'}
             </button>
           )}
-          <button className="btn btn-secondary" onClick={() => handleSave(false)} disabled={saving}
-            style={!isNew ? { background: '#f5f5f5', color: '#666', border: '1px solid #ddd' } : {}}>
-            <Save size={18} /> {saving ? 'Saving...' : isNew ? 'Generate New Estimate' : 'Save'}
-          </button>
+          {isNew && (
+            <button className="btn btn-secondary" onClick={() => handleSave(false)} disabled={saving}>
+              <Save size={18} /> {saving ? 'Saving...' : 'Generate New Estimate'}
+            </button>
+          )}
           {!isNew && autoSaveStatus && (
-            <span style={{ fontSize: '0.75rem', color: autoSaveStatus === 'saving' ? '#ff9800' : '#4caf50', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: '0.8rem', color: autoSaveStatus === 'saving' ? '#ff9800' : '#4caf50', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
               {autoSaveStatus === 'saving' ? '⏳ Saving...' : '✓ Saved'}
             </span>
           )}
@@ -1670,95 +1685,143 @@ function EstimateDetailsPage() {
             <div className="grid grid-2">
               <div className="form-group" style={{ position: 'relative' }}>
                 <label className="form-label">Client Name *</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  value={formData.clientName}
-                  ref={clientInputRef}
-                  onChange={async (e) => {
-                    const value = e.target.value;
-                    setFormData({ ...formData, clientName: value });
-                    if (value.length >= 2) {
-                      try {
-                        const res = await searchClients(value);
-                        setClientSuggestions(res.data.data || []);
-                        setShowClientSuggestions(true);
-                      } catch (err) {
-                        setClientSuggestions([]);
-                      }
-                    } else {
-                      setClientSuggestions([]);
-                      setShowClientSuggestions(false);
-                    }
-                  }}
-                  onFocus={() => clientSuggestions.length > 0 && setShowClientSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
-                  autoComplete="off"
-                />
-                {showClientSuggestions && clientSuggestions.length > 0 && (
-                  <div style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                    background: 'white', border: '1px solid #ddd', borderRadius: 4,
-                    maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                  }}>
-                    {clientSuggestions.map(client => (
-                      <div 
-                        key={client.id}
-                        style={{ 
-                          padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #eee',
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                        }}
-                        onMouseDown={() => {
-                          // Apply client data
-                          setFormData({
-                            ...formData,
-                            clientName: client.name,
-                            contactName: client.contactName || formData.contactName,
-                            contactEmail: client.contactEmail || formData.contactEmail,
-                            contactPhone: client.contactPhone || formData.contactPhone,
-                            // Apply tax settings - auto exempt for resale/exempt or verified resale certs
-                            taxExempt: client.taxStatus === 'resale' || client.taxStatus === 'exempt' || 
-                              (!!client.resaleCertificate && client.permitStatus === 'active'),
-                            taxExemptReason: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? 'Resale' : (client.taxStatus === 'exempt' ? 'Tax Exempt' : ''),
-                            taxExemptCertNumber: client.resaleCertificate || '',
-                            useCustomTax: !!client.customTaxRate,
-                            taxRate: client.customTaxRate ? parseFloat(client.customTaxRate) * 100 : formData.taxRate
-                          });
+                {clientLocked && !isNew ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1, padding: '8px 12px', background: '#f5f5f5', borderRadius: 6, fontWeight: 600, fontSize: '0.95rem', border: '1px solid #e0e0e0' }}>
+                      {formData.clientName}
+                    </div>
+                    <button type="button" onClick={() => setClientLocked(false)}
+                      style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 4, padding: '6px 10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: '#1565c0' }}>
+                      ✏️ Change
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={formData.clientName}
+                      ref={clientInputRef}
+                      onChange={async (e) => {
+                        const value = e.target.value;
+                        setFormData({ ...formData, clientName: value });
+                        if (value.length >= 2) {
+                          try {
+                            const res = await searchClients(value);
+                            setClientSuggestions(res.data.data || []);
+                            setShowClientSuggestions(true);
+                          } catch (err) {
+                            setClientSuggestions([]);
+                          }
+                        } else {
+                          setClientSuggestions([]);
                           setShowClientSuggestions(false);
-                          setClientPaymentTerms(client.paymentTerms || null);
-                          showMessage(`Applied ${client.name}'s info`);
-                        }}
-                      >
-                        <div>
-                          <strong>{client.name}</strong>
-                          {client.contactName && <div style={{ fontSize: '0.8rem', color: '#666' }}>{client.contactName}</div>}
-                        </div>
-                        <span style={{ 
-                          fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4,
-                          background: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '#fff3e0' : client.taxStatus === 'exempt' ? '#e8f5e9' : '#e3f2fd',
-                          color: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '#e65100' : client.taxStatus === 'exempt' ? '#2e7d32' : '#1565c0'
-                        }}>
-                          {(client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '✅ Resale' : client.taxStatus === 'exempt' ? 'Exempt' : 'Taxable'}
-                        </span>
-                      </div>
-                    ))}
-                    {formData.clientName && formData.clientName.length >= 2 && !clientSuggestions.some(c => c.name.toLowerCase() === formData.clientName.toLowerCase()) && (
-                      <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, borderTop: '2px solid #c8e6c9' }}
-                        onMouseDown={() => {
-                          setShowClientSuggestions(false);
-                          navigate(`/clients-vendors?addClient=${encodeURIComponent(formData.clientName)}`);
-                        }}>
-                        + Add "{formData.clientName}" as new client
+                        }
+                      }}
+                      onFocus={() => clientSuggestions.length > 0 && setShowClientSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
+                      autoComplete="off"
+                    />
+                    {showClientSuggestions && clientSuggestions.length > 0 && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                        background: 'white', border: '1px solid #ddd', borderRadius: 4,
+                        maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                      }}>
+                        {clientSuggestions.map(client => (
+                          <div 
+                            key={client.id}
+                            style={{ 
+                              padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #eee',
+                              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                            }}
+                            onMouseDown={() => {
+                              // Build full contacts list: primary + additional
+                              const allContacts = [];
+                              if (client.contactName) {
+                                allContacts.push({ name: client.contactName, email: client.contactEmail || '', phone: client.contactPhone || '', isPrimary: true });
+                              }
+                              if (client.contacts && client.contacts.length > 0) {
+                                client.contacts.forEach(c => { if (c.name) allContacts.push({ ...c, isPrimary: false }); });
+                              }
+                              const primary = allContacts.find(c => c.isPrimary) || allContacts[0] || {};
+                              setFormData({
+                                ...formData,
+                                clientName: client.name,
+                                contactName: primary.name || formData.contactName,
+                                contactEmail: primary.email || formData.contactEmail,
+                                contactPhone: primary.phone || formData.contactPhone,
+                                taxExempt: client.taxStatus === 'resale' || client.taxStatus === 'exempt' || 
+                                  (!!client.resaleCertificate && client.permitStatus === 'active'),
+                                taxExemptReason: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? 'Resale' : (client.taxStatus === 'exempt' ? 'Tax Exempt' : ''),
+                                taxExemptCertNumber: client.resaleCertificate || '',
+                                useCustomTax: !!client.customTaxRate,
+                                taxRate: client.customTaxRate ? parseFloat(client.customTaxRate) * 100 : formData.taxRate
+                              });
+                              setSelectedClient(client);
+                              setClientContacts(allContacts);
+                              setClientLocked(true);
+                              setShowClientSuggestions(false);
+                              setClientPaymentTerms(client.paymentTerms || null);
+                              showMessage(`Applied ${client.name}'s info`);
+                            }}
+                          >
+                            <div>
+                              <strong>{client.name}</strong>
+                              {client.contactName && <div style={{ fontSize: '0.8rem', color: '#666' }}>{client.contactName}</div>}
+                            </div>
+                            <span style={{ 
+                              fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4,
+                              background: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '#fff3e0' : client.taxStatus === 'exempt' ? '#e8f5e9' : '#e3f2fd',
+                              color: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '#e65100' : client.taxStatus === 'exempt' ? '#2e7d32' : '#1565c0'
+                            }}>
+                              {(client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '✅ Resale' : client.taxStatus === 'exempt' ? 'Exempt' : 'Taxable'}
+                            </span>
+                          </div>
+                        ))}
+                        {formData.clientName && formData.clientName.length >= 2 && !clientSuggestions.some(c => c.name.toLowerCase() === formData.clientName.toLowerCase()) && (
+                          <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, borderTop: '2px solid #c8e6c9' }}
+                            onMouseDown={() => {
+                              setShowClientSuggestions(false);
+                              navigate(`/clients-vendors?addClient=${encodeURIComponent(formData.clientName)}`);
+                            }}>
+                            + Add "{formData.clientName}" as new client
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
-              <div className="form-group">
-                <label className="form-label">Contact Name</label>
-                <input type="text" className="form-input" value={formData.contactName}
-                  onChange={(e) => setFormData({ ...formData, contactName: e.target.value })} />
-              </div>
+
+              {/* Contact picker — if client has multiple contacts, show dropdown */}
+              {clientContacts.length > 1 ? (
+                <div className="form-group">
+                  <label className="form-label">Contact Person</label>
+                  <select className="form-select" 
+                    value={formData.contactName || ''}
+                    onChange={(e) => {
+                      const contact = clientContacts.find(c => c.name === e.target.value);
+                      if (contact) {
+                        setFormData({ ...formData, contactName: contact.name, contactEmail: contact.email || '', contactPhone: contact.phone || '' });
+                      } else if (e.target.value === '__custom__') {
+                        setFormData({ ...formData, contactName: '', contactEmail: '', contactPhone: '' });
+                      }
+                    }}>
+                    {clientContacts.map((c, i) => (
+                      <option key={i} value={c.name}>{c.name}{c.isPrimary ? ' (Primary)' : ''}</option>
+                    ))}
+                    <option value="__custom__">+ Enter manually...</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="form-group">
+                  <label className="form-label">Contact Name</label>
+                  <input type="text" className="form-input" value={formData.contactName}
+                    onChange={(e) => setFormData({ ...formData, contactName: e.target.value })} />
+                </div>
+              )}
+
               <div className="form-group">
                 <label className="form-label">Email</label>
                 <input type="email" className="form-input" value={formData.contactEmail}
