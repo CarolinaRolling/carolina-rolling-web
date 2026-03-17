@@ -378,3 +378,9 @@ export const completeTodo = (id) => api.post(`/todos/${id}/complete`);
 export const acceptTodo = (id) => api.post(`/todos/${id}/accept`);
 export const denyTodo = (id, reason) => api.post(`/todos/${id}/deny`, { reason });
 export const deleteTodo = (id) => api.delete(`/todos/${id}`);
+
+// Scrap Pickup
+export const getScrapConfig = () => api.get('/settings/scrap-config');
+export const updateScrapConfig = (data) => api.put('/settings/scrap-config', data);
+export const getScrapLog = () => api.get('/settings/scrap-log');
+export const requestScrapPickup = (scrapType) => api.post('/settings/scrap-request', { scrapType });

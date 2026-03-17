@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import QRCode from 'qrcode';
 import { 
   Users, Activity, Plus, Trash2, Edit, Save, X, 
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -33,7 +34,7 @@ function AdminPage({ section = 'users-logs' }) {
   // Tab groups by section
   const SECTION_TABS = {
     'users-logs': ['users', 'logs', 'schedule', 'apikeys', 'system'],
-    'shop-config': ['tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates', 'printer']
+    'shop-config': ['tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates', 'printer', 'scrap']
   };
   const allowedTabs = SECTION_TABS[section] || SECTION_TABS['users-logs'];
   const [activeTab, setActiveTab] = useState(allowedTabs[0]);
@@ -112,6 +113,8 @@ function AdminPage({ section = 'users-logs' }) {
   const [approvedIPs, setApprovedIPs] = useState([]);
   const [newIP, setNewIP] = useState('');
   const [printerConfig, setPrinterConfig] = useState({ qrPrinterIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, partPrinterIp: '', partLabelType: 'DK_11202_62x100' });
+  const [scrapConfig, setScrapConfig] = useState({ scrapEmail: '', shopAddress: '', shopName: 'Carolina Rolling Co. Inc.' });
+  const [scrapLog, setScrapLog] = useState([]);
 
   // Two-Factor Auth
   const [twoFAState, setTwoFAState] = useState({ enabled: false, setupData: null, verifyCode: '', disablePassword: '' });
@@ -158,6 +161,8 @@ function AdminPage({ section = 'users-logs' }) {
       loadApiKeys();
     } else if (activeTab === 'printer') {
       loadPrinterConfig();
+    } else if (activeTab === 'scrap') {
+      loadScrapConfig();
     }
   }, [activeTab, logsPage]);
 
@@ -555,6 +560,46 @@ function AdminPage({ section = 'users-logs' }) {
     }
   };
 
+  const loadScrapConfig = async () => {
+    try {
+      setLoading(true);
+      const [configRes, logRes] = await Promise.all([getScrapConfig(), getScrapLog()]);
+      setScrapConfig(configRes.data.data || { scrapEmail: '', shopAddress: '', shopName: 'Carolina Rolling Co. Inc.' });
+      setScrapLog(logRes.data.data || []);
+    } catch (err) {
+      setScrapConfig({ scrapEmail: '', shopAddress: '', shopName: 'Carolina Rolling Co. Inc.' });
+      setScrapLog([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveScrapConfig = async () => {
+    try {
+      setSaving(true);
+      await updateScrapConfig(scrapConfig);
+      setSuccess('Scrap configuration saved');
+    } catch (err) {
+      setError('Failed to save scrap config');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRequestScrapPickup = async (scrapType) => {
+    if (!window.confirm(`Send scrap pickup request for ${scrapType === 'steel' ? 'Steel' : 'Stainless & Aluminum'}?\n\nAn email will be sent to the scrap company.`)) return;
+    try {
+      setSaving(true);
+      const res = await requestScrapPickup(scrapType);
+      setSuccess(res.data.message || 'Pickup request sent');
+      loadScrapConfig(); // Refresh log
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to send scrap request');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCreateApiKey = async () => {
     if (!newApiKey.name.trim()) {
       setError('API key name is required');
@@ -830,6 +875,7 @@ function AdminPage({ section = 'users-logs' }) {
           <button className={`tab ${activeTab === 'grades' ? 'active' : ''}`} onClick={() => setActiveTab('grades')}>📊 Material Grades</button>
           <button className={`tab ${activeTab === 'weldrates' ? 'active' : ''}`} onClick={() => setActiveTab('weldrates')}>🔥 Weld Rates</button>
           <button className={`tab ${activeTab === 'printer' ? 'active' : ''}`} onClick={() => setActiveTab('printer')}>🖨️ Printer</button>
+          <button className={`tab ${activeTab === 'scrap' ? 'active' : ''}`} onClick={() => setActiveTab('scrap')}>♻️ Scrap</button>
         </>)}
         {section === 'users-logs' && (<>
           <button className={`tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
@@ -2069,6 +2115,131 @@ function AdminPage({ section = 'users-logs' }) {
               {saving ? 'Saving...' : '💾 Save Printer Config'}
             </button>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'scrap' && !loading && (
+        <div>
+          <div className="card">
+            <h3 style={{ marginBottom: 16 }}>♻️ Scrap Pickup Configuration</h3>
+            <p style={{ color: '#666', marginBottom: 16, fontSize: '0.85rem' }}>
+              Configure scrap pickup requests. Print QR codes and stick them on your scrap bins. 
+              When an operator scans one, it emails the scrap company requesting a pickup.
+            </p>
+
+            <div className="form-group">
+              <label className="form-label">Scrap Company Email</label>
+              <input type="email" className="form-input" placeholder="scrap@metalrecycling.com" style={{ maxWidth: 400 }}
+                value={scrapConfig.scrapEmail} onChange={(e) => setScrapConfig({ ...scrapConfig, scrapEmail: e.target.value })} />
+              <small style={{ color: '#666' }}>Pickup request emails will be sent to this address.</small>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Shop Name</label>
+              <input type="text" className="form-input" placeholder="Carolina Rolling Co. Inc." style={{ maxWidth: 400 }}
+                value={scrapConfig.shopName} onChange={(e) => setScrapConfig({ ...scrapConfig, shopName: e.target.value })} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Shop Address (included in pickup email)</label>
+              <textarea className="form-input" rows={3} placeholder="123 Industrial Blvd&#10;City, ST 12345" style={{ maxWidth: 400 }}
+                value={scrapConfig.shopAddress} onChange={(e) => setScrapConfig({ ...scrapConfig, shopAddress: e.target.value })} />
+            </div>
+
+            <button className="btn btn-primary" onClick={handleSaveScrapConfig} disabled={saving} style={{ marginBottom: 24 }}>
+              {saving ? 'Saving...' : '💾 Save Scrap Config'}
+            </button>
+          </div>
+
+          <div className="card" style={{ marginTop: 16 }}>
+            <h3 style={{ marginBottom: 16 }}>🏷️ Scrap Bin QR Codes</h3>
+            <p style={{ color: '#666', marginBottom: 16, fontSize: '0.85rem' }}>
+              Print these QR codes and label your scrap bins. When scanned on a tablet, it sends a pickup request email to the scrap company.
+            </p>
+
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+              {[
+                { type: 'steel', label: '🔩 Steel Scrap', code: 'SCRAP-STEEL', color: '#795548', bg: '#EFEBE9' },
+                { type: 'stainless', label: '✨ Stainless & Aluminum', code: 'SCRAP-STAINLESS', color: '#1565C0', bg: '#E3F2FD' }
+              ].map(bin => (
+                <div key={bin.type} style={{ border: '2px solid ' + bin.color, borderRadius: 12, padding: 20, textAlign: 'center', background: bin.bg, minWidth: 220 }}>
+                  <h4 style={{ marginBottom: 12, color: bin.color }}>{bin.label}</h4>
+                  <div style={{ background: 'white', padding: 16, borderRadius: 8, display: 'inline-block', marginBottom: 12 }}>
+                    <canvas id={`scrap-qr-${bin.type}`} ref={el => {
+                      if (el && !el.dataset.rendered) {
+                        el.dataset.rendered = 'true';
+                        QRCode.toCanvas(el, bin.code, { width: 160, margin: 1, errorCorrectionLevel: 'H' }, (err) => {
+                          if (err) console.error('QR error:', err);
+                        });
+                      }
+                    }}></canvas>
+                  </div>
+                  <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#666', marginBottom: 12 }}>{bin.code}</div>
+                  <button className="btn btn-outline" style={{ borderColor: bin.color, color: bin.color }} onClick={() => {
+                    const canvas = document.getElementById(`scrap-qr-${bin.type}`);
+                    if (canvas) {
+                      const printWin = window.open('', '_blank');
+                      printWin.document.write('<html><head><title>Scrap Bin Label</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:Arial}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;color:#666;margin-top:12px}</style></head><body>');
+                      printWin.document.write('<h1>' + bin.label + '</h1>');
+                      printWin.document.write('<img src="' + canvas.toDataURL() + '" width="250" height="250"/>');
+                      printWin.document.write('<p>Scan to request pickup</p>');
+                      printWin.document.write('</body></html>');
+                      printWin.document.close();
+                      printWin.print();
+                    }
+                  }}>
+                    🖨️ Print Label
+                  </button>
+                  <button className="btn" style={{ marginLeft: 8, background: bin.color, color: 'white', border: 'none' }} onClick={async () => {
+                    try {
+                      setSuccess(''); setError('');
+                      const res = await requestScrapPickup(bin.type);
+                      setSuccess(res.data.message || 'Pickup request sent!');
+                      loadScrapConfig();
+                    } catch (err) {
+                      setError(err.response?.data?.error?.message || 'Failed to send request');
+                    }
+                  }}>
+                    📧 Request Pickup
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {scrapLog.length > 0 && (
+            <div className="card" style={{ marginTop: 16 }}>
+              <h3 style={{ marginBottom: 12 }}>📋 Pickup Request Log</h3>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Sent To</th>
+                    <th>Requested By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scrapLog.map(entry => (
+                    <tr key={entry.id}>
+                      <td style={{ fontSize: '0.85rem' }}>{new Date(entry.requestedAt).toLocaleString()}</td>
+                      <td>
+                        <span style={{
+                          padding: '2px 10px', borderRadius: 12, fontSize: '0.75rem', fontWeight: 600,
+                          background: entry.scrapType === 'steel' ? '#EFEBE9' : '#E3F2FD',
+                          color: entry.scrapType === 'steel' ? '#795548' : '#1565C0'
+                        }}>
+                          {entry.scrapLabel || (entry.scrapType === 'steel' ? 'Steel' : 'Stainless/Alum')}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: '0.85rem', fontFamily: 'monospace' }}>{entry.emailSentTo}</td>
+                      <td style={{ fontSize: '0.85rem' }}>{entry.requestedBy}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
