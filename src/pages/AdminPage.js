@@ -115,6 +115,7 @@ function AdminPage({ section = 'users-logs' }) {
   const [printerConfig, setPrinterConfig] = useState({ qrPrinterIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, partPrinterIp: '', partLabelType: 'DK_11202_62x100' });
   const [scrapConfig, setScrapConfig] = useState({ scrapEmail: '', shopAddress: '', shopName: 'Carolina Rolling Co. Inc.' });
   const [scrapLog, setScrapLog] = useState([]);
+  const [codOverridePasswordAdmin, setCodOverridePasswordAdmin] = useState('');
 
   // Two-Factor Auth
   const [twoFAState, setTwoFAState] = useState({ enabled: false, setupData: null, verifyCode: '', disablePassword: '' });
@@ -156,6 +157,9 @@ function AdminPage({ section = 'users-logs' }) {
       get2FAStatus().then(resp => {
         setTwoFAState(prev => ({ ...prev, enabled: resp.data.data.enabled }));
       }).catch(() => {});
+      getSettings('cod_override_password').then(resp => {
+        if (resp.data.data?.value) setCodOverridePasswordAdmin(resp.data.data.value);
+      }).catch(() => {});
       setLoading(false);
     } else if (activeTab === 'apikeys') {
       loadApiKeys();
@@ -165,6 +169,23 @@ function AdminPage({ section = 'users-logs' }) {
       loadScrapConfig();
     }
   }, [activeTab, logsPage]);
+
+  // Render scrap QR codes when tab is active
+  useEffect(() => {
+    if (activeTab === 'scrap') {
+      setTimeout(() => {
+        ['steel', 'stainless'].forEach(type => {
+          const code = type === 'steel' ? 'SCRAP-STEEL' : 'SCRAP-STAINLESS';
+          const canvas = document.getElementById(`scrap-qr-${type}`);
+          if (canvas) {
+            QRCode.toCanvas(canvas, code, { width: 200, margin: 2, errorCorrectionLevel: 'H' }, (err) => {
+              if (err) console.error('QR error:', err);
+            });
+          }
+        });
+      }, 200);
+    }
+  }, [activeTab, loading]);
 
   const loadTaxSettings = async () => {
     try {
@@ -1905,6 +1926,33 @@ function AdminPage({ section = 'users-logs' }) {
             )}
           </div>
 
+          {/* COD Override Password */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3 style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              💰 COD Override Password
+            </h3>
+            <p style={{ color: '#666', marginBottom: 12, fontSize: '0.85rem' }}>
+              When a COD client's order is ready for pickup, staff must confirm payment before printing a pickup checklist. 
+              This password allows an authorized override if pickup must proceed without payment confirmation.
+            </p>
+            <div style={{ display: 'flex', gap: 8, maxWidth: 400 }}>
+              <input type="text" className="form-input" placeholder="Set override password"
+                value={codOverridePasswordAdmin}
+                onChange={e => setCodOverridePasswordAdmin(e.target.value)} />
+              <button className="btn btn-primary" disabled={saving} onClick={async () => {
+                try {
+                  setSaving(true);
+                  await updateSettings('cod_override_password', codOverridePasswordAdmin);
+                  setSuccess('COD override password saved');
+                } catch (err) {
+                  setError('Failed to save override password');
+                } finally { setSaving(false); }
+              }}>
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+
           {/* System Logs */}
           <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
             <button className="btn btn-outline" onClick={refreshSystemLogs}>
@@ -2161,22 +2209,17 @@ function AdminPage({ section = 'users-logs' }) {
               {[
                 { type: 'steel', label: '🔩 Steel Scrap', code: 'SCRAP-STEEL', color: '#795548', bg: '#EFEBE9' },
                 { type: 'stainless', label: '✨ Stainless & Aluminum', code: 'SCRAP-STAINLESS', color: '#1565C0', bg: '#E3F2FD' }
-              ].map(bin => (
+              ].map(bin => {
+                const canvasId = `scrap-qr-${bin.type}`;
+                return (
                 <div key={bin.type} style={{ border: '2px solid ' + bin.color, borderRadius: 12, padding: 20, textAlign: 'center', background: bin.bg, minWidth: 220 }}>
                   <h4 style={{ marginBottom: 12, color: bin.color }}>{bin.label}</h4>
                   <div style={{ background: 'white', padding: 16, borderRadius: 8, display: 'inline-block', marginBottom: 12 }}>
-                    <canvas id={`scrap-qr-${bin.type}`} ref={el => {
-                      if (el && !el.dataset.rendered) {
-                        el.dataset.rendered = 'true';
-                        QRCode.toCanvas(el, bin.code, { width: 160, margin: 1, errorCorrectionLevel: 'H' }, (err) => {
-                          if (err) console.error('QR error:', err);
-                        });
-                      }
-                    }}></canvas>
+                    <canvas id={canvasId}></canvas>
                   </div>
                   <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#666', marginBottom: 12 }}>{bin.code}</div>
                   <button className="btn btn-outline" style={{ borderColor: bin.color, color: bin.color }} onClick={() => {
-                    const canvas = document.getElementById(`scrap-qr-${bin.type}`);
+                    const canvas = document.getElementById(canvasId);
                     if (canvas) {
                       const printWin = window.open('', '_blank');
                       printWin.document.write('<html><head><title>Scrap Bin Label</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:Arial}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;color:#666;margin-top:12px}</style></head><body>');
@@ -2203,7 +2246,7 @@ function AdminPage({ section = 'users-logs' }) {
                     📧 Request Pickup
                   </button>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
 

@@ -105,9 +105,19 @@ function WorkOrderDetailsPage() {
   const [reordering, setReordering] = useState(false);
   const [editingDR, setEditingDR] = useState(false);
   const [drInput, setDrInput] = useState('');
+  const [codConfirmOpen, setCodConfirmOpen] = useState(false);
+  const [codPaid, setCodPaid] = useState(false);
+  const [codOverrideInput, setCodOverrideInput] = useState('');
+  const [codOverridePassword, setCodOverridePassword] = useState('');
+  const [codAction, setCodAction] = useState(null); // 'checklist' or 'pickup'
+  const [codShowOverride, setCodShowOverride] = useState(false);
 
   useEffect(() => { 
     loadOrder(); loadLaborMinimums(); 
+    // Load COD override password
+    getSettings('cod_override_password').then(res => {
+      if (res.data.data?.value) setCodOverridePassword(res.data.data.value);
+    }).catch(() => {});
     // Auto-refresh every 30 seconds for live progress updates from shop tablets
     const interval = setInterval(() => { loadOrder(); }, 30000);
     return () => clearInterval(interval);
@@ -1319,6 +1329,22 @@ function WorkOrderDetailsPage() {
   // Print Production Copy (no pricing + part prints only)
   const printShopOrder = () => generatePrintPackage('production', false);
 
+  // COD payment check — intercepts pickup actions for COD clients
+  const isCODClient = clientPaymentTerms && clientPaymentTerms.toUpperCase().includes('COD');
+  
+  const handleCODCheck = (action) => {
+    if (!isCODClient || codPaid) {
+      // Not COD or already confirmed paid — proceed
+      if (action === 'checklist') printPickupChecklist();
+      else if (action === 'pickup') setShowPickupModal(true);
+      return;
+    }
+    // COD client, not yet confirmed — show confirmation dialog
+    setCodAction(action);
+    setCodOverrideInput('');
+    setCodConfirmOpen(true);
+  };
+
   // Print Pickup Checklist - simple form with checkboxes for loading
   const printPickupChecklist = () => {
     setShowPrintMenu(false);
@@ -1765,6 +1791,14 @@ function WorkOrderDetailsPage() {
 
   return (
     <div>
+      {/* COD Banner — full width, above header */}
+      {clientPaymentTerms && clientPaymentTerms.toUpperCase().includes('COD') && (
+        <div style={{ background: '#c62828', color: 'white', padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 0, borderRadius: '8px 8px 0 0', border: '3px solid #b71c1c' }}>
+          <span style={{ fontSize: '1.8rem' }}>💰</span>
+          <span style={{ fontSize: '1.4rem', fontWeight: 900, letterSpacing: 2 }}>COD — COLLECT PAYMENT BEFORE SHIPPING</span>
+          <span style={{ fontSize: '1.8rem' }}>💰</span>
+        </div>
+      )}
       <div className="detail-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <button className="btn btn-icon btn-secondary" onClick={() => navigate('/inventory')}><ArrowLeft size={20} /></button>
@@ -1829,8 +1863,9 @@ function WorkOrderDetailsPage() {
                 <option value="urgent">🔴 Urgent</option>
               </select>
               {(order.status === 'stored' || (order.pickupHistory?.length > 0 && getPickupSummary().some(p => p.remaining > 0))) && (
-                <button className="btn btn-success" onClick={() => setShowPickupModal(true)}>
+                <button className="btn btn-success" onClick={() => handleCODCheck('pickup')}>
                   <Check size={18} />{order.pickupHistory?.length > 0 ? 'Continue Shipment' : 'Ship'}
+                  {isCODClient && !codPaid && <span style={{ marginLeft: 6, fontSize: '0.7rem' }}>💰</span>}
                 </button>
               )}
             </>
@@ -1856,8 +1891,9 @@ function WorkOrderDetailsPage() {
                 </button>
                 <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
                 <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Pickup / Loading</div>
-                <button onClick={printPickupChecklist} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
+                <button onClick={() => handleCODCheck('checklist')} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer', fontWeight: 600 }}>
                   ☑️ Pickup Checklist<br/><span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#666' }}>Checkboxes for each part — for loading crew</span>
+                  {isCODClient && !codPaid && <><br/><span style={{ fontWeight: 600, fontSize: '0.75rem', color: '#c62828' }}>⚠️ COD — Payment confirmation required</span></>}
                 </button>
                 <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }}></div>
                 <div style={{ padding: '8px 16px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>QuickBooks</div>
@@ -3621,6 +3657,93 @@ function WorkOrderDetailsPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COD Payment Confirmation Dialog */}
+      {codConfirmOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setCodConfirmOpen(false)}>
+          <div style={{ background: 'white', borderRadius: 12, padding: 0, maxWidth: 440, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}
+            onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ background: '#c62828', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0', textAlign: 'center' }}>
+              <div style={{ fontSize: '2rem', marginBottom: 4 }}>💰</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: 1 }}>COD — PAYMENT REQUIRED</div>
+              <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: 4 }}>{order?.clientName}</div>
+            </div>
+
+            <div style={{ padding: '24px' }}>
+              <p style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 16, textAlign: 'center', color: '#333' }}>
+                Has this job been paid for?
+              </p>
+
+              <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                <button className="btn" onClick={() => {
+                  setCodPaid(true);
+                  setCodConfirmOpen(false);
+                  if (codAction === 'checklist') printPickupChecklist();
+                  else if (codAction === 'pickup') setShowPickupModal(true);
+                }} style={{ flex: 1, background: '#388E3C', color: 'white', border: 'none', padding: '14px', fontSize: '1rem', fontWeight: 700, borderRadius: 8 }}>
+                  ✅ Yes — Paid
+                </button>
+                <button className="btn" onClick={() => {
+                  setCodPaid(false);
+                  setCodShowOverride(true);
+                }} style={{ flex: 1, background: '#c62828', color: 'white', border: 'none', padding: '14px', fontSize: '1rem', fontWeight: 700, borderRadius: 8 }}>
+                  ❌ No — Not Paid
+                </button>
+              </div>
+
+              {codShowOverride && (
+                <div style={{ background: '#FFF3E0', border: '1px solid #FFB74D', borderRadius: 8, padding: 16, marginTop: 8 }}>
+                  <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#E65100', marginBottom: 8 }}>
+                    ⚠️ This order has NOT been paid. Enter override password to proceed anyway:
+                  </p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input type="password" className="form-input" placeholder="Override password" style={{ flex: 1 }}
+                      value={codOverrideInput} onChange={e => setCodOverrideInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && codOverrideInput) {
+                          if (codOverridePassword && codOverrideInput === codOverridePassword) {
+                            setCodPaid(true);
+                            setCodConfirmOpen(false);
+                            setCodShowOverride(false);
+                            if (codAction === 'checklist') printPickupChecklist();
+                            else if (codAction === 'pickup') setShowPickupModal(true);
+                          } else {
+                            setError('Incorrect override password');
+                          }
+                        }
+                      }} />
+                    <button className="btn" onClick={() => {
+                      if (codOverridePassword && codOverrideInput === codOverridePassword) {
+                        setCodPaid(true);
+                        setCodConfirmOpen(false);
+                        setCodShowOverride(false);
+                        if (codAction === 'checklist') printPickupChecklist();
+                        else if (codAction === 'pickup') setShowPickupModal(true);
+                      } else {
+                        setError('Incorrect override password');
+                      }
+                    }} style={{ background: '#E65100', color: 'white', border: 'none', fontWeight: 600 }}>
+                      Override
+                    </button>
+                  </div>
+                  {!codOverridePassword && (
+                    <p style={{ fontSize: '0.75rem', color: '#c62828', marginTop: 8 }}>
+                      No override password set. Go to Admin → Users & Logs → System to configure one.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <button onClick={() => { setCodConfirmOpen(false); setCodShowOverride(false); }} 
+                style={{ width: '100%', marginTop: 12, padding: '10px', background: 'none', border: '1px solid #ccc', borderRadius: 8, cursor: 'pointer', color: '#666', fontSize: '0.9rem' }}>
+                Cancel
+              </button>
             </div>
           </div>
         </div>
