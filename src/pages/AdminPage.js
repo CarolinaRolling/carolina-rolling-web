@@ -2176,10 +2176,9 @@ function AdminPage({ section = 'users-logs' }) {
             </p>
 
             <div className="form-group">
-              <label className="form-label">Scrap Company Email</label>
+              <label className="form-label">Scrap Company Email <span style={{ fontWeight: 400, color: '#888', fontSize: '0.8rem' }}>(Pickup request emails will be sent to this address)</span></label>
               <input type="email" className="form-input" placeholder="scrap@metalrecycling.com" style={{ maxWidth: 400 }}
                 value={scrapConfig.scrapEmail} onChange={(e) => setScrapConfig({ ...scrapConfig, scrapEmail: e.target.value })} />
-              <small style={{ color: '#666' }}>Pickup request emails will be sent to this address.</small>
             </div>
 
             <div className="form-group">
