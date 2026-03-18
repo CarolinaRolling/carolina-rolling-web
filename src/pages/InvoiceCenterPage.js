@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, assignInvoiceNumber, exportBatchIIF, getNextInvoiceNumber, skipInvoice, restoreInvoice, markInvoiceSent } from '../services/api';
 
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
 const InvoiceCenterPage = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('queue');
@@ -23,6 +25,10 @@ const InvoiceCenterPage = () => {
   const [skipReason, setSkipReason] = useState('');
   const [sentModal, setSentModal] = useState(null);
   const [sentFile, setSentFile] = useState(null);
+  const [sentDate, setSentDate] = useState('');
+  const [showSkipped, setShowSkipped] = useState(false);
+  const [manualModal, setManualModal] = useState(null);
+  const [manualInvNum, setManualInvNum] = useState('');
 
   useEffect(() => { loadData(); }, [activeTab]);
 
@@ -33,12 +39,10 @@ const InvoiceCenterPage = () => {
         const [qRes, numRes] = await Promise.all([getInvoiceQueue(), getNextInvoiceNumber()]);
         setQueue(qRes.data.data || []);
         setNextInvNum(numRes.data.data?.nextNumber || 1001);
-      } else if (activeTab === 'history') {
-        const res = await getInvoiceHistory();
-        setHistory(res.data.data || []);
       } else {
-        const res = await getInvoiceSkipped();
-        setSkipped(res.data.data || []);
+        const [hRes, sRes] = await Promise.all([getInvoiceHistory(), getInvoiceSkipped()]);
+        setHistory(hRes.data.data || []);
+        setSkipped(sRes.data.data || []);
       }
     } catch (err) { setError('Failed to load data'); }
     finally { setLoading(false); }
@@ -61,6 +65,23 @@ const InvoiceCenterPage = () => {
       document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
       setSuccess(`IIF exported — Invoice #${wo.invoiceNumber}`); loadData();
     } catch (err) { setError(err.response?.data?.error?.message || 'Failed to export IIF'); }
+  };
+
+  const handleManualAssign = async () => {
+    const num = manualInvNum.trim();
+    if (!num) { setError('Enter an invoice number'); return; }
+    try {
+      setSaving(true);
+      // Use the record-invoice endpoint with just the number
+      const fd = new FormData();
+      fd.append('invoiceNumber', num);
+      fd.append('invoiceDate', new Date().toISOString().split('T')[0]);
+      const { recordInvoice } = await import('../services/api');
+      await recordInvoice(manualModal.id, fd);
+      setSuccess(`Invoice #${num} assigned to ${manualModal.drNumber ? 'DR-' + manualModal.drNumber : manualModal.orderNumber}`);
+      setManualModal(null); setManualInvNum(''); loadData();
+    } catch (err) { setError(err.response?.data?.error?.message || 'Failed to assign'); }
+    finally { setSaving(false); }
   };
 
   const handleBatchConfirm = () => {
@@ -92,9 +113,10 @@ const InvoiceCenterPage = () => {
       setSaving(true);
       const fd = new FormData();
       if (sentFile) fd.append('invoicePdf', sentFile);
+      if (sentDate) fd.append('invoiceDate', sentDate);
       await markInvoiceSent(sentModal.id, fd);
       setSuccess(`Invoice #${sentModal.invoiceNumber} marked as sent`);
-      setSentModal(null); setSentFile(null); loadData();
+      setSentModal(null); setSentFile(null); setSentDate(''); loadData();
     } catch (err) { setError(err.response?.data?.error?.message || 'Failed'); }
     finally { setSaving(false); }
   };
@@ -134,26 +156,17 @@ const InvoiceCenterPage = () => {
 
   const filteredQueue = search ? queue.filter(wo => (wo.clientName || '').toLowerCase().includes(search.toLowerCase()) || (wo.drNumber && String(wo.drNumber).includes(search))) : queue;
   const filteredHistory = search ? history.filter(wo => (wo.clientName || '').toLowerCase().includes(search.toLowerCase()) || (wo.drNumber && String(wo.drNumber).includes(search)) || (wo.invoiceNumber || '').includes(search)) : history;
-  const filteredSkipped = search ? skipped.filter(wo => (wo.clientName || '').toLowerCase().includes(search.toLowerCase()) || (wo.drNumber && String(wo.drNumber).includes(search))) : skipped;
 
-  const WOCard = ({ wo, actions }) => {
-    const drLabel = wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber;
-    const total = getWOTotal(wo);
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <span style={{ fontFamily: 'Courier New, monospace', fontWeight: 700, fontSize: '1.1rem', color: '#1565C0', cursor: 'pointer' }} onClick={() => navigate('/workorders/' + wo.id)}>{drLabel}</span>
-          {wo.invoiceNumber && <span style={{ marginLeft: 8, fontFamily: 'monospace', fontWeight: 600, color: '#2E7D32' }}>#{wo.invoiceNumber}</span>}
-          <div style={{ fontSize: '0.85rem', color: '#555' }}>{wo.clientName}</div>
-        </div>
-        <div style={{ textAlign: 'right', minWidth: 90 }}>
-          <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{formatCurrency(total)}</div>
-          <div style={{ fontSize: '0.75rem', color: '#888' }}>{(wo.parts || []).length} part{(wo.parts || []).length !== 1 ? 's' : ''}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>{actions}</div>
-      </div>
-    );
-  };
+  // Group history by month/year
+  const groupedHistory = {};
+  filteredHistory.forEach(wo => {
+    const d = wo.invoiceDate ? new Date(wo.invoiceDate) : wo.createdAt ? new Date(wo.createdAt) : new Date();
+    const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
+    const label = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    if (!groupedHistory[key]) groupedHistory[key] = { label, items: [] };
+    groupedHistory[key].items.push(wo);
+  });
+  const sortedMonths = Object.keys(groupedHistory).sort().reverse();
 
   return (
     <div>
@@ -170,9 +183,6 @@ const InvoiceCenterPage = () => {
           Awaiting Invoice {queue.length > 0 && <span style={{ marginLeft: 6, background: '#E65100', color: 'white', borderRadius: 10, padding: '2px 8px', fontSize: '0.75rem' }}>{queue.length}</span>}
         </button>
         <button className={`tab ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>Invoiced</button>
-        <button className={`tab ${activeTab === 'skipped' ? 'active' : ''}`} onClick={() => setActiveTab('skipped')}>
-          Not Invoiced {skipped.length > 0 && <span style={{ marginLeft: 6, background: '#888', color: 'white', borderRadius: 10, padding: '2px 8px', fontSize: '0.75rem' }}>{skipped.length}</span>}
-        </button>
       </div>
 
       {loading ? <div className="loading"><div className="spinner"></div></div> :
@@ -197,79 +207,121 @@ const InvoiceCenterPage = () => {
                 <input type="checkbox" checked={selected.size === filteredQueue.length && filteredQueue.length > 0} onChange={toggleSelectAll} style={{ width: 18, height: 18, cursor: 'pointer' }} />
                 <span style={{ fontSize: '0.85rem', color: '#666', fontWeight: 600 }}>Select All ({filteredQueue.length})</span>
               </div>
-              {filteredQueue.map(wo => (
-                <div key={wo.id} className="card" style={{ padding: '14px 20px', borderLeft: selected.has(wo.id) ? '4px solid #1565C0' : '4px solid transparent' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <input type="checkbox" checked={selected.has(wo.id)} onChange={() => toggleSelect(wo.id)} style={{ width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                      <WOCard wo={wo} actions={<>
-                        <button className="btn btn-outline" style={{ padding: '8px 12px', fontSize: '0.85rem', borderColor: '#2E7D32', color: '#2E7D32' }} onClick={() => handleExportIIF(wo)}>IIF</button>
-                        {wo.invoiceNumber && !wo.invoiceDate && (
-                          <button className="btn" style={{ padding: '8px 14px', fontSize: '0.85rem', background: '#1565C0', color: 'white', border: 'none', fontWeight: 600 }} onClick={() => { setSentModal(wo); setSentFile(null); }}>Invoice Sent</button>
-                        )}
-                        <button className="btn btn-outline" style={{ padding: '8px 10px', fontSize: '0.8rem', color: '#888', borderColor: '#ccc' }} onClick={() => { setSkipModal(wo); setSkipReason(''); }}>Skip</button>
-                      </>} />
+              {filteredQueue.map(wo => {
+                const drLabel = wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber;
+                const total = getWOTotal(wo);
+                return (
+                  <div key={wo.id} className="card" style={{ padding: '14px 20px', borderLeft: selected.has(wo.id) ? '4px solid #1565C0' : '4px solid transparent' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <input type="checkbox" checked={selected.has(wo.id)} onChange={() => toggleSelect(wo.id)} style={{ width: 18, height: 18, cursor: 'pointer', flexShrink: 0 }} />
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                        <div style={{ flex: 1, minWidth: 200 }}>
+                          <span style={{ fontFamily: 'Courier New, monospace', fontWeight: 700, fontSize: '1.1rem', color: '#1565C0', cursor: 'pointer' }} onClick={() => navigate('/workorders/' + wo.id)}>{drLabel}</span>
+                          {wo.invoiceNumber && <span style={{ marginLeft: 8, fontFamily: 'monospace', fontWeight: 600, color: '#2E7D32' }}>#{wo.invoiceNumber}</span>}
+                          <div style={{ fontSize: '0.85rem', color: '#555' }}>{wo.clientName}</div>
+                        </div>
+                        <div style={{ textAlign: 'right', minWidth: 90 }}>
+                          <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{formatCurrency(total)}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#888' }}>{(wo.parts || []).length} part{(wo.parts || []).length !== 1 ? 's' : ''}</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                          <button className="btn btn-outline" style={{ padding: '8px 12px', fontSize: '0.85rem', borderColor: '#2E7D32', color: '#2E7D32' }} onClick={() => handleExportIIF(wo)}>IIF</button>
+                          <button className="btn" style={{ padding: '8px 14px', fontSize: '0.85rem', background: '#7B1FA2', color: 'white', border: 'none', fontWeight: 600 }} onClick={() => { setManualModal(wo); setManualInvNum(wo.invoiceNumber || ''); }}>Assign #</button>
+                          {wo.invoiceNumber && !wo.invoiceDate && (
+                            <button className="btn" style={{ padding: '8px 14px', fontSize: '0.85rem', background: '#1565C0', color: 'white', border: 'none', fontWeight: 600 }} onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date().toISOString().split('T')[0]); }}>Invoice Sent</button>
+                          )}
+                          <button className="btn btn-outline" style={{ padding: '8px 10px', fontSize: '0.8rem', color: '#888', borderColor: '#ccc' }} onClick={() => { setSkipModal(wo); setSkipReason(''); }}>Skip</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       ) :
 
-      /* ========== HISTORY TAB ========== */
-      activeTab === 'history' ? (
-        <div>
-          {filteredHistory.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: 40, color: '#999' }}>No invoices yet.</div>
-          ) : (
-            <table className="table">
-              <thead><tr><th>Invoice #</th><th>DR#</th><th>Client</th><th>Amount</th><th>Sent</th><th>By</th><th>PDF</th><th></th></tr></thead>
-              <tbody>
-                {filteredHistory.map(wo => (
-                  <tr key={wo.id}>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2E7D32' }}>#{wo.invoiceNumber}</td>
-                    <td><span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1565C0', cursor: 'pointer' }} onClick={() => navigate('/workorders/' + wo.id)}>{wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber}</span></td>
-                    <td>{wo.clientName}</td>
-                    <td style={{ fontWeight: 600 }}>{formatCurrency(getWOTotal(wo))}</td>
-                    <td style={{ fontSize: '0.85rem' }}>{wo.invoiceDate ? new Date(wo.invoiceDate).toLocaleDateString() : <span style={{ color: '#E65100' }}>Not sent</span>}</td>
-                    <td style={{ fontSize: '0.85rem', color: '#666' }}>{wo.invoicedBy || '-'}</td>
-                    <td>
-                      {wo.invoicePdfUrl ? <a href={wo.invoicePdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 600, fontSize: '0.85rem' }}>View</a>
-                        : <button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={() => { setPdfUploadWO(wo); setPdfFile(null); }}>Upload</button>}
-                    </td>
-                    <td><button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px', color: '#c62828', borderColor: '#c62828' }} onClick={() => handleClearInvoice(wo)}>Clear</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      ) :
-
-      /* ========== NOT INVOICED TAB ========== */
+      /* ========== INVOICED TAB ========== */
       (
         <div>
-          {filteredSkipped.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: 40, color: '#999' }}>No skipped work orders.</div>
+          {filteredHistory.length === 0 && skipped.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: 40, color: '#999' }}>No invoices yet.</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {filteredSkipped.map(wo => (
-                <div key={wo.id} className="card" style={{ padding: '14px 20px', borderLeft: '4px solid #888' }}>
-                  <WOCard wo={wo} actions={
-                    <button className="btn btn-outline" style={{ padding: '8px 14px', fontSize: '0.85rem' }} onClick={() => handleRestore(wo)}>Restore to Queue</button>
-                  } />
-                  {(wo.invoiceSkipReason || wo.invoiceSkippedBy) && (
-                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #eee', fontSize: '0.8rem', color: '#888' }}>
-                      {wo.invoiceSkipReason && <span style={{ marginRight: 12 }}>Reason: <strong>{wo.invoiceSkipReason}</strong></span>}
-                      {wo.invoiceSkippedBy && <span>by {wo.invoiceSkippedBy}</span>}
-                      {wo.invoiceSkippedAt && <span> on {new Date(wo.invoiceSkippedAt).toLocaleDateString()}</span>}
+            <>
+              {sortedMonths.map(key => {
+                const group = groupedHistory[key];
+                return (
+                  <div key={key} style={{ marginBottom: 24 }}>
+                    <div style={{ padding: '8px 0', marginBottom: 8, borderBottom: '2px solid #1565C0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1565C0' }}>{group.label}</span>
+                      <span style={{ fontSize: '0.8rem', color: '#888' }}>({group.items.length} invoice{group.items.length !== 1 ? 's' : ''})</span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333', marginLeft: 'auto' }}>{formatCurrency(group.items.reduce((s, wo) => s + getWOTotal(wo), 0))}</span>
+                    </div>
+                    <table className="table" style={{ marginBottom: 0 }}>
+                      <thead><tr><th>Invoice #</th><th>DR#</th><th>Client</th><th>Amount</th><th>Sent</th><th>PDF</th><th></th></tr></thead>
+                      <tbody>
+                        {group.items.map(wo => (
+                          <tr key={wo.id}>
+                            <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2E7D32' }}>#{wo.invoiceNumber}</td>
+                            <td><span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1565C0', cursor: 'pointer' }} onClick={() => navigate('/workorders/' + wo.id)}>{wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber}</span></td>
+                            <td>{wo.clientName}</td>
+                            <td style={{ fontWeight: 600 }}>{formatCurrency(getWOTotal(wo))}</td>
+                            <td style={{ fontSize: '0.85rem' }}>
+                              {wo.invoiceDate ? (
+                                <span style={{ color: '#2E7D32', fontWeight: 500, cursor: 'pointer' }} onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date(wo.invoiceDate).toISOString().split('T')[0]); }} title="Click to edit date">
+                                  {new Date(wo.invoiceDate).toLocaleDateString()}
+                                </span>
+                              ) : (
+                                <button className="btn btn-sm" style={{ fontSize: '0.75rem', padding: '4px 10px', background: '#E65100', color: 'white', border: 'none', fontWeight: 600, borderRadius: 4 }}
+                                  onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date().toISOString().split('T')[0]); }}>
+                                  Confirm Sent
+                                </button>
+                              )}
+                            </td>
+                            <td>{wo.invoicePdfUrl ? <a href={wo.invoicePdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 600, fontSize: '0.85rem' }}>View</a> : <button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={() => { setPdfUploadWO(wo); setPdfFile(null); }}>Upload</button>}</td>
+                            <td><button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px', color: '#c62828', borderColor: '#c62828' }} onClick={() => handleClearInvoice(wo)}>Clear</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+
+              {/* Not Invoiced — collapsible at bottom */}
+              {skipped.length > 0 && (
+                <div style={{ marginTop: 32 }}>
+                  <button onClick={() => setShowSkipped(!showSkipped)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', width: '100%', borderBottom: '2px solid #888' }}>
+                    <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#888' }}>{showSkipped ? '▼' : '▶'} Not Invoiced ({skipped.length})</span>
+                  </button>
+                  {showSkipped && (
+                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {skipped.map(wo => {
+                        const drLabel = wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber;
+                        return (
+                          <div key={wo.id} className="card" style={{ padding: '12px 20px', borderLeft: '4px solid #888', opacity: 0.85 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                              <div style={{ flex: 1, minWidth: 200 }}>
+                                <span style={{ fontFamily: 'Courier New, monospace', fontWeight: 700, color: '#1565C0', cursor: 'pointer' }} onClick={() => navigate('/workorders/' + wo.id)}>{drLabel}</span>
+                                <div style={{ fontSize: '0.85rem', color: '#555' }}>{wo.clientName}</div>
+                                {wo.invoiceSkipReason && <div style={{ fontSize: '0.8rem', color: '#888', marginTop: 2 }}>Reason: <strong>{wo.invoiceSkipReason}</strong></div>}
+                              </div>
+                              <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                                {wo.invoiceSkippedBy && <span>by {wo.invoiceSkippedBy}</span>}
+                                {wo.invoiceSkippedAt && <span> on {new Date(wo.invoiceSkippedAt).toLocaleDateString()}</span>}
+                              </div>
+                              <button className="btn btn-outline" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={() => handleRestore(wo)}>Restore to Queue</button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -304,6 +356,35 @@ const InvoiceCenterPage = () => {
         </div>
       )}
 
+      {/* Manual Invoice # Assignment Modal */}
+      {manualModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setManualModal(null)}>
+          <div style={{ background: 'white', borderRadius: 12, padding: 0, maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ background: '#7B1FA2', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>Assign Invoice Number</div>
+              <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: 4 }}>{manualModal.drNumber ? 'DR-' + manualModal.drNumber : manualModal.orderNumber} — {manualModal.clientName}</div>
+            </div>
+            <div style={{ padding: 24 }}>
+              <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: 16 }}>Enter the invoice number for this work order. Use this for previously invoiced orders or manual entries.</p>
+              <div className="form-group" style={{ marginBottom: 20 }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Invoice Number</label>
+                <input type="text" className="form-input" placeholder="e.g. 208394" autoFocus
+                  value={manualInvNum} onChange={e => setManualInvNum(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleManualAssign(); }}
+                  style={{ fontFamily: 'monospace', fontSize: '1.1rem' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button className="btn" onClick={handleManualAssign} disabled={saving || !manualInvNum.trim()}
+                  style={{ flex: 1, background: manualInvNum.trim() ? '#7B1FA2' : '#ccc', color: 'white', border: 'none', padding: '14px', fontWeight: 700, borderRadius: 8 }}>
+                  {saving ? 'Saving...' : 'Assign #' + (manualInvNum || '...')}
+                </button>
+                <button onClick={() => setManualModal(null)} style={{ padding: '14px 20px', background: 'none', border: '1px solid #ccc', borderRadius: 8, cursor: 'pointer', color: '#666' }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Skip Modal */}
       {skipModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setSkipModal(null)}>
@@ -328,10 +409,13 @@ const InvoiceCenterPage = () => {
           <div style={{ background: 'white', borderRadius: 12, padding: 0, maxWidth: 440, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
             <div style={{ background: '#1565C0', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0' }}>
               <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>Invoice Sent</div>
-              <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: 4 }}>Invoice #{sentModal.invoiceNumber} — {sentModal.drNumber ? 'DR-' + sentModal.drNumber : sentModal.orderNumber} — {sentModal.clientName}</div>
+              <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: 4 }}>Invoice #{sentModal.invoiceNumber} — {sentModal.clientName}</div>
             </div>
             <div style={{ padding: 24 }}>
-              <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: 16 }}>This will record today's date and your username as the sender. Optionally attach the invoice PDF.</p>
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Date Sent</label>
+                <input type="date" className="form-input" value={sentDate} onChange={e => setSentDate(e.target.value)} />
+              </div>
               <div className="form-group" style={{ marginBottom: 20 }}>
                 <label className="form-label" style={{ fontWeight: 600 }}>Invoice PDF <span style={{ fontWeight: 400, color: '#888' }}>(optional)</span></label>
                 <input type="file" accept=".pdf" className="form-input" style={{ padding: 8 }} onChange={e => setSentFile(e.target.files[0] || null)} />
