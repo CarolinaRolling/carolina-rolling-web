@@ -325,6 +325,14 @@ function WorkOrderDetailsPage() {
     return bestSpecificRule || bestGeneralRule || bestFallbackRule;
   };
 
+  // Round up material cost after markup (matches estimate logic)
+  const roundUpMaterial = (value, rounding) => {
+    if (!rounding || rounding === 'none' || value <= 0) return value;
+    if (rounding === 'dollar') return Math.ceil(value);
+    if (rounding === 'five') return Math.ceil(value / 5) * 5;
+    return value;
+  };
+
   const getMinimumInfo = () => {
     let totalLabor = 0, totalMaterial = 0, highestMinimum = 0, highestMinRule = null;
     const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
@@ -335,7 +343,7 @@ function WorkOrderDetailsPage() {
       const laborEach = parseFloat(part.laborTotal) || 0;
       const materialCost = parseFloat(part.materialTotal) || 0;
       const materialMarkup = parseFloat(part.materialMarkupPercent) || (part.formData?.materialMarkupPercent ? parseFloat(part.formData.materialMarkupPercent) : 0);
-      const materialEach = materialCost * (1 + materialMarkup / 100);
+      const materialEach = roundUpMaterial(materialCost * (1 + materialMarkup / 100), part.formData?._materialRounding);
       const qty = parseInt(part.quantity) || 1;
       totalLabor += laborEach * qty;
       totalMaterial += materialEach * qty;
@@ -717,7 +725,7 @@ function WorkOrderDetailsPage() {
         const qty = parseInt(dataToSend.quantity) || 1;
         const matCost = parseFloat(dataToSend.materialTotal) || 0;
         const matMarkup = parseFloat(dataToSend.materialMarkupPercent) || 0;
-        const matEach = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
+        const matEach = roundUpMaterial(Math.round(matCost * (1 + matMarkup / 100) * 100) / 100, dataToSend._materialRounding);
         const labEach = parseFloat(dataToSend.laborTotal) || 0;
         dataToSend.partTotal = (Math.round((matEach + labEach) * qty * 100) / 100).toFixed(2);
       }
@@ -1102,7 +1110,9 @@ function WorkOrderDetailsPage() {
       // Pricing calculations (always calculate, only display if includePricing)
       const matCost = parseFloat(part.materialTotal) || 0;
       const matMarkup = parseFloat(part.materialMarkupPercent) || 0;
-      const matEach = matCost * (1 + matMarkup / 100);
+      const matRounding = part.formData?._materialRounding;
+      const matEachRaw = matCost * (1 + matMarkup / 100);
+      const matEach = matRounding === 'dollar' ? Math.ceil(matEachRaw) : matRounding === 'five' ? Math.ceil(matEachRaw / 5) * 5 : matEachRaw;
       const labEach = parseFloat(part.laborTotal) || 0;
       const unitPrice = matEach + labEach;
       const qty = parseInt(part.quantity) || 1;
@@ -1136,7 +1146,8 @@ function WorkOrderDetailsPage() {
             ${includePricing && pricingHtml ? `<div class="pr-pricing">${(() => {
               const matCost2 = parseFloat(part.materialTotal) || 0;
               const matMarkup2 = parseFloat(part.materialMarkupPercent) || 0;
-              const matEach2 = matCost2 * (1 + matMarkup2 / 100);
+              const matEach2Raw = matCost2 * (1 + matMarkup2 / 100);
+              const matEach2 = matRounding === 'dollar' ? Math.ceil(matEach2Raw) : matRounding === 'five' ? Math.ceil(matEach2Raw / 5) * 5 : matEach2Raw;
               const labEach2 = parseFloat(part.laborTotal) || 0;
               return `${matCost2 ? `<span>Material: ${formatCurrency(matCost2)}${matMarkup2 > 0 ? ' +' + matMarkup2 + '%' : ''}</span>` : ''}${labEach2 ? `<span>Labor: ${formatCurrency(labEach2)}</span>` : ''}`;
             })()}</div>` : ''}
