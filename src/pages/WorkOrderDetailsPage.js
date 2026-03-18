@@ -28,7 +28,7 @@ import {
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, recordPayment, clearPayment,
-  exportWorkOrderIIF
+  exportWorkOrderIIF, assignInvoiceNumber
 } from '../services/api';
 
 const PART_TYPES = {
@@ -1987,18 +1987,25 @@ function WorkOrderDetailsPage() {
                 <button onClick={async () => {
                   try {
                     setShowPrintMenu(false);
+                    // Assign invoice number if not already assigned
+                    if (!order.invoiceNumber) {
+                      const assignRes = await assignInvoiceNumber(order.id);
+                      order.invoiceNumber = assignRes.data.data.invoiceNumber;
+                      showMessage(`Invoice #${order.invoiceNumber} assigned`);
+                    }
                     const response = await exportWorkOrderIIF(order.id);
                     const iifContent = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
                     const blob = new Blob([iifContent], { type: 'text/plain' });
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `invoice-${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber}-${(order.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.iif`;
+                    a.download = `invoice-${order.invoiceNumber || order.drNumber || order.orderNumber}-${(order.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.iif`;
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
                     a.remove();
-                    showMessage('QuickBooks IIF file downloaded');
+                    showMessage(`IIF exported — Invoice #${order.invoiceNumber}`);
+                    loadOrder();
                   } catch (err) {
                     setError(err.response?.data?.error?.message || 'Failed to export IIF');
                   }

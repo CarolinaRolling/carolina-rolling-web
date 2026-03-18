@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getInvoiceNumbers, voidInvoiceNumber, getNextInvoiceNumber, setNextInvoiceNumber } from '../services/api';
+import { getInvoiceNumbers, voidInvoiceNumber, getNextInvoiceNumber, setNextInvoiceNumber, createManualInvoiceNumber } from '../services/api';
 
 const InvoiceNumbersPage = () => {
   const navigate = useNavigate();
@@ -15,6 +15,8 @@ const InvoiceNumbersPage = () => {
   const [saving, setSaving] = useState(false);
   const [voidTarget, setVoidTarget] = useState(null);
   const [voidReason, setVoidReason] = useState('');
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualForm, setManualForm] = useState({ invoiceNumber: '', clientName: '' });
 
   useEffect(() => { loadData(); }, []);
 
@@ -55,6 +57,21 @@ const InvoiceNumbersPage = () => {
       loadData();
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Failed to void');
+    } finally { setSaving(false); }
+  };
+
+  const handleManualCreate = async () => {
+    const num = parseInt(manualForm.invoiceNumber);
+    if (!num || num < 1) { setError('Enter a valid invoice number'); return; }
+    try {
+      setSaving(true);
+      await createManualInvoiceNumber({ invoiceNumber: num, clientName: manualForm.clientName || null });
+      setSuccess(`Invoice #${num} created`);
+      setManualOpen(false);
+      setManualForm({ invoiceNumber: '', clientName: '' });
+      loadData();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to create invoice number');
     } finally { setSaving(false); }
   };
 
@@ -100,6 +117,10 @@ const InvoiceNumbersPage = () => {
             <button className="btn btn-outline" onClick={() => setShowVoid(!showVoid)}
               style={{ color: showVoid ? '#c62828' : '#666', borderColor: showVoid ? '#c62828' : '#ccc' }}>
               {showVoid ? 'Hide Voided' : 'Show Voided'}
+            </button>
+            <button className="btn" onClick={() => { setManualOpen(true); setManualForm({ invoiceNumber: nextNum, clientName: '' }); }}
+              style={{ background: '#1565C0', color: 'white', border: 'none', fontWeight: 600 }}>
+              + Manual Entry
             </button>
           </div>
         </div>
@@ -197,6 +218,43 @@ const InvoiceNumbersPage = () => {
                 {saving ? 'Voiding...' : 'Void Invoice'}
               </button>
               <button className="btn btn-outline" onClick={() => setVoidTarget(null)} style={{ padding: '12px 20px' }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Entry Modal */}
+      {manualOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setManualOpen(false)}>
+          <div style={{ background: 'white', borderRadius: 12, padding: 0, maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ background: '#1565C0', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>Manual Invoice Number Entry</div>
+              <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: 4 }}>Create an invoice number record manually</div>
+            </div>
+            <div style={{ padding: 24 }}>
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Invoice Number *</label>
+                <input type="number" className="form-input" placeholder="e.g. 1015" autoFocus
+                  value={manualForm.invoiceNumber} onChange={e => setManualForm({ ...manualForm, invoiceNumber: e.target.value })}
+                  onKeyDown={e => { if (e.key === 'Enter') handleManualCreate(); }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: 20 }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Client Name <span style={{ fontWeight: 400, color: '#888' }}>(optional)</span></label>
+                <input type="text" className="form-input" placeholder="e.g. Nowell Steel and Supply"
+                  value={manualForm.clientName} onChange={e => setManualForm({ ...manualForm, clientName: e.target.value })} />
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button className="btn" onClick={handleManualCreate} disabled={saving || !manualForm.invoiceNumber}
+                  style={{ flex: 1, background: manualForm.invoiceNumber ? '#1565C0' : '#ccc', color: 'white', border: 'none', padding: '14px', fontWeight: 700, borderRadius: 8 }}>
+                  {saving ? 'Creating...' : 'Create Invoice #' + (manualForm.invoiceNumber || '...')}
+                </button>
+                <button onClick={() => setManualOpen(false)}
+                  style={{ padding: '14px 20px', background: 'none', border: '1px solid #ccc', borderRadius: 8, cursor: 'pointer', color: '#666' }}>
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
