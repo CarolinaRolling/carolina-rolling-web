@@ -1105,10 +1105,14 @@ function EstimateDetailsPage() {
   // Send estimate for pricing review
   const handleSendForReview = async () => {
     try {
-      const estNum = estimate?.estimateNumber || formData.estimateNumber || 'Unknown';
-      const clientName = formData.clientName || estimate?.clientName || 'Unknown Client';
+      // Get estimate number from multiple sources for robustness
+      const estNum = estimate?.estimateNumber || formData.estimateNumber || document.querySelector('.page-title')?.textContent?.trim() || 'Estimate';
+      const clientName = formData.clientName || estimate?.clientName || '';
+      const titleParts = [estNum];
+      if (clientName) titleParts.push(clientName);
+      
       await createTodo({
-        title: `Review pricing: ${estNum} — ${clientName}`,
+        title: `Review pricing: ${titleParts.join(' — ')}`,
         description: `${parts.length} part(s). Review pricing and accept or deny.`,
         type: 'estimate_review',
         priority: 'high',
