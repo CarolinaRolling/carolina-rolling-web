@@ -178,7 +178,7 @@ function AdminPage({ section = 'users-logs' }) {
           const code = type === 'steel' ? 'SCRAP-STEEL' : 'SCRAP-STAINLESS';
           const canvas = document.getElementById(`scrap-qr-${type}`);
           if (canvas) {
-            QRCode.toCanvas(canvas, code, { width: 200, margin: 2, errorCorrectionLevel: 'H' }, (err) => {
+            QRCode.toCanvas(canvas, code, { width: 250, margin: 2, errorCorrectionLevel: 'H' }, (err) => {
               if (err) console.error('QR error:', err);
             });
           }
@@ -2224,7 +2224,7 @@ function AdminPage({ section = 'users-logs' }) {
                       const printWin = window.open('', '_blank');
                       printWin.document.write('<html><head><title>Scrap Bin Label</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:Arial}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;color:#666;margin-top:12px}</style></head><body>');
                       printWin.document.write('<h1>' + bin.label + '</h1>');
-                      printWin.document.write('<img src="' + canvas.toDataURL() + '" width="250" height="250"/>');
+                      printWin.document.write('<img src="' + canvas.toDataURL() + '" width="400" height="400"/>');
                       printWin.document.write('<p>Scan to request pickup</p>');
                       printWin.document.write('</body></html>');
                       printWin.document.close();
