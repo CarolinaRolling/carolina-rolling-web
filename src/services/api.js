@@ -371,6 +371,8 @@ export const uploadShopSupplyImage = (id, file) => {
   return api.post(`/shop-supplies/${id}/image`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 };
 export const deleteShopSupplyImage = (id) => api.delete(`/shop-supplies/${id}/image`);
+export const getShopSupplyCategories = () => api.get('/shop-supplies/categories');
+export const updateShopSupplyCategories = (categories) => api.put('/shop-supplies/categories', { categories });
 
 // Todos
 export const getTodos = (params) => api.get('/todos', { params });
@@ -386,6 +388,8 @@ export const getScrapConfig = () => api.get('/settings/scrap-config');
 export const updateScrapConfig = (data) => api.put('/settings/scrap-config', data);
 export const getScrapLog = () => api.get('/settings/scrap-log');
 export const requestScrapPickup = (scrapType) => api.post('/settings/scrap-request', { scrapType });
+export const getScrapPending = () => api.get('/settings/scrap-pending');
+export const confirmScrapPickup = (scrapType) => api.post('/settings/scrap-confirm-pickup', { scrapType });
 
 // Invoicing
 export const getInvoiceQueue = () => api.get('/workorders/invoicing/queue');

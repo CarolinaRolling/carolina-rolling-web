@@ -6,7 +6,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -2206,44 +2206,76 @@ function AdminPage({ section = 'users-logs' }) {
 
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
               {[
-                { type: 'steel', label: '🔩 Steel Scrap', code: 'SCRAP-STEEL', color: '#795548', bg: '#EFEBE9' },
-                { type: 'stainless', label: '✨ Stainless & Aluminum', code: 'SCRAP-STAINLESS', color: '#1565C0', bg: '#E3F2FD' }
+                { type: 'steel', label: '🔩 Steel Scrap', code: 'SCRAP-STEEL', color: '#795548', bg: '#EFEBE9', pendingKey: 'steelPending' },
+                { type: 'stainless', label: '✨ Stainless & Aluminum', code: 'SCRAP-STAINLESS', color: '#1565C0', bg: '#E3F2FD', pendingKey: 'stainlessPending' }
               ].map(bin => {
                 const canvasId = `scrap-qr-${bin.type}`;
+                const pending = scrapConfig[bin.pendingKey];
                 return (
-                <div key={bin.type} style={{ border: '2px solid ' + bin.color, borderRadius: 12, padding: 20, textAlign: 'center', background: bin.bg, minWidth: 220 }}>
+                <div key={bin.type} style={{ border: '2px solid ' + bin.color, borderRadius: 12, padding: 20, textAlign: 'center', background: bin.bg, minWidth: 260 }}>
                   <h4 style={{ marginBottom: 12, color: bin.color }}>{bin.label}</h4>
+
+                  {/* Pending pickup status */}
+                  {pending ? (
+                    <div style={{ background: '#FFF3E0', border: '2px solid #FFB74D', borderRadius: 8, padding: 12, marginBottom: 12, textAlign: 'left' }}>
+                      <div style={{ fontWeight: 700, color: '#E65100', fontSize: '0.9rem', marginBottom: 4 }}>⏳ Pickup Requested</div>
+                      <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                        {pending.requestedBy && <span>By: <strong>{pending.requestedBy}</strong></span>}
+                        {pending.requestedAt && <span> on {new Date(pending.requestedAt).toLocaleDateString()}</span>}
+                      </div>
+                      <button className="btn" style={{ marginTop: 8, background: '#388E3C', color: 'white', border: 'none', fontWeight: 700, width: '100%', padding: '10px' }} onClick={async () => {
+                        if (!window.confirm(`Confirm ${bin.label} has been picked up?`)) return;
+                        try {
+                          setSuccess(''); setError('');
+                          const res = await confirmScrapPickup(bin.type);
+                          setSuccess(res.data.message || 'Pickup confirmed!');
+                          loadScrapConfig();
+                        } catch (err) {
+                          setError(err.response?.data?.error?.message || 'Failed to confirm pickup');
+                        }
+                      }}>
+                        ✅ Confirm Picked Up
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ background: '#E8F5E9', borderRadius: 8, padding: 8, marginBottom: 12, fontSize: '0.8rem', color: '#2E7D32', fontWeight: 600 }}>
+                      ✅ Ready for new request
+                    </div>
+                  )}
+
                   <div style={{ background: 'white', padding: 16, borderRadius: 8, display: 'inline-block', marginBottom: 12 }}>
                     <canvas id={canvasId}></canvas>
                   </div>
                   <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#666', marginBottom: 12 }}>{bin.code}</div>
-                  <button className="btn btn-outline" style={{ borderColor: bin.color, color: bin.color }} onClick={() => {
-                    const canvas = document.getElementById(canvasId);
-                    if (canvas) {
-                      const printWin = window.open('', '_blank');
-                      printWin.document.write('<html><head><title>Scrap Bin Label</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:Arial}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;color:#666;margin-top:12px}</style></head><body>');
-                      printWin.document.write('<h1>' + bin.label + '</h1>');
-                      printWin.document.write('<img src="' + canvas.toDataURL() + '" width="400" height="400"/>');
-                      printWin.document.write('<p>Scan to request pickup</p>');
-                      printWin.document.write('</body></html>');
-                      printWin.document.close();
-                      printWin.print();
-                    }
-                  }}>
-                    🖨️ Print Label
-                  </button>
-                  <button className="btn" style={{ marginLeft: 8, background: bin.color, color: 'white', border: 'none' }} onClick={async () => {
-                    try {
-                      setSuccess(''); setError('');
-                      const res = await requestScrapPickup(bin.type);
-                      setSuccess(res.data.message || 'Pickup request sent!');
-                      loadScrapConfig();
-                    } catch (err) {
-                      setError(err.response?.data?.error?.message || 'Failed to send request');
-                    }
-                  }}>
-                    📧 Request Pickup
-                  </button>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                    <button className="btn btn-outline" style={{ borderColor: bin.color, color: bin.color }} onClick={() => {
+                      const canvas = document.getElementById(canvasId);
+                      if (canvas) {
+                        const printWin = window.open('', '_blank');
+                        printWin.document.write('<html><head><title>Scrap Bin Label</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:Arial}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;color:#666;margin-top:12px}</style></head><body>');
+                        printWin.document.write('<h1>' + bin.label + '</h1>');
+                        printWin.document.write('<img src="' + canvas.toDataURL() + '" width="400" height="400"/>');
+                        printWin.document.write('<p>Scan to request pickup</p>');
+                        printWin.document.write('</body></html>');
+                        printWin.document.close();
+                        printWin.print();
+                      }
+                    }}>
+                      🖨️ Print Label
+                    </button>
+                    <button className="btn" style={{ background: pending ? '#ccc' : bin.color, color: 'white', border: 'none' }} disabled={!!pending} onClick={async () => {
+                      try {
+                        setSuccess(''); setError('');
+                        const res = await requestScrapPickup(bin.type);
+                        setSuccess(res.data.message || 'Pickup request sent!');
+                        loadScrapConfig();
+                      } catch (err) {
+                        setError(err.response?.data?.error?.message || 'Failed to send request');
+                      }
+                    }}>
+                      📧 Request Pickup
+                    </button>
+                  </div>
                 </div>
               )})}
             </div>
@@ -2257,13 +2289,13 @@ function AdminPage({ section = 'users-logs' }) {
                   <tr>
                     <th>Date</th>
                     <th>Type</th>
-                    <th>Sent To</th>
-                    <th>Requested By</th>
+                    <th>Action</th>
+                    <th>By</th>
                   </tr>
                 </thead>
                 <tbody>
                   {scrapLog.map(entry => (
-                    <tr key={entry.id}>
+                    <tr key={entry.id} style={entry.action === 'picked_up' ? { background: '#E8F5E9' } : {}}>
                       <td style={{ fontSize: '0.85rem' }}>{new Date(entry.requestedAt).toLocaleString()}</td>
                       <td>
                         <span style={{
@@ -2274,7 +2306,13 @@ function AdminPage({ section = 'users-logs' }) {
                           {entry.scrapLabel || (entry.scrapType === 'steel' ? 'Steel' : 'Stainless/Alum')}
                         </span>
                       </td>
-                      <td style={{ fontSize: '0.85rem', fontFamily: 'monospace' }}>{entry.emailSentTo}</td>
+                      <td style={{ fontSize: '0.85rem' }}>
+                        {entry.action === 'picked_up' ? (
+                          <span style={{ color: '#388E3C', fontWeight: 600 }}>✅ Pickup Confirmed</span>
+                        ) : (
+                          <span>📧 Requested → {entry.emailSentTo}</span>
+                        )}
+                      </td>
                       <td style={{ fontSize: '0.85rem' }}>{entry.requestedBy}</td>
                     </tr>
                   ))}

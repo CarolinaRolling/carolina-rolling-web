@@ -1104,10 +1104,10 @@ function EstimateDetailsPage() {
   // Send estimate for pricing review
   const handleSendForReview = async () => {
     try {
-      const estNum = formData.estimateNumber || 'Unknown';
-      const clientName = formData.clientName || 'Unknown Client';
+      const estNum = estimate?.estimateNumber || formData.estimateNumber || 'Unknown';
+      const clientName = formData.clientName || estimate?.clientName || 'Unknown Client';
       await createTodo({
-        title: `Confirm/Add pricing to ${estNum} — ${clientName}`,
+        title: `Review pricing: ${estNum} — ${clientName}`,
         description: `${parts.length} part(s). Review pricing and accept or deny.`,
         type: 'estimate_review',
         priority: 'high',
@@ -1115,7 +1115,7 @@ function EstimateDetailsPage() {
         estimateNumber: estNum
       });
       setSentForReview(true);
-      showMessage('Sent for review — task added to shared to-do list');
+      showMessage('Sent to head estimator for review');
       setTimeout(() => setSentForReview(false), 5000);
     } catch (err) {
       setError('Failed to send for review');

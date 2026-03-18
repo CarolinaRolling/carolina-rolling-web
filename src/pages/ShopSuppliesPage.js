@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Package, Plus, RefreshCw, AlertTriangle, Trash2, Edit, History, Printer, Camera, X } from 'lucide-react';
-import { getShopSupplies, createShopSupply, updateShopSupply, refillShopSupply, getShopSupplyLogs, deleteShopSupply, uploadShopSupplyImage, deleteShopSupplyImage } from '../services/api';
+import { getShopSupplies, createShopSupply, updateShopSupply, refillShopSupply, getShopSupplyLogs, deleteShopSupply, uploadShopSupplyImage, deleteShopSupplyImage, getShopSupplyCategories, updateShopSupplyCategories } from '../services/api';
 
-const CATEGORIES = ['Gas', 'Paint', 'Safety', 'Welding', 'Cutting', 'Cleaning', 'Hardware', 'Other'];
 const UNITS = ['each', 'tanks', 'cans', 'boxes', 'rolls', 'gallons', 'bags', 'pairs', 'bottles', 'packs'];
 
 function ShopSuppliesPage() {
   const [supplies, setSupplies] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({ name: '', description: '', category: '', quantity: 0, unit: 'each', minQuantity: 1 });
+  const [formData, setFormData] = useState({ name: '', description: '', category: '', quantity: 0, unit: 'each', minQuantity: 1, maxQuantity: '' });
   const [showRefillModal, setShowRefillModal] = useState(null);
   const [refillQty, setRefillQty] = useState('');
   const [refillNotes, setRefillNotes] = useState('');
@@ -22,10 +22,21 @@ function ShopSuppliesPage() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [filterCategory, setFilterCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
+  const [editingStock, setEditingStock] = useState(null);
+  const [stockInput, setStockInput] = useState('');
 
-  useEffect(() => { loadSupplies(); }, []);
+  useEffect(() => { loadSupplies(); loadCategories(); }, []);
   useEffect(() => { if (success) { const t = setTimeout(() => setSuccess(''), 4000); return () => clearTimeout(t); } }, [success]);
   useEffect(() => { if (error) { const t = setTimeout(() => setError(''), 5000); return () => clearTimeout(t); } }, [error]);
+
+  const loadCategories = async () => {
+    try {
+      const res = await getShopSupplyCategories();
+      setCategories(res.data.data || ['Gas', 'Safety', 'Consumables', 'Other']);
+    } catch (err) { /* use defaults */ }
+  };
 
   const loadSupplies = async () => {
     try {
@@ -96,14 +107,15 @@ function ShopSuppliesPage() {
       description: item.description || '',
       category: item.category || '',
       unit: item.unit || 'each',
-      minQuantity: item.minQuantity || 1
+      minQuantity: item.minQuantity || 1,
+      maxQuantity: item.maxQuantity || ''
     });
     setShowModal(true);
   };
 
   const openAdd = () => {
     setEditing(null);
-    setFormData({ name: '', description: '', category: '', quantity: 0, unit: 'each', minQuantity: 1 });
+    setFormData({ name: '', description: '', category: '', quantity: 0, unit: 'each', minQuantity: 1, maxQuantity: '' });
     setShowModal(true);
   };
 
@@ -235,8 +247,58 @@ function ShopSuppliesPage() {
     return true;
   });
 
-  const categories = [...new Set(supplies.map(s => s.category).filter(Boolean))];
+  const usedCategories = [...new Set(supplies.map(s => s.category).filter(Boolean))];
+  const allCategories = [...new Set([...categories, ...usedCategories])].sort();
   const lowStockCount = supplies.filter(s => s.quantity <= s.minQuantity).length;
+
+  const handleStockSave = async (item) => {
+    const newQty = parseInt(stockInput);
+    if (isNaN(newQty) || newQty < 0) { setError('Enter a valid quantity'); return; }
+    try {
+      await updateShopSupply(item.id, { quantity: newQty });
+      setSuccess(`${item.name} stock updated to ${newQty}`);
+      setEditingStock(null);
+      loadSupplies();
+    } catch (err) { setError('Failed to update stock'); }
+  };
+
+  const handleSaveCategories = async (cats) => {
+    try {
+      await updateShopSupplyCategories(cats);
+      setCategories(cats);
+      setSuccess('Categories updated');
+    } catch (err) { setError('Failed to save categories'); }
+  };
+
+  const printShoppingList = () => {
+    const needsRefill = supplies.filter(s => {
+      const max = s.maxQuantity || s.minQuantity * 2 || 4;
+      return s.quantity < max && s.isActive;
+    }).sort((a, b) => (a.category || 'zzz').localeCompare(b.category || 'zzz'));
+
+    if (needsRefill.length === 0) { setSuccess('All supplies are fully stocked!'); return; }
+
+    const grouped = {};
+    needsRefill.forEach(s => {
+      const cat = s.category || 'Uncategorized';
+      if (!grouped[cat]) grouped[cat] = [];
+      const max = s.maxQuantity || s.minQuantity * 2 || 4;
+      const need = max - s.quantity;
+      grouped[cat].push({ name: s.name, have: s.quantity, need, max, unit: s.unit });
+    });
+
+    const rows = Object.entries(grouped).sort(([a],[b]) => a.localeCompare(b)).map(([cat, items]) =>
+      `<tr><td colspan="5" style="background:#1565C0;color:white;font-weight:700;padding:8px 12px;font-size:0.95rem">${cat}</td></tr>` +
+      items.map(i => `<tr><td style="padding:6px 12px">☐</td><td style="padding:6px 12px;font-weight:600">${i.name}</td><td style="padding:6px 12px;text-align:center">${i.have} ${i.unit}</td><td style="padding:6px 12px;text-align:center;color:#c62828;font-weight:700">Need ${i.need}</td><td style="padding:6px 12px;text-align:center">${i.max} ${i.unit}</td></tr>`).join('')
+    ).join('');
+
+    const win = window.open('', '_blank');
+    win.document.write(`<html><head><title>Shopping List</title><style>body{font-family:Arial,sans-serif;margin:20px}table{width:100%;border-collapse:collapse}td{border-bottom:1px solid #eee}@media print{button{display:none}}</style></head><body>`);
+    win.document.write(`<h2>🛒 Shop Supply Shopping List</h2><p style="color:#666">${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>`);
+    win.document.write(`<table><thead><tr style="background:#f5f5f5"><th style="padding:8px 12px;text-align:left;width:30px">✓</th><th style="padding:8px 12px;text-align:left">Item</th><th style="padding:8px 12px;text-align:center">Have</th><th style="padding:8px 12px;text-align:center">Need</th><th style="padding:8px 12px;text-align:center">Max</th></tr></thead><tbody>${rows}</tbody></table>`);
+    win.document.write(`<br/><button onclick="window.print()" style="padding:10px 24px;font-size:1rem;cursor:pointer">Print</button></body></html>`);
+    win.document.close();
+  };
 
   if (loading) return <div className="loading"><div className="spinner"></div></div>;
 
@@ -245,6 +307,8 @@ function ShopSuppliesPage() {
       <div className="page-header">
         <h1 className="page-title">Shop Supplies</h1>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={printShoppingList} style={{ background: '#E65100', color: 'white', border: 'none' }}>🛒 Shopping List</button>
+          <button className="btn btn-outline" onClick={() => setShowCategoryManager(true)}>📁 Categories</button>
           <button className="btn btn-primary" onClick={openAdd}><Plus size={18} /> Add Item</button>
           <button className="btn btn-outline" onClick={loadSupplies}><RefreshCw size={18} /></button>
         </div>
@@ -276,7 +340,7 @@ function ShopSuppliesPage() {
           <select className="form-select" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}
             style={{ width: 'auto', minWidth: 140 }}>
             <option value="all">All Categories</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <span style={{ fontSize: '0.85rem', color: '#666' }}>{filtered.length} items</span>
         </div>
@@ -338,17 +402,37 @@ function ShopSuppliesPage() {
                         </span>
                       )}
                     </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{
-                        fontWeight: 700, fontSize: '1.1rem',
-                        color: isEmpty ? '#c62828' : isLow ? '#e65100' : '#2e7d32'
-                      }}>
-                        {item.quantity}
-                      </span>
-                      <span style={{ fontSize: '0.75rem', color: '#888', marginLeft: 4 }}>{item.unit}</span>
-                      {isLow && (
-                        <div style={{ fontSize: '0.7rem', color: isEmpty ? '#c62828' : '#e65100', fontWeight: 600 }}>
-                          {isEmpty ? '⛔ OUT OF STOCK' : '⚠️ LOW STOCK'}
+                    <td style={{ textAlign: 'center', minWidth: 120 }}>
+                      {editingStock === item.id ? (
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'center' }}>
+                          <input type="number" value={stockInput} onChange={e => setStockInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleStockSave(item); if (e.key === 'Escape') setEditingStock(null); }}
+                            autoFocus style={{ width: 60, textAlign: 'center', padding: '2px 4px' }} min="0" />
+                          <button onClick={() => handleStockSave(item)} style={{ background: '#388E3C', color: 'white', border: 'none', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', fontSize: '0.75rem' }}>✓</button>
+                          <button onClick={() => setEditingStock(null)} style={{ background: '#888', color: 'white', border: 'none', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', fontSize: '0.75rem' }}>✕</button>
+                        </div>
+                      ) : (
+                        <div onClick={() => { setEditingStock(item.id); setStockInput(String(item.quantity)); }} style={{ cursor: 'pointer' }} title="Click to edit stock">
+                          <span style={{
+                            fontWeight: 700, fontSize: '1.05rem',
+                            color: isEmpty ? '#c62828' : isLow ? '#e65100' : '#2e7d32'
+                          }}>
+                            {item.quantity}{item.maxQuantity ? `/${item.maxQuantity}` : ''}
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: '#888', marginLeft: 4 }}>{item.unit}</span>
+                          {item.maxQuantity && (
+                            <div style={{ width: '100%', height: 6, background: '#e0e0e0', borderRadius: 3, marginTop: 4, overflow: 'hidden' }}>
+                              <div style={{
+                                width: `${Math.min(100, (item.quantity / item.maxQuantity) * 100)}%`,
+                                height: '100%',
+                                borderRadius: 3,
+                                background: isEmpty ? '#c62828' : isLow ? '#ff9800' : item.quantity >= item.maxQuantity ? '#2e7d32' : '#42a5f5',
+                                transition: 'width 0.3s'
+                              }} />
+                            </div>
+                          )}
+                          {isEmpty && <div style={{ fontSize: '0.65rem', color: '#c62828', fontWeight: 700, marginTop: 2 }}>OUT OF STOCK</div>}
+                          {!isEmpty && isLow && <div style={{ fontSize: '0.65rem', color: '#e65100', fontWeight: 600, marginTop: 2 }}>LOW</div>}
                         </div>
                       )}
                     </td>
@@ -423,7 +507,7 @@ function ShopSuppliesPage() {
                 <select className="form-select" value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}>
                   <option value="">None</option>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div className="form-group">
@@ -440,6 +524,12 @@ function ShopSuppliesPage() {
                     onChange={(e) => setFormData({ ...formData, quantity: e.target.value })} min="0" />
                 </div>
               )}
+              <div className="form-group">
+                <label className="form-label">Max Stock</label>
+                <input type="number" className="form-input" value={formData.maxQuantity}
+                  onChange={(e) => setFormData({ ...formData, maxQuantity: e.target.value })} min="0" placeholder="e.g. 4" />
+                <small style={{ color: '#666' }}>Full capacity — shows progress bar</small>
+              </div>
               <div className="form-group">
                 <label className="form-label">Low Stock Alert (at or below)</label>
                 <input type="number" className="form-input" value={formData.minQuantity}
@@ -548,6 +638,48 @@ function ShopSuppliesPage() {
           if (file && itemId) handleImageUpload(itemId, file);
           e.target.value = '';
         }} />
+
+      {/* Category Manager Modal */}
+      {showCategoryManager && (
+        <div className="modal-overlay" onClick={() => setShowCategoryManager(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">📁 Manage Categories</h3>
+              <button className="modal-close" onClick={() => setShowCategoryManager(false)}>&times;</button>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="form-input" placeholder="New category name" value={newCategory}
+                  onChange={e => setNewCategory(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newCategory.trim()) { handleSaveCategories([...categories, newCategory.trim()]); setNewCategory(''); }}} />
+                <button className="btn btn-primary" disabled={!newCategory.trim()} onClick={() => {
+                  if (newCategory.trim()) { handleSaveCategories([...categories, newCategory.trim()]); setNewCategory(''); }
+                }}>Add</button>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {categories.map((cat, i) => {
+                const inUse = supplies.some(s => s.category === cat);
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#f9f9f9', borderRadius: 6 }}>
+                    <span style={{ fontWeight: 500 }}>{cat}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {inUse && <span style={{ fontSize: '0.7rem', color: '#888' }}>In use</span>}
+                      <button className="btn btn-sm" onClick={() => {
+                        if (inUse && !window.confirm(`"${cat}" is used by some items. Remove it from the list? (Items won't be affected)`)) return;
+                        handleSaveCategories(categories.filter((_, j) => j !== i));
+                      }} style={{ padding: '2px 8px', fontSize: '0.75rem', color: '#c62828', background: 'none', border: '1px solid #c62828' }}>
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {categories.length === 0 && <div style={{ color: '#999', textAlign: 'center', padding: 16 }}>No categories yet</div>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

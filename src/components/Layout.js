@@ -1,13 +1,33 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, DollarSign, Database, Hash, ShoppingCart, FileCode, Truck, Users, Wrench, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
 import TodoBar from './TodoBar';
+import { getScrapPending, confirmScrapPickup } from '../services/api';
 
 function Layout({ children }) {
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
+  const [scrapPending, setScrapPending] = useState([]);
+
+  useEffect(() => {
+    const loadPending = () => {
+      getScrapPending().then(res => setScrapPending(res.data.data || [])).catch(() => {});
+    };
+    loadPending();
+    const interval = setInterval(loadPending, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleConfirmPickup = async (type) => {
+    const label = type === 'steel' ? 'Steel Scrap' : 'Stainless & Aluminum';
+    if (!window.confirm(`Confirm ${label} has been picked up?`)) return;
+    try {
+      await confirmScrapPickup(type);
+      setScrapPending(prev => prev.filter(p => p.type !== type));
+    } catch (err) { /* ignore */ }
+  };
 
   const handleLogout = () => {
     logout();
@@ -114,6 +134,30 @@ function Layout({ children }) {
       <main className="main-content">
         <WalterJoke />
         <TodoBar />
+        {scrapPending.length > 0 && (
+          <div style={{ margin: '0 0 12px 0' }}>
+            {scrapPending.map(p => (
+              <div key={p.type} style={{ background: '#FFF3E0', border: '2px solid #FFB74D', borderRadius: 8, padding: '10px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '1.3rem' }}>♻️</span>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#E65100', fontSize: '0.9rem' }}>
+                      {p.label} Pickup Requested
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                      {p.requestedAt && new Date(p.requestedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {p.requestedBy && ` by ${p.requestedBy}`}
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => handleConfirmPickup(p.type)}
+                  style={{ background: '#388E3C', color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                  ✅ Confirm Picked Up
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         {children}
       </main>
     </div>
