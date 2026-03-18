@@ -240,10 +240,10 @@ function TodoBar() {
                   </div>
                 )}
 
-                {isEstimateReview && todo.estimateId && (
+                {todo.estimateId && (
                   <button onClick={() => navigate(`/estimates/${todo.estimateId}`)}
                     style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, color: '#1565c0', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, whiteSpace: 'nowrap' }}>
-                    <Eye size={12} /> View Estimate
+                    <Eye size={12} /> {todo.estimateNumber || 'View Estimate'}
                   </button>
                 )}
 

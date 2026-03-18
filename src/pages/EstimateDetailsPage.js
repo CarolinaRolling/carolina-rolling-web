@@ -190,6 +190,7 @@ function EstimateDetailsPage() {
       setEstimate(data);
       formLoadedRef.current = false; // suppress autosave during server load
       setFormData({
+        estimateNumber: data.estimateNumber || '',
         clientName: data.clientName || '', contactName: data.contactName || '',
         contactEmail: data.contactEmail || '', contactPhone: data.contactPhone || '',
         projectDescription: data.projectDescription || '', notes: data.notes || '',
