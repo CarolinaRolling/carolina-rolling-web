@@ -8,7 +8,7 @@ import {
   downloadEstimatePDF, convertEstimateToWorkOrder,
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
-  getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders
+  getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
@@ -67,6 +67,7 @@ function EstimateDetailsPage() {
   const [success, setSuccess] = useState(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
   const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [replyingWithPdf, setReplyingWithPdf] = useState(false);
   const pdfPreviewActive = useRef(false);
 
   const [formData, setFormData] = useState({
@@ -1491,6 +1492,27 @@ function EstimateDetailsPage() {
               style={{ display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
               📧 View Email
             </a>
+          )}
+          {!isNew && estimate?.scannedEmailId && (
+            <button className="btn btn-outline" disabled={replyingWithPdf} onClick={async () => {
+              try {
+                setReplyingWithPdf(true);
+                const res = await replyWithPdf(id);
+                const draftUrl = res.data.data?.draftUrl;
+                if (draftUrl) {
+                  window.open(draftUrl, '_blank');
+                  showMessage('Gmail draft created with PDF attached');
+                } else {
+                  setError('Failed to get draft URL');
+                }
+              } catch (err) {
+                setError(err.response?.data?.error?.message || 'Failed to create reply draft');
+              } finally {
+                setReplyingWithPdf(false);
+              }
+            }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {replyingWithPdf ? '⏳ Creating draft...' : '↩️ Reply with Quote'}
+            </button>
           )}
           {!isNew && (
             <button className="btn btn-outline" onClick={generatePdfPreview} disabled={pdfGenerating}>
