@@ -391,6 +391,7 @@ export const searchEstimatesForLink = (q) => api.get('/email-scanner/search-esti
 export const replyWithPdf = (estimateId, message) => api.post(`/email-scanner/reply-with-pdf/${estimateId}`, { message });
 export const sendVendorRfq = (estimateId, data) => api.post(`/email-scanner/vendor-rfq/${estimateId}`, data);
 export const getVendorContacts = (vendorId) => api.get(`/email-scanner/vendor-contacts/${vendorId}`);
+export const getVendorById = (vendorId) => api.get(`/vendors/${vendorId}`);
 export const sendVendorPo = (workOrderId, data) => api.post(`/email-scanner/vendor-po/${workOrderId}`, data);
 export const getMonitoredClients = () => api.get('/email-scanner/monitored-clients');
 export const retryScannedEmail = (id) => api.post(`/email-scanner/retry/${id}`);

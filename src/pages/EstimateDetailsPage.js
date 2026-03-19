@@ -9,7 +9,7 @@ import {
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
   getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
-  sendVendorRfq, getVendorContacts
+  sendVendorRfq, getVendorContacts, getVendorById
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
@@ -1530,13 +1530,42 @@ function EstimateDetailsPage() {
           )}
           {!isNew && <button className="btn btn-outline" onClick={printEstimate}><Printer size={18} /> Print</button>}
           {!isNew && parts.length > 0 && (
-            <button className="btn btn-outline" onClick={() => {
-              setShowRfqModal(true);
-              setRfqSelectedVendor(null);
+            <button className="btn btn-outline" onClick={async () => {
+              const materialParts = parts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType));
+              setRfqSelectedParts(materialParts.map(p => p.id));
               setRfqVendorSearch('');
+              setRfqVendorResults([]);
               setRfqContacts([]);
               setRfqSelectedEmail('');
-              setRfqSelectedParts(parts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType)).map(p => p.id));
+              
+              // Auto-detect vendor from parts
+              const vendorPart = materialParts.find(p => p.vendorId || p.supplierName);
+              if (vendorPart && vendorPart.vendorId) {
+                try {
+                  const vRes = await getVendorById(vendorPart.vendorId);
+                  const vendor = vRes.data.data;
+                  if (vendor) {
+                    setRfqSelectedVendor(vendor);
+                    const cRes = await getVendorContacts(vendor.id);
+                    const contacts = cRes.data.data || [];
+                    setRfqContacts(contacts);
+                    if (contacts.length > 0) setRfqSelectedEmail(contacts[0].email);
+                  } else {
+                    setRfqSelectedVendor(null);
+                  }
+                } catch { setRfqSelectedVendor(null); }
+              } else if (vendorPart && vendorPart.supplierName) {
+                // Have a name but no vendorId — pre-fill search
+                setRfqVendorSearch(vendorPart.supplierName);
+                setRfqSelectedVendor(null);
+                try {
+                  const vRes = await searchVendors(vendorPart.supplierName);
+                  setRfqVendorResults(vRes.data.data || []);
+                } catch { setRfqVendorResults([]); }
+              } else {
+                setRfqSelectedVendor(null);
+              }
+              setShowRfqModal(true);
             }} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#7B1FA2', borderColor: '#7B1FA2' }}>
               📤 RFQ Vendor
             </button>
@@ -2020,7 +2049,7 @@ function EstimateDetailsPage() {
                       <div style={{ color: '#666', fontSize: '0.85rem' }}>
                         {part.clientPartNumber && `Client Part#: ${part.clientPartNumber}`}
                         {part.heatNumber && ` • Heat#: ${part.heatNumber}`}
-                        {part.cutFileReference && ` • Cut File: ${part.cutFileReference}`}
+                        {part.cutFileReference && ` • 📐 ${part.cutFileReference}`}
                       </div>
                     </div>
                     <div className="actions-row">
@@ -2647,12 +2676,6 @@ function EstimateDetailsPage() {
                 <div className="form-group">
                   <HeatNumberInput partData={partData} setPartData={setPartData} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Cut File Reference</label>
-                  <input type="text" className="form-input" value={partData.cutFileReference || ''}
-                    onChange={(e) => setPartData({ ...partData, cutFileReference: e.target.value })}
-                    placeholder="e.g. Part2_cutout.dxf" />
-                </div>
               </div>
               )}
 
@@ -2924,6 +2947,65 @@ function EstimateDetailsPage() {
               )}
             </div>
 
+            {/* DXF/Cut File Upload — inside Material section */}
+            <div style={{ margin: '0 20px 12px', padding: 12, background: '#f5f5f5', borderRadius: 8 }}>
+              <label className="form-label" style={{ marginBottom: 8 }}>📐 Cut File (DXF/STEP) <span style={{ fontWeight: 400, color: '#999' }}>— attached to RFQs and POs</span></label>
+              {/* Show existing cut file */}
+              {partData.cutFileReference && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 10px', background: 'white', borderRadius: 6, border: '1px solid #ddd' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1565c0' }}>📄 {partData.cutFileReference}</span>
+                  <button onClick={() => setPartData({ ...partData, cutFileReference: '' })}
+                    style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.8rem' }}>✕ Remove</button>
+                </div>
+              )}
+              {/* Show uploaded DXF files for this part */}
+              {editingPart && editingPart.files && editingPart.files.filter(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.(dxf|step|stp)$/i)).length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  {editingPart.files.filter(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.(dxf|step|stp)$/i)).map(f => (
+                    <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px', background: '#E3F2FD', borderRadius: 4, marginBottom: 4, fontSize: '0.85rem' }}>
+                      <span style={{ color: '#1565c0', fontWeight: 600 }}>📐 {f.originalName}</span>
+                      <button onClick={() => handleViewPartFile(editingPart.id, f)}
+                        style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: '0.8rem' }}>View</button>
+                      <button onClick={async () => {
+                        try {
+                          await deleteEstimatePartFile(id, editingPart.id, f.id);
+                          await loadEstimate();
+                          showMessage('File deleted');
+                        } catch { setError('Failed to delete file'); }
+                      }} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Upload button */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: 'white', border: '1px solid #1565c0', borderRadius: 6, color: '#1565c0', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+                  📎 Upload DXF/STEP
+                  <input type="file" accept=".dxf,.step,.stp,.DXF,.STEP,.STP" hidden
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      // Set the filename as reference
+                      setPartData(prev => ({ ...prev, cutFileReference: file.name }));
+                      // If editing existing part, upload immediately
+                      if (editingPart) {
+                        try {
+                          await uploadEstimatePartFile(id, editingPart.id, [file], 'cut_file');
+                          await loadEstimate();
+                          showMessage(`Uploaded ${file.name}`);
+                        } catch (err) { setError('Failed to upload file'); }
+                      } else {
+                        showMessage(`${file.name} will be uploaded when part is saved`);
+                      }
+                      e.target.value = '';
+                    }} />
+                </label>
+                {!editingPart && partData.cutFileReference && (
+                  <span style={{ fontSize: '0.75rem', color: '#ff9800' }}>⚠ Save part first to upload file</span>
+                )}
+              </div>
+            </div>
+
             <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>🔄 Rolling</h4>
             <div className="grid grid-2">
               <div className="form-group">
@@ -3091,14 +3173,6 @@ function EstimateDetailsPage() {
             </div>
                 </div>
               )}
-            </div>
-
-            {/* Cut File Reference — always visible for all part types */}
-            <div style={{ margin: '0 20px 12px', padding: '12px 0', borderTop: '1px solid #eee' }}>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">📐 Cut File Reference <span style={{ fontWeight: 400, color: '#999' }}>(DXF/STEP filename to send to vendor)</span></label>
-                <input type="text" className="form-input" value={partData.cutFileReference || ''} onChange={(e) => setPartData({ ...partData, cutFileReference: e.target.value })} placeholder="e.g. Part2_cutout.dxf — will appear on purchase order" />
-              </div>
             </div>
 
             {partFormError && (
@@ -3350,13 +3424,17 @@ function EstimateDetailsPage() {
                         const fd = p.formData && typeof p.formData === 'object' ? p.formData : {};
                         const desc = fd._materialDescription || p.materialDescription || `Part #${p.partNumber}`;
                         const checked = rfqSelectedParts.includes(p.id);
+                        const isVendorMatch = rfqSelectedVendor && (p.vendorId === rfqSelectedVendor.id || (p.supplierName || '').toLowerCase() === (rfqSelectedVendor.name || '').toLowerCase());
+                        const otherVendor = p.supplierName && !isVendorMatch ? p.supplierName : null;
                         return (
-                          <label key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 4px', cursor: 'pointer', background: checked ? '#E3F2FD' : 'transparent', borderRadius: 4 }}>
+                          <label key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 8px', cursor: 'pointer', background: checked ? '#E3F2FD' : 'transparent', borderRadius: 4, borderLeft: isVendorMatch ? '3px solid #2e7d32' : otherVendor ? '3px solid #ff9800' : '3px solid transparent' }}>
                             <input type="checkbox" checked={checked}
                               onChange={() => setRfqSelectedParts(prev => checked ? prev.filter(x => x !== p.id) : [...prev, p.id])}
                               style={{ marginTop: 3, accentColor: '#1565c0' }} />
-                            <div>
+                            <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>({p.quantity || 1}) {desc}</div>
+                              {isVendorMatch && <div style={{ fontSize: '0.7rem', color: '#2e7d32', fontWeight: 600 }}>✓ Assigned to this vendor</div>}
+                              {otherVendor && <div style={{ fontSize: '0.7rem', color: '#ff9800' }}>⚠ Assigned to: {otherVendor}</div>}
                               {p.specialInstructions && <div style={{ fontSize: '0.75rem', color: '#888' }}>{p.specialInstructions}</div>}
                             </div>
                           </label>
@@ -3364,6 +3442,12 @@ function EstimateDetailsPage() {
                       })}
                     </div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                      {rfqSelectedVendor && (
+                        <button onClick={() => {
+                          const vendorParts = parts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) && (p.vendorId === rfqSelectedVendor.id || (p.supplierName || '').toLowerCase() === (rfqSelectedVendor.name || '').toLowerCase()));
+                          setRfqSelectedParts(vendorParts.length > 0 ? vendorParts.map(p => p.id) : parts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType)).map(p => p.id));
+                        }} style={{ background: 'none', border: 'none', color: '#2e7d32', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>Select Vendor's Parts</button>
+                      )}
                       <button onClick={() => setRfqSelectedParts(parts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType)).map(p => p.id))}
                         style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: '0.8rem' }}>Select All</button>
                       <button onClick={() => setRfqSelectedParts([])}
