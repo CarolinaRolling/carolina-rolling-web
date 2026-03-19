@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Check, X, ExternalLink, RefreshCw, Clock, AlertCircle } from 'lucide-react';
-import { getPendingOrders, approvePendingOrder, rejectPendingOrder, deletePendingOrder, getEmailScannerStatus } from '../services/api';
+import { getPendingOrders, approvePendingOrder, rejectPendingOrder, deletePendingOrder, getEmailScannerStatus, linkPendingOrderEstimate, searchEstimatesForLink } from '../services/api';
 
 function PendingOrdersPage() {
   const navigate = useNavigate();
@@ -13,6 +13,9 @@ function PendingOrdersPage() {
   const [rejectModal, setRejectModal] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [scannerStatus, setScannerStatus] = useState(null);
+  const [linkingId, setLinkingId] = useState(null);
+  const [linkSearch, setLinkSearch] = useState('');
+  const [linkResults, setLinkResults] = useState([]);
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { if (success) { const t = setTimeout(() => setSuccess(''), 4000); return () => clearTimeout(t); } }, [success]);
@@ -34,7 +37,6 @@ function PendingOrdersPage() {
     try {
       await approvePendingOrder(order.id, {});
       if (order.matchedEstimateId) {
-        // Navigate to estimate with state to auto-open convert modal
         navigate(`/estimates/${order.matchedEstimateId}`, {
           state: {
             autoConvert: true,
@@ -43,10 +45,33 @@ function PendingOrdersPage() {
           }
         });
       } else {
-        setSuccess(`PO#${order.poNumber} approved`);
+        setSuccess(`PO#${order.poNumber || ''} approved (no estimate linked — approve only)`);
         loadData();
       }
-    } catch (err) { setError('Failed to approve'); }
+    } catch (err) {
+      console.error('Approve error:', err);
+      setError(err.response?.data?.error?.message || 'Failed to approve');
+    }
+  };
+
+  const handleLinkSearch = async (q) => {
+    setLinkSearch(q);
+    if (q.length < 2) { setLinkResults([]); return; }
+    try {
+      const res = await searchEstimatesForLink(q);
+      setLinkResults(res.data.data || []);
+    } catch { setLinkResults([]); }
+  };
+
+  const handleLinkEstimate = async (orderId, estimateId) => {
+    try {
+      await linkPendingOrderEstimate(orderId, estimateId);
+      setLinkingId(null);
+      setLinkSearch('');
+      setLinkResults([]);
+      setSuccess('Estimate linked');
+      loadData();
+    } catch (err) { setError('Failed to link estimate'); }
   };
 
   const handleReject = async () => {
@@ -120,17 +145,56 @@ function PendingOrdersPage() {
                         <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{order.clientName}</div>
                         {order.poNumber && <div style={{ fontFamily: 'monospace', color: '#1565c0', fontWeight: 600, fontSize: '1rem' }}>PO# {order.poNumber}</div>}
                         {order.subject && <div style={{ fontSize: '0.85rem', color: '#666', marginTop: 2 }}>{order.subject}</div>}
-                        {order.matchedEstimateNumber && (
-                          <div style={{ fontSize: '0.85rem', color: '#2e7d32', marginTop: 4 }}>
-                            Matched to: <span style={{ fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                        {order.matchedEstimateNumber ? (
+                          <div style={{ fontSize: '0.85rem', color: '#2e7d32', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            ✅ Linked to: <span style={{ fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
                               onClick={() => order.matchedEstimateId && navigate(`/estimates/${order.matchedEstimateId}`)}>
                               {order.matchedEstimateNumber}
                             </span>
+                            <button onClick={() => { setLinkingId(order.id); setLinkSearch(''); setLinkResults([]); }}
+                              style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '0.75rem', padding: '0 4px' }}>change</button>
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: 4 }}>
+                            {order.referenceNumber && (
+                              <div style={{ fontSize: '0.85rem', color: '#888', marginBottom: 4 }}>
+                                <AlertCircle size={12} style={{ color: '#ff9800' }} /> References: {order.referenceNumber} (no match found)
+                              </div>
+                            )}
+                            {linkingId === order.id ? null : (
+                              <button onClick={() => { setLinkingId(order.id); setLinkSearch(order.referenceNumber || order.clientName || ''); handleLinkSearch(order.referenceNumber || order.clientName || ''); }}
+                                style={{ fontSize: '0.8rem', color: '#1565c0', background: 'none', border: '1px solid #1565c0', borderRadius: 4, padding: '3px 10px', cursor: 'pointer' }}>
+                                🔗 Link Estimate
+                              </button>
+                            )}
                           </div>
                         )}
-                        {order.referenceNumber && !order.matchedEstimateNumber && (
-                          <div style={{ fontSize: '0.85rem', color: '#888', marginTop: 4 }}>
-                            <AlertCircle size={12} style={{ color: '#ff9800' }} /> References: {order.referenceNumber} (no match found)
+                        {linkingId === order.id && (
+                          <div style={{ marginTop: 6, padding: 10, background: '#f5f5f5', borderRadius: 8, position: 'relative' }}>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                              <input type="text" value={linkSearch} onChange={(e) => handleLinkSearch(e.target.value)}
+                                placeholder="Search by estimate # or client..."
+                                style={{ flex: 1, padding: '6px 10px', border: '1px solid #ccc', borderRadius: 4, fontSize: '0.85rem' }} autoFocus />
+                              <button onClick={() => { setLinkingId(null); setLinkSearch(''); setLinkResults([]); }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888' }}><X size={16} /></button>
+                            </div>
+                            {linkResults.length > 0 && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 150, overflowY: 'auto' }}>
+                                {linkResults.map(est => (
+                                  <div key={est.id} onClick={() => handleLinkEstimate(order.id, est.id)}
+                                    style={{ padding: '6px 10px', background: 'white', borderRadius: 4, cursor: 'pointer', border: '1px solid #ddd', fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                      <span style={{ fontWeight: 600, color: '#1565c0' }}>{est.estimateNumber}</span>
+                                      <span style={{ marginLeft: 8, color: '#666' }}>{est.clientName}</span>
+                                    </div>
+                                    <span style={{ fontSize: '0.75rem', color: '#888' }}>{est.status}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {linkSearch.length >= 2 && linkResults.length === 0 && (
+                              <div style={{ fontSize: '0.8rem', color: '#888', textAlign: 'center', padding: 8 }}>No estimates found</div>
+                            )}
                           </div>
                         )}
                         {order.requestedDate && (
@@ -143,12 +207,6 @@ function PendingOrdersPage() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                        {order.matchedEstimateId && (
-                          <button onClick={() => navigate(`/estimates/${order.matchedEstimateId}`)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 12px', fontSize: '0.85rem', border: '1px solid #2e7d32', borderRadius: 6, background: '#E8F5E9', color: '#2e7d32', fontWeight: 600, cursor: 'pointer' }}>
-                            <FileText size={14} /> {order.matchedEstimateNumber || 'View Estimate'}
-                          </button>
-                        )}
                         {order.emailLink && (
                           <a href={order.emailLink} target="_blank" rel="noopener noreferrer"
                             style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 12px', fontSize: '0.85rem', border: '1px solid #ddd', borderRadius: 6, textDecoration: 'none', color: '#1565c0', fontWeight: 500 }}>
@@ -157,7 +215,7 @@ function PendingOrdersPage() {
                         )}
                         <button className="btn" onClick={() => handleApprove(order)}
                           style={{ background: '#2e7d32', color: 'white', border: 'none', padding: '8px 16px', fontWeight: 600 }}>
-                          <Check size={16} /> Approve
+                          <Check size={16} /> {order.matchedEstimateId ? 'Approve & Convert' : 'Approve'}
                         </button>
                         <button className="btn btn-outline" onClick={() => { setRejectModal(order); setRejectReason(''); }}
                           style={{ padding: '8px 12px', color: '#c62828', borderColor: '#c62828' }}>

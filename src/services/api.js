@@ -386,6 +386,8 @@ export const getPendingOrders = (status) => api.get('/email-scanner/pending-orde
 export const approvePendingOrder = (id, data) => api.post(`/email-scanner/pending-orders/${id}/approve`, data);
 export const rejectPendingOrder = (id, data) => api.post(`/email-scanner/pending-orders/${id}/reject`, data);
 export const deletePendingOrder = (id) => api.delete(`/email-scanner/pending-orders/${id}`);
+export const linkPendingOrderEstimate = (id, estimateId) => api.put(`/email-scanner/pending-orders/${id}/link-estimate`, { estimateId });
+export const searchEstimatesForLink = (q) => api.get('/email-scanner/search-estimates', { params: { q } });
 export const getMonitoredClients = () => api.get('/email-scanner/monitored-clients');
 export const retryScannedEmail = (id) => api.post(`/email-scanner/retry/${id}`);
 export const deleteScannedEmail = (id) => api.delete(`/email-scanner/history/${id}`);

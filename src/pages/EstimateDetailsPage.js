@@ -1893,6 +1893,17 @@ function EstimateDetailsPage() {
             </div>
           </div>
 
+          {/* Internal Notes */}
+          {!isNew && (
+            <div className="card" style={{ background: '#FFFDE7', border: '1px solid #FFF9C4' }}>
+              <h3 className="card-title" style={{ marginBottom: 8, fontSize: '0.95rem' }}>📝 Internal Notes <span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#888' }}>(not visible to customer)</span></h3>
+              <textarea className="form-textarea" value={formData.internalNotes || ''}
+                onChange={(e) => setFormData({ ...formData, internalNotes: e.target.value })}
+                rows={3} style={{ background: 'white' }}
+                placeholder="Internal notes about this estimate..." />
+            </div>
+          )}
+
           {/* Parts */}
           <div className="card">
             <div className="card-header">
@@ -2292,11 +2303,6 @@ function EstimateDetailsPage() {
               <label className="form-label">Estimate Notes (visible to customer)</label>
               <textarea className="form-textarea" value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Internal Notes (not visible)</label>
-              <textarea className="form-textarea" value={formData.internalNotes}
-                onChange={(e) => setFormData({ ...formData, internalNotes: e.target.value })} />
             </div>
           </div>
         </div>
