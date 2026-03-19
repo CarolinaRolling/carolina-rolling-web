@@ -1896,7 +1896,17 @@ function EstimateDetailsPage() {
           {/* Internal Notes */}
           {!isNew && (
             <div className="card" style={{ background: '#FFFDE7', border: '1px solid #FFF9C4' }}>
-              <h3 className="card-title" style={{ marginBottom: 8, fontSize: '0.95rem' }}>📝 Internal Notes <span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#888' }}>(not visible to customer)</span></h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <h3 className="card-title" style={{ margin: 0, fontSize: '0.95rem' }}>📝 Internal Notes <span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#888' }}>(not visible to customer)</span></h3>
+                <button className="btn btn-sm" onClick={async () => {
+                  try {
+                    await updateEstimate(id, { internalNotes: formData.internalNotes || '' });
+                    showMessage('Internal notes saved');
+                  } catch { setError('Failed to save notes'); }
+                }} style={{ fontSize: '0.75rem', padding: '4px 12px' }}>
+                  💾 Save Notes
+                </button>
+              </div>
               <textarea className="form-textarea" value={formData.internalNotes || ''}
                 onChange={(e) => setFormData({ ...formData, internalNotes: e.target.value })}
                 rows={3} style={{ background: 'white' }}
