@@ -33,8 +33,17 @@ function PendingOrdersPage() {
   const handleApprove = async (order) => {
     try {
       await approvePendingOrder(order.id, {});
-      setSuccess(`PO#${order.poNumber} approved`);
-      loadData();
+      if (order.matchedEstimateId) {
+        // Navigate to estimate with PO# and date pre-filled for WO conversion
+        const params = new URLSearchParams();
+        if (order.poNumber) params.set('po', order.poNumber);
+        if (order.requestedDate) params.set('dueDate', order.requestedDate);
+        params.set('convert', '1');
+        navigate(`/estimates/${order.matchedEstimateId}?${params.toString()}`);
+      } else {
+        setSuccess(`PO#${order.poNumber} approved`);
+        loadData();
+      }
     } catch (err) { setError('Failed to approve'); }
   };
 
@@ -120,6 +129,11 @@ function PendingOrdersPage() {
                         {order.referenceNumber && !order.matchedEstimateNumber && (
                           <div style={{ fontSize: '0.85rem', color: '#888', marginTop: 4 }}>
                             <AlertCircle size={12} style={{ color: '#ff9800' }} /> References: {order.referenceNumber} (no match found)
+                          </div>
+                        )}
+                        {order.requestedDate && (
+                          <div style={{ fontSize: '0.85rem', color: '#c62828', marginTop: 4, fontWeight: 600 }}>
+                            📅 Requested by: {new Date(order.requestedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </div>
                         )}
                         <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 4 }}>

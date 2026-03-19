@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Save, Upload, Eye, X, Printer, Check, FileDown, Package, FileText, Edit } from 'lucide-react';
 import {
   getEstimateById, createEstimate, updateEstimate,
@@ -8,7 +8,7 @@ import {
   downloadEstimatePDF, convertEstimateToWorkOrder,
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
-  getNextDRNumber, createTodo
+  getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
@@ -54,6 +54,7 @@ const formatPhone = (val) => {
 function EstimateDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const fileInputRef = useRef(null);
   const isNew = id === 'new';
 
@@ -137,6 +138,34 @@ function EstimateDetailsPage() {
     loadDefaultSettings();
     if (!isNew) loadEstimate(); 
   }, [id]);
+
+  // Auto-open convert modal if navigated from Pending Orders approval
+  const autoConvertTriggered = useRef(false);
+  useEffect(() => {
+    if (autoConvertTriggered.current || loading || isNew) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get('convert') === '1' && parts.length > 0) {
+      autoConvertTriggered.current = true;
+      const po = params.get('po') || '';
+      const dueDate = params.get('dueDate') || '';
+      // Open convert modal with pre-filled data
+      (async () => {
+        setConvertData({
+          clientPurchaseOrderNumber: po,
+          requestedDueDate: dueDate,
+          promisedDate: '',
+          notes: formData.notes,
+          materialReceived: false
+        });
+        setUseCustomDR(false);
+        setCustomDR('');
+        try { const res = await getNextDRNumber(); setNextDR(res.data.data.nextNumber); } catch { setNextDR(null); }
+        setShowConvertModal(true);
+      })();
+      // Clean URL params
+      navigate(location.pathname, { replace: true });
+    }
+  }, [loading, parts, location.search]);
 
   // Cleanup PDF blob URL on unmount
   useEffect(() => {
@@ -1158,6 +1187,15 @@ function EstimateDetailsPage() {
       const response = await convertEstimateToWorkOrder(id, payload);
       const workOrder = response.data.data.workOrder;
       setShowConvertModal(false);
+      
+      // Auto-approve any pending orders linked to this estimate
+      try {
+        const poRes = await getPendingOrders('pending');
+        const linked = (poRes.data.data || []).filter(o => o.matchedEstimateId === id);
+        for (const order of linked) {
+          await approvePendingOrder(order.id, {}).catch(() => {});
+        }
+      } catch (e) { /* ignore */ }
       
       const message = `Work order DR-${workOrder.drNumber} created!`;
       showMessage(message);
