@@ -26,6 +26,8 @@ function ShopSuppliesPage() {
   const [newCategory, setNewCategory] = useState('');
   const [editingStock, setEditingStock] = useState(null);
   const [stockInput, setStockInput] = useState('');
+  const [showShoppingModal, setShowShoppingModal] = useState(false);
+  const [shoppingCategories, setShoppingCategories] = useState(new Set());
 
   useEffect(() => { loadSupplies(); loadCategories(); }, []);
   useEffect(() => { if (success) { const t = setTimeout(() => setSuccess(''), 4000); return () => clearTimeout(t); } }, [success]);
@@ -270,13 +272,26 @@ function ShopSuppliesPage() {
     } catch (err) { setError('Failed to save categories'); }
   };
 
+  const openShoppingList = () => {
+    const catsWithNeeds = new Set();
+    supplies.forEach(s => {
+      const max = s.maxQuantity || s.minQuantity * 2 || 4;
+      if (s.quantity < max && s.isActive && s.category) catsWithNeeds.add(s.category);
+    });
+    setShoppingCategories(catsWithNeeds);
+    setShowShoppingModal(true);
+  };
+
   const printShoppingList = () => {
+    const selectedCats = shoppingCategories;
     const needsRefill = supplies.filter(s => {
       const max = s.maxQuantity || s.minQuantity * 2 || 4;
-      return s.quantity < max && s.isActive;
+      if (s.quantity >= max || !s.isActive) return false;
+      if (selectedCats.size > 0 && !selectedCats.has(s.category || 'Uncategorized')) return false;
+      return true;
     }).sort((a, b) => (a.category || 'zzz').localeCompare(b.category || 'zzz'));
 
-    if (needsRefill.length === 0) { setSuccess('All supplies are fully stocked!'); return; }
+    if (needsRefill.length === 0) { setSuccess('All selected categories are fully stocked!'); setShowShoppingModal(false); return; }
 
     const grouped = {};
     needsRefill.forEach(s => {
@@ -298,6 +313,7 @@ function ShopSuppliesPage() {
     win.document.write(`<table><thead><tr style="background:#f5f5f5"><th style="padding:8px 12px;text-align:left;width:30px">✓</th><th style="padding:8px 12px;text-align:left">Item</th><th style="padding:8px 12px;text-align:center">Have</th><th style="padding:8px 12px;text-align:center">Need</th><th style="padding:8px 12px;text-align:center">Max</th></tr></thead><tbody>${rows}</tbody></table>`);
     win.document.write(`<br/><button onclick="window.print()" style="padding:10px 24px;font-size:1rem;cursor:pointer">Print</button></body></html>`);
     win.document.close();
+    setShowShoppingModal(false);
   };
 
   if (loading) return <div className="loading"><div className="spinner"></div></div>;
@@ -307,7 +323,7 @@ function ShopSuppliesPage() {
       <div className="page-header">
         <h1 className="page-title">Shop Supplies</h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={printShoppingList} style={{ background: '#E65100', color: 'white', border: 'none' }}>🛒 Shopping List</button>
+          <button className="btn" onClick={openShoppingList} style={{ background: '#E65100', color: 'white', border: 'none' }}>🛒 Shopping List</button>
           <button className="btn btn-outline" onClick={() => setShowCategoryManager(true)}>📁 Categories</button>
           <button className="btn btn-primary" onClick={openAdd}><Plus size={18} /> Add Item</button>
           <button className="btn btn-outline" onClick={loadSupplies}><RefreshCw size={18} /></button>
@@ -346,62 +362,67 @@ function ShopSuppliesPage() {
         </div>
       </div>
 
-      {/* Supplies Table */}
+      {/* Supplies Table — grouped by category */}
       {filtered.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 40, color: '#999' }}>
           <Package size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
           <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>No supplies yet</p>
           <p>Add your first item to start tracking shop supplies.</p>
         </div>
-      ) : (
-        <div className="card">
-          <table className="table" style={{ width: '100%' }}>
-            <thead>
-              <tr>
-                <th style={{ width: 70 }}>Image</th>
-                <th>Item</th>
-                <th>Category</th>
-                <th style={{ textAlign: 'center' }}>In Stock</th>
-                <th style={{ textAlign: 'center' }}>Min</th>
-                <th>Last Activity</th>
-                <th style={{ width: 280 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(item => {
-                const isLow = item.quantity <= item.minQuantity;
-                const isEmpty = item.quantity === 0;
-                return (
-                  <tr key={item.id} style={{ background: isEmpty ? '#ffebee' : isLow ? '#fff3e0' : 'transparent' }}>
-                    <td>
-                      <div style={{ width: 56, height: 56, borderRadius: 6, overflow: 'hidden', border: '1px solid #ddd', cursor: 'pointer', position: 'relative' }}
-                        onClick={() => { imageInputRef.current.dataset.itemId = item.id; imageInputRef.current.click(); }}>
-                        {uploadingImage === item.id ? (
-                          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>⏳</div>
-                        ) : item.imageUrl ? (
-                          <>
-                            <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteImage(item.id); }}
-                              style={{ position: 'absolute', top: -4, right: -4, background: '#c62828', color: 'white', border: 'none', borderRadius: '50%', width: 18, height: 18, fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }}>×</button>
-                          </>
-                        ) : (
-                          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9f9f9', color: '#bbb' }}>
-                            <Camera size={20} />
+      ) : (() => {
+        const grouped = {};
+        filtered.forEach(item => {
+          const cat = item.category || 'Uncategorized';
+          if (!grouped[cat]) grouped[cat] = [];
+          grouped[cat].push(item);
+        });
+        const sortedCats = Object.keys(grouped).sort((a, b) => a === 'Uncategorized' ? 1 : b === 'Uncategorized' ? -1 : a.localeCompare(b));
+        return sortedCats.map(cat => (
+          <div key={cat} style={{ marginBottom: 20 }}>
+            <div style={{ padding: '8px 16px', background: '#1565C0', color: 'white', fontWeight: 700, fontSize: '0.95rem', borderRadius: '8px 8px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>{cat}</span>
+              <span style={{ fontSize: '0.8rem', fontWeight: 400, opacity: 0.85 }}>{grouped[cat].length} item{grouped[cat].length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="card" style={{ borderRadius: '0 0 8px 8px', marginTop: 0, borderTop: 'none' }}>
+              <table className="table" style={{ width: '100%', marginBottom: 0 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: 60 }}>Image</th>
+                    <th>Item</th>
+                    <th style={{ textAlign: 'center', width: 130 }}>Stock</th>
+                    <th style={{ textAlign: 'center', width: 50 }}>Min</th>
+                    <th style={{ width: 160 }}>Last Activity</th>
+                    <th style={{ width: 260 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grouped[cat].map(item => {
+                    const isLow = item.quantity <= item.minQuantity;
+                    const isEmpty = item.quantity === 0;
+                    return (
+                      <tr key={item.id} style={{ background: isEmpty ? '#ffebee' : isLow ? '#fff3e0' : 'transparent' }}>
+                        <td>
+                          <div style={{ width: 50, height: 50, borderRadius: 6, overflow: 'hidden', border: '1px solid #ddd', cursor: 'pointer', position: 'relative', background: '#fff' }}
+                            onClick={() => { imageInputRef.current.dataset.itemId = item.id; imageInputRef.current.click(); }}>
+                            {uploadingImage === item.id ? (
+                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>⏳</div>
+                            ) : item.imageUrl ? (
+                              <>
+                                <img src={item.imageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }} />
+                                <button onClick={(e) => { e.stopPropagation(); handleDeleteImage(item.id); }}
+                                  style={{ position: 'absolute', top: -4, right: -4, background: '#c62828', color: 'white', border: 'none', borderRadius: '50%', width: 18, height: 18, fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }}>×</button>
+                              </>
+                            ) : (
+                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9f9f9', color: '#bbb' }}>
+                                <Camera size={18} />
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{item.name}</div>
-                      {item.description && <div style={{ fontSize: '0.8rem', color: '#666' }}>{item.description}</div>}
-                    </td>
-                    <td>
-                      {item.category && (
-                        <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '2px 8px', borderRadius: 12, fontSize: '0.75rem', fontWeight: 500 }}>
-                          {item.category}
-                        </span>
-                      )}
-                    </td>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{item.name}</div>
+                          {item.description && <div style={{ fontSize: '0.8rem', color: '#666' }}>{item.description}</div>}
+                        </td>
                     <td style={{ textAlign: 'center', minWidth: 120 }}>
                       {editingStock === item.id ? (
                         <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'center' }}>
@@ -478,10 +499,12 @@ function ShopSuppliesPage() {
                   </tr>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ));
+      })()}
 
       {/* Add/Edit Modal */}
       {showModal && (
@@ -638,6 +661,62 @@ function ShopSuppliesPage() {
           if (file && itemId) handleImageUpload(itemId, file);
           e.target.value = '';
         }} />
+
+      {/* Shopping List Category Picker Modal */}
+      {showShoppingModal && (
+        <div className="modal-overlay" onClick={() => setShowShoppingModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">🛒 Shopping List</h3>
+              <button className="modal-close" onClick={() => setShowShoppingModal(false)}>&times;</button>
+            </div>
+            <p style={{ color: '#666', fontSize: '0.9rem', marginBottom: 12 }}>Select categories to include in the shopping list:</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+              {allCategories.map(cat => {
+                const itemsInCat = supplies.filter(s => s.category === cat && s.isActive);
+                const needsRefill = itemsInCat.filter(s => { const max = s.maxQuantity || s.minQuantity * 2 || 4; return s.quantity < max; }).length;
+                return (
+                  <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: shoppingCategories.has(cat) ? '#E3F2FD' : '#f9f9f9', borderRadius: 6, cursor: 'pointer', border: shoppingCategories.has(cat) ? '2px solid #1565C0' : '2px solid transparent' }}>
+                    <input type="checkbox" checked={shoppingCategories.has(cat)} onChange={() => {
+                      setShoppingCategories(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n; });
+                    }} style={{ width: 18, height: 18 }} />
+                    <span style={{ fontWeight: 600, flex: 1 }}>{cat}</span>
+                    {needsRefill > 0 && <span style={{ fontSize: '0.75rem', background: '#FFE0B2', color: '#E65100', padding: '2px 8px', borderRadius: 10 }}>{needsRefill} need refill</span>}
+                  </label>
+                );
+              })}
+              {(() => {
+                const uncatItems = supplies.filter(s => !s.category && s.isActive);
+                const uncatNeeds = uncatItems.filter(s => { const max = s.maxQuantity || s.minQuantity * 2 || 4; return s.quantity < max; }).length;
+                if (uncatItems.length === 0) return null;
+                return (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: shoppingCategories.has('Uncategorized') ? '#E3F2FD' : '#f9f9f9', borderRadius: 6, cursor: 'pointer', border: shoppingCategories.has('Uncategorized') ? '2px solid #1565C0' : '2px solid transparent' }}>
+                    <input type="checkbox" checked={shoppingCategories.has('Uncategorized')} onChange={() => {
+                      setShoppingCategories(prev => { const n = new Set(prev); n.has('Uncategorized') ? n.delete('Uncategorized') : n.add('Uncategorized'); return n; });
+                    }} style={{ width: 18, height: 18 }} />
+                    <span style={{ fontWeight: 600, flex: 1 }}>Uncategorized</span>
+                    {uncatNeeds > 0 && <span style={{ fontSize: '0.75rem', background: '#FFE0B2', color: '#E65100', padding: '2px 8px', borderRadius: 10 }}>{uncatNeeds} need refill</span>}
+                  </label>
+                );
+              })()}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
+              <button className="btn btn-outline" onClick={() => {
+                const all = new Set(allCategories);
+                if (supplies.some(s => !s.category)) all.add('Uncategorized');
+                setShoppingCategories(all);
+              }} style={{ fontSize: '0.85rem' }}>Select All</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-outline" onClick={() => setShowShoppingModal(false)}>Cancel</button>
+                <button className="btn" onClick={printShoppingList} disabled={shoppingCategories.size === 0}
+                  style={{ background: shoppingCategories.size > 0 ? '#E65100' : '#ccc', color: 'white', border: 'none', fontWeight: 700 }}>
+                  🖨️ Print Shopping List
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Category Manager Modal */}
       {showCategoryManager && (
