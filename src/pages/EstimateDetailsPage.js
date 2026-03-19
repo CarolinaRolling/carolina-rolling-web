@@ -142,13 +142,11 @@ function EstimateDetailsPage() {
   // Auto-open convert modal if navigated from Pending Orders approval
   const autoConvertTriggered = useRef(false);
   useEffect(() => {
-    if (autoConvertTriggered.current || loading || isNew) return;
-    const params = new URLSearchParams(location.search);
-    if (params.get('convert') === '1' && parts.length > 0) {
+    if (autoConvertTriggered.current || loading || isNew || parts.length === 0) return;
+    if (location.state?.autoConvert) {
       autoConvertTriggered.current = true;
-      const po = params.get('po') || '';
-      const dueDate = params.get('dueDate') || '';
-      // Open convert modal with pre-filled data
+      const po = location.state.poNumber || '';
+      const dueDate = location.state.requestedDate || '';
       (async () => {
         setConvertData({
           clientPurchaseOrderNumber: po,
@@ -162,10 +160,10 @@ function EstimateDetailsPage() {
         try { const res = await getNextDRNumber(); setNextDR(res.data.data.nextNumber); } catch { setNextDR(null); }
         setShowConvertModal(true);
       })();
-      // Clean URL params
-      navigate(location.pathname, { replace: true });
+      // Clear state so refresh doesn't re-trigger
+      navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [loading, parts, location.search]);
+  }, [loading, parts]);
 
   // Cleanup PDF blob URL on unmount
   useEffect(() => {

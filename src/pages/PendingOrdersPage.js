@@ -34,12 +34,14 @@ function PendingOrdersPage() {
     try {
       await approvePendingOrder(order.id, {});
       if (order.matchedEstimateId) {
-        // Navigate to estimate with PO# and date pre-filled for WO conversion
-        const params = new URLSearchParams();
-        if (order.poNumber) params.set('po', order.poNumber);
-        if (order.requestedDate) params.set('dueDate', order.requestedDate);
-        params.set('convert', '1');
-        navigate(`/estimates/${order.matchedEstimateId}?${params.toString()}`);
+        // Navigate to estimate with state to auto-open convert modal
+        navigate(`/estimates/${order.matchedEstimateId}`, {
+          state: {
+            autoConvert: true,
+            poNumber: order.poNumber || '',
+            requestedDate: order.requestedDate || ''
+          }
+        });
       } else {
         setSuccess(`PO#${order.poNumber} approved`);
         loadData();
