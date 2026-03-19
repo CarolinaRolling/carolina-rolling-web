@@ -6,7 +6,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -125,6 +125,7 @@ function AdminPage({ section = 'users-logs' }) {
   const [scannerHistory, setScannerHistory] = useState([]);
   const [monitoredClients, setMonitoredClients] = useState([]);
   const [scanning, setScanning] = useState(false);
+  const [generalNotes, setGeneralNotes] = useState('');
   const [codOverridePasswordAdmin, setCodOverridePasswordAdmin] = useState('');
 
   // Two-Factor Auth
@@ -637,16 +638,18 @@ function AdminPage({ section = 'users-logs' }) {
   const loadEmailScanner = async () => {
     try {
       setLoading(true);
-      const [statusRes, accountsRes, historyRes, clientsRes] = await Promise.all([
+      const [statusRes, accountsRes, historyRes, clientsRes, notesRes] = await Promise.all([
         getEmailScannerStatus().catch(() => ({ data: { data: null } })),
         getEmailScannerAccounts().catch(() => ({ data: { data: [] } })),
         getEmailScanHistory().catch(() => ({ data: { data: [] } })),
-        getMonitoredClients().catch(() => ({ data: { data: [] } }))
+        getMonitoredClients().catch(() => ({ data: { data: [] } })),
+        getGeneralParsingNotes().catch(() => ({ data: { data: '' } }))
       ]);
       setScannerStatus(statusRes.data.data);
       setScannerAccounts(accountsRes.data.data || []);
       setScannerHistory(historyRes.data.data || []);
       setMonitoredClients(clientsRes.data.data || []);
+      setGeneralNotes(notesRes.data.data || '');
     } catch (err) {
       setError('Failed to load email scanner data');
     } finally {
@@ -2436,6 +2439,26 @@ function AdminPage({ section = 'users-logs' }) {
             </div>
           )}
 
+          {/* General AI Parsing Notes */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3 style={{ marginBottom: 8 }}>🧠 General AI Parsing Notes</h3>
+            <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: 12 }}>
+              These notes are sent to the AI for every email it parses, regardless of client. Use this to teach it about your shop, common terminology, or how you want things handled.
+            </p>
+            <textarea className="form-input" rows={12} value={generalNotes}
+              onChange={(e) => setGeneralNotes(e.target.value)}
+              placeholder={`The AI already knows about part types (plate_roll, cone_roll, pipe_roll, etc.), common abbreviations (OD, R/T, V/H), material grades, and form fields. Use this space to add extra context:\n\nEXAMPLES:\n- Our shop mainly does plate rolling, cone rolling, and structural rolling\n- If someone says "rolled and tacked" always put that in specialInstructions\n- "Shell" always means a plate_roll (cylinder)\n- Convert all fractions to decimals (3/8 = 0.375)\n- If the email mentions delivery, put that in the notes field\n- When they say "ISOF" it means inside-out flange for a cone or reducer\n- For plate rolls: width = shell height, length = flat developed arc length\n- Our shop is in Riverside, CA — if delivery location is not mentioned assume pickup\n- If material is not specified, leave it blank — don't guess\n- "Square and resquare" means trim the edges after rolling, put in specialInstructions\n- If they attach a DXF or PDF, mention it in attachmentMentions`}
+              style={{ fontFamily: 'monospace', fontSize: '0.85rem', lineHeight: 1.5 }} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+              <button className="btn btn-primary" onClick={async () => {
+                try {
+                  await updateGeneralParsingNotes(generalNotes);
+                  setSuccess('General notes saved');
+                } catch (err) { setError('Failed to save notes'); }
+              }}>💾 Save Notes</button>
+            </div>
+          </div>
+
           {/* Connected Gmail Accounts */}
           <div className="card" style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -2575,7 +2598,32 @@ function AdminPage({ section = 'users-logs' }) {
                         </td>
                         <td style={{ fontSize: '0.8rem' }}>
                           {email.estimateId && <a href={`/estimates/${email.estimateId}`} style={{ color: '#1565C0', fontWeight: 600 }}>View Estimate</a>}
-                          {email.errorMessage && <span style={{ color: '#c62828' }}>{email.errorMessage}</span>}
+                          {email.errorMessage && <span style={{ color: '#c62828', display: 'block', marginBottom: 4 }}>{email.errorMessage.substring(0, 60)}</span>}
+                          <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                            {(email.status === 'error' || email.status === 'processed') && (
+                              <button className="btn btn-sm" onClick={async () => {
+                                try {
+                                  setError(''); setSuccess('');
+                                  const res = await retryScannedEmail(email.id);
+                                  setSuccess(res.data.message || 'Retry successful');
+                                  loadEmailScanner();
+                                } catch (err) {
+                                  setError(err.response?.data?.error?.message || 'Retry failed');
+                                }
+                              }} style={{ fontSize: '0.7rem', padding: '2px 8px', background: '#E65100', color: 'white', border: 'none' }}>
+                                🔄 Retry
+                              </button>
+                            )}
+                            <button className="btn btn-sm" onClick={async () => {
+                              if (!window.confirm('Delete this scan record? The email will be picked up again on next scan.')) return;
+                              try {
+                                await deleteScannedEmail(email.id);
+                                loadEmailScanner();
+                              } catch (err) { setError('Failed to delete'); }
+                            }} style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'none', border: '1px solid #ccc', color: '#888' }}>
+                              ✕
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

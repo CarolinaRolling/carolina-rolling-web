@@ -386,6 +386,12 @@ export const getPendingOrders = (status) => api.get('/email-scanner/pending-orde
 export const approvePendingOrder = (id, data) => api.post(`/email-scanner/pending-orders/${id}/approve`, data);
 export const rejectPendingOrder = (id, data) => api.post(`/email-scanner/pending-orders/${id}/reject`, data);
 export const getMonitoredClients = () => api.get('/email-scanner/monitored-clients');
+export const retryScannedEmail = (id) => api.post(`/email-scanner/retry/${id}`);
+export const deleteScannedEmail = (id) => api.delete(`/email-scanner/history/${id}`);
+export const getGeneralParsingNotes = () => api.get('/email-scanner/general-notes');
+export const updateGeneralParsingNotes = (notes) => api.put('/email-scanner/general-notes', { notes });
+export const getGeneralScannerNotes = () => api.get('/email-scanner/general-notes');
+export const updateGeneralScannerNotes = (notes) => api.put('/email-scanner/general-notes', { notes });
 
 // Todos
 export const getTodos = (params) => api.get('/todos', { params });
