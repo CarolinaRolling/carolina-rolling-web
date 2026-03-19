@@ -40,7 +40,7 @@ function PendingOrdersPage() {
 
   const handleReject = async () => {
     try {
-      await rejectPendingOrder(rejectModal.id, rejectReason);
+      await rejectPendingOrder(rejectModal.id, { reason: rejectReason });
       setSuccess(`PO#${rejectModal.poNumber} rejected`);
       setRejectModal(null); setRejectReason('');
       loadData();
@@ -118,6 +118,12 @@ function PendingOrdersPage() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        {order.matchedEstimateId && (
+                          <button onClick={() => navigate(`/estimates/${order.matchedEstimateId}`)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 12px', fontSize: '0.85rem', border: '1px solid #2e7d32', borderRadius: 6, background: '#E8F5E9', color: '#2e7d32', fontWeight: 600, cursor: 'pointer' }}>
+                            <FileText size={14} /> {order.matchedEstimateNumber || 'View Estimate'}
+                          </button>
+                        )}
                         {order.emailLink && (
                           <a href={order.emailLink} target="_blank" rel="noopener noreferrer"
                             style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 12px', fontSize: '0.85rem', border: '1px solid #ddd', borderRadius: 6, textDecoration: 'none', color: '#1565c0', fontWeight: 500 }}>
@@ -152,7 +158,7 @@ function PendingOrdersPage() {
                 <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {processed.map(order => (
                     <div key={order.id} className="card" style={{ padding: '12px 20px', borderLeft: `4px solid ${order.status === 'approved' ? '#2e7d32' : '#c62828'}`, opacity: 0.75 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div>
                           <span style={{ fontWeight: 600 }}>{order.clientName}</span>
                           {order.poNumber && <span style={{ fontFamily: 'monospace', marginLeft: 8 }}>PO# {order.poNumber}</span>}
@@ -163,6 +169,16 @@ function PendingOrdersPage() {
                           }}>
                             {order.status === 'approved' ? '✓ Approved' : '✕ Rejected'}
                           </span>
+                          {order.matchedEstimateId && (
+                            <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#1565c0', cursor: 'pointer', textDecoration: 'underline' }}
+                              onClick={() => navigate(`/estimates/${order.matchedEstimateId}`)}>
+                              {order.matchedEstimateNumber || 'View Estimate'}
+                            </span>
+                          )}
+                          {order.emailLink && (
+                            <a href={order.emailLink} target="_blank" rel="noopener noreferrer"
+                              style={{ marginLeft: 8, fontSize: '0.8rem', color: '#1565c0', textDecoration: 'none' }}>📧</a>
+                          )}
                         </div>
                         <div style={{ fontSize: '0.8rem', color: '#888' }}>
                           {order.approvedBy || order.rejectedBy} · {new Date(order.approvedAt || order.rejectedAt || order.updatedAt).toLocaleDateString()}

@@ -125,6 +125,7 @@ function AdminPage({ section = 'users-logs' }) {
   const [scannerHistory, setScannerHistory] = useState([]);
   const [monitoredClients, setMonitoredClients] = useState([]);
   const [scanning, setScanning] = useState(false);
+  const [showGeneralNotes, setShowGeneralNotes] = useState(false);
   const [generalNotes, setGeneralNotes] = useState('');
   const [codOverridePasswordAdmin, setCodOverridePasswordAdmin] = useState('');
 
@@ -2439,26 +2440,6 @@ function AdminPage({ section = 'users-logs' }) {
             </div>
           )}
 
-          {/* General AI Parsing Notes */}
-          <div className="card" style={{ marginBottom: 20 }}>
-            <h3 style={{ marginBottom: 8 }}>🧠 General AI Parsing Notes</h3>
-            <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: 12 }}>
-              These notes are sent to the AI for every email it parses, regardless of client. Use this to teach it about your shop, common terminology, or how you want things handled.
-            </p>
-            <textarea className="form-input" rows={12} value={generalNotes}
-              onChange={(e) => setGeneralNotes(e.target.value)}
-              placeholder={`The AI already knows about part types (plate_roll, cone_roll, pipe_roll, etc.), common abbreviations (OD, R/T, V/H), material grades, and form fields. Use this space to add extra context:\n\nEXAMPLES:\n- Our shop mainly does plate rolling, cone rolling, and structural rolling\n- If someone says "rolled and tacked" always put that in specialInstructions\n- "Shell" always means a plate_roll (cylinder)\n- Convert all fractions to decimals (3/8 = 0.375)\n- If the email mentions delivery, put that in the notes field\n- When they say "ISOF" it means inside-out flange for a cone or reducer\n- For plate rolls: width = shell height, length = flat developed arc length\n- Our shop is in Riverside, CA — if delivery location is not mentioned assume pickup\n- If material is not specified, leave it blank — don't guess\n- "Square and resquare" means trim the edges after rolling, put in specialInstructions\n- If they attach a DXF or PDF, mention it in attachmentMentions`}
-              style={{ fontFamily: 'monospace', fontSize: '0.85rem', lineHeight: 1.5 }} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-              <button className="btn btn-primary" onClick={async () => {
-                try {
-                  await updateGeneralParsingNotes(generalNotes);
-                  setSuccess('General notes saved');
-                } catch (err) { setError('Failed to save notes'); }
-              }}>💾 Save Notes</button>
-            </div>
-          </div>
-
           {/* Connected Gmail Accounts */}
           <div className="card" style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -2630,6 +2611,33 @@ function AdminPage({ section = 'users-logs' }) {
                   })}
                 </tbody>
               </table>
+            )}
+          </div>
+
+          {/* General AI Parsing Notes — collapsible at bottom */}
+          <div style={{ marginTop: 20 }}>
+            <button onClick={() => setShowGeneralNotes(!showGeneralNotes)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', width: '100%', borderBottom: '2px solid #888' }}>
+              <span style={{ fontSize: '1rem', fontWeight: 700, color: '#888' }}>{showGeneralNotes ? '▼' : '▶'} 🧠 General AI Parsing Notes</span>
+            </button>
+            {showGeneralNotes && (
+              <div className="card" style={{ marginTop: 12 }}>
+                <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: 12 }}>
+                  These notes are sent to the AI for every email it parses. The AI already knows part types, dropdown options, abbreviations, and form fields. Use this to add shop-specific knowledge.
+                </p>
+                <textarea className="form-input" rows={12} value={generalNotes}
+                  onChange={(e) => setGeneralNotes(e.target.value)}
+                  placeholder="Add shop-specific knowledge here..."
+                  style={{ fontFamily: 'monospace', fontSize: '0.85rem', lineHeight: 1.5 }} />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                  <button className="btn btn-primary" onClick={async () => {
+                    try {
+                      await updateGeneralParsingNotes(generalNotes);
+                      setSuccess('General notes saved');
+                    } catch (err) { setError('Failed to save notes'); }
+                  }}>💾 Save Notes</button>
+                </div>
+              </div>
             )}
           </div>
         </div>

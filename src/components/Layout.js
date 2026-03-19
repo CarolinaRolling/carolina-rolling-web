@@ -4,16 +4,18 @@ import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, Do
 import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
 import TodoBar from './TodoBar';
-import { getScrapPending, confirmScrapPickup } from '../services/api';
+import { getScrapPending, confirmScrapPickup, getPendingOrders } from '../services/api';
 
 function Layout({ children }) {
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
   const [scrapPending, setScrapPending] = useState([]);
+  const [pendingOrderCount, setPendingOrderCount] = useState(0);
 
   useEffect(() => {
     const loadPending = () => {
       getScrapPending().then(res => setScrapPending(res.data.data || [])).catch(() => {});
+      getPendingOrders('pending').then(res => setPendingOrderCount((res.data.data || []).length)).catch(() => {});
     };
     loadPending();
     const interval = setInterval(loadPending, 60000);
@@ -54,7 +56,7 @@ function Layout({ children }) {
             <li><NavLink to="/scheduling" className={({ isActive }) => isActive ? 'active' : ''}><CalendarClock size={20} /><span>Scheduling</span></NavLink></li>
             <li><NavLink to="/shipments" className={({ isActive }) => isActive ? 'active' : ''}><Truck size={20} /><span>Shipments</span></NavLink></li>
             <li><NavLink to="/inbound" className={({ isActive }) => isActive ? 'active' : ''}><Inbox size={20} /><span>Inbound</span></NavLink></li>
-            <li><NavLink to="/pending-orders" className={({ isActive }) => isActive ? 'active' : ''}><FileCode size={20} /><span>Pending Orders</span></NavLink></li>
+            <li><NavLink to="/pending-orders" className={({ isActive }) => isActive ? 'active' : ''}><FileCode size={20} /><span>Pending Orders</span>{pendingOrderCount > 0 && <span style={{ marginLeft: 'auto', background: '#E65100', color: 'white', borderRadius: 10, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 700, minWidth: 18, textAlign: 'center' }}>{pendingOrderCount}</span>}</NavLink></li>
             <li><NavLink to="/estimates" className={({ isActive }) => isActive ? 'active' : ''}><DollarSign size={20} /><span>Estimates</span></NavLink></li>
             <li><NavLink to="/purchase-orders" className={({ isActive }) => isActive ? 'active' : ''}><ShoppingCart size={20} /><span>Purchase Orders</span></NavLink></li>
             <li><NavLink to="/clients-vendors" className={({ isActive }) => isActive ? 'active' : ''}><Users size={20} /><span>Clients & Vendors</span></NavLink></li>
@@ -156,6 +158,27 @@ function Layout({ children }) {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+        {pendingOrderCount > 0 && (
+          <div style={{ margin: '0 0 12px 0' }}>
+            <div style={{ background: '#E3F2FD', border: '2px solid #1565C0', borderRadius: 8, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '1.3rem' }}>📋</span>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#1565C0', fontSize: '0.9rem' }}>
+                    {pendingOrderCount} Pending Order{pendingOrderCount > 1 ? 's' : ''} Awaiting Approval
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#666' }}>
+                    Purchase orders detected from email scanner
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => navigate('/pending-orders')}
+                style={{ background: '#1565C0', color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                Review Orders
+              </button>
+            </div>
           </div>
         )}
         {children}
