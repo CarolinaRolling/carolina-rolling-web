@@ -8,6 +8,7 @@ import ShipmentDetailsPage from './pages/ShipmentDetailsPage';
 import NewShipmentPage from './pages/NewShipmentPage';
 import InboundPage from './pages/InboundPage';
 import InboundDetailsPage from './pages/InboundDetailsPage';
+import PendingOrdersPage from './pages/PendingOrdersPage';
 import WorkOrdersPage from './pages/WorkOrdersPage';
 import WorkOrderDetailsPage from './pages/WorkOrderDetailsPage';
 import EstimatesPage from './pages/EstimatesPage';
@@ -120,6 +121,12 @@ function AppRoutes() {
       <Route path="/workorders/:id" element={
         <ProtectedRoute>
           <Layout><WorkOrderDetailsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/pending-orders" element={
+        <ProtectedRoute>
+          <Layout><PendingOrdersPage /></Layout>
         </ProtectedRoute>
       } />
       

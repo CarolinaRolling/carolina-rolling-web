@@ -1450,6 +1450,12 @@ function EstimateDetailsPage() {
           </div>
         </div>
         <div className="actions-row">
+          {!isNew && estimate?.emailLink && (
+            <a href={estimate.emailLink} target="_blank" rel="noopener noreferrer" className="btn btn-outline"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+              📧 View Email
+            </a>
+          )}
           {!isNew && (
             <button className="btn btn-outline" onClick={generatePdfPreview} disabled={pdfGenerating}>
               <Eye size={18} /> {pdfGenerating ? 'Generating...' : 'Generate PDF'}

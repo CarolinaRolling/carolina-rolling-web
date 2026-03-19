@@ -52,9 +52,9 @@ function Layout({ children }) {
           <ul className="sidebar-nav">
             <li><NavLink to="/inventory" className={({ isActive }) => isActive ? 'active' : ''}><Package size={20} /><span>Inventory</span></NavLink></li>
             <li><NavLink to="/scheduling" className={({ isActive }) => isActive ? 'active' : ''}><CalendarClock size={20} /><span>Scheduling</span></NavLink></li>
-            <li><NavLink to="/new-shipment" className={({ isActive }) => isActive ? 'active' : ''}><PlusCircle size={20} /><span>New Shipment</span></NavLink></li>
             <li><NavLink to="/shipments" className={({ isActive }) => isActive ? 'active' : ''}><Truck size={20} /><span>Shipments</span></NavLink></li>
             <li><NavLink to="/inbound" className={({ isActive }) => isActive ? 'active' : ''}><Inbox size={20} /><span>Inbound</span></NavLink></li>
+            <li><NavLink to="/pending-orders" className={({ isActive }) => isActive ? 'active' : ''}><FileCode size={20} /><span>Pending Orders</span></NavLink></li>
             <li><NavLink to="/estimates" className={({ isActive }) => isActive ? 'active' : ''}><DollarSign size={20} /><span>Estimates</span></NavLink></li>
             <li><NavLink to="/purchase-orders" className={({ isActive }) => isActive ? 'active' : ''}><ShoppingCart size={20} /><span>Purchase Orders</span></NavLink></li>
             <li><NavLink to="/clients-vendors" className={({ isActive }) => isActive ? 'active' : ''}><Users size={20} /><span>Clients & Vendors</span></NavLink></li>

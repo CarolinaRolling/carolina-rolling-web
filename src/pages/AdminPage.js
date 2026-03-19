@@ -6,7 +6,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // Global error log for NAS uploads
@@ -34,10 +34,15 @@ function AdminPage({ section = 'users-logs' }) {
   // Tab groups by section
   const SECTION_TABS = {
     'users-logs': ['users', 'logs', 'schedule', 'apikeys', 'system'],
-    'shop-config': ['tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates', 'printer', 'scrap']
+    'shop-config': ['tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates', 'printer', 'scrap', 'emailscanner']
   };
   const allowedTabs = SECTION_TABS[section] || SECTION_TABS['users-logs'];
-  const [activeTab, setActiveTab] = useState(allowedTabs[0]);
+  const [activeTab, setActiveTab] = useState(() => {
+    // Check URL params for OAuth redirect
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'emailScanner') return 'emailscanner';
+    return allowedTabs[0];
+  });
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
   const [logsTotal, setLogsTotal] = useState(0);
@@ -115,6 +120,11 @@ function AdminPage({ section = 'users-logs' }) {
   const [printerConfig, setPrinterConfig] = useState({ qrPrinterIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, partPrinterIp: '', partLabelType: 'DK_11202_62x100' });
   const [scrapConfig, setScrapConfig] = useState({ scrapEmail: '', shopAddress: '', shopName: 'Carolina Rolling Co. Inc.' });
   const [scrapLog, setScrapLog] = useState([]);
+  const [scannerStatus, setScannerStatus] = useState(null);
+  const [scannerAccounts, setScannerAccounts] = useState([]);
+  const [scannerHistory, setScannerHistory] = useState([]);
+  const [monitoredClients, setMonitoredClients] = useState([]);
+  const [scanning, setScanning] = useState(false);
   const [codOverridePasswordAdmin, setCodOverridePasswordAdmin] = useState('');
 
   // Two-Factor Auth
@@ -167,6 +177,8 @@ function AdminPage({ section = 'users-logs' }) {
       loadPrinterConfig();
     } else if (activeTab === 'scrap') {
       loadScrapConfig();
+    } else if (activeTab === 'emailscanner') {
+      loadEmailScanner();
     }
   }, [activeTab, logsPage]);
 
@@ -621,6 +633,75 @@ function AdminPage({ section = 'users-logs' }) {
     }
   };
 
+  // Email Scanner functions
+  const loadEmailScanner = async () => {
+    try {
+      setLoading(true);
+      const [statusRes, accountsRes, historyRes, clientsRes] = await Promise.all([
+        getEmailScannerStatus().catch(() => ({ data: { data: null } })),
+        getEmailScannerAccounts().catch(() => ({ data: { data: [] } })),
+        getEmailScanHistory().catch(() => ({ data: { data: [] } })),
+        getMonitoredClients().catch(() => ({ data: { data: [] } }))
+      ]);
+      setScannerStatus(statusRes.data.data);
+      setScannerAccounts(accountsRes.data.data || []);
+      setScannerHistory(historyRes.data.data || []);
+      setMonitoredClients(clientsRes.data.data || []);
+    } catch (err) {
+      setError('Failed to load email scanner data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConnectGmail = async () => {
+    try {
+      const res = await startGmailOAuth();
+      const authUrl = res.data.data?.authUrl;
+      if (authUrl) {
+        window.location.href = authUrl;
+      } else {
+        setError('Failed to get OAuth URL');
+      }
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to start OAuth. Check Google credentials in env vars.');
+    }
+  };
+
+  const handleDisconnectGmail = async (account) => {
+    if (!window.confirm(`Disconnect ${account.email}? The scanner will stop checking this account.`)) return;
+    try {
+      await disconnectGmailAccount(account.id);
+      setSuccess(`${account.email} disconnected`);
+      loadEmailScanner();
+    } catch (err) { setError('Failed to disconnect'); }
+  };
+
+  const handleToggleGmail = async (account) => {
+    try {
+      await toggleGmailAccount(account.id);
+      loadEmailScanner();
+    } catch (err) { setError('Failed to toggle'); }
+  };
+
+  const handleScanNow = async () => {
+    try {
+      setScanning(true);
+      const res = await triggerEmailScan();
+      const r = res.data.data || {};
+      if (r.skipped) {
+        setSuccess(`Scan skipped: ${r.reason}`);
+      } else {
+        setSuccess(`Scan complete: ${r.processed || 0} emails processed, ${r.estimates || 0} estimates, ${r.pendingOrders || 0} pending orders`);
+      }
+      loadEmailScanner();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const handleCreateApiKey = async () => {
     if (!newApiKey.name.trim()) {
       setError('API key name is required');
@@ -897,6 +978,7 @@ function AdminPage({ section = 'users-logs' }) {
           <button className={`tab ${activeTab === 'weldrates' ? 'active' : ''}`} onClick={() => setActiveTab('weldrates')}>🔥 Weld Rates</button>
           <button className={`tab ${activeTab === 'printer' ? 'active' : ''}`} onClick={() => setActiveTab('printer')}>🖨️ Printer</button>
           <button className={`tab ${activeTab === 'scrap' ? 'active' : ''}`} onClick={() => setActiveTab('scrap')}>♻️ Scrap</button>
+          <button className={`tab ${activeTab === 'emailscanner' ? 'active' : ''}`} onClick={() => setActiveTab('emailscanner')}>📧 Email Scanner</button>
         </>)}
         {section === 'users-logs' && (<>
           <button className={`tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>
@@ -2320,6 +2402,188 @@ function AdminPage({ section = 'users-logs' }) {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ==================== EMAIL SCANNER TAB ==================== */}
+      {activeTab === 'emailscanner' && !loading && (
+        <div>
+          {/* Status Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
+            {[
+              { label: 'Connected Accounts', value: scannerStatus?.connectedAccounts || 0, color: '#1565C0', icon: '📬' },
+              { label: 'Monitored Emails', value: scannerStatus?.monitoredAddresses || 0, color: '#7B1FA2', icon: '👀' },
+              { label: 'Processed Today', value: scannerStatus?.emailsProcessedToday || 0, color: '#2E7D32', icon: '✅' },
+              { label: 'Pending Orders', value: scannerStatus?.pendingOrders || 0, color: '#E65100', icon: '⏳' }
+            ].map(card => (
+              <div key={card.label} className="card" style={{ textAlign: 'center', padding: '16px 12px' }}>
+                <div style={{ fontSize: '1.8rem', marginBottom: 4 }}>{card.icon}</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: card.color }}>{card.value}</div>
+                <div style={{ fontSize: '0.75rem', color: '#888', fontWeight: 600 }}>{card.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Config warnings */}
+          {!scannerStatus?.googleConfigured && (
+            <div className="alert alert-error" style={{ marginBottom: 12 }}>
+              Google OAuth not configured. Set <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> environment variables.
+            </div>
+          )}
+          {!scannerStatus?.anthropicConfigured && (
+            <div className="alert alert-error" style={{ marginBottom: 12 }}>
+              Anthropic API key not configured. Set <code>ANTHROPIC_API_KEY</code> environment variable for AI email parsing.
+            </div>
+          )}
+
+          {/* Connected Gmail Accounts */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>📬 Connected Gmail Accounts</h3>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary" onClick={handleConnectGmail} disabled={!scannerStatus?.googleConfigured}>
+                  + Connect Gmail Account
+                </button>
+                <button className="btn" onClick={handleScanNow} disabled={scanning || scannerAccounts.length === 0}
+                  style={{ background: '#E65100', color: 'white', border: 'none' }}>
+                  {scanning ? '⏳ Scanning...' : '🔍 Scan Now'}
+                </button>
+              </div>
+            </div>
+            {scannerAccounts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 24, color: '#888' }}>
+                No Gmail accounts connected. Click "Connect Gmail Account" to start scanning emails.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {scannerAccounts.map(acct => (
+                  <div key={acct.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: acct.isActive ? '#E8F5E9' : '#f5f5f5', borderRadius: 8, border: `1px solid ${acct.isActive ? '#A5D6A7' : '#ddd'}` }}>
+                    <div>
+                      <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {acct.email}
+                        <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: 10, fontWeight: 600, background: acct.isActive ? '#C8E6C9' : '#eee', color: acct.isActive ? '#2E7D32' : '#888' }}>
+                          {acct.isActive ? 'Active' : 'Paused'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#888', marginTop: 2 }}>
+                        {acct.lastScannedAt ? `Last scan: ${new Date(acct.lastScannedAt).toLocaleString()}` : 'Never scanned'}
+                        {acct.lastError && <span style={{ color: '#c62828', marginLeft: 8 }}>Error: {acct.lastError}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-sm btn-outline" onClick={() => handleToggleGmail(acct)}
+                        style={{ fontSize: '0.8rem' }}>
+                        {acct.isActive ? '⏸️ Pause' : '▶️ Resume'}
+                      </button>
+                      <button className="btn btn-sm" onClick={() => handleDisconnectGmail(acct)}
+                        style={{ fontSize: '0.8rem', color: '#c62828', background: 'none', border: '1px solid #c62828' }}>
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Monitored Clients */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3 style={{ marginBottom: 12 }}>👀 Monitored Clients</h3>
+            {monitoredClients.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 24, color: '#888' }}>
+                No clients have email scanning enabled. Go to <strong>Clients & Vendors</strong>, edit a client, and check "📧 Email Scanning".
+              </div>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Client</th>
+                    <th>Monitored Emails</th>
+                    <th>Parsing Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monitoredClients.map(client => (
+                    <tr key={client.id}>
+                      <td style={{ fontWeight: 600 }}>{client.name}</td>
+                      <td>
+                        {(client.emailScanAddresses || []).map((addr, i) => (
+                          <span key={i} style={{ display: 'inline-block', background: '#E3F2FD', color: '#1565C0', padding: '2px 8px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 500, marginRight: 6, marginBottom: 4 }}>
+                            {addr}
+                          </span>
+                        ))}
+                      </td>
+                      <td style={{ fontSize: '0.8rem', color: '#666', maxWidth: 300 }}>{client.emailScanParsingNotes || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Scan History */}
+          <div className="card">
+            <h3 style={{ marginBottom: 12 }}>📋 Recent Scan History</h3>
+            {scannerHistory.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 24, color: '#888' }}>
+                No emails have been scanned yet. Connect a Gmail account and enable client email scanning to get started.
+              </div>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>From</th>
+                    <th>Subject</th>
+                    <th>Type</th>
+                    <th>Confidence</th>
+                    <th>Status</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scannerHistory.map(email => {
+                    const statusColors = { estimate_created: '#2E7D32', pending_order: '#E65100', processed: '#1565C0', error: '#c62828', ignored: '#888' };
+                    return (
+                      <tr key={email.id}>
+                        <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{new Date(email.createdAt).toLocaleString()}</td>
+                        <td>
+                          <div style={{ fontWeight: 500 }}>{email.fromName}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#888' }}>{email.fromEmail}</div>
+                        </td>
+                        <td style={{ fontSize: '0.85rem', maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {email.gmailLink ? (
+                            <a href={email.gmailLink} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0' }}>{email.subject}</a>
+                          ) : email.subject}
+                        </td>
+                        <td>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: email.emailType === 'po' ? '#FFF3E0' : '#E8F5E9', color: email.emailType === 'po' ? '#E65100' : '#2E7D32' }}>
+                            {email.emailType === 'po' ? 'PO' : email.emailType === 'rfq' ? 'RFQ' : '?'}
+                          </span>
+                        </td>
+                        <td>
+                          {email.parseConfidence && (
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: email.parseConfidence === 'high' ? '#2E7D32' : email.parseConfidence === 'medium' ? '#F57C00' : '#c62828' }}>
+                              {email.parseConfidence}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: (statusColors[email.status] || '#888') + '18', color: statusColors[email.status] || '#888' }}>
+                            {(email.status || '').replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: '0.8rem' }}>
+                          {email.estimateId && <a href={`/estimates/${email.estimateId}`} style={{ color: '#1565C0', fontWeight: 600 }}>View Estimate</a>}
+                          {email.errorMessage && <span style={{ color: '#c62828' }}>{email.errorMessage}</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
 

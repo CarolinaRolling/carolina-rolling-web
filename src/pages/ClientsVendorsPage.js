@@ -361,6 +361,7 @@ const ClientsVendorsPage = () => {
                       <strong>{client.name}</strong>
                       {client.noTag && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: '#fff3e0', color: '#e65100', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>🚫 No Tag</span>}
                       {client.requiresPartLabels && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: '#e3f2fd', color: '#1565c0', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>🏷️ Part Labels</span>}
+                      {client.emailScanEnabled && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: '#FFF3E0', color: '#E65100', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>📧 Email Scan</span>}
                       {client.resaleCertificate && client.permitStatus === 'active' && <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#e8f5e9', color: '#2e7d32', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>✅ Permit</span>}
                       {client.resaleCertificate && client.permitStatus === 'closed' && <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#ffebee', color: '#c62828', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>❌ Permit Closed</span>}
                       {client.resaleCertificate && client.permitStatus === 'not_found' && <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#ffebee', color: '#c62828', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>❌ Permit Not Found</span>}
@@ -714,6 +715,49 @@ const ClientsVendorsPage = () => {
                 {formData.requiresPartLabels && (
                   <div style={{ marginTop: 8, padding: 10, background: '#e3f2fd', borderRadius: 8, fontSize: '0.85rem', color: '#0d47a1' }}>
                     A "Print Label" button will appear next to each part on the Android tablet. Labels include client part number, purchase order number, and heat number.
+                  </div>
+                )}
+              </div>
+
+              {/* Email Scanning */}
+              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #eee', paddingTop: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 8 }}>
+                  <input type="checkbox" checked={formData.emailScanEnabled || false} onChange={(e) => setFormData({ ...formData, emailScanEnabled: e.target.checked })}
+                    style={{ width: 18, height: 18, accentColor: '#E65100' }} />
+                  <span style={{ fontWeight: 600, color: formData.emailScanEnabled ? '#E65100' : '#333' }}>
+                    📧 Email Scanning — Auto-detect RFQs and POs from this client's emails
+                  </span>
+                </label>
+                {formData.emailScanEnabled && (
+                  <div style={{ padding: 12, background: '#FFF3E0', borderRadius: 8, marginTop: 4 }}>
+                    <div className="form-group" style={{ marginBottom: 10 }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>Email addresses to scan</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {(formData.emailScanAddresses || []).map((addr, i) => (
+                          <div key={i} style={{ display: 'flex', gap: 6 }}>
+                            <input className="form-input" value={addr} placeholder="email@company.com"
+                              onChange={(e) => {
+                                const addrs = [...(formData.emailScanAddresses || [])];
+                                addrs[i] = e.target.value;
+                                setFormData({ ...formData, emailScanAddresses: addrs });
+                              }} style={{ flex: 1 }} />
+                            <button className="btn btn-sm" onClick={() => {
+                              const addrs = (formData.emailScanAddresses || []).filter((_, j) => j !== i);
+                              setFormData({ ...formData, emailScanAddresses: addrs });
+                            }} style={{ color: '#c62828', background: 'none', border: '1px solid #c62828', padding: '4px 8px' }}>✕</button>
+                          </div>
+                        ))}
+                        <button className="btn btn-sm btn-outline" onClick={() => {
+                          setFormData({ ...formData, emailScanAddresses: [...(formData.emailScanAddresses || []), ''] });
+                        }} style={{ alignSelf: 'flex-start', fontSize: '0.8rem' }}>+ Add Email</button>
+                      </div>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>Parsing Notes <span style={{ fontWeight: 400, color: '#888' }}>(helps the AI understand this client's email format)</span></label>
+                      <textarea className="form-input" rows={2} value={formData.emailScanParsingNotes || ''}
+                        onChange={(e) => setFormData({ ...formData, emailScanParsingNotes: e.target.value })}
+                        placeholder='e.g. "OR numbers are their reference numbers, use as estimate number" or "Ted uses shorthand — cone means cone_roll"' />
+                    </div>
                   </div>
                 )}
               </div>
