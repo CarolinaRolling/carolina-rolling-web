@@ -421,16 +421,3 @@ export const getInvoiceNumbers = () => api.get('/quickbooks/invoice-numbers');
 export const voidInvoiceNumber = (id, reason) => api.post(`/quickbooks/invoice-numbers/${id}/void`, { reason });
 export const createManualInvoiceNumber = (data) => api.post('/quickbooks/invoice-numbers/manual', data);
 export const emailInvoice = (id, email) => api.post(`/workorders/${id}/email-invoice`, { email });
-
-// Email Scanner
-export const getEmailScannerStatus = () => api.get('/email-scanner/status');
-export const getEmailScannerAccounts = () => api.get('/email-scanner/accounts');
-export const startGmailOAuth = () => api.get('/email-scanner/oauth/start');
-export const disconnectGmailAccount = (id) => api.delete(`/email-scanner/accounts/${id}`);
-export const toggleGmailAccount = (id) => api.put(`/email-scanner/accounts/${id}/toggle`);
-export const triggerEmailScan = () => api.post('/email-scanner/scan-now');
-export const getEmailScanHistory = () => api.get('/email-scanner/history');
-export const getPendingOrders = (status) => api.get('/email-scanner/pending-orders', { params: { status } });
-export const approvePendingOrder = (id, data) => api.post(`/email-scanner/pending-orders/${id}/approve`, data);
-export const rejectPendingOrder = (id, reason) => api.post(`/email-scanner/pending-orders/${id}/reject`, { reason });
-export const getMonitoredClients = () => api.get('/email-scanner/monitored-clients');
