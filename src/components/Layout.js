@@ -38,7 +38,7 @@ function Layout({ children }) {
 
   return (
     <div className="layout">
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ display: 'flex', flexDirection: 'column' }}>
         <div className="sidebar-header">
           <img 
             src="/logo.png" 
@@ -50,15 +50,15 @@ function Layout({ children }) {
             <p>Carolina Rolling</p>
           </div>
         </div>
-        <nav>
+        <nav style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           <ul className="sidebar-nav">
             <li><NavLink to="/inventory" className={({ isActive }) => isActive ? 'active' : ''}><Package size={20} /><span>Inventory</span></NavLink></li>
             <li><NavLink to="/scheduling" className={({ isActive }) => isActive ? 'active' : ''}><CalendarClock size={20} /><span>Scheduling</span></NavLink></li>
             <li><NavLink to="/shipments" className={({ isActive }) => isActive ? 'active' : ''}><Truck size={20} /><span>Shipments</span></NavLink></li>
             <li><NavLink to="/inbound" className={({ isActive }) => isActive ? 'active' : ''}><Inbox size={20} /><span>Inbound</span></NavLink></li>
+            <li><NavLink to="/purchase-orders" className={({ isActive }) => isActive ? 'active' : ''}><ShoppingCart size={20} /><span>Purchase Orders</span></NavLink></li>
             <li><NavLink to="/pending-orders" className={({ isActive }) => isActive ? 'active' : ''}><FileCode size={20} /><span>Pending Orders</span>{pendingOrderCount > 0 && <span style={{ marginLeft: 'auto', background: '#E65100', color: 'white', borderRadius: 10, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 700, minWidth: 18, textAlign: 'center' }}>{pendingOrderCount}</span>}</NavLink></li>
             <li><NavLink to="/estimates" className={({ isActive }) => isActive ? 'active' : ''}><DollarSign size={20} /><span>Estimates</span></NavLink></li>
-            <li><NavLink to="/purchase-orders" className={({ isActive }) => isActive ? 'active' : ''}><ShoppingCart size={20} /><span>Purchase Orders</span></NavLink></li>
             <li><NavLink to="/clients-vendors" className={({ isActive }) => isActive ? 'active' : ''}><Users size={20} /><span>Clients & Vendors</span></NavLink></li>
             <li><NavLink to="/shop-supplies" className={({ isActive }) => isActive ? 'active' : ''}><Package size={20} /><span>Shop Supplies</span></NavLink></li>
             <li><NavLink to="/invoicing" className={({ isActive }) => isActive ? 'active' : ''}><FileText size={20} /><span>Invoice Center</span></NavLink></li>
@@ -86,11 +86,8 @@ function Layout({ children }) {
         
         {/* User info and logout */}
         <div style={{ 
-          position: 'absolute', 
-          bottom: 0, 
-          left: 0, 
-          right: 0,
-          padding: '16px 20px',
+          flexShrink: 0,
+          padding: '12px 20px',
           borderTop: '1px solid rgba(255,255,255,0.1)',
           background: 'rgba(0,0,0,0.1)'
         }}>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Check, X, ExternalLink, RefreshCw, Clock, AlertCircle } from 'lucide-react';
-import { getPendingOrders, approvePendingOrder, rejectPendingOrder, getEmailScannerStatus } from '../services/api';
+import { getPendingOrders, approvePendingOrder, rejectPendingOrder, deletePendingOrder, getEmailScannerStatus } from '../services/api';
 
 function PendingOrdersPage() {
   const navigate = useNavigate();
@@ -45,6 +45,15 @@ function PendingOrdersPage() {
       setRejectModal(null); setRejectReason('');
       loadData();
     } catch (err) { setError('Failed to reject'); }
+  };
+
+  const handleDelete = async (order) => {
+    if (!window.confirm(`Delete pending order${order.poNumber ? ` PO#${order.poNumber}` : ''} from ${order.clientName}? This cannot be undone.`)) return;
+    try {
+      await deletePendingOrder(order.id);
+      setSuccess('Pending order deleted');
+      loadData();
+    } catch (err) { setError('Failed to delete'); }
   };
 
   const pending = pendingOrders.filter(o => o.status === 'pending');
@@ -138,6 +147,11 @@ function PendingOrdersPage() {
                           style={{ padding: '8px 12px', color: '#c62828', borderColor: '#c62828' }}>
                           <X size={16} /> Reject
                         </button>
+                        <button onClick={() => handleDelete(order)}
+                          style={{ padding: '8px 8px', background: 'none', border: '1px solid #ccc', borderRadius: 6, cursor: 'pointer', color: '#888', display: 'flex', alignItems: 'center' }}
+                          title="Delete permanently">
+                          <X size={14} />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -158,7 +172,7 @@ function PendingOrdersPage() {
                 <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {processed.map(order => (
                     <div key={order.id} className="card" style={{ padding: '12px 20px', borderLeft: `4px solid ${order.status === 'approved' ? '#2e7d32' : '#c62828'}`, opacity: 0.75 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                         <div>
                           <span style={{ fontWeight: 600 }}>{order.clientName}</span>
                           {order.poNumber && <span style={{ fontFamily: 'monospace', marginLeft: 8 }}>PO# {order.poNumber}</span>}
@@ -179,10 +193,13 @@ function PendingOrdersPage() {
                             <a href={order.emailLink} target="_blank" rel="noopener noreferrer"
                               style={{ marginLeft: 8, fontSize: '0.8rem', color: '#1565c0', textDecoration: 'none' }}>📧</a>
                           )}
+                          <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#888' }}>
+                            {order.approvedBy || order.rejectedBy} · {new Date(order.approvedAt || order.rejectedAt || order.updatedAt).toLocaleDateString()}
+                          </span>
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: '#888' }}>
-                          {order.approvedBy || order.rejectedBy} · {new Date(order.approvedAt || order.rejectedAt || order.updatedAt).toLocaleDateString()}
-                        </div>
+                        <button onClick={() => handleDelete(order)}
+                          style={{ padding: '4px 8px', background: 'none', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', color: '#888', fontSize: '0.75rem', flexShrink: 0 }}
+                          title="Delete permanently">✕</button>
                       </div>
                       {order.rejectionReason && <div style={{ fontSize: '0.8rem', color: '#c62828', marginTop: 4 }}>Reason: {order.rejectionReason}</div>}
                     </div>
