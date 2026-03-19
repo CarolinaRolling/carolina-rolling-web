@@ -389,6 +389,9 @@ export const deletePendingOrder = (id) => api.delete(`/email-scanner/pending-ord
 export const linkPendingOrderEstimate = (id, estimateId) => api.put(`/email-scanner/pending-orders/${id}/link-estimate`, { estimateId });
 export const searchEstimatesForLink = (q) => api.get('/email-scanner/search-estimates', { params: { q } });
 export const replyWithPdf = (estimateId, message) => api.post(`/email-scanner/reply-with-pdf/${estimateId}`, { message });
+export const sendVendorRfq = (estimateId, data) => api.post(`/email-scanner/vendor-rfq/${estimateId}`, data);
+export const getVendorContacts = (vendorId) => api.get(`/email-scanner/vendor-contacts/${vendorId}`);
+export const sendVendorPo = (workOrderId, data) => api.post(`/email-scanner/vendor-po/${workOrderId}`, data);
 export const getMonitoredClients = () => api.get('/email-scanner/monitored-clients');
 export const retryScannedEmail = (id) => api.post(`/email-scanner/retry/${id}`);
 export const deleteScannedEmail = (id) => api.delete(`/email-scanner/history/${id}`);
@@ -431,3 +434,4 @@ export const getInvoiceNumbers = () => api.get('/quickbooks/invoice-numbers');
 export const voidInvoiceNumber = (id, reason) => api.post(`/quickbooks/invoice-numbers/${id}/void`, { reason });
 export const createManualInvoiceNumber = (data) => api.post('/quickbooks/invoice-numbers/manual', data);
 export const emailInvoice = (id, email) => api.post(`/workorders/${id}/email-invoice`, { email });
+export const repairPricing = () => api.post('/workorders/repair-pricing');

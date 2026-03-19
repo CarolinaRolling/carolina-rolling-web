@@ -8,7 +8,8 @@ import {
   downloadEstimatePDF, convertEstimateToWorkOrder,
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
-  getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf
+  getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
+  sendVendorRfq, getVendorContacts
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
@@ -68,6 +69,14 @@ function EstimateDetailsPage() {
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [replyingWithPdf, setReplyingWithPdf] = useState(false);
+  const [showRfqModal, setShowRfqModal] = useState(false);
+  const [rfqVendorSearch, setRfqVendorSearch] = useState('');
+  const [rfqVendorResults, setRfqVendorResults] = useState([]);
+  const [rfqSelectedVendor, setRfqSelectedVendor] = useState(null);
+  const [rfqContacts, setRfqContacts] = useState([]);
+  const [rfqSelectedEmail, setRfqSelectedEmail] = useState('');
+  const [rfqSelectedParts, setRfqSelectedParts] = useState([]);
+  const [rfqSending, setRfqSending] = useState(false);
   const pdfPreviewActive = useRef(false);
 
   const [formData, setFormData] = useState({
@@ -1520,6 +1529,18 @@ function EstimateDetailsPage() {
             </button>
           )}
           {!isNew && <button className="btn btn-outline" onClick={printEstimate}><Printer size={18} /> Print</button>}
+          {!isNew && parts.length > 0 && (
+            <button className="btn btn-outline" onClick={() => {
+              setShowRfqModal(true);
+              setRfqSelectedVendor(null);
+              setRfqVendorSearch('');
+              setRfqContacts([]);
+              setRfqSelectedEmail('');
+              setRfqSelectedParts(parts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType)).map(p => p.id));
+            }} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#7B1FA2', borderColor: '#7B1FA2' }}>
+              📤 RFQ Vendor
+            </button>
+          )}
           {!isNew && (
             <button className="btn" onClick={handleSendForReview} disabled={sentForReview}
               style={{ background: sentForReview ? '#c8e6c9' : '#ff9800', color: sentForReview ? '#2e7d32' : 'white' }}>
@@ -3240,6 +3261,147 @@ function EstimateDetailsPage() {
               >
                 <Package size={18} />
                 {converting ? 'Converting...' : `Create Work Order (DR-${useCustomDR ? (customDR || '?') : (nextDR || '...')})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Vendor RFQ Modal */}
+      {showRfqModal && (
+        <div className="modal-overlay" onClick={() => setShowRfqModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <h3>📤 Send RFQ to Vendor</h3>
+              <button className="btn btn-icon" onClick={() => setShowRfqModal(false)}><X size={20} /></button>
+            </div>
+            <div style={{ padding: '16px 20px', maxHeight: '70vh', overflowY: 'auto' }}>
+              {/* Vendor Search */}
+              {!rfqSelectedVendor ? (
+                <div>
+                  <label className="form-label">Select Vendor</label>
+                  <input className="form-input" value={rfqVendorSearch} placeholder="Search vendors..."
+                    onChange={async (e) => {
+                      setRfqVendorSearch(e.target.value);
+                      if (e.target.value.length >= 2) {
+                        try {
+                          const res = await searchVendors(e.target.value);
+                          setRfqVendorResults(res.data.data || []);
+                        } catch { setRfqVendorResults([]); }
+                      } else { setRfqVendorResults([]); }
+                    }} autoFocus />
+                  {rfqVendorResults.length > 0 && (
+                    <div style={{ border: '1px solid #ddd', borderRadius: 6, marginTop: 4, maxHeight: 200, overflowY: 'auto' }}>
+                      {rfqVendorResults.map(v => (
+                        <div key={v.id} onClick={async () => {
+                          setRfqSelectedVendor(v);
+                          setRfqVendorResults([]);
+                          // Load contacts
+                          try {
+                            const cRes = await getVendorContacts(v.id);
+                            const contacts = cRes.data.data || [];
+                            setRfqContacts(contacts);
+                            if (contacts.length > 0) setRfqSelectedEmail(contacts[0].email);
+                          } catch { setRfqContacts([]); }
+                        }} style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontWeight: 600 }}>{v.name}</span>
+                          <span style={{ color: '#888', fontSize: '0.85rem' }}>{v.contactEmail || ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  {/* Selected vendor */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '10px 14px', background: '#E8F5E9', borderRadius: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{rfqSelectedVendor.name}</div>
+                      {rfqSelectedVendor.contactName && <div style={{ fontSize: '0.85rem', color: '#666' }}>{rfqSelectedVendor.contactName}</div>}
+                    </div>
+                    <button onClick={() => { setRfqSelectedVendor(null); setRfqVendorSearch(''); }} 
+                      style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: '0.85rem' }}>Change</button>
+                  </div>
+
+                  {/* Contact picker */}
+                  <div className="form-group">
+                    <label className="form-label">Send To</label>
+                    {rfqContacts.length > 1 ? (
+                      <select className="form-select" value={rfqSelectedEmail} onChange={e => setRfqSelectedEmail(e.target.value)}>
+                        {rfqContacts.map((c, i) => (
+                          <option key={i} value={c.email}>{c.name ? `${c.name} — ${c.email}` : c.email}</option>
+                        ))}
+                      </select>
+                    ) : rfqContacts.length === 1 ? (
+                      <div style={{ padding: '8px 12px', background: '#f5f5f5', borderRadius: 6, fontSize: '0.9rem' }}>
+                        {rfqContacts[0].name ? `${rfqContacts[0].name} — ` : ''}{rfqContacts[0].email}
+                      </div>
+                    ) : (
+                      <input className="form-input" value={rfqSelectedEmail} onChange={e => setRfqSelectedEmail(e.target.value)}
+                        placeholder="vendor@company.com" />
+                    )}
+                  </div>
+
+                  {/* Part selection */}
+                  <div className="form-group">
+                    <label className="form-label">Parts to include in RFQ</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 200, overflowY: 'auto', border: '1px solid #ddd', borderRadius: 6, padding: 8 }}>
+                      {parts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType)).map(p => {
+                        const fd = p.formData && typeof p.formData === 'object' ? p.formData : {};
+                        const desc = fd._materialDescription || p.materialDescription || `Part #${p.partNumber}`;
+                        const checked = rfqSelectedParts.includes(p.id);
+                        return (
+                          <label key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 4px', cursor: 'pointer', background: checked ? '#E3F2FD' : 'transparent', borderRadius: 4 }}>
+                            <input type="checkbox" checked={checked}
+                              onChange={() => setRfqSelectedParts(prev => checked ? prev.filter(x => x !== p.id) : [...prev, p.id])}
+                              style={{ marginTop: 3, accentColor: '#1565c0' }} />
+                            <div>
+                              <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>({p.quantity || 1}) {desc}</div>
+                              {p.specialInstructions && <div style={{ fontSize: '0.75rem', color: '#888' }}>{p.specialInstructions}</div>}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                      <button onClick={() => setRfqSelectedParts(parts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType)).map(p => p.id))}
+                        style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: '0.8rem' }}>Select All</button>
+                      <button onClick={() => setRfqSelectedParts([])}
+                        style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '0.8rem' }}>Clear</button>
+                    </div>
+                  </div>
+
+                  {/* Subject preview */}
+                  <div style={{ padding: '8px 12px', background: '#FFFDE7', borderRadius: 6, fontSize: '0.85rem', marginBottom: 16 }}>
+                    <strong>Subject:</strong> RFQ-{estimate?.estimateNumber || 'EST-XXXXX'}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowRfqModal(false)}>Cancel</button>
+              <button className="btn" disabled={!rfqSelectedVendor || !rfqSelectedEmail || rfqSelectedParts.length === 0 || rfqSending}
+                onClick={async () => {
+                  try {
+                    setRfqSending(true);
+                    const res = await sendVendorRfq(id, {
+                      vendorId: rfqSelectedVendor.id,
+                      contactEmail: rfqSelectedEmail,
+                      partIds: rfqSelectedParts
+                    });
+                    const draftUrl = res.data.data?.draftUrl;
+                    setShowRfqModal(false);
+                    if (draftUrl) {
+                      window.open(draftUrl, '_blank');
+                      showMessage('RFQ draft created — review and send in Gmail');
+                    }
+                    await loadEstimate();
+                  } catch (err) {
+                    setError(err.response?.data?.error?.message || 'Failed to create RFQ');
+                  } finally { setRfqSending(false); }
+                }}
+                style={{ background: '#7B1FA2', color: 'white' }}>
+                {rfqSending ? '⏳ Creating...' : `📤 Create RFQ Draft (${rfqSelectedParts.length} parts)`}
               </button>
             </div>
           </div>

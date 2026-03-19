@@ -809,6 +809,44 @@ const ClientsVendorsPage = () => {
                 <label className="form-label">Notes</label>
                 <textarea className="form-textarea" value={formData.notes || ''} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={2} />
               </div>
+              
+              {/* Email Scanning */}
+              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #eee', paddingTop: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 8 }}>
+                  <input type="checkbox" checked={formData.emailScanEnabled || false} onChange={(e) => setFormData({ ...formData, emailScanEnabled: e.target.checked })}
+                    style={{ width: 18, height: 18, accentColor: '#7B1FA2' }} />
+                  <span style={{ fontWeight: 600, color: formData.emailScanEnabled ? '#7B1FA2' : '#333' }}>
+                    📧 Monitor Vendor Emails — Auto-detect RFQ responses and quotes
+                  </span>
+                </label>
+                {formData.emailScanEnabled && (
+                  <div style={{ padding: 12, background: '#F3E5F5', borderRadius: 8, marginTop: 4 }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>Additional email addresses to monitor</label>
+                      <p style={{ fontSize: '0.75rem', color: '#888', marginBottom: 6 }}>The primary email above is always monitored. Add more addresses here.</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {(formData.emailScanAddresses || []).map((addr, i) => (
+                          <div key={i} style={{ display: 'flex', gap: 6 }}>
+                            <input className="form-input" value={addr} placeholder="sales@vendor.com"
+                              onChange={(e) => {
+                                const addrs = [...(formData.emailScanAddresses || [])];
+                                addrs[i] = e.target.value;
+                                setFormData({ ...formData, emailScanAddresses: addrs });
+                              }} style={{ flex: 1 }} />
+                            <button className="btn btn-sm" onClick={() => {
+                              const addrs = (formData.emailScanAddresses || []).filter((_, j) => j !== i);
+                              setFormData({ ...formData, emailScanAddresses: addrs });
+                            }} style={{ color: '#c62828', background: 'none', border: '1px solid #c62828', padding: '4px 8px' }}>✕</button>
+                          </div>
+                        ))}
+                        <button className="btn btn-sm btn-outline" onClick={() => {
+                          setFormData({ ...formData, emailScanAddresses: [...(formData.emailScanAddresses || []), ''] });
+                        }} style={{ alignSelf: 'flex-start', fontSize: '0.8rem' }}>+ Add Email</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>

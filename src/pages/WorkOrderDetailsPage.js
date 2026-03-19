@@ -2634,6 +2634,28 @@ function WorkOrderDetailsPage() {
                 <ShoppingCart size={16} /> Order Material
               </button>
             )}
+            {order.estimateId && (
+              <button className="btn btn-sm btn-outline" onClick={async () => {
+                try {
+                  const { sendVendorPo } = await import('../services/api');
+                  const res = await sendVendorPo(id, {});
+                  const draftUrl = res.data.data?.draftUrl;
+                  if (draftUrl) {
+                    window.open(draftUrl, '_blank');
+                    showMessage('PO draft created — review and send in Gmail');
+                  }
+                } catch (err) {
+                  const msg = err.response?.data?.error?.message || 'Failed';
+                  if (msg.includes('No vendor RFQ')) {
+                    setError('No vendor RFQ was sent for this estimate. Send an RFQ from the estimate first.');
+                  } else {
+                    setError(msg);
+                  }
+                }
+              }} style={{ color: '#7B1FA2', borderColor: '#7B1FA2' }}>
+                📤 Email PO to Vendor
+              </button>
+            )}
             <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
           </div>
         </div>
