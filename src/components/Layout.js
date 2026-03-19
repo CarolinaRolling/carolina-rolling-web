@@ -4,18 +4,20 @@ import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, Do
 import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
 import TodoBar from './TodoBar';
-import { getScrapPending, confirmScrapPickup, getPendingOrders } from '../services/api';
+import { getScrapPending, confirmScrapPickup, getPendingOrders, getEmailNotifications, dismissEmailNotification } from '../services/api';
 
 function Layout({ children }) {
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
   const [scrapPending, setScrapPending] = useState([]);
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
+  const [emailNotifications, setEmailNotifications] = useState([]);
 
   useEffect(() => {
     const loadPending = () => {
       getScrapPending().then(res => setScrapPending(res.data.data || [])).catch(() => {});
       getPendingOrders('pending').then(res => setPendingOrderCount((res.data.data || []).length)).catch(() => {});
+      getEmailNotifications().then(res => setEmailNotifications(res.data.data || [])).catch(() => {});
     };
     loadPending();
     const interval = setInterval(loadPending, 60000);
@@ -176,6 +178,47 @@ function Layout({ children }) {
                 Review Orders
               </button>
             </div>
+          </div>
+        )}
+        {emailNotifications.length > 0 && (
+          <div style={{ margin: '0 0 12px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {emailNotifications.map(n => (
+              <div key={n.id} style={{ background: '#FFF3E0', border: '1px solid #FFB74D', borderRadius: 8, padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: '1.1rem' }}>📧</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: '#E65100', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      New email from {n.fromName || n.fromEmail}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {n.subject || '(no subject)'} — {n.receivedAt ? new Date(n.receivedAt).toLocaleString() : ''}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  {n.gmailLink && (
+                    <a href={n.gmailLink} target="_blank" rel="noopener noreferrer"
+                      onClick={async () => {
+                        try {
+                          await dismissEmailNotification(n.id);
+                          setEmailNotifications(prev => prev.filter(x => x.id !== n.id));
+                        } catch {}
+                      }}
+                      style={{ background: '#E65100', color: 'white', border: 'none', borderRadius: 6, padding: '6px 12px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                      Open Email
+                    </a>
+                  )}
+                  <button onClick={async () => {
+                    try {
+                      await dismissEmailNotification(n.id);
+                      setEmailNotifications(prev => prev.filter(x => x.id !== n.id));
+                    } catch {}
+                  }} style={{ background: 'none', border: '1px solid #ccc', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: '0.8rem', color: '#888' }}>
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
         {children}

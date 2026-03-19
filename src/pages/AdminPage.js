@@ -688,10 +688,10 @@ function AdminPage({ section = 'users-logs' }) {
     } catch (err) { setError('Failed to toggle'); }
   };
 
-  const handleScanNow = async () => {
+  const handleScanNow = async (hoursBack = 0) => {
     try {
       setScanning(true);
-      const res = await triggerEmailScan();
+      const res = await triggerEmailScan(hoursBack);
       const r = res.data.data || {};
       if (r.skipped) {
         setSuccess(`Scan skipped: ${r.reason}`);
@@ -2448,9 +2448,13 @@ function AdminPage({ section = 'users-logs' }) {
                 <button className="btn btn-primary" onClick={handleConnectGmail} disabled={!scannerStatus?.googleConfigured}>
                   + Connect Gmail Account
                 </button>
-                <button className="btn" onClick={handleScanNow} disabled={scanning || scannerAccounts.length === 0}
+                <button className="btn" onClick={() => handleScanNow()} disabled={scanning || scannerAccounts.length === 0}
                   style={{ background: '#E65100', color: 'white', border: 'none' }}>
                   {scanning ? '⏳ Scanning...' : '🔍 Scan Now'}
+                </button>
+                <button className="btn btn-outline" onClick={() => handleScanNow(24)} disabled={scanning || scannerAccounts.length === 0}
+                  style={{ fontSize: '0.8rem' }}>
+                  🔄 Rescan 24h
                 </button>
               </div>
             </div>

@@ -380,7 +380,7 @@ export const getEmailScannerAccounts = () => api.get('/email-scanner/accounts');
 export const startGmailOAuth = () => api.get('/email-scanner/oauth/start');
 export const disconnectGmailAccount = (id) => api.delete(`/email-scanner/accounts/${id}`);
 export const toggleGmailAccount = (id) => api.put(`/email-scanner/accounts/${id}/toggle`);
-export const triggerEmailScan = () => api.post('/email-scanner/scan-now');
+export const triggerEmailScan = (hoursBack = 0) => api.post('/email-scanner/scan-now', hoursBack ? { hoursBack } : {});
 export const getEmailScanHistory = () => api.get('/email-scanner/history');
 export const getPendingOrders = (status) => api.get('/email-scanner/pending-orders', { params: { status } });
 export const approvePendingOrder = (id, data) => api.post(`/email-scanner/pending-orders/${id}/approve`, data);
@@ -393,6 +393,8 @@ export const sendVendorRfq = (estimateId, data) => api.post(`/email-scanner/vend
 export const getVendorContacts = (vendorId) => api.get(`/email-scanner/vendor-contacts/${vendorId}`);
 export const getVendorById = (vendorId) => api.get(`/vendors/${vendorId}`);
 export const sendVendorPo = (workOrderId, data) => api.post(`/email-scanner/vendor-po/${workOrderId}`, data);
+export const getEmailNotifications = () => api.get('/email-scanner/notifications');
+export const dismissEmailNotification = (id) => api.post(`/email-scanner/notifications/${id}/dismiss`);
 export const getMonitoredClients = () => api.get('/email-scanner/monitored-clients');
 export const retryScannedEmail = (id) => api.post(`/email-scanner/retry/${id}`);
 export const deleteScannedEmail = (id) => api.delete(`/email-scanner/history/${id}`);
