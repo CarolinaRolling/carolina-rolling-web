@@ -1810,6 +1810,7 @@ function WorkOrderDetailsPage() {
       stored: { background: '#e8f5e9', color: '#2e7d32' },
       shipped: { background: '#f3e5f5', color: '#7b1fa2' },
       archived: { background: '#eceff1', color: '#546e7a' },
+      void: { background: '#ffcdd2', color: '#b71c1c' },
       pending: { background: '#e0e0e0', color: '#555' },
       // Legacy mappings
       draft: { background: '#e3f2fd', color: '#1565c0' },
@@ -1825,6 +1826,7 @@ function WorkOrderDetailsPage() {
       stored: 'Stored',
       shipped: 'Shipped',
       archived: 'Archived',
+      void: '⛔ VOID',
       pending: 'Pending',
       draft: 'Received',
       in_progress: 'Processing',
@@ -1913,13 +1915,48 @@ function WorkOrderDetailsPage() {
             )}
             <div style={{ color: '#666', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 12 }}>
               <span>{order.clientName}</span>
-              <StatusBadge status={hasNoParts ? 'pending' : order.status} />
+              <StatusBadge status={order.isVoided ? 'void' : hasNoParts ? 'pending' : order.status} />
               {hasNoParts && <span style={{ color: '#9c27b0', fontSize: '0.8rem' }}>(Awaiting Instructions)</span>}
             </div>
           </div>
         </div>
+
+        {/* Void Banner */}
+        {(order.isVoided || order.status === 'void') && (
+          <div style={{ 
+            margin: '0 0 12px', padding: '12px 20px', 
+            background: 'repeating-linear-gradient(45deg, #ffcdd2, #ffcdd2 10px, #ffebee 10px, #ffebee 20px)',
+            border: '3px solid #c62828', borderRadius: 8, 
+            display: 'flex', alignItems: 'center', gap: 12
+          }}>
+            <span style={{ fontSize: '2rem' }}>⛔</span>
+            <div>
+              <div style={{ fontWeight: 800, color: '#b71c1c', fontSize: '1.2rem', letterSpacing: 2 }}>VOIDED</div>
+              {order.voidReason && <div style={{ color: '#c62828', fontSize: '0.9rem' }}>{order.voidReason}</div>}
+              {order.voidedBy && order.voidedAt && (
+                <div style={{ color: '#e57373', fontSize: '0.8rem' }}>
+                  by {order.voidedBy} on {new Date(order.voidedAt).toLocaleDateString()}
+                </div>
+              )}
+              <div style={{ color: '#888', fontSize: '0.75rem', marginTop: 4 }}>
+                POs and material records are preserved for expense tracking. This order will not be invoiced.
+              </div>
+              <button onClick={async () => {
+                if (!window.confirm('Remove void status from this work order? It will become active and eligible for invoicing again.')) return;
+                try {
+                  await updateWorkOrder(order.id, { isVoided: false, voidedAt: null, voidedBy: null, voidReason: null });
+                  setOrder({ ...order, isVoided: false, voidedAt: null, voidedBy: null, voidReason: null });
+                  showMessage('Void removed — work order is active again');
+                } catch (err) { setError('Failed to unvoid'); }
+              }} style={{ marginTop: 8, background: 'white', border: '1px solid #c62828', color: '#c62828', padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                ↩️ Remove Void
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="actions-row">
-          {order.status !== 'archived' && (
+          {!(order.isVoided || order.status === 'void') && order.status !== 'archived' && (
             <>
               <select className="form-select" value={order.status} onChange={(e) => handleStatusChange(e.target.value)} style={{ width: 'auto' }}>
                 <option value="waiting_for_materials">Waiting for Materials</option>
