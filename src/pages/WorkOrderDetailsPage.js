@@ -60,6 +60,7 @@ function WorkOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const [woTab, setWoTab] = useState('parts');
   const [clientPaymentTerms, setClientPaymentTerms] = useState(null);
   const [shipment, setShipment] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -2674,6 +2675,30 @@ function WorkOrderDetailsPage() {
         </div>
       )}
 
+      {/* Tab Navigation */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginTop: 20, marginBottom: 0 }}>
+        {[
+          { key: 'parts', label: '📦 Parts', count: order.parts?.length || 0 },
+          { key: 'materials', label: '📋 Materials' },
+          { key: 'summary', label: '📊 Summary' }
+        ].map(tab => (
+          <button key={tab.key} onClick={() => setWoTab(tab.key)}
+            style={{
+              padding: '10px 20px', border: 'none', cursor: 'pointer',
+              background: woTab === tab.key ? '#1976d2' : 'transparent',
+              color: woTab === tab.key ? 'white' : '#555',
+              fontWeight: woTab === tab.key ? 700 : 500,
+              fontSize: '0.95rem', borderRadius: '8px 8px 0 0',
+              transition: 'all 0.15s'
+            }}>
+            {tab.label}{tab.count !== undefined ? ` (${tab.count})` : ''}
+          </button>
+        ))}
+      </div>
+
+      {/* ===== PARTS TAB ===== */}
+      {woTab === 'parts' && (
+      <>
       {/* Parts Section */}
       <div className="card" style={{ marginTop: 20 }}>
         <div className="card-header">
@@ -3281,6 +3306,244 @@ function WorkOrderDetailsPage() {
           )}
         </div>
       </div>
+      </>
+      )}
+
+      {/* ===== MATERIALS TAB ===== */}
+      {woTab === 'materials' && (
+        <div className="card" style={{ marginTop: 0 }}>
+          <h3 className="card-title" style={{ marginBottom: 16 }}>📋 Bill of Materials</h3>
+          {(() => {
+            const allParts = order.parts || [];
+            const materialParts = allParts.filter(p => !['fab_service', 'shop_rate', 'rush_service'].includes(p.partType));
+            if (materialParts.length === 0) return <p style={{ color: '#888', textAlign: 'center', padding: 20 }}>No parts added yet</p>;
+
+            const bySource = { customer_supplied: [], we_order: [], in_stock: [] };
+            materialParts.forEach(p => {
+              const src = p.materialSource || 'customer_supplied';
+              if (!bySource[src]) bySource[src] = [];
+              bySource[src].push(p);
+            });
+
+            const byVendor = {};
+            bySource.we_order.forEach(p => {
+              const vKey = p.supplierName || 'Unassigned Vendor';
+              if (!byVendor[vKey]) byVendor[vKey] = { vendorId: p.vendorId, parts: [] };
+              byVendor[vKey].parts.push(p);
+            });
+
+            const renderPart = (p) => {
+              const fd = p.formData && typeof p.formData === 'object' ? p.formData : {};
+              const desc = fd._materialDescription || p.materialDescription || PART_TYPES[p.partType]?.label || '';
+              return (
+                <div key={p.id} style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Part #{p.partNumber}</span>
+                    <span style={{ color: '#555', marginLeft: 8, fontSize: '0.85rem' }}>({p.quantity || 1}pc) {desc}</span>
+                    {p.materialReceived && <span style={{ marginLeft: 8, color: '#2e7d32', fontSize: '0.8rem' }}>✅ Received</span>}
+                    {p.materialOrdered && !p.materialReceived && <span style={{ marginLeft: 8, color: '#ff9800', fontSize: '0.8rem' }}>📦 Ordered — {p.materialPurchaseOrderNumber}</span>}
+                    {!p.materialOrdered && !p.materialReceived && p.materialSource === 'we_order' && <span style={{ marginLeft: 8, color: '#c62828', fontSize: '0.8rem' }}>⚠ Not ordered</span>}
+                    {p.cutFileReference && <span style={{ marginLeft: 8, color: '#1565c0', fontSize: '0.8rem' }}>📐 {p.cutFileReference}</span>}
+                  </div>
+                  <span style={{ fontWeight: 600, color: '#E65100' }}>${(parseFloat(p.materialTotal) || 0).toFixed(2)}</span>
+                </div>
+              );
+            };
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {bySource.customer_supplied.length > 0 && (
+                  <div style={{ border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden' }}>
+                    <div style={{ padding: '10px 16px', background: '#f5f5f5', fontWeight: 700, fontSize: '0.95rem', borderBottom: '1px solid #e0e0e0' }}>
+                      👤 Client Supplied ({bySource.customer_supplied.length})
+                    </div>
+                    {bySource.customer_supplied.map(renderPart)}
+                  </div>
+                )}
+
+                {bySource.in_stock.length > 0 && (
+                  <div style={{ border: '1px solid #c8e6c9', borderRadius: 8, overflow: 'hidden' }}>
+                    <div style={{ padding: '10px 16px', background: '#e8f5e9', fontWeight: 700, fontSize: '0.95rem', borderBottom: '1px solid #c8e6c9' }}>
+                      🏭 In Stock ({bySource.in_stock.length})
+                    </div>
+                    {bySource.in_stock.map(renderPart)}
+                  </div>
+                )}
+
+                {Object.entries(byVendor).map(([vendorName, { parts: vParts }]) => (
+                  <div key={vendorName} style={{ border: '1px solid #CE93D8', borderRadius: 8, overflow: 'hidden' }}>
+                    <div style={{ padding: '10px 16px', background: '#F3E5F5', fontWeight: 700, fontSize: '0.95rem', borderBottom: '1px solid #CE93D8' }}>
+                      🏢 {vendorName} ({vParts.length})
+                    </div>
+                    {vParts.map(renderPart)}
+                    <div style={{ padding: '8px 16px', background: '#fafafa', borderTop: '1px solid #f0f0f0', display: 'flex', justifyContent: 'flex-end', fontWeight: 700, fontSize: '0.9rem', color: '#E65100' }}>
+                      Vendor Total: ${vParts.reduce((s, p) => s + (parseFloat(p.materialTotal) || 0), 0).toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+
+                {allParts.some(p => p.outsideProcessingVendorName) && (
+                  <div style={{ border: '1px solid #FFE0B2', borderRadius: 8, overflow: 'hidden' }}>
+                    <div style={{ padding: '10px 16px', background: '#FFF3E0', fontWeight: 700, fontSize: '0.95rem', borderBottom: '1px solid #FFE0B2' }}>
+                      🏭 Outside Processing
+                    </div>
+                    {allParts.filter(p => p.outsideProcessingVendorName).map(p => (
+                      <div key={p.id} style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Part #{p.partNumber}</span>
+                          <span style={{ color: '#E65100', marginLeft: 8, fontSize: '0.85rem' }}>{p.outsideProcessingVendorName}</span>
+                          <span style={{ color: '#888', marginLeft: 8, fontSize: '0.8rem' }}>{p.outsideProcessingDescription}</span>
+                          {p.outsideProcessingPONumber && <span style={{ marginLeft: 8, color: '#2e7d32', fontSize: '0.8rem' }}>✅ {p.outsideProcessingPONumber}</span>}
+                        </div>
+                        <span style={{ fontWeight: 600, color: '#E65100' }}>${((parseFloat(p.outsideProcessingCost) || 0) + (parseFloat(p.outsideProcessingTransportCost) || 0)).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ===== SUMMARY TAB ===== */}
+      {woTab === 'summary' && (
+        <div className="card" style={{ marginTop: 0 }}>
+          <h3 className="card-title" style={{ marginBottom: 20 }}>📊 Job Cost Summary</h3>
+          {(() => {
+            const allParts = order.parts || [];
+            const materialParts = allParts.filter(p => !['fab_service', 'shop_rate', 'rush_service'].includes(p.partType));
+
+            let totalMaterialCost = 0, totalMaterialBilled = 0, totalLaborInHouse = 0;
+            let totalOutsideCost = 0, totalOutsideBilled = 0;
+            let totalTransportCost = 0, totalTransportBilled = 0;
+
+            materialParts.forEach(p => {
+              const qty = parseInt(p.quantity) || 1;
+              const matCost = parseFloat(p.materialTotal) || 0;
+              const matMarkup = parseFloat(p.materialMarkupPercent) || 0;
+              const matBilled = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
+              totalMaterialCost += matCost * qty;
+              totalMaterialBilled += matBilled * qty;
+              totalLaborInHouse += (parseFloat(p.laborTotal) || 0) * qty;
+
+              const opCost = parseFloat(p.outsideProcessingCost) || 0;
+              const opMarkup = parseFloat(p.outsideProcessingMarkupPercent) || 0;
+              totalOutsideCost += opCost * qty;
+              totalOutsideBilled += Math.round(opCost * (1 + opMarkup / 100) * 100) / 100 * qty;
+
+              const tCost = parseFloat(p.outsideProcessingTransportCost) || 0;
+              const tMarkup = parseFloat(p.outsideProcessingTransportMarkupPercent) || 0;
+              totalTransportCost += tCost * qty;
+              totalTransportBilled += Math.round(tCost * (1 + tMarkup / 100) * 100) / 100 * qty;
+            });
+
+            let totalServicesCost = 0;
+            allParts.filter(p => ['fab_service', 'shop_rate'].includes(p.partType)).forEach(p => {
+              totalServicesCost += parseFloat(p.partTotal) || 0;
+            });
+
+            const trucking = parseFloat(order.truckingCost) || 0;
+            const totalExpenses = totalMaterialCost + totalOutsideCost + totalTransportCost + trucking;
+            const totals = calculateTotals();
+            const totalRevenue = totals.grandTotal;
+            const grossProfit = totalRevenue - totalExpenses;
+            const margin = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 100) : 0;
+            const totalMarkupProfit = (totalMaterialBilled - totalMaterialCost) + (totalOutsideBilled - totalOutsideCost) + (totalTransportBilled - totalTransportCost);
+
+            const row = (label, amount, opts = {}) => (
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: opts.size || '0.9rem', color: opts.color || '#333', fontWeight: opts.bold ? 700 : 400, borderTop: opts.border ? '2px solid #e0e0e0' : 'none', marginTop: opts.border ? 8 : 0, paddingTop: opts.border ? 12 : 6 }}>
+                <span>{label}</span>
+                <span>{typeof amount === 'string' ? amount : formatCurrency(amount)}</span>
+              </div>
+            );
+
+            return (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+                  <div style={{ padding: 16, background: '#FFF3E0', borderRadius: 10, border: '1px solid #FFE0B2' }}>
+                    <h4 style={{ margin: '0 0 12px', color: '#E65100', fontSize: '1rem' }}>💰 Our Costs</h4>
+                    {row('Material (our cost)', totalMaterialCost)}
+                    {totalOutsideCost > 0 && row('Outside Processing', totalOutsideCost)}
+                    {totalTransportCost > 0 && row('Transport (outside)', totalTransportCost)}
+                    {trucking > 0 && row('Trucking to Client', trucking)}
+                    {row('Total Expenses', totalExpenses, { bold: true, border: true, color: '#c62828' })}
+                  </div>
+                  <div style={{ padding: 16, background: '#E8F5E9', borderRadius: 10, border: '1px solid #C8E6C9' }}>
+                    <h4 style={{ margin: '0 0 12px', color: '#2e7d32', fontSize: '1rem' }}>💵 Client Pays</h4>
+                    {row('Material (with markup)', totalMaterialBilled)}
+                    {row('In-House Labor', totalLaborInHouse)}
+                    {totalOutsideBilled > 0 && row('Outside Processing (marked up)', totalOutsideBilled)}
+                    {totalTransportBilled > 0 && row('Transport (marked up)', totalTransportBilled)}
+                    {totalServicesCost > 0 && row('Fab Services / Shop Rate', totalServicesCost)}
+                    {trucking > 0 && row('Trucking', trucking)}
+                    {totals.discountAmt > 0 && row('Discount', -totals.discountAmt, { color: '#c62828' })}
+                    {totals.taxAmount > 0 && row('Tax', totals.taxAmount, { color: '#888' })}
+                    {row('Grand Total', totals.grandTotal, { bold: true, border: true, color: '#2e7d32' })}
+                  </div>
+                </div>
+
+                <div style={{ padding: 20, background: margin >= 30 ? '#E8F5E9' : margin >= 15 ? '#FFFDE7' : '#FFEBEE', borderRadius: 10, border: `2px solid ${margin >= 30 ? '#66BB6A' : margin >= 15 ? '#FFF176' : '#EF5350'}`, textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.9rem', color: '#555', marginBottom: 4 }}>Estimated Margin</div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: margin >= 30 ? '#2e7d32' : margin >= 15 ? '#F57F17' : '#c62828' }}>{margin}%</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 8 }}>
+                    <div><div style={{ fontSize: '0.75rem', color: '#888' }}>Markup Profit</div><div style={{ fontWeight: 700, color: '#2e7d32' }}>{formatCurrency(totalMarkupProfit)}</div></div>
+                    <div><div style={{ fontSize: '0.75rem', color: '#888' }}>Labor Revenue</div><div style={{ fontWeight: 700, color: '#1565c0' }}>{formatCurrency(totalLaborInHouse + totalServicesCost)}</div></div>
+                    <div><div style={{ fontSize: '0.75rem', color: '#888' }}>Gross Profit</div><div style={{ fontWeight: 700, color: grossProfit >= 0 ? '#2e7d32' : '#c62828' }}>{formatCurrency(grossProfit)}</div></div>
+                  </div>
+                </div>
+
+                {allParts.length > 0 && (
+                  <div style={{ marginTop: 24 }}>
+                    <h4 style={{ marginBottom: 12, fontSize: '0.95rem' }}>Per-Part Breakdown</h4>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: '#f5f5f5' }}>
+                            <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>#</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Part</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>Qty</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>Material</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>Labor</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '2px solid #ddd' }}>Outside</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '2px solid #ddd', fontWeight: 700 }}>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {allParts.sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0)).map(p => {
+                            const fd = p.formData && typeof p.formData === 'object' ? p.formData : {};
+                            const qty = parseInt(p.quantity) || 1;
+                            const mat = parseFloat(p.materialTotal) || 0;
+                            const matMk = parseFloat(p.materialMarkupPercent) || 0;
+                            const matBilled = Math.round(mat * (1 + matMk / 100) * 100) / 100;
+                            const labor = parseFloat(p.laborTotal) || 0;
+                            const opCost = parseFloat(p.outsideProcessingCost) || 0;
+                            const opMk = parseFloat(p.outsideProcessingMarkupPercent) || 0;
+                            const opBilled = Math.round(opCost * (1 + opMk / 100) * 100) / 100;
+                            const total = parseFloat(p.partTotal) || 0;
+                            const desc = fd._materialDescription || p.materialDescription || PART_TYPES[p.partType]?.label || p.partType;
+                            return (
+                              <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                <td style={{ padding: '8px 12px', fontWeight: 600 }}>{p.partNumber}</td>
+                                <td style={{ padding: '8px 12px', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{desc}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right' }}>{qty}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right' }}>{matBilled > 0 ? formatCurrency(matBilled * qty) : '—'}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right' }}>{labor > 0 ? formatCurrency(labor * qty) : '—'}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right' }}>{opBilled > 0 ? formatCurrency(opBilled * qty) : '—'}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{formatCurrency(total)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Part Type Picker Modal */}
       {showPartTypePicker && (

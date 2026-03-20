@@ -1524,6 +1524,11 @@ function EstimateDetailsPage() {
         </div>
         <div className="actions-row">
           {!isNew && <button className="btn btn-outline" onClick={printEstimate}><Printer size={18} /> Print</button>}
+          {!isNew && (
+            <button className="btn btn-outline" onClick={generatePdfPreview} disabled={pdfGenerating}>
+              <Eye size={18} /> {pdfGenerating ? 'Generating...' : 'Generate PDF'}
+            </button>
+          )}
           {isNew && (
             <button className="btn btn-secondary" onClick={() => handleSave(false)} disabled={saving}>
               <Save size={18} /> {saving ? 'Saving...' : 'Generate New Estimate'}
