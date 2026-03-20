@@ -2468,6 +2468,32 @@ function WorkOrderDetailsPage() {
                   >
                     <X size={14} />
                   </button>
+                  {order.estimateId && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { sendVendorPo } = await import('../services/api');
+                          const res = await sendVendorPo(id, {});
+                          const draftUrl = res.data.data?.draftUrl;
+                          if (draftUrl) {
+                            window.open(draftUrl, '_blank');
+                            showMessage('PO draft created — review and send in Gmail');
+                          }
+                        } catch (err) {
+                          const msg = err.response?.data?.error?.message || 'Failed';
+                          if (msg.includes('No vendor RFQ')) {
+                            setError('No vendor RFQ was sent for this estimate. Send an RFQ from the estimate first.');
+                          } else {
+                            setError(msg);
+                          }
+                        }
+                      }}
+                      style={{ background: '#7B1FA2', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', fontWeight: 600 }}
+                      title="Email PO to Vendor"
+                    >
+                      📤 Email
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -2669,28 +2695,6 @@ function WorkOrderDetailsPage() {
             {getOrderableParts().length > 0 && (
               <button className="btn btn-sm" onClick={openOrderModal} style={{ background: '#ff9800', color: 'white' }}>
                 <ShoppingCart size={16} /> Order Material
-              </button>
-            )}
-            {order.estimateId && (
-              <button className="btn btn-sm btn-outline" onClick={async () => {
-                try {
-                  const { sendVendorPo } = await import('../services/api');
-                  const res = await sendVendorPo(id, {});
-                  const draftUrl = res.data.data?.draftUrl;
-                  if (draftUrl) {
-                    window.open(draftUrl, '_blank');
-                    showMessage('PO draft created — review and send in Gmail');
-                  }
-                } catch (err) {
-                  const msg = err.response?.data?.error?.message || 'Failed';
-                  if (msg.includes('No vendor RFQ')) {
-                    setError('No vendor RFQ was sent for this estimate. Send an RFQ from the estimate first.');
-                  } else {
-                    setError(msg);
-                  }
-                }
-              }} style={{ color: '#7B1FA2', borderColor: '#7B1FA2' }}>
-                📤 Email PO to Vendor
               </button>
             )}
             <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
