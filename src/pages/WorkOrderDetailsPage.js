@@ -2676,13 +2676,13 @@ function WorkOrderDetailsPage() {
       )}
 
       {/* Tab Navigation */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginTop: 20, marginBottom: 0 }}>
+      <div id="wo-tabs" style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginTop: 20, marginBottom: 0 }}>
         {[
           { key: 'parts', label: '📦 Parts', count: order.parts?.length || 0 },
           { key: 'materials', label: '📋 Materials' },
           { key: 'summary', label: '📊 Summary' }
         ].map(tab => (
-          <button key={tab.key} onClick={(e) => { e.preventDefault(); const y = window.scrollY; setWoTab(tab.key); requestAnimationFrame(() => window.scrollTo(0, y)); }}
+          <button key={tab.key} onClick={(e) => { e.preventDefault(); setWoTab(tab.key); setTimeout(() => document.getElementById('wo-tabs')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}
             style={{
               padding: '10px 20px', border: 'none', cursor: 'pointer',
               background: woTab === tab.key ? '#1976d2' : 'transparent',
@@ -3311,7 +3311,7 @@ function WorkOrderDetailsPage() {
 
       {/* ===== MATERIALS TAB ===== */}
       {woTab === 'materials' && (
-        <div className="card" style={{ marginTop: 0 }}>
+        <div className="card" style={{ marginTop: 0, minHeight: '70vh' }}>
           <h3 className="card-title" style={{ marginBottom: 16 }}>📋 Bill of Materials</h3>
           {(() => {
             const allParts = order.parts || [];
@@ -3408,7 +3408,7 @@ function WorkOrderDetailsPage() {
 
       {/* ===== SUMMARY TAB ===== */}
       {woTab === 'summary' && (
-        <div className="card" style={{ marginTop: 0 }}>
+        <div className="card" style={{ marginTop: 0, minHeight: '70vh' }}>
           <h3 className="card-title" style={{ marginBottom: 20 }}>📊 Job Cost Summary</h3>
           {(() => {
             const allParts = order.parts || [];

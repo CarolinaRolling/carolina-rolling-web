@@ -1920,13 +1920,13 @@ function EstimateDetailsPage() {
 
           {/* Tab Navigation */}
           {!isNew && (
-            <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginBottom: 16 }}>
+            <div id="estimate-tabs" style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginBottom: 16 }}>
               {[
                 { key: 'parts', label: '📦 Parts', count: parts.length },
                 { key: 'materials', label: '📋 Materials' },
                 { key: 'summary', label: '📊 Summary' }
               ].map(tab => (
-                <button key={tab.key} onClick={(e) => { e.preventDefault(); const y = window.scrollY; setEstimateTab(tab.key); requestAnimationFrame(() => window.scrollTo(0, y)); }}
+                <button key={tab.key} onClick={(e) => { e.preventDefault(); setEstimateTab(tab.key); setTimeout(() => document.getElementById('estimate-tabs')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}
                   style={{
                     padding: '10px 20px', border: 'none', cursor: 'pointer',
                     background: estimateTab === tab.key ? '#1976d2' : 'transparent',
@@ -2450,7 +2450,7 @@ function EstimateDetailsPage() {
 
           {/* ===== MATERIALS TAB ===== */}
           {!isNew && estimateTab === 'materials' && (
-            <div>
+            <div style={{ minHeight: '70vh' }}>
               <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <h3 className="card-title" style={{ margin: 0 }}>📋 Bill of Materials</h3>
@@ -2609,7 +2609,7 @@ function EstimateDetailsPage() {
 
           {/* ===== SUMMARY TAB ===== */}
           {!isNew && estimateTab === 'summary' && (
-            <div>
+            <div style={{ minHeight: '70vh' }}>
               <div className="card">
                 <h3 className="card-title" style={{ marginBottom: 20 }}>📊 Job Cost Summary</h3>
 
