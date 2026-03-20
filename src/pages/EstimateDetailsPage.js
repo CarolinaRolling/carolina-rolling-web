@@ -3535,7 +3535,7 @@ function EstimateDetailsPage() {
                           materialSource: p.materialSource || 'customer_supplied',
                           formData: p.formData || {}
                         };
-                        await createEstimatePart(id, partPayload);
+                        await addEstimatePart(id, partPayload);
                       }
                       showMessage(`Added ${aiParseResults.parts.length} parts from AI`);
                       if (aiParseResults.notes && !formData.projectDescription) {
