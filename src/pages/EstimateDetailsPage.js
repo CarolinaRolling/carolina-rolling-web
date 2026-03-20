@@ -12,6 +12,7 @@ import {
   sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
+import OutsideProcessingSection from '../components/OutsideProcessingSection';
 import AngleRollForm from '../components/AngleRollForm';
 import FlatStockForm from '../components/FlatStockForm';
 import FabServiceForm from '../components/FabServiceForm';
@@ -1015,7 +1016,7 @@ function EstimateDetailsPage() {
       if (!dataToSend.rollType) dataToSend.rollType = null;
       
       // Recalculate partTotal at save time to avoid useEffect timing issues
-      const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
+      const EA_PRICED = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
       // Clean price fields to exact 2-decimal values
       if (dataToSend.laborTotal) dataToSend.laborTotal = (Math.round(parseFloat(dataToSend.laborTotal) * 100) / 100).toFixed(2);
       if (dataToSend.materialTotal) dataToSend.materialTotal = (Math.round(parseFloat(dataToSend.materialTotal) * 100) / 100).toFixed(2);
@@ -1026,7 +1027,14 @@ function EstimateDetailsPage() {
         const matEachRaw = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
         const matEach = roundUpMaterial(matEachRaw, dataToSend._materialRounding);
         const labEach = parseFloat(dataToSend.laborTotal) || 0;
-        dataToSend.partTotal = ((matEach + labEach) * qty).toFixed(2);
+        // Outside processing with markup
+        const opCost = parseFloat(dataToSend.outsideProcessingCost) || 0;
+        const opMarkup = parseFloat(dataToSend.outsideProcessingMarkupPercent) || 0;
+        const opEach = Math.round(opCost * (1 + opMarkup / 100) * 100) / 100;
+        const opTransport = parseFloat(dataToSend.outsideProcessingTransportCost) || 0;
+        const opTransportMarkup = parseFloat(dataToSend.outsideProcessingTransportMarkupPercent) || 0;
+        const opTransportEach = Math.round(opTransport * (1 + opTransportMarkup / 100) * 100) / 100;
+        dataToSend.partTotal = ((matEach + labEach + opEach + opTransportEach) * qty).toFixed(2);
       }
       
       let savedPartId = editingPart?.id;
@@ -2087,6 +2095,50 @@ function EstimateDetailsPage() {
                     </div>
                   </div>
 
+                  {/* Outside Processing indicator */}
+                  {part.outsideProcessingVendorName && (
+                    <div style={{ padding: '8px 12px', background: '#FFF3E0', borderRadius: 6, marginBottom: 8, border: '1px solid #FFE0B2', fontSize: '0.85rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <span style={{ fontWeight: 600, color: '#E65100' }}>🏭 Outside Processing: </span>
+                          <span>{part.outsideProcessingVendorName}</span>
+                          {part.outsideProcessingDescription && <span style={{ color: '#888' }}> — {part.outsideProcessingDescription}</span>}
+                          <span style={{ marginLeft: 8, fontWeight: 600 }}>
+                            ${((parseFloat(part.outsideProcessingCost) || 0) * (1 + (parseFloat(part.outsideProcessingMarkupPercent) || 0) / 100)).toFixed(2)}/ea
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          {part.outsideProcessingPONumber ? (
+                            <span style={{ background: '#E8F5E9', padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>
+                              ✅ {part.outsideProcessingPONumber}
+                            </span>
+                          ) : (
+                            <button className="btn btn-sm" onClick={async () => {
+                              try {
+                                const { generateOutsideProcessingPO, emailOutsideProcessingPO } = await import('../services/api');
+                                const res = await generateOutsideProcessingPO(id, part.id);
+                                const poData = res.data.data;
+                                showMessage(`PO ${poData.poNumber} generated`);
+                                // Auto-email if vendor has email
+                                if (poData.vendorEmail) {
+                                  const emailRes = await emailOutsideProcessingPO(id, part.id);
+                                  const draftUrl = emailRes.data.data?.draftUrl;
+                                  if (draftUrl) window.open(draftUrl, '_blank');
+                                  showMessage(`PO ${poData.poNumber} draft created in Gmail`);
+                                }
+                                await loadEstimate();
+                              } catch (err) {
+                                setError(err.response?.data?.error?.message || 'Failed to generate PO');
+                              }
+                            }} style={{ background: '#E65100', color: 'white', fontSize: '0.75rem', padding: '3px 8px' }}>
+                              📄 Generate & Email PO
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ fontSize: '0.875rem', marginBottom: 12 }}>
                     {/* Rush Service Display */}
                     {part.partType === 'rush_service' ? (() => {
@@ -3042,6 +3094,18 @@ function EstimateDetailsPage() {
                 )}
               </div>
             </div>
+
+            {/* Outside Processing — available on all part types except fab_service/shop_rate/rush_service */}
+            {!['fab_service', 'shop_rate', 'rush_service'].includes(partData.partType) && (
+              <div style={{ margin: '0 20px 12px' }}>
+                <OutsideProcessingSection
+                  partData={partData}
+                  setPartData={setPartData}
+                  showMessage={showMessage}
+                  setError={setError}
+                />
+              </div>
+            )}
 
             <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>🔄 Rolling</h4>
             <div className="grid grid-2">

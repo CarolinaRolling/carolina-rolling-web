@@ -193,6 +193,8 @@ export const deleteEstimate = (id) => api.delete(`/estimates/${id}`);
 
 // Estimate Parts
 export const addEstimatePart = (estimateId, data) => api.post(`/estimates/${estimateId}/parts`, data);
+export const generateOutsideProcessingPO = (estimateId, partId, notes) => api.post(`/estimates/${estimateId}/parts/${partId}/outside-processing-po`, { notes });
+export const emailOutsideProcessingPO = (estimateId, partId, contactEmail) => api.post(`/estimates/${estimateId}/parts/${partId}/outside-processing-email`, { contactEmail });
 export const updateEstimatePart = (estimateId, partId, data) => api.put(`/estimates/${estimateId}/parts/${partId}`, data);
 export const deleteEstimatePart = (estimateId, partId) => api.delete(`/estimates/${estimateId}/parts/${partId}`);
 
