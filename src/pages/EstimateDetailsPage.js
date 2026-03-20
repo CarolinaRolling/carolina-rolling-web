@@ -9,7 +9,7 @@ import {
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
   getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
-  sendVendorRfq, getVendorContacts, getVendorById
+  sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
@@ -22,6 +22,7 @@ import FlatBarRollForm from '../components/FlatBarRollForm';
 import ChannelRollForm from '../components/ChannelRollForm';
 import BeamRollForm from '../components/BeamRollForm';
 import ConeRollForm from '../components/ConeRollForm';
+import ShapedPlateForm from '../components/ShapedPlateForm';
 import TeeBarRollForm from '../components/TeeBarRollForm';
 import PressBrakeForm from '../components/PressBrakeForm';
 import RushServiceForm from '../components/RushServiceForm';
@@ -29,6 +30,7 @@ import HeatNumberInput from '../components/HeatNumberInput';
 
 const PART_TYPES = {
   plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator' },
+  shaped_plate: { label: 'Shaped Plate', icon: '⭕', desc: 'Round plates, donuts, and custom shapes' },
   cone_roll: { label: 'Cone Layout', icon: '🔺', desc: 'Cone segment design with AutoCAD export' },
   angle_roll: { label: 'Angle Roll', icon: '📐', desc: 'Angle iron rolling' },
   flat_bar: { label: 'Flat & Square Bar', icon: '▬', desc: 'Flat bar and square bar bending' },
@@ -77,6 +79,11 @@ function EstimateDetailsPage() {
   const [rfqSelectedEmail, setRfqSelectedEmail] = useState('');
   const [rfqSelectedParts, setRfqSelectedParts] = useState([]);
   const [rfqSending, setRfqSending] = useState(false);
+  const [showAiParseModal, setShowAiParseModal] = useState(false);
+  const [aiParsing, setAiParsing] = useState(false);
+  const [aiParseResults, setAiParseResults] = useState(null);
+  const [aiParseNotes, setAiParseNotes] = useState('');
+  const [aiAddingParts, setAiAddingParts] = useState(false);
   const pdfPreviewActive = useRef(false);
 
   const [formData, setFormData] = useState({
@@ -864,6 +871,17 @@ function EstimateDetailsPage() {
       if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
     }
 
+    if (partData.partType === 'shaped_plate') {
+      if (!partData.thickness) warnings.push('Thickness is required');
+      const shape = partData._shapeType || 'round';
+      if ((shape === 'round' || shape === 'donut') && !partData.outerDiameter) warnings.push('Outer Diameter (OD) is required');
+      if (shape === 'donut' && !partData._innerDiameter) warnings.push('Inner Diameter (ID) is required');
+      if (shape === 'donut' && partData._innerDiameter && partData.outerDiameter && parseFloat(partData._innerDiameter) >= parseFloat(partData.outerDiameter)) {
+        warnings.push('Inner Diameter must be smaller than Outer Diameter');
+      }
+      if (shape === 'custom' && !partData._customDescription) warnings.push('Shape description is required');
+    }
+
     if (partData.partType === 'flat_stock') {
       if (!partData._stockType) warnings.push('Stock type is required');
       if (partData._stockType === 'plate' && !partData.thickness) warnings.push('Thickness is required');
@@ -1568,6 +1586,12 @@ function EstimateDetailsPage() {
               setShowRfqModal(true);
             }} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#7B1FA2', borderColor: '#7B1FA2' }}>
               📤 RFQ Vendor
+            </button>
+          )}
+          {!isNew && (
+            <button className="btn btn-outline" onClick={() => { setShowAiParseModal(true); setAiParseResults(null); setAiParseNotes(''); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#00838f', borderColor: '#00838f' }}>
+              🤖 Upload to AI
             </button>
           )}
           {!isNew && (
@@ -2706,6 +2730,19 @@ function EstimateDetailsPage() {
                     setError={setError}
                   />
                 </div>
+              ) : partData.partType === 'shaped_plate' ? (
+                <div className="grid grid-2">
+                  <ShapedPlateForm
+                    partData={partData}
+                    setPartData={setPartData}
+                    vendorSuggestions={vendorSuggestions}
+                    setVendorSuggestions={setVendorSuggestions}
+                    showVendorSuggestions={showVendorSuggestions}
+                    setShowVendorSuggestions={setShowVendorSuggestions}
+                    showMessage={showMessage}
+                    setError={setError}
+                  />
+                </div>
               ) : partData.partType === 'angle_roll' ? (
                 <div className="grid grid-2">
                   <AngleRollForm
@@ -3336,6 +3373,186 @@ function EstimateDetailsPage() {
                 <Package size={18} />
                 {converting ? 'Converting...' : `Create Work Order (DR-${useCustomDR ? (customDR || '?') : (nextDR || '...')})`}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Document Parser Modal */}
+      {showAiParseModal && (
+        <div className="modal-overlay" onClick={() => !aiParsing && setShowAiParseModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
+            <div className="modal-header">
+              <h3>🤖 Upload Document to AI</h3>
+              <button className="btn btn-icon" onClick={() => !aiParsing && setShowAiParseModal(false)}><X size={20} /></button>
+            </div>
+            <div style={{ padding: '16px 20px', maxHeight: '70vh', overflowY: 'auto' }}>
+              {!aiParseResults ? (
+                <div>
+                  <p style={{ color: '#555', marginBottom: 16 }}>
+                    Upload a drawing, RFQ, spec sheet, or any document and the AI will read it and extract parts to add to this estimate.
+                  </p>
+                  
+                  {/* File upload area */}
+                  <label style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    padding: 32, border: '2px dashed #00838f', borderRadius: 12, cursor: aiParsing ? 'wait' : 'pointer',
+                    background: '#e0f7fa', minHeight: 120, transition: 'all 0.2s'
+                  }}>
+                    {aiParsing ? (
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '2rem', marginBottom: 8 }}>🔄</div>
+                        <div style={{ fontWeight: 700, color: '#00838f', fontSize: '1.1rem' }}>AI is reading your document...</div>
+                        <div style={{ color: '#888', fontSize: '0.85rem', marginTop: 4 }}>This may take 15-30 seconds</div>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>📄</div>
+                        <div style={{ fontWeight: 600, color: '#00838f', fontSize: '1rem' }}>Click to upload PDF, Image, or Drawing</div>
+                        <div style={{ color: '#888', fontSize: '0.8rem', marginTop: 4 }}>PDF, PNG, JPG — max 50MB</div>
+                      </>
+                    )}
+                    <input type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" hidden disabled={aiParsing}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          setAiParsing(true);
+                          const res = await aiParseDocument(id, file, aiParseNotes);
+                          setAiParseResults(res.data.data);
+                        } catch (err) {
+                          setError(err.response?.data?.error?.message || 'AI parsing failed. Please try again.');
+                          setShowAiParseModal(false);
+                        } finally {
+                          setAiParsing(false);
+                          e.target.value = '';
+                        }
+                      }} />
+                  </label>
+
+                  {/* Optional notes */}
+                  <div className="form-group" style={{ marginTop: 16 }}>
+                    <label className="form-label">Additional context for AI <span style={{ color: '#999', fontWeight: 400 }}>(optional)</span></label>
+                    <textarea className="form-textarea" value={aiParseNotes} onChange={(e) => setAiParseNotes(e.target.value)}
+                      rows={2} placeholder='e.g. "These are all A36 material", "Client wants everything rolled to 48" OD", "Ignore the header row"' />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {/* Results */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#00838f' }}>
+                        🤖 Found {aiParseResults.parts?.length || 0} parts
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                        from {aiParseResults.fileName} • {aiParseResults.documentType || 'document'}
+                      </div>
+                    </div>
+                    <button className="btn btn-sm btn-outline" onClick={() => setAiParseResults(null)}>
+                      ← Upload Another
+                    </button>
+                  </div>
+
+                  {aiParseResults.aiNotes && (
+                    <div style={{ padding: 10, background: '#FFF8E1', borderRadius: 6, marginBottom: 12, fontSize: '0.85rem', color: '#f57f17' }}>
+                      💡 {aiParseResults.aiNotes}
+                    </div>
+                  )}
+
+                  {/* Parts list */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
+                    {(aiParseResults.parts || []).map((p, i) => {
+                      const typeLabel = PART_TYPES[p.partType]?.label || p.partType;
+                      const typeIcon = PART_TYPES[p.partType]?.icon || '📦';
+                      return (
+                        <div key={i} style={{
+                          padding: 12, borderRadius: 8, border: '1px solid #e0e0e0',
+                          background: p.missingFields?.length > 0 ? '#FFF8E1' : '#f9f9f9'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                              <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                                {typeIcon} Part #{p.partNumber} — {typeLabel}
+                              </span>
+                              <span style={{ marginLeft: 8, color: '#666', fontSize: '0.85rem' }}>Qty: {p.quantity || 1}</span>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#555', marginTop: 4 }}>
+                            {p.description || p.formData?._materialDescription || 'No description'}
+                          </div>
+                          {p.specialInstructions && (
+                            <div style={{ fontSize: '0.8rem', color: '#1565c0', marginTop: 2 }}>
+                              📝 {p.specialInstructions}
+                            </div>
+                          )}
+                          {p.missingFields?.length > 0 && (
+                            <div style={{ fontSize: '0.75rem', color: '#e65100', marginTop: 4 }}>
+                              ⚠ Missing: {p.missingFieldNotes || p.missingFields.join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {aiParseResults.notes && (
+                    <div style={{ padding: 10, background: '#f5f5f5', borderRadius: 6, marginTop: 12, fontSize: '0.85rem' }}>
+                      <strong>Notes:</strong> {aiParseResults.notes}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => !aiParsing && setShowAiParseModal(false)} disabled={aiParsing}>Cancel</button>
+              {aiParseResults && aiParseResults.parts?.length > 0 && (
+                <button className="btn" disabled={aiAddingParts}
+                  onClick={async () => {
+                    try {
+                      setAiAddingParts(true);
+                      // Add each part to the estimate
+                      for (const p of aiParseResults.parts) {
+                        const partPayload = {
+                          partNumber: p.partNumber,
+                          partType: p.partType || 'plate_roll',
+                          quantity: parseInt(p.quantity) || 1,
+                          material: p.material || '',
+                          thickness: p.thickness || '',
+                          width: p.width || '',
+                          length: p.length || '',
+                          outerDiameter: p.outerDiameter || '',
+                          wallThickness: p.wallThickness || '',
+                          sectionSize: p.sectionSize || '',
+                          radius: p.radius || '',
+                          diameter: p.diameter || p.outerDiameter || '',
+                          arcDegrees: p.arcDegrees || '',
+                          rollType: p.rollType || '',
+                          flangeOut: p.flangeOut || false,
+                          specialInstructions: p.specialInstructions || '',
+                          clientPartNumber: p.clientPartNumber || '',
+                          materialDescription: p.description || '',
+                          materialSource: p.materialSource || 'customer_supplied',
+                          formData: p.formData || {}
+                        };
+                        await createEstimatePart(id, partPayload);
+                      }
+                      showMessage(`Added ${aiParseResults.parts.length} parts from AI`);
+                      if (aiParseResults.notes && !formData.projectDescription) {
+                        setFormData(prev => ({ ...prev, projectDescription: aiParseResults.notes }));
+                      }
+                      setShowAiParseModal(false);
+                      await loadEstimate();
+                    } catch (err) {
+                      setError('Failed to add parts: ' + (err.response?.data?.error?.message || err.message));
+                    } finally {
+                      setAiAddingParts(false);
+                    }
+                  }}
+                  style={{ background: '#00838f', color: 'white' }}>
+                  {aiAddingParts ? '⏳ Adding...' : `✅ Add ${aiParseResults.parts.length} Parts to Estimate`}
+                </button>
+              )}
             </div>
           </div>
         </div>

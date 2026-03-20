@@ -211,6 +211,15 @@ export const uploadEstimatePartFile = (estimateId, partId, fileOrFiles, fileType
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 };
+export const aiParseDocument = (estimateId, file, additionalNotes = '') => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (additionalNotes) formData.append('additionalNotes', additionalNotes);
+  return api.post(`/estimates/${estimateId}/ai-parse-document`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000 // 2 min for AI processing
+  });
+};
 export const deleteEstimatePartFile = (estimateId, partId, fileId) => 
   api.delete(`/estimates/${estimateId}/parts/${partId}/files/${fileId}`);
 
@@ -393,6 +402,16 @@ export const sendVendorRfq = (estimateId, data) => api.post(`/email-scanner/vend
 export const getVendorContacts = (vendorId) => api.get(`/email-scanner/vendor-contacts/${vendorId}`);
 export const getVendorById = (vendorId) => api.get(`/vendors/${vendorId}`);
 export const sendVendorPo = (workOrderId, data) => api.post(`/email-scanner/vendor-po/${workOrderId}`, data);
+export const parseDocumentWithAI = (file, clientName, parsingNotes) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (clientName) formData.append('clientName', clientName);
+  if (parsingNotes) formData.append('parsingNotes', parsingNotes);
+  return api.post('/email-scanner/parse-document', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000 // 60s timeout for AI processing
+  });
+};
 export const getEmailNotifications = () => api.get('/email-scanner/notifications');
 export const dismissEmailNotification = (id) => api.post(`/email-scanner/notifications/${id}/dismiss`);
 export const getMonitoredClients = () => api.get('/email-scanner/monitored-clients');
