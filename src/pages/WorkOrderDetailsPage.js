@@ -2509,22 +2509,54 @@ function WorkOrderDetailsPage() {
           if (missingPOs.length === 0) return null;
           return (
             <div style={{ marginTop: 12, padding: 12, background: '#ffebee', borderRadius: 8, border: '1px solid #ef9a9a' }}>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#c62828', marginBottom: 8 }}>Missing PO Documents</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#c62828' }}>Missing PO Documents</div>
+                <button onClick={async () => {
+                  if (!window.confirm('Clear PO numbers from these parts? The parts will keep their vendor but the PO assignment will be removed.')) return;
+                  try {
+                    for (const po of missingPOs) {
+                      const affectedParts = (order.parts || []).filter(p => p.materialPurchaseOrderNumber === po);
+                      for (const part of affectedParts) {
+                        await updateWorkOrderPart(id, part.id, { materialPurchaseOrderNumber: null, materialOrdered: false, materialOrderedAt: null });
+                      }
+                    }
+                    showMessage('PO assignments cleared');
+                    await loadOrder();
+                  } catch (err) { setError('Failed to clear POs'); }
+                }} style={{ background: 'none', border: '1px solid #ef9a9a', color: '#c62828', padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '0.8rem' }}>
+                  ✕ Dismiss All
+                </button>
+              </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {missingPOs.map(po => (
-                  <button key={po} onClick={async () => {
-                    try {
-                      await createPODocument(id, po);
-                      showMessage(`${po} PDF regenerated`);
-                      await loadOrder();
-                    } catch (err) {
-                      setError(`Failed to regenerate ${po}: ${err.response?.data?.error?.message || err.message}`);
-                    }
-                  }} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid #ef9a9a', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: '0.85rem' }}>
-                    <RefreshCw size={14} color="#c62828" />
-                    <strong style={{ color: '#c62828' }}>{po}</strong>
-                    <span style={{ color: '#666' }}>— Regenerate PDF</span>
-                  </button>
+                  <div key={po} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <button onClick={async () => {
+                      try {
+                        await createPODocument(id, po);
+                        showMessage(`${po} PDF regenerated`);
+                        await loadOrder();
+                      } catch (err) {
+                        setError(`Failed to regenerate ${po}: ${err.response?.data?.error?.message || err.message}`);
+                      }
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid #ef9a9a', borderRadius: '6px 0 0 6px', padding: '6px 12px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      <RefreshCw size={14} color="#c62828" />
+                      <strong style={{ color: '#c62828' }}>{po}</strong>
+                      <span style={{ color: '#666' }}>— Regenerate</span>
+                    </button>
+                    <button onClick={async () => {
+                      try {
+                        const affectedParts = (order.parts || []).filter(p => p.materialPurchaseOrderNumber === po);
+                        for (const part of affectedParts) {
+                          await updateWorkOrderPart(id, part.id, { materialPurchaseOrderNumber: null, materialOrdered: false, materialOrderedAt: null });
+                        }
+                        showMessage(`${po} cleared from parts`);
+                        await loadOrder();
+                      } catch (err) { setError('Failed to clear PO'); }
+                    }} style={{ background: 'white', border: '1px solid #ef9a9a', borderLeft: 'none', borderRadius: '0 6px 6px 0', padding: '6px 8px', cursor: 'pointer', color: '#999', fontSize: '0.85rem' }}
+                      title={`Remove ${po} from parts`}>
+                      ✕
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

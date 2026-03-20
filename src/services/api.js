@@ -190,6 +190,9 @@ export const getEstimateById = (id) => api.get(`/estimates/${id}`);
 export const createEstimate = (data) => api.post('/estimates', data);
 export const updateEstimate = (id, data) => api.put(`/estimates/${id}`, data);
 export const deleteEstimate = (id) => api.delete(`/estimates/${id}`);
+export const restoreEstimate = (id) => api.post(`/estimates/${id}/restore`);
+export const permanentDeleteEstimate = (id) => api.delete(`/estimates/${id}/permanent`);
+export const getEstimateTrash = () => api.get('/estimates/trash');
 
 // Estimate Parts
 export const addEstimatePart = (estimateId, data) => api.post(`/estimates/${estimateId}/parts`, data);
