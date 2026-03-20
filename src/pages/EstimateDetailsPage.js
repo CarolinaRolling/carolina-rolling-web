@@ -2440,7 +2440,8 @@ function EstimateDetailsPage() {
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
             </div>
           </div>
-        </div>
+          </>
+          )}
 
           {/* ===== MATERIALS TAB ===== */}
           {!isNew && estimateTab === 'materials' && (
