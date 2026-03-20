@@ -1926,7 +1926,7 @@ function EstimateDetailsPage() {
                 { key: 'materials', label: '📋 Materials' },
                 { key: 'summary', label: '📊 Summary' }
               ].map(tab => (
-                <button key={tab.key} onClick={() => setEstimateTab(tab.key)}
+                <button key={tab.key} onClick={(e) => { e.preventDefault(); const y = window.scrollY; setEstimateTab(tab.key); requestAnimationFrame(() => window.scrollTo(0, y)); }}
                   style={{
                     padding: '10px 20px', border: 'none', cursor: 'pointer',
                     background: estimateTab === tab.key ? '#1976d2' : 'transparent',
