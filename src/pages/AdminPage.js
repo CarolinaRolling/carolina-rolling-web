@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import SectionSizesPage from './SectionSizesPage';
 
 // Global error log for NAS uploads
 window.nasErrorLog = window.nasErrorLog || [];
@@ -34,7 +35,7 @@ function AdminPage({ section = 'users-logs' }) {
   // Tab groups by section
   const SECTION_TABS = {
     'users-logs': ['users', 'logs', 'schedule', 'apikeys', 'system'],
-    'shop-config': ['tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates', 'printer', 'scrap', 'emailscanner']
+    'shop-config': ['tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates', 'sectionsizes', 'printer', 'scrap', 'emailscanner']
   };
   const allowedTabs = SECTION_TABS[section] || SECTION_TABS['users-logs'];
   const [activeTab, setActiveTab] = useState(() => {
@@ -181,6 +182,8 @@ function AdminPage({ section = 'users-logs' }) {
       loadScrapConfig();
     } else if (activeTab === 'emailscanner') {
       loadEmailScanner();
+    } else if (activeTab === 'sectionsizes') {
+      setLoading(false); // SectionSizesPage handles its own loading
     }
   }, [activeTab, logsPage]);
 
@@ -980,6 +983,7 @@ function AdminPage({ section = 'users-logs' }) {
           <button className={`tab ${activeTab === 'mandreldies' ? 'active' : ''}`} onClick={() => setActiveTab('mandreldies')}>⚙️ Mandrel Dies</button>
           <button className={`tab ${activeTab === 'grades' ? 'active' : ''}`} onClick={() => setActiveTab('grades')}>📊 Material Grades</button>
           <button className={`tab ${activeTab === 'weldrates' ? 'active' : ''}`} onClick={() => setActiveTab('weldrates')}>🔥 Weld Rates</button>
+          <button className={`tab ${activeTab === 'sectionsizes' ? 'active' : ''}`} onClick={() => setActiveTab('sectionsizes')}>📐 Section Sizes</button>
           <button className={`tab ${activeTab === 'printer' ? 'active' : ''}`} onClick={() => setActiveTab('printer')}>🖨️ Printer</button>
           <button className={`tab ${activeTab === 'scrap' ? 'active' : ''}`} onClick={() => setActiveTab('scrap')}>♻️ Scrap</button>
           <button className={`tab ${activeTab === 'emailscanner' ? 'active' : ''}`} onClick={() => setActiveTab('emailscanner')}>📧 Email Scanner</button>
@@ -1508,6 +1512,9 @@ function AdminPage({ section = 'users-logs' }) {
             </div>
           </div>
         </div>
+
+      ) : activeTab === 'sectionsizes' ? (
+        <SectionSizesPage embedded={true} />
 
       ) : activeTab === 'schedule' ? (
         <div>

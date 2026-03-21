@@ -1889,7 +1889,7 @@ function WorkOrderDetailsPage() {
       )}
       <div className="detail-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button className="btn btn-icon btn-secondary" onClick={() => navigate('/inventory')}><ArrowLeft size={20} /></button>
+          <button className="btn btn-icon btn-secondary" onClick={() => navigate(-1)}><ArrowLeft size={20} /></button>
           <div>
             {order.drNumber ? (
               <h1 className="detail-title" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

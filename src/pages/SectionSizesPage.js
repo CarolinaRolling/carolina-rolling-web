@@ -94,7 +94,7 @@ const TABS = [
   { key: 'sq_rect_tube', label: 'Sq/Rect Tube', icon: '⬜', hint: 'Format: Side1xSide2 (e.g. 2x2 for square, 2x4 for rect)' }
 ];
 
-function SectionSizesPage() {
+function SectionSizesPage({ embedded = false }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('angle');
   const [sizes, setSizes] = useState({});
@@ -110,6 +110,9 @@ function SectionSizesPage() {
   const [newPipeOD, setNewPipeOD] = useState('');
   const [newPipeType, setNewPipeType] = useState('tube');
   const [newPipeLength, setNewPipeLength] = useState("20'");
+  const [dragKey, setDragKey] = useState(null);
+  const [dragIdx, setDragIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -181,6 +184,17 @@ function SectionSizesPage() {
     setSizes({ ...sizes, [key]: current });
   };
 
+  const handleDrop = (key, fromIdx, toIdx) => {
+    if (fromIdx === toIdx) return;
+    const current = [...(sizes[key] || [])];
+    const [item] = current.splice(fromIdx, 1);
+    current.splice(toIdx, 0, item);
+    setSizes({ ...sizes, [key]: current });
+    setDragIdx(null);
+    setDragOverIdx(null);
+    setDragKey(null);
+  };
+
   // ─── Sq/Rect tube helpers ───
   const addSqRect = (subKey, value) => {
     if (!value || !value.trim()) return;
@@ -200,6 +214,26 @@ function SectionSizesPage() {
     list.splice(idx, 1);
     current[subKey] = list;
     setSizes({ ...sizes, sq_rect_tube: current });
+  };
+
+  const handleDropSqRect = (subKey, fromIdx, toIdx) => {
+    if (fromIdx === toIdx) return;
+    const current = { ...(sizes.sq_rect_tube || DEFAULTS.sq_rect_tube) };
+    const list = [...(current[subKey] || [])];
+    const [item] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, item);
+    current[subKey] = list;
+    setSizes({ ...sizes, sq_rect_tube: current });
+    setDragIdx(null); setDragOverIdx(null); setDragKey(null);
+  };
+
+  const handleDropPipe = (fromIdx, toIdx) => {
+    if (fromIdx === toIdx) return;
+    const current = [...(sizes.pipe || [])];
+    const [item] = current.splice(fromIdx, 1);
+    current.splice(toIdx, 0, item);
+    setSizes({ ...sizes, pipe: current });
+    setDragIdx(null); setDragOverIdx(null); setDragKey(null);
   };
 
   // ─── Pipe/Tube helpers ───
@@ -249,11 +283,21 @@ function SectionSizesPage() {
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {items.map((item, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 6,
-              padding: '6px 10px', fontSize: '0.85rem'
-            }}>
+            <div key={i}
+              draggable
+              onDragStart={() => { setDragKey(key); setDragIdx(i); }}
+              onDragOver={(e) => { e.preventDefault(); if (dragKey === key) setDragOverIdx(i); }}
+              onDrop={() => { if (dragKey === key) handleDrop(key, dragIdx, i); }}
+              onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); setDragKey(null); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: dragKey === key && dragOverIdx === i ? '#bbdefb' : '#f5f5f5',
+                border: dragKey === key && dragOverIdx === i ? '2px solid #1976d2' : '1px solid #ddd', borderRadius: 6,
+                padding: '6px 8px', fontSize: '0.85rem', cursor: 'grab',
+                opacity: dragKey === key && dragIdx === i ? 0.4 : 1,
+                transition: 'background 0.1s'
+              }}>
+              <GripVertical size={12} style={{ color: '#999', flexShrink: 0 }} />
               <span style={{ fontWeight: 500 }}>{item}</span>
               <button onClick={() => removeSimple(key, i)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d32f2f', padding: 0, display: 'flex' }}>
@@ -285,11 +329,20 @@ function SectionSizesPage() {
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
           {(data.square || []).map((item, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 6,
-              padding: '6px 10px', fontSize: '0.85rem'
-            }}>
+            <div key={i}
+              draggable
+              onDragStart={() => { setDragKey('sq'); setDragIdx(i); }}
+              onDragOver={(e) => { e.preventDefault(); if (dragKey === 'sq') setDragOverIdx(i); }}
+              onDrop={() => { if (dragKey === 'sq') handleDropSqRect('square', dragIdx, i); }}
+              onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); setDragKey(null); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: dragKey === 'sq' && dragOverIdx === i ? '#bbdefb' : '#e3f2fd',
+                border: dragKey === 'sq' && dragOverIdx === i ? '2px solid #1976d2' : '1px solid #90caf9', borderRadius: 6,
+                padding: '6px 8px', fontSize: '0.85rem', cursor: 'grab',
+                opacity: dragKey === 'sq' && dragIdx === i ? 0.4 : 1
+              }}>
+              <GripVertical size={12} style={{ color: '#999', flexShrink: 0 }} />
               <span style={{ fontWeight: 500 }}>{item}</span>
               <button onClick={() => removeSqRect('square', i)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d32f2f', padding: 0, display: 'flex' }}>
@@ -312,11 +365,20 @@ function SectionSizesPage() {
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {(data.rectangular || []).map((item, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 6,
-              padding: '6px 10px', fontSize: '0.85rem'
-            }}>
+            <div key={i}
+              draggable
+              onDragStart={() => { setDragKey('rect'); setDragIdx(i); }}
+              onDragOver={(e) => { e.preventDefault(); if (dragKey === 'rect') setDragOverIdx(i); }}
+              onDrop={() => { if (dragKey === 'rect') handleDropSqRect('rectangular', dragIdx, i); }}
+              onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); setDragKey(null); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: dragKey === 'rect' && dragOverIdx === i ? '#ffe0b2' : '#fff3e0',
+                border: dragKey === 'rect' && dragOverIdx === i ? '2px solid #e65100' : '1px solid #ffcc80', borderRadius: 6,
+                padding: '6px 8px', fontSize: '0.85rem', cursor: 'grab',
+                opacity: dragKey === 'rect' && dragIdx === i ? 0.4 : 1
+              }}>
+              <GripVertical size={12} style={{ color: '#999', flexShrink: 0 }} />
               <span style={{ fontWeight: 500 }}>{item}</span>
               <button onClick={() => removeSqRect('rectangular', i)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d32f2f', padding: 0, display: 'flex' }}>
@@ -346,11 +408,20 @@ function SectionSizesPage() {
           {groupItems.map((item) => {
             const globalIdx = items.indexOf(item);
             return (
-              <div key={globalIdx} style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 6,
-                padding: '6px 10px', fontSize: '0.85rem'
-              }}>
+              <div key={globalIdx}
+                draggable
+                onDragStart={() => { setDragKey('pipe'); setDragIdx(globalIdx); }}
+                onDragOver={(e) => { e.preventDefault(); if (dragKey === 'pipe') setDragOverIdx(globalIdx); }}
+                onDrop={() => { if (dragKey === 'pipe') handleDropPipe(dragIdx, globalIdx); }}
+                onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); setDragKey(null); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  background: dragKey === 'pipe' && dragOverIdx === globalIdx ? '#bbdefb' : '#f5f5f5',
+                  border: dragKey === 'pipe' && dragOverIdx === globalIdx ? '2px solid #1976d2' : '1px solid #ddd', borderRadius: 6,
+                  padding: '6px 8px', fontSize: '0.85rem', cursor: 'grab',
+                  opacity: dragKey === 'pipe' && dragIdx === globalIdx ? 0.4 : 1
+                }}>
+                <GripVertical size={12} style={{ color: '#999', flexShrink: 0 }} />
                 <span style={{ fontWeight: 500 }}>{item.label}</span>
                 <span style={{ color: '#999', fontSize: '0.75rem' }}>OD: {item.od}"</span>
                 <button onClick={() => removePipe(globalIdx)}
@@ -407,8 +478,9 @@ function SectionSizesPage() {
   };
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: 20 }}>
+    <div style={embedded ? {} : { maxWidth: 1000, margin: '0 auto', padding: 20 }}>
       {/* Header */}
+      {!embedded && (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button className="btn btn-outline" onClick={() => navigate('/admin/settings')} style={{ padding: '6px 10px' }}>
@@ -420,6 +492,14 @@ function SectionSizesPage() {
           <Save size={18} /> {saving ? 'Saving...' : 'Save All'}
         </button>
       </div>
+      )}
+      {embedded && (
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <button className="btn btn-primary btn-sm" onClick={handleSaveAll} disabled={saving}>
+          <Save size={18} /> {saving ? 'Saving...' : 'Save All'}
+        </button>
+      </div>
+      )}
 
       {message && (
         <div style={{
