@@ -4,7 +4,7 @@ import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-const InvoiceCenterPage = () => {
+const InvoiceCenterPage = ({ embedded = false }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('queue');
   const [queue, setQueue] = useState([]);
@@ -170,10 +170,17 @@ const InvoiceCenterPage = () => {
 
   return (
     <div>
+      {!embedded && (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h1 className="page-title">Invoice Center</h1>
         <input type="text" className="form-input" placeholder="Search..." style={{ width: 260 }} value={search} onChange={e => setSearch(e.target.value)} />
       </div>
+      )}
+      {embedded && (
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <input type="text" className="form-input" placeholder="Search..." style={{ width: 260 }} value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
+      )}
 
       {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error} <button onClick={() => setError('')} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer' }}>x</button></div>}
       {success && <div className="alert alert-success" style={{ marginBottom: 12 }}>{success} <button onClick={() => setSuccess('')} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer' }}>x</button></div>}

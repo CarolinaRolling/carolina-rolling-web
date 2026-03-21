@@ -462,3 +462,23 @@ export const voidInvoiceNumber = (id, reason) => api.post(`/quickbooks/invoice-n
 export const createManualInvoiceNumber = (data) => api.post('/quickbooks/invoice-numbers/manual', data);
 export const emailInvoice = (id, email) => api.post(`/workorders/${id}/email-invoice`, { email });
 export const repairPricing = () => api.post('/workorders/repair-pricing');
+
+// ============= BUSINESS =============
+// Liabilities
+export const getLiabilities = (params) => api.get('/business/liabilities', { params });
+export const getLiabilitySummary = () => api.get('/business/liabilities/summary');
+export const createLiability = (data) => api.post('/business/liabilities', data);
+export const updateLiability = (id, data) => api.put(`/business/liabilities/${id}`, data);
+export const payLiability = (id, data) => api.post(`/business/liabilities/${id}/pay`, data);
+export const deleteLiability = (id) => api.delete(`/business/liabilities/${id}`);
+// Employees
+export const getEmployees = (params) => api.get('/business/employees', { params });
+export const createEmployee = (data) => api.post('/business/employees', data);
+export const updateEmployee = (id, data) => api.put(`/business/employees/${id}`, data);
+export const deleteEmployee = (id) => api.delete(`/business/employees/${id}`);
+// Payroll
+export const getPayrolls = () => api.get('/business/payroll');
+export const createPayroll = (data) => api.post('/business/payroll', data);
+export const getPayroll = (id) => api.get(`/business/payroll/${id}`);
+export const updatePayrollEntry = (payrollId, entryId, data) => api.put(`/business/payroll/${payrollId}/entries/${entryId}`, data);
+export const submitPayroll = (id, data) => api.post(`/business/payroll/${id}/submit`, data);

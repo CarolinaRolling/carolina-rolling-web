@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, AlertTriangle, Trash2, RefreshCw, Save, Unlock, Search, Edit2 } from 'lucide-react';
 import { getPONumbers, getPONumberStats, setNextPONumber, voidPONumber, releasePONumber, reassignPONumber, getVoidedPONumbers } from '../services/api';
 
-function PONumbersPage() {
+function PONumbersPage({ embedded = false }) {
   const navigate = useNavigate();
   const [stats, setStats] = useState({ lastUsed: 0, nextNumber: 1, voidedCount: 0, activeCount: 0 });
   const [activePOs, setActivePOs] = useState([]);
@@ -120,10 +120,13 @@ function PONumbersPage() {
 
   return (
     <div>
+      {!embedded && (
       <div className="page-header">
         <h1 className="page-title"><ShoppingCart size={28} style={{ marginRight: 8 }} /> PO Number Management</h1>
         <button className="btn btn-outline" onClick={loadData}><RefreshCw size={18} /> Refresh</button>
       </div>
+      )}
+      {embedded && <h3 style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}><ShoppingCart size={18} /> PO Numbers</h3>}
 
       {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}<button style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setError(null)}>×</button></div>}
       {success && <div className="alert alert-success" style={{ marginBottom: 16 }}>{success}</div>}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getInvoiceNumbers, voidInvoiceNumber, getNextInvoiceNumber, setNextInvoiceNumber, createManualInvoiceNumber } from '../services/api';
 
-const InvoiceNumbersPage = () => {
+const InvoiceNumbersPage = ({ embedded = false }) => {
   const navigate = useNavigate();
   const [invoiceNumbers, setInvoiceNumbers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -88,11 +88,14 @@ const InvoiceNumbersPage = () => {
 
   return (
     <div>
+      {!embedded && (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h1 className="page-title">📄 Invoice Numbers</h1>
         <input type="text" className="form-input" placeholder="Search by invoice#, client, DR#..." style={{ width: 280 }}
           value={search} onChange={e => setSearch(e.target.value)} />
       </div>
+      )}
+      {embedded && <h3 style={{ marginBottom: 12 }}>📄 Invoice Numbers</h3>}
 
       {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error} <button onClick={() => setError('')} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer' }}>×</button></div>}
       {success && <div className="alert alert-success" style={{ marginBottom: 12 }}>{success} <button onClick={() => setSuccess('')} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer' }}>×</button></div>}

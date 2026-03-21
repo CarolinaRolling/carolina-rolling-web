@@ -28,6 +28,7 @@ import AutoCADToolsPage from './pages/AutoCADToolsPage';
 import ShipmentsAdminPage from './pages/ShipmentsAdminPage';
 import ShopSuppliesPage from './pages/ShopSuppliesPage';
 import InvoiceCenterPage from './pages/InvoiceCenterPage';
+import BusinessPage from './pages/BusinessPage';
 import SectionSizesPage from './pages/SectionSizesPage';
 import './App.css';
 
@@ -163,6 +164,12 @@ function AppRoutes() {
       <Route path="/invoicing" element={
         <ProtectedRoute>
           <Layout><InvoiceCenterPage /></Layout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/business" element={
+        <ProtectedRoute>
+          <Layout><BusinessPage /></Layout>
         </ProtectedRoute>
       } />
       

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, DollarSign, Database, Hash, ShoppingCart, FileCode, Truck, Users, Wrench, FileText } from 'lucide-react';
+import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, DollarSign, Database, Hash, ShoppingCart, FileCode, Truck, Users, Wrench, FileText, Briefcase } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
 import TodoBar from './TodoBar';
@@ -64,6 +64,7 @@ function Layout({ children }) {
             <li><NavLink to="/clients-vendors" className={({ isActive }) => isActive ? 'active' : ''}><Users size={20} /><span>Clients & Vendors</span></NavLink></li>
             <li><NavLink to="/shop-supplies" className={({ isActive }) => isActive ? 'active' : ''}><Package size={20} /><span>Shop Supplies</span></NavLink></li>
             <li><NavLink to="/invoicing" className={({ isActive }) => isActive ? 'active' : ''}><FileText size={20} /><span>Invoice Center</span></NavLink></li>
+            <li><NavLink to="/business" className={({ isActive }) => isActive ? 'active' : ''}><Briefcase size={20} /><span>Business Center</span></NavLink></li>
             {isAdmin() && (
               <>
                 <li style={{ 
@@ -74,9 +75,6 @@ function Layout({ children }) {
                 }}>
                   Admin
                 </li>
-                <li><NavLink to="/admin/dr-numbers" className={({ isActive }) => isActive ? 'active' : ''}><Hash size={20} /><span>DR Numbers</span></NavLink></li>
-                <li><NavLink to="/admin/po-numbers" className={({ isActive }) => isActive ? 'active' : ''}><Hash size={20} /><span>PO Numbers</span></NavLink></li>
-                <li><NavLink to="/admin/invoice-numbers" className={({ isActive }) => isActive ? 'active' : ''}><FileText size={20} /><span>Invoice Numbers</span></NavLink></li>
                 <li><NavLink to="/admin/users-logs" className={({ isActive }) => isActive ? 'active' : ''}><Shield size={20} /><span>Users & Logs</span></NavLink></li>
                 <li><NavLink to="/admin/shop-config" className={({ isActive }) => isActive ? 'active' : ''}><Wrench size={20} /><span>Shop Config</span></NavLink></li>
                 <li><NavLink to="/admin/settings" className={({ isActive }) => isActive ? 'active' : ''}><Settings size={20} /><span>Settings</span></NavLink></li>

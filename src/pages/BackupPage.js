@@ -368,14 +368,14 @@ function BackupPage() {
           Scheduled Auto-Backup
         </h3>
         <p style={{ fontSize: '0.9rem', color: '#333', marginBottom: 8 }}>
-          Database backups run automatically <strong>every Friday at midnight Pacific</strong> and are stored on Cloudinary. For a full backup with PDFs & CAD files, use the manual download above with "Include Files" checked.
+          Database backups run automatically <strong>every Saturday at 11 PM Pacific</strong> and are stored on Cloudinary. 2 months of weekly backups are kept. For a full backup with PDFs & CAD files, use the manual download above with "Include Files" checked.
         </p>
         
         {/* Run Now */}
         <div style={{ background: 'white', borderRadius: 8, padding: 16, border: '1px solid #e0e0e0', marginBottom: 12 }}>
           <div style={{ fontWeight: 600, marginBottom: 8 }}>Run Cloud Backup Now</div>
           <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: 10 }}>
-            Upload a database backup to Cloudinary now (same as the Friday auto-backup). You'll get an email when it's done.
+            Upload a database backup to Cloudinary now (same as the Saturday auto-backup).
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <input type="email" className="form-input" placeholder="Email for notification"
@@ -393,27 +393,80 @@ function BackupPage() {
           )}
         </div>
 
-        {backupInfo?.lastAutoBackup && (
-          <div style={{ background: 'white', borderRadius: 6, padding: 12, fontSize: '0.85rem', border: '1px solid #e0e0e0', marginBottom: 12 }}>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Last Auto-Backup</div>
-            <div style={{ color: '#666' }}>
-              {new Date(backupInfo.lastAutoBackup.createdAt).toLocaleString()} — {((backupInfo.lastAutoBackup.size || 0) / 1024).toFixed(0)}KB compressed
-              {backupInfo.lastAutoBackup.duration && ` — ${backupInfo.lastAutoBackup.duration}`}
-            </div>
-          </div>
-        )}
-        {backupInfo?.cloudBackups?.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: 6 }}>Recent Cloud Backups ({backupInfo.cloudBackups.length})</div>
-            {backupInfo.cloudBackups.slice(0, 5).map((b, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #eee', fontSize: '0.8rem' }}>
-                <span style={{ color: '#666' }}>{new Date(b.createdAt).toLocaleString()}</span>
-                <span style={{ color: '#888' }}>{((b.size || 0) / 1024).toFixed(0)}KB</span>
-                <a href={b.url} target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 600 }}>Download</a>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Backup History */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 12 }}>📋 Backup History</div>
+          {(() => {
+            // Merge history (has counts) with cloud backups (has URLs)
+            const history = backupInfo?.backupHistory || [];
+            const cloudMap = {};
+            (backupInfo?.cloudBackups || []).forEach(b => { cloudMap[b.createdAt] = b; });
+            
+            // Also include cloud backups not in history
+            const allBackups = [...history];
+            (backupInfo?.cloudBackups || []).forEach(b => {
+              if (!history.some(h => h.url === b.url)) {
+                allBackups.push({ createdAt: b.createdAt, size: b.size, url: b.url });
+              }
+            });
+            allBackups.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const unique = allBackups.filter((b, i, arr) => i === 0 || b.url !== arr[i-1]?.url);
+
+            if (unique.length === 0) {
+              return <div style={{ color: '#888', fontSize: '0.9rem', padding: 16, textAlign: 'center' }}>No cloud backups yet. Run your first backup above.</div>;
+            }
+
+            return unique.map((b, i) => {
+              const date = new Date(b.createdAt);
+              const sizeKB = ((b.size || 0) / 1024).toFixed(0);
+              const counts = b.counts || {};
+              const totalRecords = Object.values(counts).reduce((s, c) => s + (c || 0), 0);
+              const downloadUrl = b.url || cloudMap[b.createdAt]?.url;
+              
+              return (
+                <div key={i} style={{
+                  background: i === 0 ? '#e8f5e9' : 'white', border: `1px solid ${i === 0 ? '#66bb6a' : '#e0e0e0'}`,
+                  borderRadius: 8, padding: '12px 16px', marginBottom: 8
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: counts && Object.keys(counts).length > 0 ? 8 : 0 }}>
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                        {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                      <span style={{ color: '#888', marginLeft: 8, fontSize: '0.85rem' }}>
+                        {date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                      </span>
+                      <span style={{ color: '#555', marginLeft: 12, fontSize: '0.85rem' }}>
+                        {sizeKB}KB
+                      </span>
+                      {b.duration && <span style={{ color: '#888', marginLeft: 8, fontSize: '0.8rem' }}>({b.duration})</span>}
+                      {i === 0 && <span style={{ marginLeft: 8, background: '#2e7d32', color: 'white', padding: '1px 8px', borderRadius: 10, fontSize: '0.75rem', fontWeight: 600 }}>Latest</span>}
+                    </div>
+                    {downloadUrl && (
+                      <a href={downloadUrl} target="_blank" rel="noopener noreferrer"
+                        style={{ background: '#1976d2', color: 'white', padding: '6px 14px', borderRadius: 6, textDecoration: 'none', fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                        ⬇ Download
+                      </a>
+                    )}
+                  </div>
+                  {counts && Object.keys(counts).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', fontSize: '0.8rem', color: '#666' }}>
+                      {totalRecords > 0 && <span style={{ fontWeight: 600, color: '#333' }}>{totalRecords} records:</span>}
+                      {counts.clients > 0 && <span>👤 {counts.clients} clients</span>}
+                      {counts.workOrders > 0 && <span>📦 {counts.workOrders} WOs</span>}
+                      {counts.estimates > 0 && <span>📋 {counts.estimates} estimates</span>}
+                      {counts.shipments > 0 && <span>🚚 {counts.shipments} shipments</span>}
+                      {counts.drNumbers > 0 && <span>DR: {counts.drNumbers}</span>}
+                      {counts.poNumbers > 0 && <span>PO: {counts.poNumbers}</span>}
+                      {counts.users > 0 && <span>👥 {counts.users} users</span>}
+                      {counts.settings > 0 && <span>⚙️ {counts.settings} settings</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()}
+        </div>
       </div>
     </div>
   );
