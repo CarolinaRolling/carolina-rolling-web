@@ -11,7 +11,14 @@ function WorkOrdersPage() {
   const [error, setError] = useState(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => {
+    return sessionStorage.getItem('wo_search') || '';
+  });
+  const updateSearch = (val) => {
+    setSearchQuery(val);
+    if (val) sessionStorage.setItem('wo_search', val);
+    else sessionStorage.removeItem('wo_search');
+  };
   const [statusFilter, setStatusFilter] = useState(() => {
     return localStorage.getItem('workorders_statusFilter') || 'all';
   });
@@ -102,6 +109,17 @@ function WorkOrdersPage() {
     }, 400); // debounce
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Restore scroll position when returning from a WO detail page
+  useEffect(() => {
+    if (!loading && orders.length > 0) {
+      const savedScroll = sessionStorage.getItem('wo_scroll');
+      if (savedScroll) {
+        requestAnimationFrame(() => window.scrollTo(0, parseInt(savedScroll)));
+        sessionStorage.removeItem('wo_scroll');
+      }
+    }
+  }, [loading, orders.length]);
 
   const loadOrders = async (silent = false) => {
     try {
@@ -290,7 +308,7 @@ function WorkOrdersPage() {
                 className="form-input"
                 placeholder="Search by client, DR#, PO#..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => updateSearch(e.target.value)}
                 style={{ paddingLeft: 40 }}
               />
             </div>
@@ -346,7 +364,7 @@ function WorkOrdersPage() {
             <div
               key={order.id}
               className="card"
-              onClick={() => navigate(`/workorders/${order.id}`)}
+              onClick={() => { sessionStorage.setItem('wo_scroll', window.scrollY); navigate(`/workorders/${order.id}`); }}
               style={{
                 cursor: 'pointer',
                 transition: 'transform 0.15s, box-shadow 0.15s',

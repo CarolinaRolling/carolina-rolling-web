@@ -214,7 +214,6 @@ function EstimatesPage() {
         }}>
           <Trash2 size={14} style={{ marginRight: 4 }} />
           Trash
-          {trashEstimates.length > 0 && <span style={{ marginLeft: 4, background: '#c62828', color: 'white', borderRadius: 10, padding: '1px 6px', fontSize: '0.75rem' }}>{trashEstimates.length}</span>}
         </button>
       </div>
 
@@ -315,15 +314,19 @@ function EstimatesPage() {
           )}
           {!showArchived && (
             <div className="tabs" style={{ marginBottom: 0, borderBottom: 'none', paddingBottom: 0 }}>
-              {['all', 'draft', 'sent', 'declined'].map(status => (
+              {['all', 'draft', 'sent', 'declined'].map(status => {
+                const count = status === 'all' ? estimates.length : estimates.filter(e => e.status === status).length;
+                return (
                 <button
                   key={status}
                   className={`tab ${statusFilter === status ? 'active' : ''}`}
                   onClick={() => setStatusFilter(status)}
                 >
                   {status.charAt(0).toUpperCase() + status.slice(1)}
+                  {status !== 'all' && count > 0 && <span style={{ marginLeft: 4, fontSize: '0.75rem', opacity: 0.7 }}>({count})</span>}
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
           {showArchived && (
