@@ -9,6 +9,7 @@ import {
 import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import SectionSizesPage from './SectionSizesPage';
+import SettingsPage from './SettingsPage';
 
 // Global error log for NAS uploads
 window.nasErrorLog = window.nasErrorLog || [];
@@ -35,7 +36,7 @@ function AdminPage({ section = 'users-logs' }) {
   // Tab groups by section
   const SECTION_TABS = {
     'users-logs': ['users', 'logs', 'schedule', 'apikeys', 'system'],
-    'shop-config': ['tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates', 'sectionsizes', 'printer', 'scrap', 'emailscanner']
+    'shop-config': ['general', 'tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates', 'sectionsizes', 'printer', 'scrap', 'emailscanner']
   };
   const allowedTabs = SECTION_TABS[section] || SECTION_TABS['users-logs'];
   const [activeTab, setActiveTab] = useState(() => {
@@ -183,7 +184,9 @@ function AdminPage({ section = 'users-logs' }) {
     } else if (activeTab === 'emailscanner') {
       loadEmailScanner();
     } else if (activeTab === 'sectionsizes') {
-      setLoading(false); // SectionSizesPage handles its own loading
+      setLoading(false);
+    } else if (activeTab === 'general') {
+      setLoading(false); // SettingsPage handles its own loading
     }
   }, [activeTab, logsPage]);
 
@@ -964,7 +967,7 @@ function AdminPage({ section = 'users-logs' }) {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">{section === 'shop-config' ? '🔧 Shop Configuration' : '👥 Users & Logs'}</h1>
+        <h1 className="page-title">{section === 'shop-config' || section === 'settings' ? '⚙️ Settings' : '👥 Users & Logs'}</h1>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -972,7 +975,8 @@ function AdminPage({ section = 'users-logs' }) {
 
       {/* Tabs based on section */}
       <div className="tabs" style={{ flexWrap: 'wrap', gap: '2px 0' }}>
-        {section === 'shop-config' && (<>
+        {(section === 'shop-config' || section === 'settings') && (<>
+          <button className={`tab ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>📋 General</button>
           <button className={`tab ${activeTab === 'tax' ? 'active' : ''}`} onClick={() => setActiveTab('tax')}>
             <DollarSign size={16} style={{ marginRight: 6 }} />Tax & Rates
           </button>
@@ -1016,6 +1020,39 @@ function AdminPage({ section = 'users-logs' }) {
         <div className="loading">
           <div className="spinner"></div>
         </div>
+      ) : activeTab === 'general' ? (
+        <div>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h3 style={{ marginBottom: 16 }}>📋 General Settings</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ padding: 16, borderRadius: 8, border: '1px solid #e0e0e0', cursor: 'pointer' }}
+                onClick={() => navigate('/admin/settings/locations')}>
+                <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>📍</div>
+                <h4 style={{ marginBottom: 4 }}>Location Settings</h4>
+                <p style={{ color: '#666', fontSize: '0.85rem' }}>Storage locations and pickup/delivery zones</p>
+              </div>
+              <div style={{ padding: 16, borderRadius: 8, border: '1px solid #e0e0e0', cursor: 'pointer' }}
+                onClick={() => setActiveTab('emailscanner')}>
+                <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>📧</div>
+                <h4 style={{ marginBottom: 4 }}>Email Scanner</h4>
+                <p style={{ color: '#666', fontSize: '0.85rem' }}>Gmail integration & auto-scanning</p>
+              </div>
+              <div style={{ padding: 16, borderRadius: 8, border: '1px solid #e0e0e0', cursor: 'pointer' }}
+                onClick={() => setActiveTab('printer')}>
+                <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>🖨️</div>
+                <h4 style={{ marginBottom: 4 }}>Printer</h4>
+                <p style={{ color: '#666', fontSize: '0.85rem' }}>Brother label printer configuration</p>
+              </div>
+              <div style={{ padding: 16, borderRadius: 8, border: '1px solid #e0e0e0', cursor: 'pointer' }}
+                onClick={() => navigate('/admin/backup')}>
+                <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>💾</div>
+                <h4 style={{ marginBottom: 4 }}>Backup & Restore</h4>
+                <p style={{ color: '#666', fontSize: '0.85rem' }}>Database backups and restore</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
       ) : activeTab === 'tax' ? (
         <div>
           <div className="card">

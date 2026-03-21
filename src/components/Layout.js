@@ -64,7 +64,6 @@ function Layout({ children }) {
             <li><NavLink to="/clients-vendors" className={({ isActive }) => isActive ? 'active' : ''}><Users size={20} /><span>Clients & Vendors</span></NavLink></li>
             <li><NavLink to="/shop-supplies" className={({ isActive }) => isActive ? 'active' : ''}><Package size={20} /><span>Shop Supplies</span></NavLink></li>
             <li><NavLink to="/invoicing" className={({ isActive }) => isActive ? 'active' : ''}><FileText size={20} /><span>Invoice Center</span></NavLink></li>
-            <li><NavLink to="/business" className={({ isActive }) => isActive ? 'active' : ''}><Briefcase size={20} /><span>Business Center</span></NavLink></li>
             {isAdmin() && (
               <>
                 <li style={{ 
@@ -75,8 +74,9 @@ function Layout({ children }) {
                 }}>
                   Admin
                 </li>
+                <li><NavLink to="/admin/business" className={({ isActive }) => isActive ? 'active' : ''}><Briefcase size={20} /><span>Business Center</span></NavLink></li>
+                <li><NavLink to="/admin/tracking" className={({ isActive }) => isActive ? 'active' : ''}><Hash size={20} /><span>Tracking</span></NavLink></li>
                 <li><NavLink to="/admin/users-logs" className={({ isActive }) => isActive ? 'active' : ''}><Shield size={20} /><span>Users & Logs</span></NavLink></li>
-                <li><NavLink to="/admin/shop-config" className={({ isActive }) => isActive ? 'active' : ''}><Wrench size={20} /><span>Shop Config</span></NavLink></li>
                 <li><NavLink to="/admin/settings" className={({ isActive }) => isActive ? 'active' : ''}><Settings size={20} /><span>Settings</span></NavLink></li>
                 <li><NavLink to="/admin/backup" className={({ isActive }) => isActive ? 'active' : ''}><Database size={20} /><span>Backup</span></NavLink></li>
               </>

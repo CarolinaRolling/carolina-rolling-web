@@ -29,6 +29,7 @@ import ShipmentsAdminPage from './pages/ShipmentsAdminPage';
 import ShopSuppliesPage from './pages/ShopSuppliesPage';
 import InvoiceCenterPage from './pages/InvoiceCenterPage';
 import BusinessPage from './pages/BusinessPage';
+import TrackingPage from './pages/TrackingPage';
 import SectionSizesPage from './pages/SectionSizesPage';
 import './App.css';
 
@@ -173,6 +174,12 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      <Route path="/admin/business" element={
+        <ProtectedRoute>
+          <Layout><BusinessPage /></Layout>
+        </ProtectedRoute>
+      } />
+      
       <Route path="/admin/clients-vendors" element={
         <ProtectedRoute>
           <Layout><ClientsVendorsPage /></Layout>
@@ -203,23 +210,15 @@ function AppRoutes() {
         </AdminRoute>
       } />
       
-      <Route path="/admin/dr-numbers" element={
+      <Route path="/admin/tracking" element={
         <AdminRoute>
-          <Layout><DRNumbersPage /></Layout>
+          <Layout><TrackingPage /></Layout>
         </AdminRoute>
       } />
       
-      <Route path="/admin/po-numbers" element={
-        <AdminRoute>
-          <Layout><PONumbersPage /></Layout>
-        </AdminRoute>
-      } />
-      
-      <Route path="/admin/invoice-numbers" element={
-        <AdminRoute>
-          <Layout><InvoiceNumbersPage /></Layout>
-        </AdminRoute>
-      } />
+      <Route path="/admin/dr-numbers" element={<Navigate to="/admin/tracking?tab=dr" replace />} />
+      <Route path="/admin/po-numbers" element={<Navigate to="/admin/tracking?tab=po" replace />} />
+      <Route path="/admin/invoice-numbers" element={<Navigate to="/admin/tracking?tab=invoice" replace />} />
       
       <Route path="/admin/email" element={
         <AdminRoute>
@@ -235,7 +234,7 @@ function AppRoutes() {
       
       <Route path="/admin/settings" element={
         <AdminRoute>
-          <Layout><SettingsPage /></Layout>
+          <Layout><AdminPage section="shop-config" /></Layout>
         </AdminRoute>
       } />
       
