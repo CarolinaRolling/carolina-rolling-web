@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, MapPin, Calendar, Package, Truck, CheckCircle, Clock, FileText, Inbox, Image, AlertCircle } from 'lucide-react';
 import { getWorkOrders, getUnlinkedShipments, getRecentlyCompletedOrders, getLowStockSupplies } from '../services/api';
 
@@ -21,6 +21,7 @@ const STATUSES = {
 
 function InventoryPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [workOrders, setWorkOrders] = useState([]);
   const [unlinkedShipments, setUnlinkedShipments] = useState([]);
   const [recentlyCompleted, setRecentlyCompleted] = useState([]);
@@ -30,7 +31,15 @@ function InventoryPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  // Derive search from URL — survives back button
+  const searchQuery = searchParams.get('q') || '';
+  const updateSearch = (val) => {
+    if (val) {
+      setSearchParams({ q: val }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
   const [searchResults, setSearchResults] = useState(null); // null = not searching, [] = no results
   const [searching, setSearching] = useState(false);
   
@@ -118,6 +127,30 @@ function InventoryPage() {
     }, 300);
     return () => clearTimeout(searchTimer.current);
   }, [searchQuery]);
+
+  // Save scroll position continuously so browser back also restores it
+  useEffect(() => {
+    let timeout;
+    const handleScroll = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        sessionStorage.setItem('inv_scroll', window.scrollY);
+      }, 100);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => { window.removeEventListener('scroll', handleScroll); clearTimeout(timeout); };
+  }, []);
+
+  // Restore scroll position when returning
+  useEffect(() => {
+    if (!loading) {
+      const savedScroll = sessionStorage.getItem('inv_scroll');
+      if (savedScroll && parseInt(savedScroll) > 0) {
+        // Wait for content to render before scrolling
+        setTimeout(() => window.scrollTo(0, parseInt(savedScroll)), 50);
+      }
+    }
+  }, [loading, searchResults]);
 
   const dismissCompletion = (orderId) => {
     const updated = [...dismissedCompletions, orderId];
@@ -344,11 +377,12 @@ function InventoryPage() {
               type="text"
               placeholder="Search by DR#, client, PO#, estimate#, location..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => updateSearch(e.target.value)}
               className="search-box-input"
+              style={{ borderColor: searchQuery ? '#1976d2' : undefined, background: searchQuery ? '#f0f7ff' : undefined }}
             />
             {searchQuery && (
-              <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#999', fontSize: '1.1rem', padding: 4 }}>✕</button>
+              <button onClick={() => updateSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: '#1976d2', color: 'white', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>✕</button>
             )}
           </div>
           {searchQuery && searchQuery.length >= 2 && (

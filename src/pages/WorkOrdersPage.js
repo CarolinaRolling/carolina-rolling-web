@@ -111,13 +111,25 @@ function WorkOrdersPage() {
     return () => clearInterval(interval);
   }, [searchQuery]);
 
-  // Restore scroll position when returning from a WO detail page
+  // Save scroll position continuously so browser back also restores it
+  useEffect(() => {
+    let timeout;
+    const handleScroll = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        sessionStorage.setItem('wo_scroll', window.scrollY);
+      }, 100);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => { window.removeEventListener('scroll', handleScroll); clearTimeout(timeout); };
+  }, []);
+
+  // Restore scroll position when returning
   useEffect(() => {
     if (!loading && orders.length > 0) {
       const savedScroll = sessionStorage.getItem('wo_scroll');
-      if (savedScroll) {
-        requestAnimationFrame(() => window.scrollTo(0, parseInt(savedScroll)));
-        sessionStorage.removeItem('wo_scroll');
+      if (savedScroll && parseInt(savedScroll) > 0) {
+        setTimeout(() => window.scrollTo(0, parseInt(savedScroll)), 50);
       }
     }
   }, [loading, orders.length]);
@@ -376,7 +388,7 @@ function WorkOrdersPage() {
             <div
               key={order.id}
               className="card"
-              onClick={() => { sessionStorage.setItem('wo_scroll', window.scrollY); navigate(`/workorders/${order.id}`); }}
+              onClick={() => navigate(`/workorders/${order.id}`)}
               style={{
                 cursor: 'pointer',
                 transition: 'transform 0.15s, box-shadow 0.15s',

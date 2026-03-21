@@ -1497,7 +1497,7 @@ function EstimateDetailsPage() {
     <div>
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button className="btn btn-secondary" onClick={() => navigate('/estimates')} style={{ borderRadius: '50%', padding: 8 }}>
+          <button className="btn btn-secondary" onClick={() => navigate(-1)} style={{ borderRadius: '50%', padding: 8 }}>
             <ArrowLeft size={20} />
           </button>
           <div>
