@@ -276,9 +276,9 @@ const ClientsVendorsPage = () => {
     if (activeTab === 'clients') {
       setVendorHistory(null);
       try {
-        const res = await getWorkOrders({ clientName: item.name, limit: 100, archived: 'true' });
+        const res = await getWorkOrders({ clientId: item.id, limit: 100, archived: 'true' });
         const wos = res.data.data || [];
-        const res2 = await getWorkOrders({ clientName: item.name, limit: 100, archived: 'false' });
+        const res2 = await getWorkOrders({ clientId: item.id, limit: 100, archived: 'false' });
         const allWOs = [...wos, ...(res2.data.data || [])];
         const seen = new Set();
         const unique = allWOs.filter(w => { if (seen.has(w.id)) return false; seen.add(w.id); return true; });
@@ -497,15 +497,15 @@ const ClientsVendorsPage = () => {
                           {/* Summary cards */}
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                             <div style={{ background: '#e3f2fd', padding: 10, borderRadius: 8, textAlign: 'center' }}>
-                              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1565c0' }}>{vendorHistory.poNumbers.length}</div>
+                              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1565c0' }}>{(vendorHistory.poNumbers || []).length}</div>
                               <div style={{ fontSize: '0.75rem', color: '#555' }}>PO Numbers</div>
                             </div>
                             <div style={{ background: '#f3e5f5', padding: 10, borderRadius: 8, textAlign: 'center' }}>
-                              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#6a1b9a' }}>{vendorHistory.workOrders.length}</div>
+                              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#6a1b9a' }}>{(vendorHistory.workOrders || []).length}</div>
                               <div style={{ fontSize: '0.75rem', color: '#555' }}>Work Orders</div>
                             </div>
                             <div style={{ background: '#fff3e0', padding: 10, borderRadius: 8, textAlign: 'center' }}>
-                              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#e65100' }}>{vendorHistory.liabilities.length}</div>
+                              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#e65100' }}>{(vendorHistory.liabilities || []).length}</div>
                               <div style={{ fontSize: '0.75rem', color: '#555' }}>Bills</div>
                             </div>
                             <div style={{ background: '#e8f5e9', padding: 10, borderRadius: 8, textAlign: 'center' }}>
@@ -515,7 +515,7 @@ const ClientsVendorsPage = () => {
                           </div>
 
                           {/* Purchase Orders */}
-                          {vendorHistory.poNumbers.length > 0 && (
+                          {(vendorHistory.poNumbers || []).length > 0 && (
                             <div>
                               <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem' }}>📦 Purchase Orders</h4>
                               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
@@ -524,7 +524,7 @@ const ClientsVendorsPage = () => {
                                   <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Date</th>
                                   <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Description</th>
                                 </tr></thead>
-                                <tbody>{vendorHistory.poNumbers.map(po => (
+                                <tbody>{(vendorHistory.poNumbers || []).map(po => (
                                   <tr key={po.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                                     <td style={{ padding: '6px 10px', fontWeight: 600 }}>PO-{po.poNumber}</td>
                                     <td style={{ padding: '6px 10px', color: '#666' }}>{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : '—'}</td>
@@ -536,7 +536,7 @@ const ClientsVendorsPage = () => {
                           )}
 
                           {/* Linked Work Orders */}
-                          {vendorHistory.workOrders.length > 0 && (
+                          {(vendorHistory.workOrders || []).length > 0 && (
                             <div>
                               <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem' }}>🔧 Linked Work Orders</h4>
                               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
@@ -548,7 +548,7 @@ const ClientsVendorsPage = () => {
                                   <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '2px solid #e0e0e0' }}>Payment</th>
                                   <th style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '2px solid #e0e0e0' }}>Total</th>
                                 </tr></thead>
-                                <tbody>{vendorHistory.workOrders.map(wo => (
+                                <tbody>{(vendorHistory.workOrders || []).map(wo => (
                                   <tr key={wo.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                                     <td style={{ padding: '6px 10px' }}>
                                       <a href={`/workorder/${wo.id}`} onClick={(e) => { e.preventDefault(); navigate(`/workorder/${wo.id}`); }} style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 600 }}>
@@ -573,7 +573,7 @@ const ClientsVendorsPage = () => {
                           )}
 
                           {/* Bills */}
-                          {vendorHistory.liabilities.length > 0 && (
+                          {(vendorHistory.liabilities || []).length > 0 && (
                             <div>
                               <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem' }}>🧾 Bills</h4>
                               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
@@ -584,7 +584,7 @@ const ClientsVendorsPage = () => {
                                   <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '2px solid #e0e0e0' }}>Status</th>
                                   <th style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '2px solid #e0e0e0' }}>Amount</th>
                                 </tr></thead>
-                                <tbody>{vendorHistory.liabilities.map(l => (
+                                <tbody>{(vendorHistory.liabilities || []).map(l => (
                                   <tr key={l.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                                     <td style={{ padding: '6px 10px', fontWeight: 500 }}>{l.name}</td>
                                     <td style={{ padding: '6px 10px', color: '#666' }}>{l.category}</td>
@@ -600,7 +600,7 @@ const ClientsVendorsPage = () => {
                           )}
 
                           {/* Inbound Orders */}
-                          {vendorHistory.inboundOrders.length > 0 && (
+                          {(vendorHistory.inboundOrders || []).length > 0 && (
                             <div>
                               <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem' }}>📥 Inbound Orders</h4>
                               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
@@ -609,7 +609,7 @@ const ClientsVendorsPage = () => {
                                   <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Date</th>
                                   <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '2px solid #e0e0e0' }}>Status</th>
                                 </tr></thead>
-                                <tbody>{vendorHistory.inboundOrders.map(o => (
+                                <tbody>{(vendorHistory.inboundOrders || []).map(o => (
                                   <tr key={o.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                                     <td style={{ padding: '6px 10px' }}>{o.description || o.materialDescription || 'Inbound order'}</td>
                                     <td style={{ padding: '6px 10px', color: '#666' }}>{new Date(o.createdAt).toLocaleDateString()}</td>
@@ -622,7 +622,7 @@ const ClientsVendorsPage = () => {
                             </div>
                           )}
 
-                          {vendorHistory.poNumbers.length === 0 && vendorHistory.workOrders.length === 0 && vendorHistory.liabilities.length === 0 && vendorHistory.inboundOrders.length === 0 && (
+                          {(vendorHistory.poNumbers || []).length === 0 && (vendorHistory.workOrders || []).length === 0 && (vendorHistory.liabilities || []).length === 0 && (vendorHistory.inboundOrders || []).length === 0 && (
                             <div style={{ textAlign: 'center', padding: 20, color: '#888' }}>No activity found for this vendor</div>
                           )}
                         </div>
