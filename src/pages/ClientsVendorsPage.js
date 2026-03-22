@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, Users, Building2, Search, Check, X } from 'lucide-react';
-import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit, startBatchVerification, getBatchStatus, downloadResaleReport } from '../services/api';
+import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit, startBatchVerification, getBatchStatus, downloadResaleReport, getWorkOrders, getEstimates } from '../services/api';
 
 const formatPhone = (val) => {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -39,6 +39,11 @@ const ClientsVendorsPage = () => {
   const [formData, setFormData] = useState({});
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  
+  // Selected item for detail view
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [workHistory, setWorkHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -264,17 +269,34 @@ const ClientsVendorsPage = () => {
     );
   };
 
+  const selectItem = async (item) => {
+    setSelectedItem(item);
+    if (activeTab === 'clients') {
+      try {
+        setHistoryLoading(true);
+        const res = await getWorkOrders({ clientName: item.name, limit: 100, archived: 'true' });
+        const wos = res.data.data || [];
+        // Also get non-archived
+        const res2 = await getWorkOrders({ clientName: item.name, limit: 100, archived: 'false' });
+        const allWOs = [...wos, ...(res2.data.data || [])];
+        // Dedupe by id
+        const seen = new Set();
+        const unique = allWOs.filter(w => { if (seen.has(w.id)) return false; seen.add(w.id); return true; });
+        unique.sort((a, b) => (b.drNumber || 0) - (a.drNumber || 0));
+        setWorkHistory(unique);
+      } catch { setWorkHistory([]); }
+      finally { setHistoryLoading(false); }
+    } else {
+      setWorkHistory([]);
+    }
+  };
+
   if (loading) return <div className="loading"><div className="spinner"></div></div>;
 
   return (
     <div>
       <div className="page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button className="btn btn-secondary" onClick={() => navigate('/admin')} style={{ borderRadius: '50%', padding: 8 }}>
-            <ArrowLeft size={20} />
-          </button>
-          <h1 className="page-title">Clients & Vendors</h1>
-        </div>
+        <h1 className="page-title">Clients & Vendors</h1>
       </div>
 
       {error && <div className="alert alert-error" onClick={() => setError('')}>{error}</div>}
@@ -282,199 +304,183 @@ const ClientsVendorsPage = () => {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <button
-          className={`btn ${activeTab === 'clients' ? 'btn-primary' : 'btn-outline'}`}
-          onClick={() => setActiveTab('clients')}
-        >
+        <button className={`btn ${activeTab === 'clients' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setActiveTab('clients'); setSelectedItem(null); setWorkHistory([]); }}>
           <Users size={18} /> Clients ({clients.length})
         </button>
-        <button
-          className={`btn ${activeTab === 'vendors' ? 'btn-primary' : 'btn-outline'}`}
-          onClick={() => setActiveTab('vendors')}
-        >
+        <button className={`btn ${activeTab === 'vendors' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setActiveTab('vendors'); setSelectedItem(null); setWorkHistory([]); }}>
           <Building2 size={18} /> Vendors ({vendors.length})
         </button>
-        <button
-          className={`btn ${activeTab === 'permits' ? 'btn-primary' : 'btn-outline'}`}
-          onClick={() => setActiveTab('permits')}
-        >
+        <button className={`btn ${activeTab === 'permits' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('permits')}>
           🔐 Permit Status
         </button>
       </div>
 
-      {/* Search and Actions */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
-              <input
-                className="form-input"
-                placeholder={`Search ${activeTab}...`}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ paddingLeft: 40 }}
-              />
+      {/* Master-Detail Layout */}
+      {(activeTab === 'clients' || activeTab === 'vendors') && (
+        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 16, minHeight: '70vh' }}>
+          {/* LEFT: Scrollable List */}
+          <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid #e0e0e0', borderRadius: 10, overflow: 'hidden', background: 'white' }}>
+            {/* Search + Add */}
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid #e0e0e0', display: 'flex', gap: 6, background: '#fafafa' }}>
+              <div style={{ flex: 1, position: 'relative' }}>
+                <Search size={14} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
+                <input className="form-input" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingLeft: 30, fontSize: '0.85rem', padding: '6px 8px 6px 30px' }} />
+              </div>
+              <button onClick={() => activeTab === 'clients' ? openClientModal() : openVendorModal()} style={{ background: '#1976d2', color: 'white', border: 'none', borderRadius: 6, padding: '0 10px', cursor: 'pointer', fontSize: '1rem', fontWeight: 700 }} title="Add new">+</button>
+            </div>
+            <div style={{ padding: '4px 8px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: '0.75rem', color: '#888' }}>
+                <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} style={{ width: 14, height: 14 }} /> Inactive
+              </label>
+            </div>
+            {/* List */}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {(activeTab === 'clients' ? filteredClients : filteredVendors).map(item => (
+                <div key={item.id} onClick={() => selectItem(item)}
+                  style={{
+                    padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f5f5f5',
+                    background: selectedItem?.id === item.id ? '#e3f2fd' : 'white',
+                    borderLeft: selectedItem?.id === item.id ? '3px solid #1976d2' : '3px solid transparent',
+                    opacity: item.isActive ? 1 : 0.5,
+                    transition: 'all 0.1s'
+                  }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.name}</div>
+                  {item.contactName && <div style={{ fontSize: '0.8rem', color: '#666' }}>{item.contactName}</div>}
+                  {activeTab === 'clients' && item.taxStatus && (
+                    <div style={{ marginTop: 2 }}>{getTaxStatusBadge(item.taxStatus)}</div>
+                  )}
+                  {activeTab === 'vendors' && item.accountNumber && (
+                    <div style={{ fontSize: '0.75rem', color: '#888', marginTop: 2 }}>Acct: {item.accountNumber}</div>
+                  )}
+                  {!item.isActive && <div style={{ fontSize: '0.7rem', color: '#c62828', marginTop: 2 }}>Inactive</div>}
+                </div>
+              ))}
+              {(activeTab === 'clients' ? filteredClients : filteredVendors).length === 0 && (
+                <div style={{ textAlign: 'center', padding: 30, color: '#888', fontSize: '0.85rem' }}>No {activeTab} found</div>
+              )}
             </div>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-            Show Inactive
-          </label>
-          <button
-            className="btn btn-primary"
-            onClick={() => activeTab === 'clients' ? openClientModal() : openVendorModal()}
-          >
-            <Plus size={18} /> Add {activeTab === 'clients' ? 'Client' : 'Vendor'}
-          </button>
-        </div>
-      </div>
 
-      {/* Clients Tab */}
-      {activeTab === 'clients' && (
-        <div className="card">
-          {filteredClients.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#666' }}>
-              <Users size={48} style={{ opacity: 0.3 }} />
-              <p style={{ marginTop: 12 }}>No clients found</p>
-              <button className="btn btn-primary" onClick={() => openClientModal()} style={{ marginTop: 8 }}>
-                <Plus size={18} /> Add First Client
-              </button>
-            </div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Client Name</th>
-                  <th>Contact</th>
-                  <th>Tax Status</th>
-                  <th>Terms</th>
-                  <th>Custom Rate</th>
-                  <th>Status</th>
-                  <th style={{ width: 100 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredClients.map(client => (
-                  <tr key={client.id} style={{ opacity: client.isActive ? 1 : 0.5 }}>
-                    <td>
-                      <strong>{client.name}</strong>
-                      {client.noTag && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: '#fff3e0', color: '#e65100', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>🚫 No Tag</span>}
-                      {client.requiresPartLabels && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: '#e3f2fd', color: '#1565c0', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>🏷️ Part Labels</span>}
-                      {client.emailScanEnabled && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: '#FFF3E0', color: '#E65100', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>📧 Email Scan</span>}
-                      {client.resaleCertificate && client.permitStatus === 'active' && <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#e8f5e9', color: '#2e7d32', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>✅ Permit</span>}
-                      {client.resaleCertificate && client.permitStatus === 'closed' && <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#ffebee', color: '#c62828', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>❌ Permit Closed</span>}
-                      {client.resaleCertificate && client.permitStatus === 'not_found' && <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#ffebee', color: '#c62828', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>❌ Permit Not Found</span>}
-                      {client.resaleCertificate && (!client.permitStatus || client.permitStatus === 'unverified') && <span style={{ marginLeft: 6, fontSize: '0.7rem', background: '#fff3e0', color: '#e65100', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>⚠️ Unverified</span>}
-                      {client.address && <div style={{ fontSize: '0.8rem', color: '#666' }}>{client.address}</div>}
-                    </td>
-                    <td>
-                      {client.contactName && <div>{client.contactName}</div>}
-                      {client.contactPhone && <div style={{ fontSize: '0.85rem', color: '#666' }}>{formatPhone(client.contactPhone)}</div>}
-                      {client.contactEmail && <div style={{ fontSize: '0.85rem', color: '#666' }}>{client.contactEmail}</div>}
-                      {client.apEmail && <div style={{ fontSize: '0.75rem', color: '#1565c0' }}>📧 AP: {client.apEmail}</div>}
-                      {client.quickbooksName && <div style={{ fontSize: '0.75rem', color: '#2E7D32', fontFamily: 'monospace' }}>📗 QB: {client.quickbooksName}</div>}
-                      {client.contacts && client.contacts.length > 0 && (
-                        <div style={{ fontSize: '0.75rem', color: '#1565c0', marginTop: 2 }}>+{client.contacts.length} more contact{client.contacts.length > 1 ? 's' : ''}</div>
-                      )}
-                    </td>
-                    <td>{getTaxStatusBadge(client.taxStatus)}</td>
-                    <td>
-                      {client.paymentTerms ? (
-                        <span style={{ fontWeight: 500, fontSize: '0.85rem' }}>{client.paymentTerms}</span>
+          {/* RIGHT: Detail Panel */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {!selectedItem ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', background: '#fafafa', borderRadius: 10, border: '1px dashed #ddd' }}>
+                <div style={{ textAlign: 'center' }}>
+                  {activeTab === 'clients' ? <Users size={48} style={{ opacity: 0.2, marginBottom: 8 }} /> : <Building2 size={48} style={{ opacity: 0.2, marginBottom: 8 }} />}
+                  <div>Select a {activeTab === 'clients' ? 'client' : 'vendor'} to view details</div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Info Card */}
+                <div style={{ padding: 20, borderRadius: 10, border: '1px solid #e0e0e0', background: 'white' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: '1.3rem' }}>{selectedItem.name}</h2>
+                      {selectedItem.contactName && <div style={{ fontSize: '0.9rem', color: '#555', marginTop: 4 }}>{selectedItem.contactName}</div>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-sm btn-outline" onClick={() => activeTab === 'clients' ? openClientModal(selectedItem) : openVendorModal(selectedItem)}><Edit size={14} /> Edit</button>
+                      {selectedItem.isActive ? (
+                        <button className="btn btn-sm" onClick={() => activeTab === 'clients' ? handleDeleteClient(selectedItem) : handleDeleteVendor(selectedItem)} style={{ background: '#ffebee', color: '#c62828', border: '1px solid #ef9a9a' }}><X size={14} /> Deactivate</button>
                       ) : (
-                        <span style={{ color: '#999', fontSize: '0.85rem' }}>—</span>
+                        <button className="btn btn-sm" onClick={() => activeTab === 'clients' ? handleReactivateClient(selectedItem) : handleReactivateVendor(selectedItem)} style={{ background: '#e8f5e9', color: '#2e7d32', border: '1px solid #66bb6a' }}><Check size={14} /> Reactivate</button>
                       )}
-                    </td>
-                    <td>
-                      {client.customTaxRate ? (
-                        <span style={{ fontWeight: 500 }}>{(parseFloat(client.customTaxRate) * 100).toFixed(2)}%</span>
-                      ) : (
-                        <span style={{ color: '#999' }}>Default</span>
-                      )}
-                    </td>
-                    <td>
-                      {client.isActive ? (
-                        <span style={{ color: '#2e7d32' }}>✓ Active</span>
-                      ) : (
-                        <span style={{ color: '#d32f2f' }}>Inactive</span>
-                      )}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-outline" onClick={() => openClientModal(client)}><Edit size={14} /></button>
-                        {client.isActive ? (
-                          <button className="btn btn-sm btn-danger" onClick={() => handleDeleteClient(client)}><X size={14} /></button>
-                        ) : (
-                          <button className="btn btn-sm btn-success" onClick={() => handleReactivateClient(client)}><Check size={14} /></button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px 24px', fontSize: '0.85rem' }}>
+                    {selectedItem.contactPhone && <div><span style={{ color: '#888' }}>📞</span> {formatPhone(selectedItem.contactPhone)}</div>}
+                    {selectedItem.contactEmail && <div><span style={{ color: '#888' }}>📧</span> {selectedItem.contactEmail}</div>}
+                    {selectedItem.apEmail && <div><span style={{ color: '#888' }}>📧 AP:</span> {selectedItem.apEmail}</div>}
+                    {selectedItem.address && <div><span style={{ color: '#888' }}>📍</span> {selectedItem.address}</div>}
+                    {activeTab === 'clients' && selectedItem.taxStatus && <div>Tax: {getTaxStatusBadge(selectedItem.taxStatus)}</div>}
+                    {activeTab === 'clients' && selectedItem.paymentTerms && <div><span style={{ color: '#888' }}>Terms:</span> {selectedItem.paymentTerms}</div>}
+                    {activeTab === 'clients' && selectedItem.quickbooksName && <div><span style={{ color: '#888' }}>📗 QB:</span> {selectedItem.quickbooksName}</div>}
+                    {activeTab === 'clients' && selectedItem.resaleCertificate && <div><span style={{ color: '#888' }}>🔐 Resale:</span> {selectedItem.resaleCertificate} {selectedItem.permitStatus === 'active' && <span style={{ color: '#2e7d32', fontWeight: 600 }}>✅</span>}</div>}
+                    {activeTab === 'vendors' && selectedItem.accountNumber && <div><span style={{ color: '#888' }}>Account:</span> {selectedItem.accountNumber}</div>}
+                    {selectedItem.notes && <div style={{ gridColumn: 'span 2', color: '#666', fontStyle: 'italic' }}>{selectedItem.notes}</div>}
+                  </div>
+                </div>
 
-      {/* Vendors Tab */}
-      {activeTab === 'vendors' && (
-        <div className="card">
-          {filteredVendors.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#666' }}>
-              <Building2 size={48} style={{ opacity: 0.3 }} />
-              <p style={{ marginTop: 12 }}>No vendors found</p>
-              <button className="btn btn-primary" onClick={() => openVendorModal()} style={{ marginTop: 8 }}>
-                <Plus size={18} /> Add First Vendor
-              </button>
-            </div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Vendor Name</th>
-                  <th>Contact</th>
-                  <th>Account #</th>
-                  <th>Status</th>
-                  <th style={{ width: 100 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredVendors.map(vendor => (
-                  <tr key={vendor.id} style={{ opacity: vendor.isActive ? 1 : 0.5 }}>
-                    <td>
-                      <strong>{vendor.name}</strong>
-                      {vendor.address && <div style={{ fontSize: '0.8rem', color: '#666' }}>{vendor.address}</div>}
-                    </td>
-                    <td>
-                      {vendor.contactName && <div>{vendor.contactName}</div>}
-                      {vendor.contactPhone && <div style={{ fontSize: '0.85rem', color: '#666' }}>{formatPhone(vendor.contactPhone)}</div>}
-                      {vendor.contactEmail && <div style={{ fontSize: '0.85rem', color: '#666' }}>{vendor.contactEmail}</div>}
-                    </td>
-                    <td>{vendor.accountNumber || <span style={{ color: '#999' }}>—</span>}</td>
-                    <td>
-                      {vendor.isActive ? (
-                        <span style={{ color: '#2e7d32' }}>✓ Active</span>
-                      ) : (
-                        <span style={{ color: '#d32f2f' }}>Inactive</span>
+                {/* Work History */}
+                {activeTab === 'clients' && (
+                  <div style={{ flex: 1, borderRadius: 10, border: '1px solid #e0e0e0', background: 'white', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '12px 16px', background: '#f5f5f5', borderBottom: '1px solid #e0e0e0', fontWeight: 700, fontSize: '0.95rem' }}>
+                      📋 Work History ({workHistory.length})
+                    </div>
+                    <div style={{ flex: 1, overflowY: 'auto', maxHeight: '55vh' }}>
+                      {historyLoading ? <div style={{ textAlign: 'center', padding: 30, color: '#888' }}>Loading work history...</div> :
+                      workHistory.length === 0 ? <div style={{ textAlign: 'center', padding: 30, color: '#888' }}>No work orders found for this client</div> : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                          <thead>
+                            <tr style={{ background: '#fafafa', position: 'sticky', top: 0 }}>
+                              <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Work Order</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Status</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '2px solid #e0e0e0' }}>Total</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '2px solid #e0e0e0' }}>Invoice</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'center', borderBottom: '2px solid #e0e0e0' }}>Payment</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {workHistory.map(wo => {
+                              const hasInvoice = !!wo.invoiceNumber;
+                              const hasPaid = !!wo.paymentDate;
+                              return (
+                                <tr key={wo.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                  <td style={{ padding: '8px 12px' }}>
+                                    <a href={`/workorder/${wo.id}`} onClick={(e) => { e.preventDefault(); navigate(`/workorder/${wo.id}`); }} style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 600 }}>
+                                      {wo.drNumber ? `DR-${wo.drNumber}` : wo.orderNumber}
+                                    </a>
+                                    {wo.estimateNumber && <div style={{ fontSize: '0.75rem', color: '#888' }}>Est: {wo.estimateNumber}</div>}
+                                    <div style={{ fontSize: '0.75rem', color: '#888' }}>{wo.createdAt ? new Date(wo.createdAt).toLocaleDateString() : ''}</div>
+                                  </td>
+                                  <td style={{ padding: '8px 12px' }}>
+                                    <span style={{
+                                      padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600,
+                                      background: wo.status === 'shipped' || wo.status === 'archived' ? '#f3e5f5' : wo.status === 'stored' || wo.status === 'completed' ? '#e8f5e9' : wo.status === 'processing' || wo.status === 'in_progress' ? '#e1f5fe' : '#f5f5f5',
+                                      color: wo.status === 'shipped' || wo.status === 'archived' ? '#7b1fa2' : wo.status === 'stored' || wo.status === 'completed' ? '#2e7d32' : wo.status === 'processing' || wo.status === 'in_progress' ? '#0288d1' : '#666'
+                                    }}>
+                                      {wo.status}
+                                    </span>
+                                    {wo.isVoided && <span style={{ marginLeft: 4, fontSize: '0.7rem', color: '#c62828', fontWeight: 600 }}>⛔ VOID</span>}
+                                  </td>
+                                  <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600 }}>
+                                    {wo.grandTotal ? '$' + parseFloat(wo.grandTotal).toFixed(2) : '—'}
+                                  </td>
+                                  <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                    {hasInvoice ? (
+                                      <span style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.85rem' }}>✅ {wo.invoiceNumber}</span>
+                                    ) : (
+                                      <span style={{ color: '#ccc' }}>—</span>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                    {hasPaid ? (
+                                      <span style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.8rem' }}>💰 {new Date(wo.paymentDate).toLocaleDateString()}</span>
+                                    ) : hasInvoice ? (
+                                      <span style={{ color: '#E65100', fontWeight: 500, fontSize: '0.8rem' }}>⏳ Pending</span>
+                                    ) : (
+                                      <span style={{ color: '#ccc' }}>—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       )}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-sm btn-outline" onClick={() => openVendorModal(vendor)}><Edit size={14} /></button>
-                        {vendor.isActive ? (
-                          <button className="btn btn-sm btn-danger" onClick={() => handleDeleteVendor(vendor)}><X size={14} /></button>
-                        ) : (
-                          <button className="btn btn-sm btn-success" onClick={() => handleReactivateVendor(vendor)}><Check size={14} /></button>
-                        )}
+                    </div>
+                    {workHistory.length > 0 && (
+                      <div style={{ padding: '8px 16px', background: '#f5f5f5', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                        <span style={{ color: '#555' }}>{workHistory.length} work orders</span>
+                        <span style={{ fontWeight: 700 }}>Total: ${workHistory.reduce((s, w) => s + (parseFloat(w.grandTotal) || 0), 0).toFixed(2)}</span>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 
