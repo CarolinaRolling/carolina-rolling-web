@@ -317,9 +317,9 @@ const ClientsVendorsPage = () => {
 
       {/* Master-Detail Layout */}
       {(activeTab === 'clients' || activeTab === 'vendors') && (
-        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 16, minHeight: '70vh' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 16, height: 'calc(100vh - 180px)' }}>
           {/* LEFT: Scrollable List */}
-          <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid #e0e0e0', borderRadius: 10, overflow: 'hidden', background: 'white' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid #e0e0e0', borderRadius: 10, overflow: 'hidden', background: 'white', height: '100%' }}>
             {/* Search + Add */}
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #e0e0e0', display: 'flex', gap: 6, background: '#fafafa' }}>
               <div style={{ flex: 1, position: 'relative' }}>
@@ -362,7 +362,7 @@ const ClientsVendorsPage = () => {
           </div>
 
           {/* RIGHT: Detail Panel */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto', height: '100%' }}>
             {!selectedItem ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', background: '#fafafa', borderRadius: 10, border: '1px dashed #ddd' }}>
                 <div style={{ textAlign: 'center' }}>
@@ -408,7 +408,7 @@ const ClientsVendorsPage = () => {
                     <div style={{ padding: '12px 16px', background: '#f5f5f5', borderBottom: '1px solid #e0e0e0', fontWeight: 700, fontSize: '0.95rem' }}>
                       📋 Work History ({workHistory.length})
                     </div>
-                    <div style={{ flex: 1, overflowY: 'auto', maxHeight: '55vh' }}>
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
                       {historyLoading ? <div style={{ textAlign: 'center', padding: 30, color: '#888' }}>Loading work history...</div> :
                       workHistory.length === 0 ? <div style={{ textAlign: 'center', padding: 30, color: '#888' }}>No work orders found for this client</div> : (
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
