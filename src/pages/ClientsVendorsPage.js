@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, Users, Building2, Search, Check, X } from 'lucide-react';
-import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit, startBatchVerification, getBatchStatus, downloadResaleReport, getWorkOrders, getEstimates } from '../services/api';
+import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit, startBatchVerification, getBatchStatus, downloadResaleReport, getWorkOrders, getEstimates, getVendorHistory } from '../services/api';
 
 const formatPhone = (val) => {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -43,6 +43,7 @@ const ClientsVendorsPage = () => {
   // Selected item for detail view
   const [selectedItem, setSelectedItem] = useState(null);
   const [workHistory, setWorkHistory] = useState([]);
+  const [vendorHistory, setVendorHistory] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
@@ -271,15 +272,14 @@ const ClientsVendorsPage = () => {
 
   const selectItem = async (item) => {
     setSelectedItem(item);
+    setHistoryLoading(true);
     if (activeTab === 'clients') {
+      setVendorHistory(null);
       try {
-        setHistoryLoading(true);
         const res = await getWorkOrders({ clientName: item.name, limit: 100, archived: 'true' });
         const wos = res.data.data || [];
-        // Also get non-archived
         const res2 = await getWorkOrders({ clientName: item.name, limit: 100, archived: 'false' });
         const allWOs = [...wos, ...(res2.data.data || [])];
-        // Dedupe by id
         const seen = new Set();
         const unique = allWOs.filter(w => { if (seen.has(w.id)) return false; seen.add(w.id); return true; });
         unique.sort((a, b) => (b.drNumber || 0) - (a.drNumber || 0));
@@ -288,6 +288,11 @@ const ClientsVendorsPage = () => {
       finally { setHistoryLoading(false); }
     } else {
       setWorkHistory([]);
+      try {
+        const res = await getVendorHistory(item.id);
+        setVendorHistory(res.data.data);
+      } catch { setVendorHistory(null); }
+      finally { setHistoryLoading(false); }
     }
   };
 
@@ -476,6 +481,153 @@ const ClientsVendorsPage = () => {
                         <span style={{ fontWeight: 700 }}>Total: ${workHistory.reduce((s, w) => s + (parseFloat(w.grandTotal) || 0), 0).toFixed(2)}</span>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Vendor History */}
+                {activeTab === 'vendors' && (
+                  <div style={{ flex: 1, borderRadius: 10, border: '1px solid #e0e0e0', background: 'white', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '12px 16px', background: '#f5f5f5', borderBottom: '1px solid #e0e0e0', fontWeight: 700, fontSize: '0.95rem' }}>
+                      📋 Vendor Activity
+                    </div>
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                      {historyLoading ? <div style={{ textAlign: 'center', padding: 30, color: '#888' }}>Loading...</div> :
+                      !vendorHistory ? <div style={{ textAlign: 'center', padding: 30, color: '#888' }}>No data</div> : (
+                        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                          {/* Summary cards */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                            <div style={{ background: '#e3f2fd', padding: 10, borderRadius: 8, textAlign: 'center' }}>
+                              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1565c0' }}>{vendorHistory.poNumbers.length}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#555' }}>PO Numbers</div>
+                            </div>
+                            <div style={{ background: '#f3e5f5', padding: 10, borderRadius: 8, textAlign: 'center' }}>
+                              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#6a1b9a' }}>{vendorHistory.workOrders.length}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#555' }}>Work Orders</div>
+                            </div>
+                            <div style={{ background: '#fff3e0', padding: 10, borderRadius: 8, textAlign: 'center' }}>
+                              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#e65100' }}>{vendorHistory.liabilities.length}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#555' }}>Bills</div>
+                            </div>
+                            <div style={{ background: '#e8f5e9', padding: 10, borderRadius: 8, textAlign: 'center' }}>
+                              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#2e7d32' }}>${(vendorHistory.totalMaterialValue || 0).toFixed(0)}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#555' }}>Material Value</div>
+                            </div>
+                          </div>
+
+                          {/* Purchase Orders */}
+                          {vendorHistory.poNumbers.length > 0 && (
+                            <div>
+                              <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem' }}>📦 Purchase Orders</h4>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+                                <thead><tr style={{ background: '#fafafa' }}>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>PO #</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Date</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Description</th>
+                                </tr></thead>
+                                <tbody>{vendorHistory.poNumbers.map(po => (
+                                  <tr key={po.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                    <td style={{ padding: '6px 10px', fontWeight: 600 }}>PO-{po.poNumber}</td>
+                                    <td style={{ padding: '6px 10px', color: '#666' }}>{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : '—'}</td>
+                                    <td style={{ padding: '6px 10px', color: '#555' }}>{po.description || '—'}</td>
+                                  </tr>
+                                ))}</tbody>
+                              </table>
+                            </div>
+                          )}
+
+                          {/* Linked Work Orders */}
+                          {vendorHistory.workOrders.length > 0 && (
+                            <div>
+                              <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem' }}>🔧 Linked Work Orders</h4>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+                                <thead><tr style={{ background: '#fafafa' }}>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Work Order</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Client</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '2px solid #e0e0e0' }}>Status</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '2px solid #e0e0e0' }}>Invoice</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '2px solid #e0e0e0' }}>Payment</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '2px solid #e0e0e0' }}>Total</th>
+                                </tr></thead>
+                                <tbody>{vendorHistory.workOrders.map(wo => (
+                                  <tr key={wo.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                    <td style={{ padding: '6px 10px' }}>
+                                      <a href={`/workorder/${wo.id}`} onClick={(e) => { e.preventDefault(); navigate(`/workorder/${wo.id}`); }} style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 600 }}>
+                                        {wo.drNumber ? `DR-${wo.drNumber}` : wo.orderNumber}
+                                      </a>
+                                    </td>
+                                    <td style={{ padding: '6px 10px' }}>{wo.clientName}</td>
+                                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                      <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: wo.status === 'stored' || wo.status === 'completed' ? '#e8f5e9' : wo.status === 'processing' ? '#e1f5fe' : '#f5f5f5', color: wo.status === 'stored' || wo.status === 'completed' ? '#2e7d32' : wo.status === 'processing' ? '#0288d1' : '#666' }}>{wo.status}</span>
+                                    </td>
+                                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                      {wo.invoiceNumber ? <span style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.8rem' }}>✅ {wo.invoiceNumber}</span> : <span style={{ color: '#ccc' }}>—</span>}
+                                    </td>
+                                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                      {wo.paymentDate ? <span style={{ color: '#2e7d32', fontSize: '0.8rem' }}>💰 {new Date(wo.paymentDate).toLocaleDateString()}</span> : wo.invoiceNumber ? <span style={{ color: '#E65100', fontSize: '0.8rem' }}>⏳</span> : <span style={{ color: '#ccc' }}>—</span>}
+                                    </td>
+                                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{wo.grandTotal ? '$' + parseFloat(wo.grandTotal).toFixed(2) : '—'}</td>
+                                  </tr>
+                                ))}</tbody>
+                              </table>
+                            </div>
+                          )}
+
+                          {/* Bills */}
+                          {vendorHistory.liabilities.length > 0 && (
+                            <div>
+                              <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem' }}>🧾 Bills</h4>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+                                <thead><tr style={{ background: '#fafafa' }}>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Bill</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Category</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Due</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '2px solid #e0e0e0' }}>Status</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '2px solid #e0e0e0' }}>Amount</th>
+                                </tr></thead>
+                                <tbody>{vendorHistory.liabilities.map(l => (
+                                  <tr key={l.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                    <td style={{ padding: '6px 10px', fontWeight: 500 }}>{l.name}</td>
+                                    <td style={{ padding: '6px 10px', color: '#666' }}>{l.category}</td>
+                                    <td style={{ padding: '6px 10px', color: '#666' }}>{l.dueDate ? new Date(l.dueDate + 'T12:00:00').toLocaleDateString() : '—'}</td>
+                                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                      {l.status === 'paid' ? <span style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.8rem' }}>✅ Paid{l.paidAt ? ` ${new Date(l.paidAt).toLocaleDateString()}` : ''}</span> : <span style={{ color: '#E65100', fontWeight: 600, fontSize: '0.8rem' }}>⏳ Unpaid</span>}
+                                    </td>
+                                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>${parseFloat(l.amount).toFixed(2)}</td>
+                                  </tr>
+                                ))}</tbody>
+                              </table>
+                            </div>
+                          )}
+
+                          {/* Inbound Orders */}
+                          {vendorHistory.inboundOrders.length > 0 && (
+                            <div>
+                              <h4 style={{ margin: '0 0 8px', fontSize: '0.9rem' }}>📥 Inbound Orders</h4>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+                                <thead><tr style={{ background: '#fafafa' }}>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Description</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Date</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'center', borderBottom: '2px solid #e0e0e0' }}>Status</th>
+                                </tr></thead>
+                                <tbody>{vendorHistory.inboundOrders.map(o => (
+                                  <tr key={o.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                    <td style={{ padding: '6px 10px' }}>{o.description || o.materialDescription || 'Inbound order'}</td>
+                                    <td style={{ padding: '6px 10px', color: '#666' }}>{new Date(o.createdAt).toLocaleDateString()}</td>
+                                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                      <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: o.status === 'received' ? '#e8f5e9' : '#fff3e0', color: o.status === 'received' ? '#2e7d32' : '#E65100' }}>{o.status || 'pending'}</span>
+                                    </td>
+                                  </tr>
+                                ))}</tbody>
+                              </table>
+                            </div>
+                          )}
+
+                          {vendorHistory.poNumbers.length === 0 && vendorHistory.workOrders.length === 0 && vendorHistory.liabilities.length === 0 && vendorHistory.inboundOrders.length === 0 && (
+                            <div style={{ textAlign: 'center', padding: 20, color: '#888' }}>No activity found for this vendor</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </>

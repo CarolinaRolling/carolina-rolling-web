@@ -341,6 +341,7 @@ export const getVendor = (id) => api.get(`/vendors/${id}`);
 export const createVendor = (data) => api.post('/vendors', data);
 export const updateVendor = (id, data) => api.put(`/vendors/${id}`, data);
 export const deleteVendor = (id) => api.delete(`/vendors/${id}`);
+export const getVendorHistory = (vendorId) => api.get(`/business/vendor-history/${vendorId}`);
 
 // Permit Verification
 export const verifySinglePermit = (data) => api.post('/verify-permit', data);
