@@ -479,8 +479,8 @@ export const deleteEmployee = (id) => api.delete(`/business/employees/${id}`);
 // Payments
 export const getOutstandingPayments = () => api.get('/business/payments/outstanding');
 export const getPaymentHistory = (params) => api.get('/business/payments/history', { params });
-export const recordPayment = (woId, data) => api.post(`/business/payments/${woId}/record`, data);
-export const clearPayment = (woId) => api.post(`/business/payments/${woId}/clear`);
+export const recordBusinessPayment = (woId, data) => api.post(`/business/payments/${woId}/record`, data);
+export const clearBusinessPayment = (woId) => api.post(`/business/payments/${woId}/clear`);
 // Payroll
 export const getPayrolls = () => api.get('/business/payroll');
 export const createPayroll = (data) => api.post('/business/payroll', data);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Receipt, Users, BarChart3, Plus, DollarSign } from 'lucide-react';
-import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, getEmployees, createEmployee, updateEmployee, deleteEmployee, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordPayment, clearPayment } from '../services/api';
+import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, getEmployees, createEmployee, updateEmployee, deleteEmployee, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment } from '../services/api';
 import InvoiceCenterPage from './InvoiceCenterPage';
 
 const LB_CATS = [
@@ -225,7 +225,7 @@ function BusinessPage() {
                               <option value="credit_card">Card</option>
                             </select>
                             <input className="form-input" placeholder="Ref#" value={payForm.paymentReference} onChange={e=>setPayForm({...payForm,paymentReference:e.target.value})} style={{width:80,padding:'4px',fontSize:'0.8rem'}}/>
-                            <button onClick={async()=>{try{await recordPayment(inv.id,payForm);showMsg(`Payment recorded for ${inv.invoiceNumber}`);setShowRecordPay(null);await loadPayments();}catch{setErr('Failed');}}} style={{background:'#2e7d32',color:'white',border:'none',borderRadius:4,padding:'4px 8px',cursor:'pointer',fontWeight:600,fontSize:'0.8rem'}}>✓</button>
+                            <button onClick={async()=>{try{await recordBusinessPayment(inv.id,payForm);showMsg(`Payment recorded for ${inv.invoiceNumber}`);setShowRecordPay(null);await loadPayments();}catch{setErr('Failed');}}} style={{background:'#2e7d32',color:'white',border:'none',borderRadius:4,padding:'4px 8px',cursor:'pointer',fontWeight:600,fontSize:'0.8rem'}}>✓</button>
                             <button onClick={()=>setShowRecordPay(null)} style={{background:'none',border:'1px solid #ddd',borderRadius:4,padding:'4px 6px',cursor:'pointer',fontSize:'0.8rem'}}>✕</button>
                           </div>
                         ) : (
@@ -262,7 +262,7 @@ function BusinessPage() {
                     <td style={{padding:'10px 12px',textAlign:'center'}}><span style={{padding:'2px 8px',borderRadius:4,fontSize:'0.75rem',fontWeight:600,background:'#e3f2fd',color:'#1565c0'}}>{p.paymentMethod||'—'}</span></td>
                     <td style={{padding:'10px 12px',color:'#666'}}>{p.paymentReference||'—'}</td>
                     <td style={{padding:'10px 12px',textAlign:'right',fontWeight:700,color:'#2e7d32'}}>{fmt(p.grandTotal)}</td>
-                    <td style={{padding:'10px 12px',textAlign:'center'}}><button onClick={async()=>{if(!window.confirm('Undo this payment?'))return;try{await clearPayment(p.id);showMsg('Payment cleared');await loadPayments();}catch{}}} style={{background:'none',border:'none',cursor:'pointer',color:'#c62828',fontSize:'0.8rem'}} title="Undo payment">↩️</button></td>
+                    <td style={{padding:'10px 12px',textAlign:'center'}}><button onClick={async()=>{if(!window.confirm('Undo this payment?'))return;try{await clearBusinessPayment(p.id);showMsg('Payment cleared');await loadPayments();}catch{}}} style={{background:'none',border:'none',cursor:'pointer',color:'#c62828',fontSize:'0.8rem'}} title="Undo payment">↩️</button></td>
                   </tr>
                 ))}</tbody>
               </table>
