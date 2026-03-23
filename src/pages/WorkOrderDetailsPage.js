@@ -3311,8 +3311,7 @@ function WorkOrderDetailsPage() {
             <div style={{ marginTop: 12, padding: 12, background: '#fce4ec', border: '1px solid #e91e63', borderRadius: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#c2185b' }}>🔓 Minimum Override Active</span>
-                {isEditing && (
-                  <button className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }}
+                <button className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }}
                   onClick={async () => {
                     setEditData({ ...editData, minimumOverride: false, minimumOverrideReason: '' });
                     try { await updateWorkOrder(id, { minimumOverride: false, minimumOverrideReason: '' }); showMessage('Override removed'); } catch {}
