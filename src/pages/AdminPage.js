@@ -2629,7 +2629,7 @@ function AdminPage({ section = 'users-logs' }) {
                           {email.estimateId && <a href={`/estimates/${email.estimateId}`} style={{ color: '#1565C0', fontWeight: 600 }}>View Estimate</a>}
                           {email.errorMessage && <span style={{ color: '#c62828', display: 'block', marginBottom: 4 }}>{email.errorMessage.substring(0, 60)}</span>}
                           <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
-                            {(email.status === 'error' || email.status === 'processed') && (
+                            {(email.status === 'error' || email.status === 'processed' || email.status === 'follow_up' || email.status === 'notification') && (
                               <button className="btn btn-sm" onClick={async () => {
                                 try {
                                   setError(''); setSuccess('');
