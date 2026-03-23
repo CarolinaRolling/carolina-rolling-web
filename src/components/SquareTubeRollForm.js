@@ -67,6 +67,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   const [completeRings, setCompleteRings] = useState(!!(partData._completeRings));
   const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
   const [tangentLength, setTangentLength] = useState(partData._tangentLength || '12');
+  const [kerfWidth, setKerfWidth] = useState(partData._kerfWidth || '0.125');
 
   // Load grades from admin settings
   useEffect(() => {
@@ -158,19 +159,28 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     if (!completeRings || clDiameter <= 0) return null;
     const circumference = Math.PI * clDiameter;
     const tang = parseFloat(tangentLength) || 0;
-    const usable = lengthInches - (2 * tang);
-    if (usable <= 0) return { error: 'Length too short after tangents' };
+    const kerf = parseFloat(kerfWidth) || 0.125;
     const numRings = parseInt(ringsNeeded) || 1;
-    if (circumference <= usable) {
-      const ringsPerStick = Math.floor(usable / circumference);
+    // Each ring piece = circumference + tangent on each end for machine grip
+    const cutLengthPerRing = circumference + (2 * tang);
+    if (cutLengthPerRing <= 0) return { error: 'Invalid ring dimensions' };
+    if (circumference <= lengthInches) {
+      // Rings fit within stock length — how many per stick?
+      const ringsPerStick = Math.floor(lengthInches / (cutLengthPerRing + kerf)) || 1;
       const sticksNeeded = Math.ceil(numRings / ringsPerStick);
-      return { circumference, usable, ringsPerStick, sticksNeeded, tangent: tang, multiSegment: false };
+      const totalMaterialUsed = sticksNeeded * lengthInches;
+      const usefulMaterial = numRings * cutLengthPerRing;
+      const wastePercent = totalMaterialUsed > 0 ? ((totalMaterialUsed - usefulMaterial) / totalMaterialUsed * 100) : 0;
+      return { circumference, cutLengthPerRing, ringsPerStick, sticksNeeded, tangent: tang, kerf, multiSegment: false, wastePercent, stockLength: lengthInches };
     } else {
-      const segmentsPerRing = Math.ceil(circumference / usable);
+      // Ring is larger than stock length — need multiple segments per ring
+      const usablePerStick = lengthInches - (2 * tang);
+      if (usablePerStick <= 0) return { error: 'Stock too short for tangents' };
+      const segmentsPerRing = Math.ceil(circumference / usablePerStick);
       const sticksNeeded = segmentsPerRing * numRings;
-      return { circumference, usable, segmentsPerRing, sticksNeeded, tangent: tang, multiSegment: true };
+      return { circumference, cutLengthPerRing, segmentsPerRing, sticksNeeded, tangent: tang, kerf, multiSegment: true, stockLength: lengthInches };
     }
-  }, [completeRings, clDiameter, lengthInches, tangentLength, ringsNeeded]);
+  }, [completeRings, clDiameter, lengthInches, tangentLength, kerfWidth, ringsNeeded]);
 
   // Auto-update quantity when complete rings changes
   useEffect(() => {
@@ -188,6 +198,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
         _completeRings: true,
         _ringsNeeded: ringsNeeded,
         _tangentLength: tangentLength,
+        _kerfWidth: kerfWidth,
         _ringSticksNeeded: ringCalc.sticksNeeded,
         _ringRingsPerStick: ringCalc.ringsPerStick || 0,
         _ringMultiSegment: ringCalc.multiSegment || false,
@@ -252,11 +263,11 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
 
     if (completeRings && ringCalc && !ringCalc.error) {
       if (!ringCalc.multiSegment) {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.ringsPerStick} rings/stick, ${ringCalc.sticksNeeded} stick(s) needed`);
+        lines.push(`Complete Ring — ${ringsNeeded} ring(s), cut ${ringCalc.cutLengthPerRing.toFixed(2)}"/ring, ${ringCalc.ringsPerStick}/stick, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
       } else {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.segmentsPerRing} segments/ring, ${ringCalc.sticksNeeded} stick(s) needed`);
+        lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.segmentsPerRing} segments/ring, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
       }
-      lines.push(`Tangents: ${ringCalc.tangent}" each end`);
+      lines.push(`Tangents: ${ringCalc.tangent}" each end, Kerf: ${ringCalc.kerf}"`);
     }
 
     lines.push(...getPitchDescriptionLines(partData, clDiameter));
@@ -576,7 +587,20 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
                   <label className="form-label">Tangent Each End (inches)</label>
                   <input type="number" step="0.5" className="form-input" value={tangentLength}
                     onFocus={(e) => e.target.select()} onChange={(e) => setTangentLength(e.target.value)} />
-                  <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Flat/straight ends that won't bend</div>
+                  <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Machine grab — straight material each end per ring</div>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Saw Kerf (inches)</label>
+                  <input type="number" step="0.0625" className="form-input" value={kerfWidth}
+                    onFocus={(e) => e.target.select()} onChange={(e) => setKerfWidth(e.target.value)} />
+                  <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Blade width lost per cut</div>
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label" style={{ color: '#888' }}>Stock Length</label>
+                  <div style={{ padding: '8px 12px', background: '#f5f5f5', borderRadius: 6, fontWeight: 600 }}>{lengthInches}"  ({(lengthInches / 12).toFixed(1)}')</div>
+                  <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>From the Length field above</div>
                 </div>
               </div>
 

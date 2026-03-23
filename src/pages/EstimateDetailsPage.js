@@ -42,7 +42,7 @@ const PART_TYPES = {
   tee_bar: { label: 'Tee Bars', icon: '🇹', desc: 'Structural tee rolling' },
   press_brake: { label: 'Press Brake', icon: '⏏️', desc: 'Press brake forming from print' },
   flat_stock: { label: 'Flat Stock', icon: '📄', desc: 'Ship flat — plate, angle, tube, channel, beam (no rolling)' },
-  fab_service: { label: 'Fabrication Service', icon: '🔥', desc: 'Welding, fitting, cut-to-fit — links to another part' },
+  fab_service: { label: 'Fabrication Service', icon: '🔥', desc: 'Welding, fitting, cut-to-size — links to another part' },
   shop_rate: { label: 'Shop Rate', icon: '⏱️', desc: 'Hourly rate — flattening, art projects, custom work' },
   rush_service: { label: 'Expedite & Emergency', icon: '🚨', desc: 'Rush order surcharge and off-hour opening fees' },
   other: { label: 'Other', icon: '📦', desc: 'Custom or miscellaneous parts' }
@@ -95,7 +95,8 @@ function EstimateDetailsPage() {
     taxExempt: false, taxExemptReason: '', taxExemptCertNumber: '',
     truckingDescription: '', truckingCost: 0,
     discountPercent: '', discountAmount: '', discountReason: '',
-    minimumOverride: false, minimumOverrideReason: ''
+    minimumOverride: false, minimumOverrideReason: '',
+    showDualPricing: false
   });
 
   const [parts, setParts] = useState([]);
@@ -252,7 +253,8 @@ function EstimateDetailsPage() {
         discountAmount: data.discountAmount || '',
         discountReason: data.discountReason || '',
         minimumOverride: data.minimumOverride || false,
-        minimumOverrideReason: data.minimumOverrideReason || ''
+        minimumOverrideReason: data.minimumOverrideReason || '',
+        showDualPricing: data.showDualPricing || false
       });
       setParts((data.parts || []).sort((a, b) => a.partNumber - b.partNumber));
       setFiles(data.files || []);
@@ -595,6 +597,34 @@ function EstimateDetailsPage() {
     const taxAmount = formData.taxExempt ? 0 : afterDiscount * (parseFloat(formData.taxRate) / 100);
     const grandTotal = afterDiscount + taxAmount + trucking;
     
+    // Dual pricing: calculate labor-only total (customer supplies all material)
+    let laborOnlySubtotal = 0;
+    for (const part of parts) {
+      if (['fab_service', 'shop_rate', 'rush_service'].includes(part.partType)) {
+        laborOnlySubtotal += parseFloat(part.partTotal) || 0;
+      } else {
+        const qty = parseInt(part.quantity) || 1;
+        const labEach = parseFloat(part.laborTotal) || 0;
+        const opCost = parseFloat(part.outsideProcessingCost) || 0;
+        const opMarkup = parseFloat(part.outsideProcessingMarkupPercent) || 0;
+        const opEach = Math.round(opCost * (1 + opMarkup / 100) * 100) / 100;
+        const opTransport = parseFloat(part.outsideProcessingTransportCost) || 0;
+        const opTransportMarkup = parseFloat(part.outsideProcessingTransportMarkupPercent) || 0;
+        const opTransportEach = Math.round(opTransport * (1 + opTransportMarkup / 100) * 100) / 100;
+        laborOnlySubtotal += (labEach + opEach + opTransportEach) * qty;
+      }
+    }
+    laborOnlySubtotal += expediteAmount + emergencyAmount;
+    let laborOnlyDiscount = 0;
+    if (parseFloat(formData.discountPercent) > 0) {
+      laborOnlyDiscount = laborOnlySubtotal * (parseFloat(formData.discountPercent) / 100);
+    } else if (parseFloat(formData.discountAmount) > 0) {
+      laborOnlyDiscount = parseFloat(formData.discountAmount);
+    }
+    const laborOnlyAfterDiscount = laborOnlySubtotal - laborOnlyDiscount;
+    const laborOnlyTax = formData.taxExempt ? 0 : laborOnlyAfterDiscount * (parseFloat(formData.taxRate) / 100);
+    const laborOnlyTotal = laborOnlyAfterDiscount + laborOnlyTax + trucking;
+    
     // Calculate credit card totals (Square fees)
     // In-Person: 2.6% + $0.15
     const ccInPersonFee = (grandTotal * 2.6 / 100) + 0.15;
@@ -603,7 +633,7 @@ function EstimateDetailsPage() {
     const ccManualFee = (grandTotal * 3.5 / 100) + 0.15;
     const ccManualTotal = grandTotal + ccManualFee;
     
-    return { partsSubtotal, discountAmt, afterDiscount, trucking, taxAmount, grandTotal, ccInPersonFee, ccInPersonTotal, ccManualFee, ccManualTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel };
+    return { partsSubtotal, discountAmt, afterDiscount, trucking, taxAmount, grandTotal, laborOnlySubtotal, laborOnlyTotal, ccInPersonFee, ccInPersonTotal, ccManualFee, ccManualTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel };
   };
 
   const generatePdfPreview = async () => {
@@ -622,7 +652,8 @@ function EstimateDetailsPage() {
           discountAmount: formData.discountAmount,
           discountReason: formData.discountReason,
           minimumOverride: formData.minimumOverride,
-          minimumOverrideReason: formData.minimumOverrideReason
+          minimumOverrideReason: formData.minimumOverrideReason,
+          showDualPricing: formData.showDualPricing
         });
       } catch (saveErr) {
         console.warn('Auto-save before PDF failed:', saveErr);
@@ -1054,6 +1085,40 @@ function EstimateDetailsPage() {
           console.error('Auto-upload file failed:', fileErr);
         }
       }
+
+      // Auto-add Cut to Size fab service for complete rings
+      if (dataToSend._completeRings && savedPartId && dataToSend.partType !== 'fab_service' && dataToSend.partType !== 'shop_rate') {
+        try {
+          // Check if a cut_to_size service already exists for this part
+          const currentParts = parts || [];
+          const existingCut = currentParts.find(p => 
+            (p.partType === 'fab_service') && 
+            ((p.formData || {})._linkedPartId === savedPartId || p._linkedPartId === savedPartId) &&
+            ((p.formData || {})._fabType === 'cut_to_size' || (p.formData || {})._fabType === 'cut_to_fit')
+          );
+          if (!existingCut) {
+            const ringCount = parseInt(dataToSend._ringsNeeded) || 1;
+            const sticksNeeded = parseInt(dataToSend._ringSticksNeeded) || 1;
+            await addEstimatePart(id, {
+              partType: 'fab_service',
+              quantity: ringCount,
+              _linkedPartId: savedPartId,
+              _fabType: 'cut_to_size',
+              specialInstructions: `Cut to size for ${ringCount} complete ring(s) — ${sticksNeeded} stock length(s)`,
+              laborTotal: '',
+              materialTotal: '0',
+              formData: {
+                _linkedPartId: savedPartId,
+                _fabType: 'cut_to_size',
+                _materialDescription: `✂️ Cut to Size — ${ringCount} ring(s) from ${sticksNeeded} length(s)`
+              }
+            });
+            console.log(`[AutoFab] Created Cut to Size service for part ${savedPartId}`);
+          }
+        } catch (fabErr) {
+          console.warn('[AutoFab] Failed to auto-add Cut to Size:', fabErr.message);
+        }
+      }
       
       await loadEstimate();
       regeneratePdfIfActive();
@@ -1475,6 +1540,21 @@ function EstimateDetailsPage() {
         ${discountLine}
         ${taxLine}
         <div class="total-row grand"><span>Grand Total</span><span>${formatCurrency(totals.grandTotal)}</span></div>
+        ${formData.showDualPricing ? `
+        <div style="margin-top:12px;border:2px solid #1565c0;border-radius:8px;overflow:hidden">
+          <div style="display:grid;grid-template-columns:1fr 1fr">
+            <div style="padding:10px 14px;background:#e3f2fd;border-right:1px solid #90caf9">
+              <div style="font-weight:700;color:#1565c0;margin-bottom:4px;font-size:0.85rem">Option A — With Material</div>
+              <div style="font-size:0.75rem;color:#555">We supply all material</div>
+              <div style="font-size:1.2rem;font-weight:800;color:#1565c0">${formatCurrency(totals.grandTotal)}</div>
+            </div>
+            <div style="padding:10px 14px;background:#fff8e1">
+              <div style="font-weight:700;color:#e65100;margin-bottom:4px;font-size:0.85rem">Option B — Labor Only</div>
+              <div style="font-size:0.75rem;color:#555">Customer supplies material</div>
+              <div style="font-size:1.2rem;font-weight:800;color:#e65100">${formatCurrency(totals.laborOnlyTotal)}</div>
+            </div>
+          </div>
+        </div>` : ''}
       </div>
 
       <div class="cc-box">
@@ -2923,6 +3003,37 @@ function EstimateDetailsPage() {
                 <div style={{ fontWeight: 600, color: '#333' }}>Total with Credit Card Fees</div>
                 <div>In-Person (2.6% + $0.15): <strong>{formatCurrency(totals.ccInPersonTotal)}</strong></div>
                 <div>Manual (3.5% + $0.15): <strong>{formatCurrency(totals.ccManualTotal)}</strong></div>
+              </div>
+
+              {/* Dual Pricing Toggle */}
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #e0e0e0' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={formData.showDualPricing || false}
+                    onChange={(e) => setFormData({ ...formData, showDualPricing: e.target.checked })}
+                    style={{ width: 16, height: 16, accentColor: '#1565c0' }} />
+                  <span style={{ fontWeight: 600, fontSize: '0.85rem', color: formData.showDualPricing ? '#1565c0' : '#666' }}>
+                    📊 Show Dual Pricing (with &amp; without material)
+                  </span>
+                </label>
+                {formData.showDualPricing && (
+                  <div style={{ marginTop: 10, borderRadius: 8, overflow: 'hidden', border: '2px solid #1565c0' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+                      <div style={{ padding: 12, background: '#e3f2fd', borderRight: '1px solid #90caf9' }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1565c0', marginBottom: 6 }}>Option A — With Material</div>
+                        <div style={{ fontSize: '0.8rem', color: '#555', marginBottom: 2 }}>We supply all material</div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#1565c0' }}>{formatCurrency(totals.grandTotal)}</div>
+                      </div>
+                      <div style={{ padding: 12, background: '#fff8e1' }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#e65100', marginBottom: 6 }}>Option B — Labor Only</div>
+                        <div style={{ fontSize: '0.8rem', color: '#555', marginBottom: 2 }}>Customer supplies material</div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#e65100' }}>{formatCurrency(totals.laborOnlyTotal)}</div>
+                      </div>
+                    </div>
+                    <div style={{ padding: '6px 12px', background: '#f5f5f5', fontSize: '0.75rem', color: '#888', textAlign: 'center' }}>
+                      Material difference: {formatCurrency(totals.grandTotal - totals.laborOnlyTotal)}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

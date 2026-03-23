@@ -7,7 +7,7 @@ const SERVICE_TYPES = [
   { key: 'bevel', label: 'Bevel', icon: '📐', color: '#4527a0', hasWeldCalc: false },
   { key: 'bracing', label: 'Bracing', icon: '🔩', color: '#00695c', hasWeldCalc: false },
   { key: 'fit', label: 'Fit Only', icon: '🔧', color: '#1565c0', hasWeldCalc: false },
-  { key: 'cut_to_fit', label: 'Cut to Fit', icon: '✂️', color: '#2e7d32', hasWeldCalc: false },
+  { key: 'cut_to_size', label: 'Cut to Size', icon: '✂️', color: '#2e7d32', hasWeldCalc: false },
   { key: 'finishing', label: 'Finishing', icon: '✨', color: '#6a1b9a', hasWeldCalc: false },
   { key: 'other', label: 'Other Service', icon: '🛠️', color: '#616161', hasWeldCalc: false },
 ];
