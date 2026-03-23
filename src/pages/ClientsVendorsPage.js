@@ -58,9 +58,9 @@ const ClientsVendorsPage = () => {
       setEditing(null);
       setFormData({
         name: addClientName,
-        contactName: '', contactPhone: '', contactEmail: '',
         address: '', taxStatus: 'taxable', resaleCertificate: '',
-        customTaxRate: '', paymentTerms: '', apEmail: '', quickbooksName: '', notes: ''
+        customTaxRate: '', paymentTerms: '', apEmail: '', quickbooksName: '', notes: '',
+        contacts: [], accountingContactName: '', accountingContactEmail: '', accountingContactPhone: ''
       });
       setShowModal(true);
       // Clear the query param so it doesn't re-trigger
@@ -92,18 +92,29 @@ const ClientsVendorsPage = () => {
   // Client functions
   const openClientModal = (client = null) => {
     setEditing(client);
-    setFormData(client ? { ...client } : {
-      name: '',
-      contactName: '',
-      contactPhone: '',
-      contactEmail: '',
-      address: '',
-      taxStatus: 'taxable',
-      resaleCertificate: '',
-      customTaxRate: '',
-      paymentTerms: '', apEmail: '', quickbooksName: '',
-      notes: ''
-    });
+    if (client) {
+      const data = { ...client };
+      // Migrate primary contact into contacts array if not already there
+      if (data.contactName && (!data.contacts || !data.contacts.some(c => c.isPrimary))) {
+        const existing = data.contacts || [];
+        data.contacts = [{ name: data.contactName, email: data.contactEmail || '', phone: data.contactPhone || '', role: '', isPrimary: true }, ...existing.map(c => ({ ...c, isPrimary: false }))];
+      }
+      setFormData(data);
+    } else {
+      setFormData({
+        name: '',
+        address: '',
+        taxStatus: 'taxable',
+        resaleCertificate: '',
+        customTaxRate: '',
+        paymentTerms: '', apEmail: '', quickbooksName: '',
+        notes: '',
+        contacts: [],
+        accountingContactName: '',
+        accountingContactEmail: '',
+        accountingContactPhone: ''
+      });
+    }
     setShowModal(true);
   };
 
@@ -189,15 +200,25 @@ const ClientsVendorsPage = () => {
   // Vendor functions
   const openVendorModal = (vendor = null) => {
     setEditing(vendor);
-    setFormData(vendor ? { ...vendor } : {
-      name: '',
-      contactName: '',
-      contactPhone: '',
-      contactEmail: '',
-      address: '',
-      accountNumber: '',
-      notes: ''
-    });
+    if (vendor) {
+      const data = { ...vendor };
+      if (data.contactName && (!data.contacts || !data.contacts.some(c => c.isPrimary))) {
+        const existing = data.contacts || [];
+        data.contacts = [{ name: data.contactName, email: data.contactEmail || '', phone: data.contactPhone || '', role: '', isPrimary: true }, ...existing.map(c => ({ ...c, isPrimary: false }))];
+      }
+      setFormData(data);
+    } else {
+      setFormData({
+        name: '',
+        address: '',
+        accountNumber: '',
+        notes: '',
+        contacts: [],
+        accountingContactName: '',
+        accountingContactEmail: '',
+        accountingContactPhone: ''
+      });
+    }
     setShowModal(true);
   };
 
@@ -405,6 +426,34 @@ const ClientsVendorsPage = () => {
                     {activeTab === 'vendors' && selectedItem.accountNumber && <div><span style={{ color: '#888' }}>Account:</span> {selectedItem.accountNumber}</div>}
                     {selectedItem.notes && <div style={{ gridColumn: 'span 2', color: '#666', fontStyle: 'italic' }}>{selectedItem.notes}</div>}
                   </div>
+                  {/* Contacts list */}
+                  {((selectedItem.contacts && selectedItem.contacts.length > 0) || selectedItem.accountingContactName || selectedItem.accountingContactEmail) && (
+                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #f0f0f0' }}>
+                      {selectedItem.contacts && selectedItem.contacts.length > 0 && (
+                        <div style={{ marginBottom: 8 }}>
+                          <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: 4 }}>Additional Contacts:</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {selectedItem.contacts.map((c, i) => (
+                              <div key={i} style={{ padding: '4px 10px', background: '#f5f5f5', borderRadius: 6, fontSize: '0.8rem', border: '1px solid #e8e8e8' }}>
+                                <span style={{ fontWeight: 600 }}>{c.name || 'No name'}</span>
+                                {c.role && <span style={{ color: '#1976d2', marginLeft: 4 }}>({c.role})</span>}
+                                {c.email && <span style={{ color: '#666', marginLeft: 6 }}>{c.email}</span>}
+                                {c.phone && <span style={{ color: '#888', marginLeft: 6 }}>{c.phone}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {(selectedItem.accountingContactName || selectedItem.accountingContactEmail) && (
+                        <div style={{ fontSize: '0.8rem' }}>
+                          <span style={{ color: '#888' }}>🧾 Accounting:</span>{' '}
+                          <span style={{ fontWeight: 500 }}>{selectedItem.accountingContactName || ''}</span>
+                          {selectedItem.accountingContactEmail && <span style={{ color: '#666', marginLeft: 6 }}>{selectedItem.accountingContactEmail}</span>}
+                          {selectedItem.accountingContactPhone && <span style={{ color: '#888', marginLeft: 6 }}>{selectedItem.accountingContactPhone}</span>}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Work History */}
@@ -649,47 +698,60 @@ const ClientsVendorsPage = () => {
                 <label className="form-label">Client Name *</label>
                 <input className="form-input" value={formData.name || ''} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Company or person name" />
               </div>
-              <div className="form-group">
-                <label className="form-label">Primary Contact</label>
-                <input className="form-input" value={formData.contactName || ''} onChange={(e) => setFormData({ ...formData, contactName: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Primary Phone</label>
-                <input className="form-input" value={formatPhone(formData.contactPhone || '')} onChange={(e) => setFormData({ ...formData, contactPhone: formatPhone(e.target.value) })} />
-              </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Primary Email</label>
-                <input className="form-input" type="email" value={formData.contactEmail || ''} onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })} />
-              </div>
 
-              {/* Additional Contacts (purchasing reps, etc.) */}
-              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 12, marginTop: 4 }}>
+              {/* Unified Contacts */}
+              <div style={{ gridColumn: 'span 2' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <h4 style={{ margin: 0, color: '#1976d2', fontSize: '0.9rem' }}>👥 Additional Contacts</h4>
+                  <h4 style={{ margin: 0, color: '#1976d2', fontSize: '0.9rem' }}>👥 Contacts</h4>
                   <button type="button" onClick={() => {
-                    const contacts = [...(formData.contacts || []), { name: '', email: '', phone: '' }];
+                    const contacts = [...(formData.contacts || []), { name: '', email: '', phone: '', role: '', isPrimary: (formData.contacts || []).length === 0 }];
                     setFormData({ ...formData, contacts });
                   }} style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: '#1565c0' }}>
                     + Add Contact
                   </button>
                 </div>
                 {(formData.contacts || []).length === 0 && (
-                  <div style={{ fontSize: '0.8rem', color: '#999', padding: 8, textAlign: 'center' }}>No additional contacts. Add purchasing reps here.</div>
+                  <div style={{ fontSize: '0.8rem', color: '#999', padding: 12, textAlign: 'center', background: '#fafafa', borderRadius: 6, border: '1px dashed #ddd' }}>No contacts yet — add your first contact</div>
                 )}
                 {(formData.contacts || []).map((contact, idx) => (
-                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 6, marginBottom: 6, padding: 8, background: '#f9f9f9', borderRadius: 6, border: '1px solid #eee' }}>
-                    <input className="form-input" placeholder="Name" value={contact.name || ''} style={{ fontSize: '0.85rem' }}
-                      onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], name: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
-                    <input className="form-input" placeholder="Email" type="email" value={contact.email || ''} style={{ fontSize: '0.85rem' }}
-                      onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], email: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
-                    <input className="form-input" placeholder="Phone" value={formatPhone(contact.phone || '')} style={{ fontSize: '0.85rem' }}
-                      onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], phone: formatPhone(e.target.value) }; setFormData({ ...formData, contacts: c }); }} />
-                    <button type="button" onClick={() => { const c = [...(formData.contacts || [])]; c.splice(idx, 1); setFormData({ ...formData, contacts: c }); }}
-                      style={{ background: '#ffebee', border: '1px solid #ef9a9a', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', alignSelf: 'center' }}>
-                      <X size={14} color="#c62828" />
-                    </button>
+                  <div key={idx} style={{ marginBottom: 6, padding: '8px 10px', background: contact.isPrimary ? '#e8f5e9' : '#f9f9f9', borderRadius: 6, border: `1px solid ${contact.isPrimary ? '#66bb6a' : '#eee'}` }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 0.7fr auto', gap: 6 }}>
+                      <input className="form-input" placeholder="Name" value={contact.name || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], name: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                      <input className="form-input" placeholder="Email" type="email" value={contact.email || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], email: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                      <input className="form-input" placeholder="Phone" value={formatPhone(contact.phone || '')} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], phone: formatPhone(e.target.value) }; setFormData({ ...formData, contacts: c }); }} />
+                      <input className="form-input" placeholder="Role" value={contact.role || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], role: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                      <button type="button" onClick={() => { const c = [...(formData.contacts || [])]; c.splice(idx, 1); setFormData({ ...formData, contacts: c }); }}
+                        style={{ background: '#ffebee', border: '1px solid #ef9a9a', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', alignSelf: 'center' }}>
+                        <X size={14} color="#c62828" />
+                      </button>
+                    </div>
+                    <div style={{ marginTop: 4 }}>
+                      <button type="button" onClick={() => {
+                        const c = (formData.contacts || []).map((ct, i) => ({ ...ct, isPrimary: i === idx }));
+                        setFormData({ ...formData, contacts: c, contactName: c[idx].name, contactEmail: c[idx].email, contactPhone: c[idx].phone });
+                      }} style={{ background: contact.isPrimary ? '#2e7d32' : '#f0f0f0', color: contact.isPrimary ? 'white' : '#666', border: 'none', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                        {contact.isPrimary ? '★ Primary' : '☆ Set as Primary'}
+                      </button>
+                    </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Accounting Contact */}
+              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 12, marginTop: 4 }}>
+                <h4 style={{ margin: 0, marginBottom: 8, color: '#2e7d32', fontSize: '0.9rem' }}>🧾 Accounting Contact</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  <input className="form-input" placeholder="Name" value={formData.accountingContactName || ''} style={{ fontSize: '0.85rem' }}
+                    onChange={(e) => setFormData({ ...formData, accountingContactName: e.target.value })} />
+                  <input className="form-input" placeholder="Email" type="email" value={formData.accountingContactEmail || ''} style={{ fontSize: '0.85rem' }}
+                    onChange={(e) => setFormData({ ...formData, accountingContactEmail: e.target.value })} />
+                  <input className="form-input" placeholder="Phone" value={formatPhone(formData.accountingContactPhone || '')} style={{ fontSize: '0.85rem' }}
+                    onChange={(e) => setFormData({ ...formData, accountingContactPhone: formatPhone(e.target.value) })} />
+                </div>
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label">Address</label>
@@ -943,18 +1005,49 @@ const ClientsVendorsPage = () => {
                 <label className="form-label">Vendor Name *</label>
                 <input className="form-input" value={formData.name || ''} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Company name" />
               </div>
-              <div className="form-group">
-                <label className="form-label">Contact Name</label>
-                <input className="form-input" value={formData.contactName || ''} onChange={(e) => setFormData({ ...formData, contactName: e.target.value })} />
+
+              {/* Unified Contacts */}
+              <div style={{ gridColumn: 'span 2' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <h4 style={{ margin: 0, color: '#1976d2', fontSize: '0.9rem' }}>👥 Contacts</h4>
+                  <button type="button" onClick={() => {
+                    const contacts = [...(formData.contacts || []), { name: '', email: '', phone: '', role: '', isPrimary: (formData.contacts || []).length === 0 }];
+                    setFormData({ ...formData, contacts });
+                  }} style={{ background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: '#1565c0' }}>
+                    + Add Contact
+                  </button>
+                </div>
+                {(formData.contacts || []).length === 0 && (
+                  <div style={{ fontSize: '0.8rem', color: '#999', padding: 12, textAlign: 'center', background: '#fafafa', borderRadius: 6, border: '1px dashed #ddd' }}>No contacts yet — add your first contact</div>
+                )}
+                {(formData.contacts || []).map((contact, idx) => (
+                  <div key={idx} style={{ marginBottom: 6, padding: '8px 10px', background: contact.isPrimary ? '#e8f5e9' : '#f9f9f9', borderRadius: 6, border: `1px solid ${contact.isPrimary ? '#66bb6a' : '#eee'}` }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 0.7fr auto', gap: 6 }}>
+                      <input className="form-input" placeholder="Name" value={contact.name || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], name: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                      <input className="form-input" placeholder="Email" type="email" value={contact.email || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], email: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                      <input className="form-input" placeholder="Phone" value={formatPhone(contact.phone || '')} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], phone: formatPhone(e.target.value) }; setFormData({ ...formData, contacts: c }); }} />
+                      <input className="form-input" placeholder="Role" value={contact.role || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], role: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                      <button type="button" onClick={() => { const c = [...(formData.contacts || [])]; c.splice(idx, 1); setFormData({ ...formData, contacts: c }); }}
+                        style={{ background: '#ffebee', border: '1px solid #ef9a9a', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', alignSelf: 'center' }}>
+                        <X size={14} color="#c62828" />
+                      </button>
+                    </div>
+                    <div style={{ marginTop: 4 }}>
+                      <button type="button" onClick={() => {
+                        const c = (formData.contacts || []).map((ct, i) => ({ ...ct, isPrimary: i === idx }));
+                        setFormData({ ...formData, contacts: c, contactName: c[idx].name, contactEmail: c[idx].email, contactPhone: c[idx].phone });
+                      }} style={{ background: contact.isPrimary ? '#2e7d32' : '#f0f0f0', color: contact.isPrimary ? 'white' : '#666', border: 'none', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                        {contact.isPrimary ? '★ Primary' : '☆ Set as Primary'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="form-group">
-                <label className="form-label">Phone</label>
-                <input className="form-input" value={formatPhone(formData.contactPhone || '')} onChange={(e) => setFormData({ ...formData, contactPhone: formatPhone(e.target.value) })} />
-              </div>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Email</label>
-                <input className="form-input" type="email" value={formData.contactEmail || ''} onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })} />
-              </div>
+
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label">Address</label>
                 <textarea className="form-textarea" value={formData.address || ''} onChange={(e) => setFormData({ ...formData, address: e.target.value })} rows={2} />
@@ -966,6 +1059,19 @@ const ClientsVendorsPage = () => {
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label">Notes</label>
                 <textarea className="form-textarea" value={formData.notes || ''} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={2} />
+              </div>
+
+              {/* Accounting Contact */}
+              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 12, marginTop: 4 }}>
+                <h4 style={{ margin: 0, marginBottom: 8, color: '#2e7d32', fontSize: '0.9rem' }}>🧾 Accounting Contact</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  <input className="form-input" placeholder="Name" value={formData.accountingContactName || ''} style={{ fontSize: '0.85rem' }}
+                    onChange={(e) => setFormData({ ...formData, accountingContactName: e.target.value })} />
+                  <input className="form-input" placeholder="Email" type="email" value={formData.accountingContactEmail || ''} style={{ fontSize: '0.85rem' }}
+                    onChange={(e) => setFormData({ ...formData, accountingContactEmail: e.target.value })} />
+                  <input className="form-input" placeholder="Phone" value={formatPhone(formData.accountingContactPhone || '')} style={{ fontSize: '0.85rem' }}
+                    onChange={(e) => setFormData({ ...formData, accountingContactPhone: formatPhone(e.target.value) })} />
+                </div>
               </div>
               
               {/* Email Scanning */}

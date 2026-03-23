@@ -4003,7 +4003,7 @@ function EstimateDetailsPage() {
                     {rfqContacts.length > 1 ? (
                       <select className="form-select" value={rfqSelectedEmail} onChange={e => setRfqSelectedEmail(e.target.value)}>
                         {rfqContacts.map((c, i) => (
-                          <option key={i} value={c.email}>{c.name ? `${c.name} — ${c.email}` : c.email}</option>
+                          <option key={i} value={c.email}>{c.name ? `${c.name}` : c.email}{c.role ? ` (${c.role})` : ''} — {c.email}</option>
                         ))}
                       </select>
                     ) : rfqContacts.length === 1 ? (
@@ -4071,6 +4071,7 @@ function EstimateDetailsPage() {
                     const res = await sendVendorRfq(id, {
                       vendorId: rfqSelectedVendor.id,
                       contactEmail: rfqSelectedEmail,
+                      contactName: (rfqContacts.find(c => c.email === rfqSelectedEmail) || {}).name || '',
                       partIds: rfqSelectedParts
                     });
                     const draftUrl = res.data.data?.draftUrl;
