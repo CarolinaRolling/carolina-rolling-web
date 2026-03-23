@@ -3288,15 +3288,16 @@ function WorkOrderDetailsPage() {
               <div style={{ fontSize: '0.8rem', color: '#bf360c', marginBottom: 8 }}>
                 Labor adjusted up by {formatCurrency(calculateTotals().minInfo.laborDifference)}
               </div>
-              {isEditing && (
-                <button
-                  className="btn btn-sm"
-                  style={{ background: '#ff9800', color: '#fff', border: 'none', fontSize: '0.75rem' }}
-                  onClick={() => setEditData({ ...editData, minimumOverride: true })}
-                >
-                  Override Minimum
-                </button>
-              )}
+              <button
+                className="btn btn-sm"
+                style={{ background: '#ff9800', color: '#fff', border: 'none', fontSize: '0.75rem' }}
+                onClick={async () => {
+                  setEditData({ ...editData, minimumOverride: true });
+                  try { await updateWorkOrder(id, { minimumOverride: true }); showMessage('Minimum override applied'); } catch {}
+                }}
+              >
+                Override Minimum
+              </button>
             </div>
           )}
 
@@ -3312,10 +3313,12 @@ function WorkOrderDetailsPage() {
                 <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#c2185b' }}>🔓 Minimum Override Active</span>
                 {isEditing && (
                   <button className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }}
-                    onClick={() => setEditData({ ...editData, minimumOverride: false, minimumOverrideReason: '' })}>
-                    Remove
-                  </button>
-                )}
+                  onClick={async () => {
+                    setEditData({ ...editData, minimumOverride: false, minimumOverrideReason: '' });
+                    try { await updateWorkOrder(id, { minimumOverride: false, minimumOverrideReason: '' }); showMessage('Override removed'); } catch {}
+                  }}>
+                  Remove
+                </button>
               </div>
               {isEditing && (
                 <input type="text" className="form-input" placeholder="Override reason..."

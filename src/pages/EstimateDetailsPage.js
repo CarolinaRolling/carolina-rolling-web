@@ -2942,7 +2942,10 @@ function EstimateDetailsPage() {
                 <button
                   className="btn btn-sm"
                   style={{ background: '#ff9800', color: '#fff', border: 'none', fontSize: '0.75rem' }}
-                  onClick={() => setFormData({ ...formData, minimumOverride: true })}
+                  onClick={async () => {
+                    setFormData({ ...formData, minimumOverride: true });
+                    try { await updateEstimate(id, { minimumOverride: true }); } catch {}
+                  }}
                 >
                   Override Minimum
                 </button>
@@ -2960,7 +2963,10 @@ function EstimateDetailsPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#c2185b' }}>🔓 Minimum Override Active</span>
                   <button className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }}
-                    onClick={() => setFormData({ ...formData, minimumOverride: false, minimumOverrideReason: '' })}>
+                    onClick={async () => {
+                      setFormData({ ...formData, minimumOverride: false, minimumOverrideReason: '' });
+                      try { await updateEstimate(id, { minimumOverride: false, minimumOverrideReason: '' }); } catch {}
+                    }}>
                     Remove
                   </button>
                 </div>
