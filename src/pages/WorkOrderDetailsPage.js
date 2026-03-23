@@ -2621,6 +2621,26 @@ function WorkOrderDetailsPage() {
                     style={{ background: '#6a1b9a', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
                     <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
                   </button>
+                  <button onClick={async () => {
+                    try {
+                      const response = await downloadWorkOrderDocument(id, doc.id);
+                      const blob = new Blob([response.data], { type: response.headers['content-type'] || 'application/pdf' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url; a.download = doc.originalName || 'MTR.pdf';
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                      window.URL.revokeObjectURL(url);
+                    } catch {
+                      const token = localStorage.getItem('token');
+                      const baseUrl = process.env.REACT_APP_API_URL || '';
+                      const a = document.createElement('a');
+                      a.href = `${baseUrl}/workorders/${id}/documents/${doc.id}/download?token=${token}`;
+                      a.download = doc.originalName || 'MTR.pdf';
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    }
+                  }} style={{ background: '#4527a0', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
+                    ⬇ Download
+                  </button>
                   <button onClick={() => handleDeleteDocument(doc.id)} 
                     style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}>
                     <X size={14} />

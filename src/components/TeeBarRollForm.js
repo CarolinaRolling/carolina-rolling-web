@@ -154,14 +154,27 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
 
   useEffect(() => {
     if (completeRings && ringCalc && !ringCalc.error) {
-      setPartData(prev => ({ ...prev, quantity: String(parseInt(ringsNeeded) || 1), _completeRings: true, _ringsNeeded: ringsNeeded, _tangentLength: tangentLength,
-        _kerfWidth: kerfWidth, _ringSticksNeeded: ringCalc.sticksNeeded, _ringRingsPerStick: ringCalc.ringsPerStick || 0, _ringMultiSegment: ringCalc.multiSegment || false }));
+      setPartData(prev => {
+      const numRings = parseInt(ringsNeeded) || 1;
+      const matPerLength = parseFloat(prev._ringMaterialPerLength) || 0;
+      const laborPerUnit = parseFloat(prev._ringLaborPerUnit) || 0;
+      const totalMat = matPerLength * ringCalc.sticksNeeded;
+      const matPerRing = numRings > 0 ? totalMat / numRings : 0;
+      return { ...prev,
+        quantity: String(numRings), _completeRings: true, _ringsNeeded: ringsNeeded, _tangentLength: tangentLength,
+        _kerfWidth: kerfWidth, _ringSticksNeeded: ringCalc.sticksNeeded, _ringRingsPerStick: ringCalc.ringsPerStick || 0, _ringMultiSegment: ringCalc.multiSegment || false,
+        materialTotal: matPerRing > 0 ? matPerRing.toFixed(2) : prev.materialTotal,
+        laborTotal: laborPerUnit > 0 ? laborPerUnit.toFixed(2) : prev.laborTotal,
+      };
+    });
     } else { setPartData(prev => ({ ...prev, _completeRings: false })); }
-  }, [completeRings, ringCalc, ringsNeeded, tangentLength]);
+  }, [completeRings, ringCalc, ringsNeeded, tangentLength, partData._ringMaterialPerLength, partData._ringLaborPerUnit]);
 
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
-    const parts = [`${qty}pc:`];
+    const parts = [completeRings && ringCalc && !ringCalc.error
+      ? `${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' length(s):`
+      : `${qty}pc:`];
     if (partData._teeSize && partData._teeSize !== 'Custom') parts.push(partData._teeSize);
     else if (partData._customTeeSize) parts.push(partData._customTeeSize);
     parts.push('Tee');
@@ -169,7 +182,7 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
     if (partData.material) parts.push(partData.material);
     if (partData._materialOrigin) parts.push(partData._materialOrigin);
     return parts.join(' ');
-  }, [partData._teeSize, partData._customTeeSize, partData.length, partData.material, partData._materialOrigin, partData.quantity]);
+  }, [partData._teeSize, partData._customTeeSize, partData.length, partData.material, partData._materialOrigin, partData.quantity, completeRings, ringCalc]);
 
   const rollingDescription = useMemo(() => {
     if (rollToMethod === 'template') return 'Roll Per Template / Sample';
@@ -365,7 +378,39 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
                   )}
                 </div>
               )}
-              {ringCalc && ringCalc.error && (<div style={{ background: '#ffebee', padding: 8, borderRadius: 6, fontSize: '0.85rem', color: '#c62828' }}>⚠️ {ringCalc.error}</div>)}
+              
+                  {/* Ring Pricing */}
+                  <div style={{ marginTop: 12, padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #a5d6a7' }}>
+                    <div style={{ fontWeight: 600, color: '#1565c0', marginBottom: 10, fontSize: '0.9rem' }}>💰 Ring Pricing</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Price Per Length (from supplier)</label>
+                        <div style={{ position: 'relative' }}>
+                          <input type="number" step="any" className="form-input" style={{ paddingLeft: 20 }}
+                            value={partData._ringMaterialPerLength || ''}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => setPartData(prev => ({ ...prev, _ringMaterialPerLength: e.target.value }))}
+                            placeholder="0.00" />
+                          <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 2 }}>
+                          {ringCalc.sticksNeeded} length(s) × ${parseFloat(partData._ringMaterialPerLength) || 0} = <strong>${((parseFloat(partData._ringMaterialPerLength) || 0) * ringCalc.sticksNeeded).toFixed(2)}</strong> total ÷ {ringsNeeded} = <strong>${(((parseFloat(partData._ringMaterialPerLength) || 0) * ringCalc.sticksNeeded) / (parseInt(ringsNeeded) || 1)).toFixed(2)}</strong>/ring
+                        </div>
+                      </div>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Labor Per Ring</label>
+                        <div style={{ position: 'relative' }}>
+                          <input type="number" step="any" className="form-input" style={{ paddingLeft: 20 }}
+                            value={partData._ringLaborPerUnit || ''}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => setPartData(prev => ({ ...prev, _ringLaborPerUnit: e.target.value }))}
+                            placeholder="0.00" />
+                          <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                {ringCalc && ringCalc.error && (<div style={{ background: '#ffebee', padding: 8, borderRadius: 6, fontSize: '0.85rem', color: '#c62828' }}>⚠️ {ringCalc.error}</div>)}
               {!ringCalc && clDiameter <= 0 && (<div style={{ background: '#fff3e0', padding: 8, borderRadius: 6, fontSize: '0.85rem', color: '#e65100' }}>⚠️ Enter a roll diameter/radius above</div>)}
             </div>
           )}

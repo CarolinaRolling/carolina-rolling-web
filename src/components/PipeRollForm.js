@@ -263,7 +263,9 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
     const parts = [];
-    parts.push(`${qty}pc:`);
+    parts.push(completeRings && ringCalc && !ringCalc.error
+      ? `${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' length(s):`
+      : `${qty}pc:`);
 
     if (selectedSize) {
       if (selectedSize.type === 'pipe') {
@@ -288,7 +290,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     if (origin) parts.push(origin);
 
     return parts.join(' ');
-  }, [partData._pipeSize, partData._schedule, partData.outerDiameter, partData.wallThickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, selectedSize]);
+  }, [partData._pipeSize, partData._schedule, partData.outerDiameter, partData.wallThickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, selectedSize, completeRings, ringCalc]);
 
   // Pitch / Helix calculations — cross-convert between input methods
   const pitchCalc = useMemo(() => {
@@ -899,6 +901,38 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                   )}
                 </div>
               )}
+
+                  {/* Ring Pricing */}
+                  <div style={{ marginTop: 12, padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #a5d6a7' }}>
+                    <div style={{ fontWeight: 600, color: '#1565c0', marginBottom: 10, fontSize: '0.9rem' }}>💰 Ring Pricing</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Price Per Length (from supplier)</label>
+                        <div style={{ position: 'relative' }}>
+                          <input type="number" step="any" className="form-input" style={{ paddingLeft: 20 }}
+                            value={partData._ringMaterialPerLength || ''}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => setPartData(prev => ({ ...prev, _ringMaterialPerLength: e.target.value }))}
+                            placeholder="0.00" />
+                          <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 2 }}>
+                          {ringCalc.sticksNeeded} length(s) × ${parseFloat(partData._ringMaterialPerLength) || 0} = <strong>${((parseFloat(partData._ringMaterialPerLength) || 0) * ringCalc.sticksNeeded).toFixed(2)}</strong> total ÷ {ringsNeeded} = <strong>${(((parseFloat(partData._ringMaterialPerLength) || 0) * ringCalc.sticksNeeded) / (parseInt(ringsNeeded) || 1)).toFixed(2)}</strong>/ring
+                        </div>
+                      </div>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Labor Per Ring</label>
+                        <div style={{ position: 'relative' }}>
+                          <input type="number" step="any" className="form-input" style={{ paddingLeft: 20 }}
+                            value={partData._ringLaborPerUnit || ''}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => setPartData(prev => ({ ...prev, _ringLaborPerUnit: e.target.value }))}
+                            placeholder="0.00" />
+                          <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
               {ringCalc && ringCalc.error && (
                 <div style={{ background: '#ffebee', padding: 8, borderRadius: 6, fontSize: '0.85rem', color: '#c62828' }}>
                   ⚠️ {ringCalc.error}

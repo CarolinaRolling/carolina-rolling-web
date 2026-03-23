@@ -225,7 +225,9 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     const descParts = [];
     
     // Quantity
-    descParts.push(`${qty}pc:`);
+    descParts.push(completeRings && ringCalc && !ringCalc.error
+      ? `${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' length(s):`
+      : `${qty}pc:`);
     
     // Angle size
     if (partData._angleSize && partData._angleSize !== 'Custom') {
@@ -258,7 +260,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     if (origin) descParts.push(origin);
     
     return descParts.join(' ');
-  }, [partData._angleSize, partData._customAngleSize, partData.thickness, partData.length, partData.material, partData._materialOrigin, partData.quantity]);
+  }, [partData._angleSize, partData._customAngleSize, partData.thickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, completeRings, ringCalc]);
 
   // Build rolling description
   const rollingDescription = useMemo(() => {
@@ -824,7 +826,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
                     <div style={{ fontWeight: 600, color: '#1565c0', marginBottom: 10, fontSize: '0.9rem' }}>💰 Ring Pricing</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Material Cost Per Length</label>
+                        <label className="form-label">Price Per Length (from supplier)</label>
                         <div style={{ position: 'relative' }}>
                           <input type="number" step="any" className="form-input" style={{ paddingLeft: 20 }}
                             value={partData._ringMaterialPerLength || ''}
@@ -834,7 +836,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
                           <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
                         </div>
                         <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 2 }}>
-                          {ringCalc.sticksNeeded} length(s) × ${parseFloat(partData._ringMaterialPerLength) || 0} = <strong>${((parseFloat(partData._ringMaterialPerLength) || 0) * ringCalc.sticksNeeded).toFixed(2)}</strong> total material
+                          {ringCalc.sticksNeeded} length(s) × ${parseFloat(partData._ringMaterialPerLength) || 0} = <strong>${((parseFloat(partData._ringMaterialPerLength) || 0) * ringCalc.sticksNeeded).toFixed(2)}</strong> total ÷ {ringsNeeded} = <strong>${(((parseFloat(partData._ringMaterialPerLength) || 0) * ringCalc.sticksNeeded) / (parseInt(ringsNeeded) || 1)).toFixed(2)}</strong>/ring
                         </div>
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
@@ -866,14 +868,20 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
                       const laborPerRing = totalLabor / numRings;
                       return (
                         <div style={{ marginTop: 10, padding: '8px 10px', background: '#e3f2fd', borderRadius: 6, fontSize: '0.85rem' }}>
+                          <div style={{ fontSize: '0.8rem', color: '#555', marginBottom: 4 }}>
+                            Material: ${matPerLength.toFixed(2)}/length × {ringCalc.sticksNeeded} lengths = <strong>${totalMat.toFixed(2)}</strong> ÷ {numRings} rings = <strong>${matPerRing.toFixed(2)}/ring</strong>
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#555', marginBottom: 4 }}>
+                            Markup applied via Material Markup % field → final material price per ring to client
+                          </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Material per ring:</span><strong>${matPerRing.toFixed(2)}</strong>
+                            <span>Material per ring (base):</span><strong>${matPerRing.toFixed(2)}</strong>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <span>Labor per ring:</span><strong>${laborPerRing.toFixed(2)}</strong>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #90caf9', paddingTop: 6, marginTop: 6, fontWeight: 700, color: '#1565c0' }}>
-                            <span>Total ({numRings} rings):</span><span>${(totalMat + totalLabor).toFixed(2)}</span>
+                            <span>Base total ({numRings} rings):</span><span>${(totalMat + totalLabor).toFixed(2)}</span>
                           </div>
                         </div>
                       );

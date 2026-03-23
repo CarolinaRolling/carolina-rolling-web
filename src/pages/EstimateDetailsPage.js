@@ -1046,6 +1046,41 @@ function EstimateDetailsPage() {
       }
       // Sanitize ENUM fields — empty strings break Postgres ENUMs, must be null
       if (!dataToSend.rollType) dataToSend.rollType = null;
+
+      // Safety net: fab_service/shop_rate parts may have partTotal=0 if user clicks Save
+      // while still focused on a pricing input (isEditingPriceRef blocks sync).
+      if (['fab_service', 'shop_rate'].includes(dataToSend.partType)) {
+        const fabQty = parseInt(dataToSend.quantity) || 1;
+        // Check both top-level (new parts) and formData (edited parts)
+        const g = (key) => dataToSend[key] || (dataToSend.formData || {})[key] || '';
+        // For weld calc: use stored weld calc total
+        const weldTotal = parseFloat(g('_weldCalcTotal')) || 0;
+        if (weldTotal > 0 && (!dataToSend.laborTotal || parseFloat(dataToSend.laborTotal) === 0)) {
+          dataToSend.laborTotal = weldTotal.toFixed(2);
+          dataToSend.partTotal = (weldTotal * fabQty).toFixed(2);
+        }
+        // Also try recomputing from raw weld inputs
+        if ((!dataToSend.laborTotal || parseFloat(dataToSend.laborTotal) === 0)) {
+          const thickness = parseFloat(g('_weldCalcThickness')) || 0;
+          const seamLen = parseFloat(g('_weldCalcSeamLength')) || 0;
+          const pricePerFoot = parseFloat(g('_weldPricePerFoot')) || 0;
+          if (thickness > 0 && seamLen > 0 && pricePerFoot > 0) {
+            const passes = Math.ceil(thickness / 0.125);
+            const seamFeet = Math.ceil(seamLen / 12);
+            const total = passes * seamFeet * pricePerFoot;
+            dataToSend.laborTotal = total.toFixed(2);
+            dataToSend.partTotal = (total * fabQty).toFixed(2);
+          }
+        }
+        // Manual pricing: laborTotal exists but partTotal is 0
+        if (parseFloat(dataToSend.laborTotal) > 0 && (!dataToSend.partTotal || parseFloat(dataToSend.partTotal) === 0)) {
+          dataToSend.partTotal = (parseFloat(dataToSend.laborTotal) * fabQty).toFixed(2);
+        }
+        // Reverse: partTotal set but laborTotal missing
+        if ((!dataToSend.laborTotal || parseFloat(dataToSend.laborTotal) === 0) && parseFloat(dataToSend.partTotal) > 0) {
+          dataToSend.laborTotal = (parseFloat(dataToSend.partTotal) / fabQty).toFixed(2);
+        }
+      }
       
       // Recalculate partTotal at save time to avoid useEffect timing issues
       const EA_PRICED = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];

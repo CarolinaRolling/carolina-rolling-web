@@ -244,8 +244,6 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
   }, [autoRate, linkedPartIdStr]);
 
   // Sync computed values — use ref to prevent infinite loops
-  // IMPORTANT: Do NOT sync laborTotal back for manual pricing — it overwrites user input
-  // Also skip sync while user is actively editing pricing to prevent value jumping
   useEffect(() => {
     if (isEditingPriceRef.current) return;
     const syncKey = lineTotal.toFixed(2) + '|' + serviceDescription + '|' + (serviceConfig ? serviceConfig.label : '');
@@ -253,13 +251,16 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
       prevSyncRef.current = syncKey;
       const updates = {
         partTotal: lineTotal.toFixed(2),
+        laborTotal: laborEach.toFixed(2),
         materialDescription: serviceDescription,
         _materialDescription: serviceDescription,
         _rollingDescription: serviceConfig ? serviceConfig.label : '',
       };
-      // Only sync laborTotal for weld calc (auto-computed), not manual pricing
+      // Store weld calc inputs so save safety net can recalculate
       if (weldCalc) {
-        updates.laborTotal = laborEach.toFixed(2);
+        updates._weldCalcTotal = weldCalc.total.toFixed(2);
+        updates._weldCalcThickness = weldCalc.thickness;
+        updates._weldCalcSeamLength = weldCalc.seamLength;
       }
       setPartData(prev => ({ ...prev, ...updates }));
     }
