@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Receipt, Users, BarChart3, Plus, DollarSign } from 'lucide-react';
-import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, getEmployees, createEmployee, updateEmployee, deleteEmployee, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment } from '../services/api';
+import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment } from '../services/api';
 import InvoiceCenterPage from './InvoiceCenterPage';
 
 const LB_CATS = [
@@ -34,7 +34,8 @@ function BusinessPage() {
   const [liabCat, setLiabCat] = useState('all');
   const [showBill, setShowBill] = useState(false);
   const [editBill, setEditBill] = useState(null);
-  const [bf, setBf] = useState({ name:'',category:'other',amount:'',dueDate:'',recurring:false,recurringInterval:'monthly',vendor:'',notes:'',referenceNumber:'' });
+  const [bf, setBf] = useState({ name:'',category:'other',amount:'',dueDate:'',recurring:false,recurringInterval:'monthly',vendor:'',notes:'',referenceNumber:'',vendorInvoiceNumber:'',poNumber:'' });
+  const billFileRef = React.useRef(null);
 
   // Employees
   const [emps, setEmps] = useState([]);
@@ -87,7 +88,7 @@ function BusinessPage() {
     } catch{setErr('Failed to load');} finally{setHealthLoad(false);}
   };
 
-  const saveBill = async () => { if(!bf.name||!bf.amount){setErr('Name & amount required');return;} try{if(editBill)await updateLiability(editBill.id,bf);else await createLiability(bf);setShowBill(false);setEditBill(null);setBf({name:'',category:'other',amount:'',dueDate:'',recurring:false,recurringInterval:'monthly',vendor:'',notes:'',referenceNumber:''});showMsg(editBill?'Updated':'Added');await loadLiabs();}catch{setErr('Failed');}};
+  const saveBill = async () => { if(!bf.name||!bf.amount){setErr('Name & amount required');return;} try{if(editBill)await updateLiability(editBill.id,bf);else await createLiability(bf);setShowBill(false);setEditBill(null);setBf({name:'',category:'other',amount:'',dueDate:'',recurring:false,recurringInterval:'monthly',vendor:'',notes:'',referenceNumber:'',vendorInvoiceNumber:'',poNumber:''});showMsg(editBill?'Updated':'Added');await loadLiabs();}catch{setErr('Failed');}};
   const saveEmp = async () => { if(!ef.name||!ef.hourlyRate){setErr('Name & rate required');return;} try{if(editEmp)await updateEmployee(editEmp.id,ef);else await createEmployee(ef);setShowEmp(false);setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:''});showMsg(editEmp?'Updated':'Added');await loadEmps();}catch{setErr('Failed');}};
 
   const createPR = async () => { if(!prDates.weekStart||!prDates.weekEnd){setErr('Select dates');return;} try{const r=await createPayroll(prDates);setActivePR(r.data.data);setShowNewPR(false);showMsg('Created');await loadPR();}catch(e){setErr(e.response?.data?.error?.message||'Failed');}};
@@ -118,42 +119,78 @@ function BusinessPage() {
 
       {/* LIABILITIES */}
       {tab === 'liabilities' && (<div>
-        {liabSum && (<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:16}}>
+        {liabSum && (<div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
           <div style={{background:liabSum.totalOverdue>0?'#ffebee':'#e8f5e9',padding:16,borderRadius:10,border:`1px solid ${liabSum.totalOverdue>0?'#ef9a9a':'#c8e6c9'}`}}><div style={{fontSize:'0.8rem',color:'#888'}}>Overdue</div><div style={{fontSize:'1.5rem',fontWeight:800,color:liabSum.totalOverdue>0?'#c62828':'#2e7d32'}}>{fmt(liabSum.totalOverdue)}</div><div style={{fontSize:'0.8rem',color:'#888'}}>{liabSum.overdueCount} bills</div></div>
           <div style={{background:'#fff3e0',padding:16,borderRadius:10,border:'1px solid #FFE0B2'}}><div style={{fontSize:'0.8rem',color:'#888'}}>Due This Week</div><div style={{fontSize:'1.5rem',fontWeight:800,color:'#E65100'}}>{fmt(liabSum.totalDueThisWeek)}</div><div style={{fontSize:'0.8rem',color:'#888'}}>{liabSum.dueThisWeekCount} bills</div></div>
           <div style={{background:'#f5f5f5',padding:16,borderRadius:10,border:'1px solid #e0e0e0'}}><div style={{fontSize:'0.8rem',color:'#888'}}>Total Unpaid</div><div style={{fontSize:'1.5rem',fontWeight:800,color:'#333'}}>{fmt(liabSum.totalUnpaid)}</div></div>
+          {liabSum.pendingReview > 0 && <div style={{padding:16,borderRadius:10,background:'#fff8e1',border:'2px solid #ff9800',cursor:'pointer'}} onClick={()=>setLiabF('pending_review')}><div style={{fontSize:'0.8rem',color:'#888'}}>Pending Review</div><div style={{fontSize:'1.5rem',fontWeight:800,color:'#E65100'}}>{liabSum.pendingReview}</div><div style={{fontSize:'0.75rem',color:'#ff9800',fontWeight:600}}>🤖 AI detected</div></div>}
         </div>)}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:8}}>
-          <div style={{display:'flex',gap:4}}>{['unpaid','paid','all'].map(s=><button key={s} onClick={()=>setLiabF(s)} style={{padding:'6px 14px',border:'none',borderRadius:6,cursor:'pointer',fontWeight:600,fontSize:'0.85rem',background:liabF===s?'#1976d2':'#f0f0f0',color:liabF===s?'white':'#555'}}>{s.charAt(0).toUpperCase()+s.slice(1)}</button>)}</div>
+          <div style={{display:'flex',gap:4}}>{['unpaid','paid','pending_review','all'].map(s=><button key={s} onClick={()=>setLiabF(s)} style={{padding:'6px 14px',border:'none',borderRadius:6,cursor:'pointer',fontWeight:600,fontSize:'0.85rem',background:liabF===s?'#1976d2':'#f0f0f0',color:liabF===s?'white':'#555'}}>{s==='pending_review'?`Pending${liabSum?.pendingReview?' ('+liabSum.pendingReview+')':''}`:s.charAt(0).toUpperCase()+s.slice(1)}</button>)}</div>
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             <select className="form-select" value={liabCat} onChange={e=>setLiabCat(e.target.value)} style={{width:160}}><option value="all">All Categories</option>{LB_CATS.map(c=><option key={c.key} value={c.key}>{c.icon} {c.label}</option>)}</select>
-            <button className="btn btn-primary" onClick={()=>{setEditBill(null);setBf({name:'',category:'other',amount:'',dueDate:'',recurring:false,recurringInterval:'monthly',vendor:'',notes:'',referenceNumber:''});setShowBill(true);}}><Plus size={16}/> Add Bill</button>
+            <button className="btn btn-primary" onClick={()=>{setEditBill(null);setBf({name:'',category:'other',amount:'',dueDate:'',recurring:false,recurringInterval:'monthly',vendor:'',notes:'',referenceNumber:'',vendorInvoiceNumber:'',poNumber:''});setShowBill(true);}}><Plus size={16}/> Add Bill</button>
           </div>
         </div>
         {liabLoad?<div style={{textAlign:'center',padding:40}}>Loading...</div>:liabs.length===0?<div style={{textAlign:'center',padding:40,color:'#888'}}>No bills found</div>:
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>{liabs.map(b=>{const cat=LB_CATS.find(c=>c.key===b.category)||LB_CATS[7];const d=daysUntil(b.dueDate);const od=d!==null&&d<0&&b.status==='unpaid';const ds=d!==null&&d>=0&&d<=7&&b.status==='unpaid';return(
-          <div key={b.id} style={{padding:'12px 16px',borderRadius:8,display:'flex',alignItems:'center',gap:12,background:b.status==='paid'?'#f9f9f9':od?'#ffebee':ds?'#fff8e1':'white',border:`1px solid ${od?'#ef9a9a':ds?'#ffe082':'#e0e0e0'}`,opacity:b.status==='paid'?0.7:1}}>
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>{liabs.map(b=>{const cat=LB_CATS.find(c=>c.key===b.category)||LB_CATS[7];const d=daysUntil(b.dueDate);const od=d!==null&&d<0&&b.status==='unpaid';const ds=d!==null&&d>=0&&d<=7&&b.status==='unpaid';const isPending=b.status==='pending_review';return(
+          <div key={b.id} style={{padding:'12px 16px',borderRadius:8,display:'flex',alignItems:'center',gap:12,background:isPending?'#fff8e1':b.status==='paid'?'#f9f9f9':od?'#ffebee':ds?'#fff8e1':'white',border:`1px solid ${isPending?'#ff9800':od?'#ef9a9a':ds?'#ffe082':'#e0e0e0'}`,opacity:b.status==='paid'?0.7:1}}>
             <div style={{width:36,height:36,borderRadius:8,background:cat.color+'20',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',flexShrink:0}}>{cat.icon}</div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:600,fontSize:'0.95rem',display:'flex',alignItems:'center',gap:6}}>{b.name}{b.recurring&&<span style={{fontSize:'0.7rem',background:'#e3f2fd',color:'#1565c0',padding:'1px 6px',borderRadius:4}}>🔄 {b.recurringInterval}</span>}{od&&<span style={{fontSize:'0.7rem',background:'#c62828',color:'white',padding:'1px 6px',borderRadius:4}}>OVERDUE</span>}</div>
-              <div style={{fontSize:'0.8rem',color:'#888',display:'flex',gap:12,flexWrap:'wrap'}}>{b.vendor&&<span>{b.vendor}</span>}{b.dueDate&&<span>Due: {new Date(b.dueDate+'T12:00:00').toLocaleDateString()}</span>}{d!==null&&b.status==='unpaid'&&<span style={{color:od?'#c62828':ds?'#E65100':'#888',fontWeight:od||ds?600:400}}>{od?`${Math.abs(d)}d overdue`:d===0?'Due today':`${d}d left`}</span>}{b.status==='paid'&&b.paidAt&&<span style={{color:'#2e7d32'}}>Paid {new Date(b.paidAt).toLocaleDateString()}</span>}</div>
+              <div style={{fontWeight:600,fontSize:'0.95rem',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                {b.name}
+                {isPending&&<span style={{fontSize:'0.7rem',background:'#ff9800',color:'white',padding:'1px 6px',borderRadius:4}}>🤖 PENDING REVIEW</span>}
+                {b.recurring&&<span style={{fontSize:'0.7rem',background:'#e3f2fd',color:'#1565c0',padding:'1px 6px',borderRadius:4}}>🔄 {b.recurringInterval}</span>}
+                {od&&<span style={{fontSize:'0.7rem',background:'#c62828',color:'white',padding:'1px 6px',borderRadius:4}}>OVERDUE</span>}
+                {b.createdBy==='email_scanner'&&<span style={{fontSize:'0.65rem',background:'#f3e5f5',color:'#7b1fa2',padding:'1px 5px',borderRadius:3}}>📧 Auto</span>}
+              </div>
+              <div style={{fontSize:'0.8rem',color:'#888',display:'flex',gap:12,flexWrap:'wrap'}}>
+                {b.vendor&&<span>{b.vendor}</span>}
+                {b.vendorInvoiceNumber&&<span>Inv: {b.vendorInvoiceNumber}</span>}
+                {b.poNumber&&<span style={{color:'#1565c0',fontWeight:500}}>PO: {b.poNumber}</span>}
+                {b.dueDate&&<span>Due: {new Date(b.dueDate+'T12:00:00').toLocaleDateString()}</span>}
+                {d!==null&&b.status==='unpaid'&&<span style={{color:od?'#c62828':ds?'#E65100':'#888',fontWeight:od||ds?600:400}}>{od?`${Math.abs(d)}d overdue`:d===0?'Due today':`${d}d left`}</span>}
+                {b.status==='paid'&&b.paidAt&&<span style={{color:'#2e7d32'}}>Paid {new Date(b.paidAt).toLocaleDateString()}</span>}
+                {b.invoiceFileUrl&&<a href={b.invoiceFileUrl} target="_blank" rel="noopener noreferrer" style={{color:'#1976d2',textDecoration:'none'}}>📄 PDF</a>}
+              </div>
             </div>
             <div style={{fontWeight:700,fontSize:'1.1rem',color:b.status==='paid'?'#888':'#333',whiteSpace:'nowrap'}}>{fmt(b.amount)}</div>
             <div style={{display:'flex',gap:4,flexShrink:0}}>
+              {isPending&&<button onClick={async()=>{try{await approveBill(b.id);showMsg('Approved');await loadLiabs();}catch{}}} style={{background:'#2e7d32',color:'white',border:'none',borderRadius:6,padding:'6px 10px',cursor:'pointer',fontWeight:600,fontSize:'0.8rem'}}>✓ Approve</button>}
+              {isPending&&<button onClick={async()=>{if(!window.confirm('Reject and delete this bill?'))return;try{await rejectBill(b.id);showMsg('Rejected');await loadLiabs();}catch{}}} style={{background:'#c62828',color:'white',border:'none',borderRadius:6,padding:'6px 10px',cursor:'pointer',fontWeight:600,fontSize:'0.8rem'}}>✕ Reject</button>}
               {b.status==='unpaid'&&<button onClick={async()=>{if(!window.confirm(`Pay "${b.name}"?`))return;try{await payLiability(b.id);showMsg('Paid');await loadLiabs();}catch{}}} style={{background:'#2e7d32',color:'white',border:'none',borderRadius:6,padding:'6px 12px',cursor:'pointer',fontWeight:600,fontSize:'0.8rem'}}>✓ Pay</button>}
-              <button onClick={()=>{setEditBill(b);setBf({name:b.name,category:b.category,amount:b.amount,dueDate:b.dueDate||'',recurring:b.recurring,recurringInterval:b.recurringInterval||'monthly',vendor:b.vendor||'',notes:b.notes||'',referenceNumber:b.referenceNumber||''});setShowBill(true);}} style={{background:'#f0f0f0',border:'none',borderRadius:6,padding:'6px 8px',cursor:'pointer',fontSize:'0.8rem'}}>✏️</button>
+              <button onClick={()=>{setEditBill(b);setBf({name:b.name,category:b.category,amount:b.amount,dueDate:b.dueDate||'',recurring:b.recurring,recurringInterval:b.recurringInterval||'monthly',vendor:b.vendor||'',notes:b.notes||'',referenceNumber:b.referenceNumber||'',vendorInvoiceNumber:b.vendorInvoiceNumber||'',poNumber:b.poNumber||''});setShowBill(true);}} style={{background:'#f0f0f0',border:'none',borderRadius:6,padding:'6px 8px',cursor:'pointer',fontSize:'0.8rem'}}>✏️</button>
               <button onClick={async()=>{if(!window.confirm(`Delete?`))return;try{await deleteLiability(b.id);await loadLiabs();}catch{}}} style={{background:'none',border:'1px solid #e0e0e0',borderRadius:6,padding:'6px 8px',cursor:'pointer',color:'#c62828',fontSize:'0.8rem'}}>🗑️</button>
             </div>
           </div>);})}</div>}
-        {showBill&&(<div className="modal-overlay" onClick={()=>setShowBill(false)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:550}}>
+        {showBill&&(<div className="modal-overlay" onClick={()=>setShowBill(false)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:580}}>
           <div className="modal-header"><h3 className="modal-title">{editBill?'Edit':'Add'} Bill</h3><button className="modal-close" onClick={()=>setShowBill(false)}>&times;</button></div>
-          <div style={{padding:20,display:'flex',flexDirection:'column',gap:12}}>
+          <div style={{padding:20,display:'flex',flexDirection:'column',gap:12,maxHeight:'70vh',overflowY:'auto'}}>
             <div className="form-group" style={{margin:0}}><label className="form-label">Name *</label><input className="form-input" value={bf.name} onChange={e=>setBf({...bf,name:e.target.value})}/></div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Category</label><select className="form-select" value={bf.category} onChange={e=>setBf({...bf,category:e.target.value})}>{LB_CATS.map(c=><option key={c.key} value={c.key}>{c.icon} {c.label}</option>)}</select></div><div className="form-group" style={{margin:0}}><label className="form-label">Amount *</label><input type="number" step="0.01" className="form-input" value={bf.amount} onChange={e=>setBf({...bf,amount:e.target.value})}/></div></div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Due Date</label><input type="date" className="form-input" value={bf.dueDate} onChange={e=>setBf({...bf,dueDate:e.target.value})}/></div><div className="form-group" style={{margin:0}}><label className="form-label">Vendor</label><input className="form-input" value={bf.vendor} onChange={e=>setBf({...bf,vendor:e.target.value})}/></div></div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Vendor Invoice #</label><input className="form-input" value={bf.vendorInvoiceNumber} onChange={e=>setBf({...bf,vendorInvoiceNumber:e.target.value})} placeholder="Vendor's invoice number"/></div><div className="form-group" style={{margin:0}}><label className="form-label">Our PO #</label><input className="form-input" value={bf.poNumber} onChange={e=>setBf({...bf,poNumber:e.target.value})} placeholder="PO number this invoice references"/></div></div>
             <div style={{display:'flex',alignItems:'center',gap:12}}><label style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer'}}><input type="checkbox" checked={bf.recurring} onChange={e=>setBf({...bf,recurring:e.target.checked})} style={{width:18,height:18}}/><span style={{fontWeight:500}}>Recurring</span></label>{bf.recurring&&<select className="form-select" value={bf.recurringInterval} onChange={e=>setBf({...bf,recurringInterval:e.target.value})} style={{width:140}}><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select>}</div>
             <div className="form-group" style={{margin:0}}><label className="form-label">Reference #</label><input className="form-input" value={bf.referenceNumber} onChange={e=>setBf({...bf,referenceNumber:e.target.value})}/></div>
             <div className="form-group" style={{margin:0}}><label className="form-label">Notes</label><textarea className="form-textarea" value={bf.notes} onChange={e=>setBf({...bf,notes:e.target.value})} rows={2}/></div>
+            {/* File upload */}
+            {editBill && (
+              <div className="form-group" style={{margin:0}}>
+                <label className="form-label">📎 Invoice / Bill PDF</label>
+                {editBill.invoiceFileUrl ? (
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    <a href={editBill.invoiceFileUrl} target="_blank" rel="noopener noreferrer" style={{color:'#1976d2',fontWeight:600,fontSize:'0.85rem'}}>📄 View Attached PDF</a>
+                    <button type="button" onClick={() => billFileRef.current?.click()} style={{background:'#f0f0f0',border:'1px solid #ddd',borderRadius:4,padding:'4px 10px',cursor:'pointer',fontSize:'0.8rem'}}>Replace</button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => billFileRef.current?.click()} style={{background:'#e3f2fd',border:'1px solid #90caf9',borderRadius:6,padding:'8px 16px',cursor:'pointer',fontSize:'0.85rem',color:'#1565c0',fontWeight:600}}>📎 Attach Invoice PDF</button>
+                )}
+                <input ref={billFileRef} type="file" accept=".pdf,image/*" style={{display:'none'}} onChange={async(e)=>{
+                  const file = e.target.files[0]; if(!file) return;
+                  try { showMsg('Uploading...'); await uploadBillFile(editBill.id, file); showMsg('File attached'); await loadLiabs(); } catch { setErr('Upload failed'); }
+                }} />
+              </div>
+            )}
           </div>
           <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowBill(false)}>Cancel</button><button className="btn btn-primary" onClick={saveBill}>{editBill?'Update':'Add'}</button></div>
         </div></div>)}

@@ -99,6 +99,14 @@ const ClientsVendorsPage = () => {
         const existing = data.contacts || [];
         data.contacts = [{ name: data.contactName, email: data.contactEmail || '', phone: data.contactPhone || '', role: '', isPrimary: true }, ...existing.map(c => ({ ...c, isPrimary: false }))];
       }
+      // Migrate emailScanAddresses to monitored flag on contacts
+      const scanAddrs = (data.emailScanAddresses || []).map(a => a.toLowerCase());
+      if (data.contacts) {
+        data.contacts = data.contacts.map(c => ({
+          ...c,
+          monitored: c.monitored || (c.email && scanAddrs.includes(c.email.toLowerCase()))
+        }));
+      }
       setFormData(data);
     } else {
       setFormData({
@@ -205,6 +213,13 @@ const ClientsVendorsPage = () => {
       if (data.contactName && (!data.contacts || !data.contacts.some(c => c.isPrimary))) {
         const existing = data.contacts || [];
         data.contacts = [{ name: data.contactName, email: data.contactEmail || '', phone: data.contactPhone || '', role: '', isPrimary: true }, ...existing.map(c => ({ ...c, isPrimary: false }))];
+      }
+      const scanAddrs = (data.emailScanAddresses || []).map(a => a.toLowerCase());
+      if (data.contacts) {
+        data.contacts = data.contacts.map(c => ({
+          ...c,
+          monitored: c.monitored || (c.email && scanAddrs.includes(c.email.toLowerCase()))
+        }));
       }
       setFormData(data);
     } else {
@@ -437,6 +452,7 @@ const ClientsVendorsPage = () => {
                               <div key={i} style={{ padding: '4px 10px', background: '#f5f5f5', borderRadius: 6, fontSize: '0.8rem', border: '1px solid #e8e8e8' }}>
                                 <span style={{ fontWeight: 600 }}>{c.name || 'No name'}</span>
                                 {c.role && <span style={{ color: '#1976d2', marginLeft: 4 }}>({c.role})</span>}
+                                {c.monitored && <span style={{ color: '#E65100', marginLeft: 4, fontSize: '0.7rem' }}>📧</span>}
                                 {c.email && <span style={{ color: '#666', marginLeft: 6 }}>{c.email}</span>}
                                 {c.phone && <span style={{ color: '#888', marginLeft: 6 }}>{c.phone}</span>}
                               </div>
@@ -715,27 +731,32 @@ const ClientsVendorsPage = () => {
                 )}
                 {(formData.contacts || []).map((contact, idx) => (
                   <div key={idx} style={{ marginBottom: 6, padding: '8px 10px', background: contact.isPrimary ? '#e8f5e9' : '#f9f9f9', borderRadius: 6, border: `1px solid ${contact.isPrimary ? '#66bb6a' : '#eee'}` }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 0.7fr auto', gap: 6 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 6 }}>
                       <input className="form-input" placeholder="Name" value={contact.name || ''} style={{ fontSize: '0.85rem' }}
                         onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], name: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
                       <input className="form-input" placeholder="Email" type="email" value={contact.email || ''} style={{ fontSize: '0.85rem' }}
                         onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], email: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
                       <input className="form-input" placeholder="Phone" value={formatPhone(contact.phone || '')} style={{ fontSize: '0.85rem' }}
                         onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], phone: formatPhone(e.target.value) }; setFormData({ ...formData, contacts: c }); }} />
-                      <input className="form-input" placeholder="Role" value={contact.role || ''} style={{ fontSize: '0.85rem' }}
-                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], role: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
                       <button type="button" onClick={() => { const c = [...(formData.contacts || [])]; c.splice(idx, 1); setFormData({ ...formData, contacts: c }); }}
                         style={{ background: '#ffebee', border: '1px solid #ef9a9a', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', alignSelf: 'center' }}>
                         <X size={14} color="#c62828" />
                       </button>
                     </div>
-                    <div style={{ marginTop: 4 }}>
+                    <div style={{ marginTop: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
                       <button type="button" onClick={() => {
                         const c = (formData.contacts || []).map((ct, i) => ({ ...ct, isPrimary: i === idx }));
                         setFormData({ ...formData, contacts: c, contactName: c[idx].name, contactEmail: c[idx].email, contactPhone: c[idx].phone });
                       }} style={{ background: contact.isPrimary ? '#2e7d32' : '#f0f0f0', color: contact.isPrimary ? 'white' : '#666', border: 'none', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
                         {contact.isPrimary ? '★ Primary' : '☆ Set as Primary'}
                       </button>
+                      {contact.email && (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: '0.75rem', color: contact.monitored ? '#E65100' : '#999' }}>
+                          <input type="checkbox" checked={contact.monitored || false} style={{ width: 14, height: 14, accentColor: '#E65100' }}
+                            onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], monitored: e.target.checked }; setFormData({ ...formData, contacts: c, emailScanEnabled: c.some(ct => ct.monitored), emailScanAddresses: c.filter(ct => ct.monitored && ct.email).map(ct => ct.email) }); }} />
+                          <span style={{ fontWeight: contact.monitored ? 600 : 400 }}>📧 Monitor Emails</span>
+                        </label>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -939,48 +960,20 @@ const ClientsVendorsPage = () => {
                 )}
               </div>
 
-              {/* Email Scanning */}
+              {/* Email Scanner Notes — shows when any contact has monitoring enabled */}
+              {(formData.contacts || []).some(c => c.monitored) && (
               <div style={{ gridColumn: 'span 2', borderTop: '1px solid #eee', paddingTop: 12 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 8 }}>
-                  <input type="checkbox" checked={formData.emailScanEnabled || false} onChange={(e) => setFormData({ ...formData, emailScanEnabled: e.target.checked })}
-                    style={{ width: 18, height: 18, accentColor: '#E65100' }} />
-                  <span style={{ fontWeight: 600, color: formData.emailScanEnabled ? '#E65100' : '#333' }}>
-                    📧 Email Scanning — Auto-detect RFQs and POs from this client's emails
-                  </span>
-                </label>
-                {formData.emailScanEnabled && (
-                  <div style={{ padding: 12, background: '#FFF3E0', borderRadius: 8, marginTop: 4 }}>
-                    <div className="form-group" style={{ marginBottom: 10 }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>Email addresses to scan</label>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {(formData.emailScanAddresses || []).map((addr, i) => (
-                          <div key={i} style={{ display: 'flex', gap: 6 }}>
-                            <input className="form-input" value={addr} placeholder="email@company.com"
-                              onChange={(e) => {
-                                const addrs = [...(formData.emailScanAddresses || [])];
-                                addrs[i] = e.target.value;
-                                setFormData({ ...formData, emailScanAddresses: addrs });
-                              }} style={{ flex: 1 }} />
-                            <button className="btn btn-sm" onClick={() => {
-                              const addrs = (formData.emailScanAddresses || []).filter((_, j) => j !== i);
-                              setFormData({ ...formData, emailScanAddresses: addrs });
-                            }} style={{ color: '#c62828', background: 'none', border: '1px solid #c62828', padding: '4px 8px' }}>✕</button>
-                          </div>
-                        ))}
-                        <button className="btn btn-sm btn-outline" onClick={() => {
-                          setFormData({ ...formData, emailScanAddresses: [...(formData.emailScanAddresses || []), ''] });
-                        }} style={{ alignSelf: 'flex-start', fontSize: '0.8rem' }}>+ Add Email</button>
-                      </div>
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>Parsing Notes <span style={{ fontWeight: 400, color: '#888' }}>(helps the AI understand this client's email format)</span></label>
-                      <textarea className="form-input" rows={2} value={formData.emailScanParsingNotes || ''}
-                        onChange={(e) => setFormData({ ...formData, emailScanParsingNotes: e.target.value })}
-                        placeholder='e.g. "OR numbers are their reference numbers, use as estimate number" or "Ted uses shorthand — cone means cone_roll"' />
-                    </div>
+                <div style={{ padding: 12, background: '#FFF3E0', borderRadius: 8 }}>
+                  <div style={{ fontSize: '0.8rem', color: '#E65100', fontWeight: 600, marginBottom: 6 }}>📧 Email scanning active for: {(formData.contacts || []).filter(c => c.monitored && c.email).map(c => c.email).join(', ')}</div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>AI Parsing Notes <span style={{ fontWeight: 400, color: '#888' }}>(helps the AI understand this client)</span></label>
+                    <textarea className="form-input" rows={2} value={formData.emailScanParsingNotes || ''}
+                      onChange={(e) => setFormData({ ...formData, emailScanParsingNotes: e.target.value })}
+                      placeholder='e.g. "OR numbers are their reference numbers" or "Ted uses shorthand — cone means cone_roll"' />
                   </div>
-                )}
+                </div>
               </div>
+              )}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
@@ -1022,27 +1015,32 @@ const ClientsVendorsPage = () => {
                 )}
                 {(formData.contacts || []).map((contact, idx) => (
                   <div key={idx} style={{ marginBottom: 6, padding: '8px 10px', background: contact.isPrimary ? '#e8f5e9' : '#f9f9f9', borderRadius: 6, border: `1px solid ${contact.isPrimary ? '#66bb6a' : '#eee'}` }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 0.7fr auto', gap: 6 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 6 }}>
                       <input className="form-input" placeholder="Name" value={contact.name || ''} style={{ fontSize: '0.85rem' }}
                         onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], name: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
                       <input className="form-input" placeholder="Email" type="email" value={contact.email || ''} style={{ fontSize: '0.85rem' }}
                         onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], email: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
                       <input className="form-input" placeholder="Phone" value={formatPhone(contact.phone || '')} style={{ fontSize: '0.85rem' }}
                         onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], phone: formatPhone(e.target.value) }; setFormData({ ...formData, contacts: c }); }} />
-                      <input className="form-input" placeholder="Role" value={contact.role || ''} style={{ fontSize: '0.85rem' }}
-                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], role: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
                       <button type="button" onClick={() => { const c = [...(formData.contacts || [])]; c.splice(idx, 1); setFormData({ ...formData, contacts: c }); }}
                         style={{ background: '#ffebee', border: '1px solid #ef9a9a', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', alignSelf: 'center' }}>
                         <X size={14} color="#c62828" />
                       </button>
                     </div>
-                    <div style={{ marginTop: 4 }}>
+                    <div style={{ marginTop: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
                       <button type="button" onClick={() => {
                         const c = (formData.contacts || []).map((ct, i) => ({ ...ct, isPrimary: i === idx }));
                         setFormData({ ...formData, contacts: c, contactName: c[idx].name, contactEmail: c[idx].email, contactPhone: c[idx].phone });
                       }} style={{ background: contact.isPrimary ? '#2e7d32' : '#f0f0f0', color: contact.isPrimary ? 'white' : '#666', border: 'none', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
                         {contact.isPrimary ? '★ Primary' : '☆ Set as Primary'}
                       </button>
+                      {contact.email && (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: '0.75rem', color: contact.monitored ? '#E65100' : '#999' }}>
+                          <input type="checkbox" checked={contact.monitored || false} style={{ width: 14, height: 14, accentColor: '#E65100' }}
+                            onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], monitored: e.target.checked }; setFormData({ ...formData, contacts: c, emailScanEnabled: c.some(ct => ct.monitored), emailScanAddresses: c.filter(ct => ct.monitored && ct.email).map(ct => ct.email) }); }} />
+                          <span style={{ fontWeight: contact.monitored ? 600 : 400 }}>📧 Monitor Emails</span>
+                        </label>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1074,43 +1072,14 @@ const ClientsVendorsPage = () => {
                 </div>
               </div>
               
-              {/* Email Scanning */}
+              {/* Email Scanner — shows when any contact has monitoring enabled */}
+              {(formData.contacts || []).some(c => c.monitored) && (
               <div style={{ gridColumn: 'span 2', borderTop: '1px solid #eee', paddingTop: 12 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 8 }}>
-                  <input type="checkbox" checked={formData.emailScanEnabled || false} onChange={(e) => setFormData({ ...formData, emailScanEnabled: e.target.checked })}
-                    style={{ width: 18, height: 18, accentColor: '#7B1FA2' }} />
-                  <span style={{ fontWeight: 600, color: formData.emailScanEnabled ? '#7B1FA2' : '#333' }}>
-                    📧 Monitor Vendor Emails — Auto-detect RFQ responses and quotes
-                  </span>
-                </label>
-                {formData.emailScanEnabled && (
-                  <div style={{ padding: 12, background: '#F3E5F5', borderRadius: 8, marginTop: 4 }}>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>Additional email addresses to monitor</label>
-                      <p style={{ fontSize: '0.75rem', color: '#888', marginBottom: 6 }}>The primary email above is always monitored. Add more addresses here.</p>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {(formData.emailScanAddresses || []).map((addr, i) => (
-                          <div key={i} style={{ display: 'flex', gap: 6 }}>
-                            <input className="form-input" value={addr} placeholder="sales@vendor.com"
-                              onChange={(e) => {
-                                const addrs = [...(formData.emailScanAddresses || [])];
-                                addrs[i] = e.target.value;
-                                setFormData({ ...formData, emailScanAddresses: addrs });
-                              }} style={{ flex: 1 }} />
-                            <button className="btn btn-sm" onClick={() => {
-                              const addrs = (formData.emailScanAddresses || []).filter((_, j) => j !== i);
-                              setFormData({ ...formData, emailScanAddresses: addrs });
-                            }} style={{ color: '#c62828', background: 'none', border: '1px solid #c62828', padding: '4px 8px' }}>✕</button>
-                          </div>
-                        ))}
-                        <button className="btn btn-sm btn-outline" onClick={() => {
-                          setFormData({ ...formData, emailScanAddresses: [...(formData.emailScanAddresses || []), ''] });
-                        }} style={{ alignSelf: 'flex-start', fontSize: '0.8rem' }}>+ Add Email</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <div style={{ padding: 12, background: '#F3E5F5', borderRadius: 8 }}>
+                  <div style={{ fontSize: '0.8rem', color: '#7B1FA2', fontWeight: 600 }}>📧 Email monitoring active for: {(formData.contacts || []).filter(c => c.monitored && c.email).map(c => c.email).join(', ')}</div>
+                </div>
               </div>
+              )}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>

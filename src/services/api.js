@@ -472,6 +472,9 @@ export const createLiability = (data) => api.post('/business/liabilities', data)
 export const updateLiability = (id, data) => api.put(`/business/liabilities/${id}`, data);
 export const payLiability = (id, data) => api.post(`/business/liabilities/${id}/pay`, data);
 export const deleteLiability = (id) => api.delete(`/business/liabilities/${id}`);
+export const uploadBillFile = (id, file) => { const fd = new FormData(); fd.append('file', file); return api.post(`/business/liabilities/${id}/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }); };
+export const approveBill = (id, data) => api.post(`/business/liabilities/${id}/approve`, data);
+export const rejectBill = (id) => api.post(`/business/liabilities/${id}/reject`);
 // Employees
 export const getEmployees = (params) => api.get('/business/employees', { params });
 export const createEmployee = (data) => api.post('/business/employees', data);
