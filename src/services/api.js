@@ -481,6 +481,7 @@ export const getEmployees = (params) => api.get('/business/employees', { params 
 export const createEmployee = (data) => api.post('/business/employees', data);
 export const updateEmployee = (id, data) => api.put(`/business/employees/${id}`, data);
 export const deleteEmployee = (id) => api.delete(`/business/employees/${id}`);
+export const updateVacationLog = (id, vacationLog) => api.put(`/business/employees/${id}/vacation-log`, { vacationLog });
 // Payments
 export const getOutstandingPayments = () => api.get('/business/payments/outstanding');
 export const getPaymentHistory = (params) => api.get('/business/payments/history', { params });
@@ -493,6 +494,7 @@ export const getPayroll = (id) => api.get(`/business/payroll/${id}`);
 export const updatePayrollEntry = (payrollId, entryId, data) => api.put(`/business/payroll/${payrollId}/entries/${entryId}`, data);
 export const updatePayrollWeek = (id, data) => api.put(`/business/payroll/${id}`, data);
 export const submitPayroll = (id, data) => api.post(`/business/payroll/${id}/submit`, data);
+export const deletePayroll = (id) => api.delete(`/business/payroll/${id}`);
 // Calendar
 export const getCalendarEvents = (params) => api.get('/business/calendar', { params });
 export const getUpcomingEvents = () => api.get('/business/calendar/upcoming');

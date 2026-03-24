@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Receipt, Users, BarChart3, Plus, DollarSign } from 'lucide-react';
-import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment } from '../services/api';
+import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, updateVacationLog, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, deletePayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment } from '../services/api';
 import InvoiceCenterPage from './InvoiceCenterPage';
 
 const LB_CATS = [
@@ -43,6 +43,12 @@ function BusinessPage() {
   const [showEmp, setShowEmp] = useState(false);
   const [editEmp, setEditEmp] = useState(null);
   const [ef, setEf] = useState({ name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'ACH 100%',description:'',annualVacationDays:'' });
+  // Vacation log modal
+  const [vacEmp, setVacEmp] = useState(null);
+  const [vacLog, setVacLog] = useState([]);
+  const [vacNewDate, setVacNewDate] = useState('');
+  const [vacNewHours, setVacNewHours] = useState('8');
+  const [vacNewNote, setVacNewNote] = useState('');
 
   // Payroll
   const [payrolls, setPayrolls] = useState([]);
@@ -394,7 +400,7 @@ function BusinessPage() {
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                 <div><div style={{fontWeight:700,fontSize:'1rem'}}>{e.name}</div>{e.role&&<div style={{fontSize:'0.85rem',color:'#1976d2'}}>{e.role}</div>}</div>
                 <div style={{display:'flex',gap:4}}>
-                  <button onClick={()=>{setEditEmp(e);setEf({name:e.name,phone:e.phone||'',hourlyRate:e.hourlyRate,role:e.role||'',startDate:e.startDate||'',controlNumber:e.controlNumber||'',deductions:e.deductions||'',description:e.description||'',annualVacationDays:e.annualVacationDays||''});setShowEmp(true);}} style={{background:'#f0f0f0',border:'none',borderRadius:4,padding:'4px 6px',cursor:'pointer',fontSize:'0.8rem'}}>✏️</button>
+                  <button onClick={()=>{setEditEmp(e);setEf({name:e.name,phone:e.phone||'',hourlyRate:e.hourlyRate,role:e.role||'',startDate:e.startDate||'',controlNumber:e.controlNumber||'',deductions:e.deductions||'ACH 100%',description:e.description||'',annualVacationDays:e.annualVacationDays||''});setShowEmp(true);}} style={{background:'#f0f0f0',border:'none',borderRadius:4,padding:'4px 6px',cursor:'pointer',fontSize:'0.8rem'}}>✏️</button>
                   {e.isActive&&<button onClick={async()=>{if(!window.confirm(`Deactivate ${e.name}?`))return;try{await deleteEmployee(e.id);await loadEmps();}catch{}}} style={{background:'none',border:'1px solid #e0e0e0',borderRadius:4,padding:'4px 6px',cursor:'pointer',color:'#c62828',fontSize:'0.8rem'}}>✕</button>}
                 </div>
               </div>
@@ -405,7 +411,10 @@ function BusinessPage() {
                 {e.description&&<div style={{color:'#666',fontSize:'0.8rem'}}>{e.description}</div>}
                 {e.deductions&&<div style={{color:'#888',fontSize:'0.8rem'}}>{e.deductions}</div>}
                 {e.startDate&&<div>Started: {new Date(e.startDate+'T12:00:00').toLocaleDateString()}</div>}
-                {parseFloat(e.annualVacationDays)>0&&<div style={{marginTop:4,padding:'3px 8px',background:'#e3f2fd',borderRadius:4,display:'inline-block',fontSize:'0.8rem'}}>🏖️ {(parseFloat(e.annualVacationDays)-(parseFloat(e.vacationDaysUsed)||0)).toFixed(1)} / {parseFloat(e.annualVacationDays).toFixed(1)} days left</div>}
+                {parseFloat(e.annualVacationDays)>0&&<div style={{marginTop:4,display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{padding:'3px 8px',background:'#e3f2fd',borderRadius:4,fontSize:'0.8rem'}}>🏖️ {(parseFloat(e.annualVacationDays)-(parseFloat(e.vacationDaysUsed)||0)).toFixed(1)} / {parseFloat(e.annualVacationDays).toFixed(1)} days left</span>
+                  <button onClick={(ev)=>{ev.stopPropagation();setVacEmp(e);setVacLog([...(e.vacationLog||[])]);}} style={{background:'none',border:'1px solid #90caf9',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.7rem',color:'#1565c0'}}>Edit</button>
+                </div>}
                 {!e.isActive&&<div style={{color:'#c62828',fontWeight:600}}>Inactive</div>}
               </div>
             </div>))}</div>}
@@ -430,6 +439,7 @@ function BusinessPage() {
               </div>
               <div style={{display:'flex',gap:8}}>
                 {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{if(!window.confirm('Submit payroll?'))return;try{await submitPayroll(activePR.id);showMsg('Submitted');setActivePR(null);await loadPR();await loadEmps();}catch{setErr('Failed');}}} style={{background:'#2e7d32',color:'white'}}>📤 Submit</button>}
+                {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{if(!window.confirm('Delete this payroll draft? All entries will be lost.'))return;try{await deletePayroll(activePR.id);showMsg('Draft deleted');setActivePR(null);await loadPR();}catch{setErr('Failed to delete');}}} style={{background:'#c62828',color:'white'}}>🗑️ Delete Draft</button>}
                 <button className="btn btn-sm" onClick={()=>printPayrollService(activePR)} style={{background:'#1565c0',color:'white'}}>🖨️ Payroll Sheet</button>
                 <button className="btn btn-sm" onClick={()=>printPayrollDetailed(activePR)} style={{background:'#6a1b9a',color:'white'}}>🖨️ Detailed</button>
                 <button className="btn btn-sm btn-outline" onClick={()=>setActivePR(null)}>Close</button>
@@ -458,7 +468,7 @@ function BusinessPage() {
         </div>
 
         {/* Modals */}
-        {showEmp&&<div className="modal-overlay" onClick={()=>setShowEmp(false)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:450}}>
+        {showEmp&&<div className="modal-overlay"><div className="modal" style={{maxWidth:450}}>
           <div className="modal-header"><h3 className="modal-title">{editEmp?'Edit':'Add'} Employee</h3><button className="modal-close" onClick={()=>setShowEmp(false)}>&times;</button></div>
           <div style={{padding:20,display:'flex',flexDirection:'column',gap:12}}>
             <div className="form-group" style={{margin:0}}><label className="form-label">Name *</label><input className="form-input" value={ef.name} onChange={e=>setEf({...ef,name:e.target.value})}/></div>
@@ -468,16 +478,27 @@ function BusinessPage() {
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Control Number</label><input className="form-input" value={ef.controlNumber} onChange={e=>setEf({...ef,controlNumber:e.target.value})} placeholder="e.g. 3676774"/></div><div className="form-group" style={{margin:0}}><label className="form-label">Deductions</label><input className="form-input" value={ef.deductions} onChange={e=>setEf({...ef,deductions:e.target.value})} placeholder="e.g. ACH 100%"/></div></div>
             <div className="form-group" style={{margin:0}}><label className="form-label">Description</label><select className="form-select" value={ef.description} onChange={e=>setEf({...ef,description:e.target.value})}><option value="">Select...</option><option value="CA3400 Metal Goods Mfg">CA3400 Metal Goods Mfg</option><option value="CA8810 Clerical Office Employee">CA8810 Clerical Office Employee</option><option value="CA0000 Exempt Officer">CA0000 Exempt Officer</option></select></div>
             <div style={{borderTop:'1px solid #e0e0e0',paddingTop:12,marginTop:4}}><h4 style={{margin:'0 0 8px',fontSize:'0.9rem',color:'#2e7d32'}}>🏖️ Vacation</h4></div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Annual Vacation Days</label><input type="number" step="0.5" className="form-input" value={ef.annualVacationDays} onChange={e=>setEf({...ef,annualVacationDays:e.target.value})} placeholder="0"/></div><div className="form-group" style={{margin:0}}><label className="form-label">Days Used ({new Date().getFullYear()})</label><div style={{padding:'8px 12px',background:'#f5f5f5',borderRadius:6,fontWeight:600}}>{editEmp?parseFloat(editEmp.vacationDaysUsed||0).toFixed(1):'0.0'}</div></div></div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div className="form-group" style={{margin:0}}><label className="form-label">Annual Vacation Days</label><input type="number" step="0.5" className="form-input" value={ef.annualVacationDays} onChange={e=>setEf({...ef,annualVacationDays:e.target.value})} placeholder="0"/></div>
+              <div className="form-group" style={{margin:0}}>
+                <label className="form-label">Days Used ({new Date().getFullYear()})</label>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <div style={{padding:'8px 12px',background:'#f5f5f5',borderRadius:6,fontWeight:700,fontSize:'1rem',flex:1}}>{editEmp ? parseFloat(editEmp.vacationDaysUsed||0).toFixed(1) : '0.0'}</div>
+                  {editEmp && <button type="button" onClick={()=>{setVacEmp(editEmp);setVacLog([...(editEmp.vacationLog||[])]);setShowEmp(false);}} style={{background:'#1565c0',color:'white',border:'none',borderRadius:6,padding:'8px 12px',cursor:'pointer',fontWeight:600,fontSize:'0.8rem',whiteSpace:'nowrap'}}>✏️ Edit Log</button>}
+                </div>
+              </div>
+            </div>
           </div>
           <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowEmp(false)}>Cancel</button><button className="btn btn-primary" onClick={saveEmp}>{editEmp?'Update':'Add'}</button></div>
         </div></div>}
         {showNewPR&&<div className="modal-overlay" onClick={()=>setShowNewPR(false)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:400}}>
           <div className="modal-header"><h3 className="modal-title">Create Weekly Payroll</h3><button className="modal-close" onClick={()=>setShowNewPR(false)}>&times;</button></div>
           <div style={{padding:20,display:'flex',flexDirection:'column',gap:12}}>
-            <div className="form-group" style={{margin:0}}><label className="form-label">Week Start (Monday)</label><input type="date" className="form-input" value={prDates.weekStart} onChange={e=>{const s=e.target.value;const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+6);setPrDates({weekStart:s,weekEnd:d.toISOString().split('T')[0]});}}/></div>
-            <div className="form-group" style={{margin:0}}><label className="form-label">Week End (Sunday)</label><input type="date" className="form-input" value={prDates.weekEnd} readOnly style={{background:'#f5f5f5'}}/></div>
-            <div style={{fontSize:'0.85rem',color:'#666'}}>All active employees added automatically.</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div className="form-group" style={{margin:0}}><label className="form-label">Week Start</label><input type="date" className="form-input" value={prDates.weekStart} onChange={e=>{const s=e.target.value;if(!prDates.weekEnd){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+6);setPrDates({weekStart:s,weekEnd:d.toISOString().split('T')[0]});}else{setPrDates({...prDates,weekStart:s});}}}/></div>
+              <div className="form-group" style={{margin:0}}><label className="form-label">Week End</label><input type="date" className="form-input" value={prDates.weekEnd} onChange={e=>setPrDates({...prDates,weekEnd:e.target.value})}/></div>
+            </div>
+            <div style={{fontSize:'0.85rem',color:'#666'}}>All active employees will be added automatically.</div>
           </div>
           <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowNewPR(false)}>Cancel</button><button className="btn btn-primary" onClick={createPR}>Create</button></div>
         </div></div>}
@@ -488,6 +509,73 @@ function BusinessPage() {
             <div className="form-group" style={{margin:0}}><label className="form-label">Hours</label><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{OT_INC.map(h=><button key={h} onClick={()=>setOtHrs(h)} style={{padding:'6px 12px',borderRadius:6,border:otHrs===h?'2px solid #1976d2':'1px solid #ddd',background:otHrs===h?'#e3f2fd':'white',cursor:'pointer',fontWeight:otHrs===h?700:400,fontSize:'0.85rem'}}>{h}h</button>)}</div></div>
           </div>
           <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setOtModal(null)}>Cancel</button><button className="btn btn-primary" onClick={()=>{const en=(activePR?.entries||[]).find(e=>e.id===otModal);if(en)addOT(en);}}>Add {otHrs}h OT</button></div>
+        </div></div>}
+
+        {/* Vacation Log Modal */}
+        {vacEmp&&<div className="modal-overlay"><div className="modal" style={{maxWidth:600}}>
+          <div className="modal-header"><h3 className="modal-title">🏖️ Vacation Log — {vacEmp.name}</h3><button className="modal-close" onClick={()=>setVacEmp(null)}>&times;</button></div>
+          <div style={{padding:20}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+              <div style={{fontSize:'0.9rem'}}>
+                <strong>Annual:</strong> {parseFloat(vacEmp.annualVacationDays||0).toFixed(1)} days &nbsp;|&nbsp;
+                <strong>Used:</strong> {(vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0)/8).toFixed(1)} days ({vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0).toFixed(1)}h) &nbsp;|&nbsp;
+                <strong style={{color:'#1565c0'}}>Remaining:</strong> {(parseFloat(vacEmp.annualVacationDays||0) - vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0)/8).toFixed(1)} days
+              </div>
+            </div>
+
+            {/* Add new entry */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 1fr auto',gap:8,marginBottom:12,padding:10,background:'#e8f5e9',borderRadius:8}}>
+              <div className="form-group" style={{margin:0}}><label className="form-label" style={{fontSize:'0.75rem'}}>Date</label><input type="date" className="form-input" value={vacNewDate} onChange={e=>setVacNewDate(e.target.value)} style={{fontSize:'0.85rem',padding:'4px 8px'}}/></div>
+              <div className="form-group" style={{margin:0}}><label className="form-label" style={{fontSize:'0.75rem'}}>Hours</label>
+                <select className="form-select" value={vacNewHours} onChange={e=>setVacNewHours(e.target.value)} style={{fontSize:'0.85rem',padding:'4px 8px'}}>
+                  <option value="1">1h</option><option value="2">2h</option><option value="3">3h</option><option value="4">4h (half day)</option>
+                  <option value="5">5h</option><option value="6">6h</option><option value="7">7h</option><option value="8">8h (full day)</option>
+                </select>
+              </div>
+              <div className="form-group" style={{margin:0}}><label className="form-label" style={{fontSize:'0.75rem'}}>Note</label><input className="form-input" value={vacNewNote} onChange={e=>setVacNewNote(e.target.value)} placeholder="optional" style={{fontSize:'0.85rem',padding:'4px 8px'}}/></div>
+              <button onClick={()=>{if(!vacNewDate)return;const entry={date:vacNewDate,hours:parseFloat(vacNewHours)||8,note:vacNewNote,source:'manual'};setVacLog([...vacLog,entry].sort((a,b)=>a.date.localeCompare(b.date)));setVacNewDate('');setVacNewHours('8');setVacNewNote('');}} style={{background:'#2e7d32',color:'white',border:'none',borderRadius:6,padding:'4px 14px',cursor:'pointer',fontWeight:600,alignSelf:'end',marginBottom:2}}>+ Add</button>
+            </div>
+
+            {/* Log entries */}
+            {vacLog.length===0?<div style={{textAlign:'center',padding:20,color:'#999',fontSize:'0.85rem'}}>No vacation entries this year</div>:
+            <div style={{maxHeight:300,overflowY:'auto',border:'1px solid #e0e0e0',borderRadius:8}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
+                <thead><tr style={{background:'#f5f5f5',position:'sticky',top:0}}>
+                  <th style={{padding:'8px 12px',textAlign:'left'}}>Date</th>
+                  <th style={{padding:'8px',textAlign:'center',width:70}}>Hours</th>
+                  <th style={{padding:'8px',textAlign:'center',width:70}}>Days</th>
+                  <th style={{padding:'8px 12px',textAlign:'left'}}>Note</th>
+                  <th style={{padding:'8px',width:40}}></th>
+                </tr></thead>
+                <tbody>{vacLog.map((entry,idx)=>(
+                  <tr key={idx} style={{borderBottom:'1px solid #f0f0f0'}}>
+                    <td style={{padding:'6px 12px'}}>{new Date(entry.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</td>
+                    <td style={{padding:'6px 8px',textAlign:'center'}}>
+                      <select value={entry.hours} onChange={e=>{const l=[...vacLog];l[idx]={...l[idx],hours:parseFloat(e.target.value)};setVacLog(l);}} style={{width:55,padding:'2px',fontSize:'0.8rem',border:'1px solid #ddd',borderRadius:4}}>
+                        <option value="1">1h</option><option value="2">2h</option><option value="3">3h</option><option value="4">4h</option>
+                        <option value="5">5h</option><option value="6">6h</option><option value="7">7h</option><option value="8">8h</option>
+                      </select>
+                    </td>
+                    <td style={{padding:'6px 8px',textAlign:'center',color:'#1565c0',fontWeight:600}}>{(parseFloat(entry.hours)/8).toFixed(2)}</td>
+                    <td style={{padding:'6px 12px'}}>
+                      <input className="form-input" value={entry.note||''} onChange={e=>{const l=[...vacLog];l[idx]={...l[idx],note:e.target.value};setVacLog(l);}} style={{fontSize:'0.8rem',padding:'2px 6px'}} placeholder="—"/>
+                    </td>
+                    <td style={{padding:'6px 4px',textAlign:'center'}}><button onClick={()=>{const l=[...vacLog];l.splice(idx,1);setVacLog(l);}} style={{background:'none',border:'none',cursor:'pointer',color:'#c62828',fontSize:'0.85rem'}}>✕</button></td>
+                  </tr>
+                ))}</tbody>
+                <tfoot><tr style={{background:'#e3f2fd'}}>
+                  <td style={{padding:'8px 12px',fontWeight:700}}>Total</td>
+                  <td style={{padding:'8px',textAlign:'center',fontWeight:700}}>{vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0).toFixed(1)}h</td>
+                  <td style={{padding:'8px',textAlign:'center',fontWeight:700,color:'#1565c0'}}>{(vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0)/8).toFixed(2)}d</td>
+                  <td colSpan={2}></td>
+                </tr></tfoot>
+              </table>
+            </div>}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={()=>setVacEmp(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={async()=>{try{await updateVacationLog(vacEmp.id,vacLog);showMsg('Vacation log saved');setVacEmp(null);await loadEmps();}catch{setErr('Failed to save');}}}>💾 Save Vacation Log</button>
+          </div>
         </div></div>}
       </div>)}
 
