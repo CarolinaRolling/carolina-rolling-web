@@ -528,7 +528,7 @@ function BusinessPage() {
           <div className="modal-header"><h3 className="modal-title">Create Weekly Payroll</h3><button className="modal-close" onClick={()=>setShowNewPR(false)}>&times;</button></div>
           <div style={{padding:20,display:'flex',flexDirection:'column',gap:12}}>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div className="form-group" style={{margin:0}}><label className="form-label">Week Start</label><input type="date" className="form-input" value={prDates.weekStart} onChange={e=>{const s=e.target.value;if(!prDates.weekEnd){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+4);setPrDates({weekStart:s,weekEnd:d.toISOString().split('T')[0]});}else{setPrDates({...prDates,weekStart:s});}}}/></div>
+              <div className="form-group" style={{margin:0}}><label className="form-label">Week Start</label><input type="date" className="form-input" value={prDates.weekStart} onChange={e=>{const s=e.target.value;if(!prDates.weekEnd){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+6);setPrDates({weekStart:s,weekEnd:d.toISOString().split('T')[0]});}else{setPrDates({...prDates,weekStart:s});}}}/></div>
               <div className="form-group" style={{margin:0}}><label className="form-label">Week End</label><input type="date" className="form-input" value={prDates.weekEnd} onChange={e=>setPrDates({...prDates,weekEnd:e.target.value})}/></div>
             </div>
             <div style={{fontSize:'0.85rem',color:'#666'}}>All active employees will be added automatically.</div>
@@ -548,7 +548,7 @@ function BusinessPage() {
           <div style={{padding:20}}>
             {/* Add new OT entry */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr auto',gap:8,marginBottom:12,padding:10,background:'#fff3e0',borderRadius:8}}>
-              <div className="form-group" style={{margin:0}}><label className="form-label" style={{fontSize:'0.75rem'}}>Date</label><input type="date" className="form-input" value={otNewDate} onChange={e=>setOtNewDate(e.target.value)} style={{fontSize:'0.85rem',padding:'4px 8px'}}/></div>
+              <div className="form-group" style={{margin:0}}><label className="form-label" style={{fontSize:'0.75rem'}}>Date</label><input type="date" className="form-input" value={otNewDate} onChange={e=>setOtNewDate(e.target.value)} min={activePR?.weekStart} max={activePR?.weekEnd} style={{fontSize:'0.85rem',padding:'4px 8px'}}/></div>
               <div className="form-group" style={{margin:0}}><label className="form-label" style={{fontSize:'0.75rem'}}>Hours</label>
                 <select className="form-select" value={otNewHrs} onChange={e=>setOtNewHrs(parseFloat(e.target.value))} style={{fontSize:'0.85rem',padding:'4px 8px'}}>
                   {[0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,7,8].map(h=><option key={h} value={h}>{h}h</option>)}
