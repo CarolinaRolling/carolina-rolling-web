@@ -18,7 +18,7 @@ import {
   getDocumentSignedUrl,
   downloadShipmentDocument,
   getWorkOrders,
-  linkShipmentToWorkOrder
+  linkShipmentToWorkOrder, API_BASE_URL
 } from '../services/api';
 
 function ShipmentDetailsPage() {
@@ -646,7 +646,7 @@ function ShipmentDetailsPage() {
                             // Fallback: token query param
                             try {
                               const token = localStorage.getItem('token');
-                              const baseUrl = process.env.REACT_APP_API_URL || '';
+                              const baseUrl = API_BASE_URL;
                               setPdfViewerUrl(`${baseUrl}/shipments/${id}/documents/${doc.id}/download?token=${token}`);
                               setPdfViewerName(doc.originalName || doc.filename);
                             } catch {
@@ -673,7 +673,7 @@ function ShipmentDetailsPage() {
                           } catch (err) {
                             // Fallback: token query param
                             const token = localStorage.getItem('token');
-                            const baseUrl = process.env.REACT_APP_API_URL || '';
+                            const baseUrl = API_BASE_URL;
                             window.open(`${baseUrl}/shipments/${id}/documents/${doc.id}/download?token=${token}`, '_blank');
                           }
                         }}

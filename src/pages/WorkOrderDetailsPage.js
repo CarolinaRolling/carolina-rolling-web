@@ -28,7 +28,7 @@ import {
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, recordPayment, clearPayment,
-  exportWorkOrderIIF, assignInvoiceNumber
+  exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL
 } from '../services/api';
 
 const PART_TYPES = {
@@ -423,12 +423,16 @@ function WorkOrderDetailsPage() {
 
   const handleViewDocument = async (documentId) => {
     try {
-      // Use the download endpoint — it redirects to the actual file URL
-      const token = localStorage.getItem('token');
-      const baseUrl = process.env.REACT_APP_API_URL || '';
-      const url = `${baseUrl}/workorders/${id}/documents/${documentId}/download?token=${token}`;
+      const response = await downloadWorkOrderDocument(id, documentId);
+      const contentType = response.headers['content-type'] || '';
+      if (contentType.includes('application/json') || contentType.includes('text/html')) {
+        setError('Failed to retrieve document — try re-uploading');
+        return;
+      }
+      const blob = new Blob([response.data], { type: contentType || 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
       window.open(url, '_blank');
-    } catch {
+    } catch (err) {
       setError('Failed to open document');
     }
   };
@@ -824,7 +828,7 @@ function WorkOrderDetailsPage() {
       // Fallback: open download URL with token query param
       try {
         const token = localStorage.getItem('token');
-        const baseUrl = process.env.REACT_APP_API_URL || '';
+        const baseUrl = API_BASE_URL;
         const url = `${baseUrl}/workorders/${id}/parts/${partId}/files/${fileId}/download?token=${token}`;
         window.open(url, '_blank');
       } catch {
@@ -2614,14 +2618,17 @@ function WorkOrderDetailsPage() {
                     style={{ background: '#6a1b9a', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
                     <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
                   </button>
-                  <button onClick={() => {
-                    const token = localStorage.getItem('token');
-                    const baseUrl = process.env.REACT_APP_API_URL || '';
-                    const a = document.createElement('a');
-                    a.href = `${baseUrl}/workorders/${id}/documents/${doc.id}/download?token=${token}`;
-                    a.target = '_blank';
-                    a.download = doc.originalName || 'MTR.pdf';
-                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                  <button onClick={async () => {
+                    try {
+                      const response = await downloadWorkOrderDocument(id, doc.id);
+                      const contentType = response.headers['content-type'] || 'application/pdf';
+                      const blob = new Blob([response.data], { type: contentType });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url; a.download = doc.originalName || 'MTR.pdf';
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                      window.URL.revokeObjectURL(url);
+                    } catch { setError('Failed to download'); }
                   }} style={{ background: '#4527a0', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
                     ⬇ Download
                   </button>
