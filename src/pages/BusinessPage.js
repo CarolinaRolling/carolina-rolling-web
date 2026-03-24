@@ -187,25 +187,26 @@ function BusinessPage() {
     const sd = new Date(pr.weekStart+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
     const ed = new Date(pr.weekEnd+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
     const w = window.open('', '_blank');
-    const css = `* { box-sizing: border-box; }
-      body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 20px 30px; font-size: 11px; color: #222; }
-      .header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 3px solid #1a1a1a; }
-      .header img { width: 70px; height: 70px; }
-      .company-name { font-size: 18px; font-weight: 800; letter-spacing: 0.5px; }
-      .doc-title { font-size: 13px; font-weight: 600; color: #555; margin-top: 2px; }
-      .date-range { margin-top: 8px; padding: 10px 14px; background: #f5f5f5; border: 2px solid #333; font-size: 14px; font-weight: 800; text-align: center; }
-      .card { border: 1.5px solid #999; padding: 12px 16px; margin-bottom: 14px; page-break-inside: avoid; }
-      .card-hd { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #333; padding-bottom: 6px; margin-bottom: 8px; }
-      .card-name { font-size: 14px; font-weight: 800; }
-      .card-rate { font-size: 12px; color: #555; }
-      .li { display: flex; justify-content: space-between; padding: 3px 0; font-size: 11px; }
-      .li-l { color: #444; } .li-v { font-weight: 700; }
-      .db { margin: 6px 0; padding: 6px 10px; background: #f5f5f5; border-left: 3px solid #999; font-size: 10px; }
-      .db-ot { border-left-color: #c62828; } .db-vac { border-left-color: #1565c0; }
-      .gross { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 6px; border-top: 2px solid #333; font-size: 13px; font-weight: 800; }
-      .grand { margin-top: 20px; padding: 12px 16px; border: 2px solid #333; font-size: 16px; font-weight: 800; text-align: right; }
-      .foot { margin-top: 20px; padding-top: 10px; border-top: 1px solid #ccc; display: flex; justify-content: space-between; font-size: 10px; color: #888; }
-      @media print { body { margin: 0; padding: 15px 20px; } @page { margin: 0.4in; } .card { break-inside: avoid; } }`;
+    const css = `* { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: Arial, Helvetica, sans-serif; padding: 16px 24px; font-size: 10px; color: #222; line-height: 1.3; }
+      .hdr { display: flex; align-items: center; gap: 12px; padding-bottom: 8px; border-bottom: 2px solid #000; margin-bottom: 8px; }
+      .hdr img { width: 55px; height: 55px; }
+      .co { font-size: 16px; font-weight: 800; }
+      .dt { font-size: 11px; color: #555; }
+      .dr { padding: 6px 0; font-size: 12px; font-weight: 800; text-align: center; border-bottom: 1px solid #999; margin-bottom: 8px; }
+      .emp { border: 1px solid #888; margin-bottom: 6px; page-break-inside: avoid; }
+      .emp-h { background: #1a1a1a; color: #fff; padding: 4px 10px; display: flex; justify-content: space-between; font-size: 10px; }
+      .emp-h b { font-size: 11px; }
+      .emp-b { padding: 4px 10px; }
+      .r { display: flex; justify-content: space-between; padding: 1px 0; }
+      .r .l { color: #444; } .r .v { font-weight: 700; }
+      .ot-box { background: #fff3e0; border-left: 3px solid #e65100; padding: 3px 8px; margin: 2px 0; font-size: 9px; }
+      .vc-box { background: #e3f2fd; border-left: 3px solid #1565c0; padding: 3px 8px; margin: 2px 0; font-size: 9px; }
+      .bal { font-size: 9px; color: #888; padding: 1px 0; }
+      .gp { display: flex; justify-content: space-between; border-top: 1.5px solid #000; padding: 3px 0 0; margin-top: 3px; font-weight: 800; font-size: 11px; }
+      .tot { border: 2px solid #000; padding: 8px 12px; margin-top: 10px; font-size: 14px; font-weight: 800; text-align: right; }
+      .ft { margin-top: 12px; padding-top: 6px; border-top: 1px solid #bbb; display: flex; justify-content: space-between; font-size: 9px; color: #999; }
+      @media print { body { padding: 10px 16px; } @page { margin: 0.3in; } .emp { break-inside: avoid; } }`;
     const cards = entries.map(en => {
       const rate = parseFloat(en.hourlyRate) || 0;
       const reg = parseFloat(en.regularHours) || 0;
@@ -217,24 +218,28 @@ function BusinessPage() {
       const vacPay = vac * rate;
       const vacDays = vac / 8;
       const vacRem = parseFloat(en.annualVacationDays) - parseFloat(en.vacationDaysUsed);
-      let html = '<div class="card"><div class="card-hd"><span class="card-name">' + en.employeeName + '</span><span class="card-rate">$' + rate.toFixed(2) + '/hr | OT: $' + (rate*1.5).toFixed(2) + '/hr</span></div>';
-      html += '<div class="li"><span class="li-l">Regular Hours</span><span class="li-v">' + reg + 'h \u00d7 $' + rate.toFixed(2) + ' = $' + regPay.toFixed(2) + '</span></div>';
-      if (ot > 0) html += '<div class="li"><span class="li-l">Overtime</span><span class="li-v" style="color:#c62828">' + ot + 'h \u00d7 $' + (rate*1.5).toFixed(2) + ' = $' + otPay.toFixed(2) + '</span></div>';
-      if (ot > 0 && en.overtimeDetails && en.overtimeDetails.length > 0) html += '<div class="db db-ot"><strong>OT Dates:</strong> ' + en.overtimeDetails.map(d => new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' \u2014 ' + d.hours + 'h ($' + (d.hours*rate*1.5).toFixed(2) + ')').join(' &nbsp;|&nbsp; ') + '</div>';
-      if (vac > 0) html += '<div class="li"><span class="li-l">Vacation Time</span><span class="li-v" style="color:#1565c0">' + vac + 'h (' + vacDays.toFixed(1) + ' days) \u00d7 $' + rate.toFixed(2) + ' = $' + vacPay.toFixed(2) + '</span></div>';
-      if (vac > 0 && en.vacationDates && en.vacationDates.length > 0) html += '<div class="db db-vac"><strong>Vacation Dates:</strong> ' + en.vacationDates.map(d => new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})).join(', ') + '</div>';
-      if (parseFloat(en.annualVacationDays) > 0) html += '<div class="li" style="font-size:10px;color:#888"><span>Vacation Balance: ' + vacRem.toFixed(1) + ' of ' + parseFloat(en.annualVacationDays).toFixed(1) + ' days remaining</span></div>';
-      if (bonus > 0) html += '<div class="li"><span class="li-l">Bonus' + (en.bonusNotes ? ' (' + en.bonusNotes + ')' : '') + '</span><span class="li-v">$' + bonus.toFixed(2) + '</span></div>';
-      html += '<div class="gross"><span>Gross Pay</span><span>$' + parseFloat(en.grossPay).toFixed(2) + '</span></div></div>';
-      return html;
+      let h = '<div class="emp"><div class="emp-h"><b>' + en.employeeName + '</b><span>$' + rate.toFixed(2) + '/hr &nbsp;|&nbsp; OT $' + (rate*1.5).toFixed(2) + '/hr</span></div><div class="emp-b">';
+      h += '<div class="r"><span class="l">Regular</span><span class="v">' + reg + 'h \u00d7 $' + rate.toFixed(2) + ' = $' + regPay.toFixed(2) + '</span></div>';
+      if (ot > 0) {
+        h += '<div class="r"><span class="l">Overtime</span><span class="v" style="color:#c62828">' + ot + 'h \u00d7 $' + (rate*1.5).toFixed(2) + ' = $' + otPay.toFixed(2) + '</span></div>';
+        if (en.overtimeDetails && en.overtimeDetails.length > 0) h += '<div class="ot-box">' + en.overtimeDetails.map(d => new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' ' + d.hours + 'h ($' + (d.hours*rate*1.5).toFixed(2) + ')').join(' &nbsp;\u2022&nbsp; ') + '</div>';
+      }
+      if (vac > 0) {
+        h += '<div class="r"><span class="l">Vacation</span><span class="v" style="color:#1565c0">' + vac + 'h (' + vacDays.toFixed(1) + 'd) \u00d7 $' + rate.toFixed(2) + ' = $' + vacPay.toFixed(2) + '</span></div>';
+        if (en.vacationDates && en.vacationDates.length > 0) h += '<div class="vc-box">' + en.vacationDates.map(d => new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})).join(', ') + '</div>';
+      }
+      if (parseFloat(en.annualVacationDays) > 0) h += '<div class="bal">Vacation balance: ' + vacRem.toFixed(1) + ' / ' + parseFloat(en.annualVacationDays).toFixed(1) + ' days</div>';
+      if (bonus > 0) h += '<div class="r"><span class="l">Bonus' + (en.bonusNotes ? ' \u2014 ' + en.bonusNotes : '') + '</span><span class="v">$' + bonus.toFixed(2) + '</span></div>';
+      h += '<div class="gp"><span>Gross Pay</span><span>$' + parseFloat(en.grossPay).toFixed(2) + '</span></div></div></div>';
+      return h;
     }).join('');
     const now = new Date();
     w.document.write('<html><head><title>Detailed Payroll</title><style>' + css + '</style></head><body>' +
-      '<div class="header"><img src="/logo.png" onerror="this.style.display=\'none\'"/><div><div class="company-name">Carolina Rolling Co., Inc.</div><div class="doc-title">Detailed Payroll Report</div></div></div>' +
-      '<div class="date-range">Pay Period: ' + sd + ' \u2014 ' + ed + '</div>' +
+      '<div class="hdr"><img src="/logo.png" onerror="this.style.display=\'none\'"/><div><div class="co">Carolina Rolling Co., Inc.</div><div class="dt">Detailed Payroll Report</div></div></div>' +
+      '<div class="dr">' + sd + ' \u2014 ' + ed + '</div>' +
       cards +
-      '<div class="grand">Total Gross Payroll: $' + parseFloat(pr.totalGross).toFixed(2) + '</div>' +
-      '<div class="foot"><span>Generated: ' + now.toLocaleDateString() + ' at ' + now.toLocaleTimeString() + '</span><span>CONFIDENTIAL \u2014 Carolina Rolling Co., Inc.</span></div>' +
+      '<div class="tot">Total Gross Payroll: $' + parseFloat(pr.totalGross).toFixed(2) + '</div>' +
+      '<div class="ft"><span>Generated: ' + now.toLocaleDateString() + ' ' + now.toLocaleTimeString() + '</span><span>CONFIDENTIAL \u2014 Carolina Rolling Co., Inc.</span></div>' +
       '</body></html>');
     w.document.close();
     w.print();
