@@ -42,7 +42,7 @@ function BusinessPage() {
   const [empLoad, setEmpLoad] = useState(false);
   const [showEmp, setShowEmp] = useState(false);
   const [editEmp, setEditEmp] = useState(null);
-  const [ef, setEf] = useState({ name:'',phone:'',hourlyRate:'',role:'',startDate:'' });
+  const [ef, setEf] = useState({ name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'',description:'',annualVacationDays:'' });
 
   // Payroll
   const [payrolls, setPayrolls] = useState([]);
@@ -89,11 +89,80 @@ function BusinessPage() {
   };
 
   const saveBill = async () => { if(!bf.name||!bf.amount){setErr('Name & amount required');return;} try{if(editBill)await updateLiability(editBill.id,bf);else await createLiability(bf);setShowBill(false);setEditBill(null);setBf({name:'',category:'other',amount:'',dueDate:'',recurring:false,recurringInterval:'monthly',vendor:'',notes:'',referenceNumber:'',vendorInvoiceNumber:'',poNumber:''});showMsg(editBill?'Updated':'Added');await loadLiabs();}catch{setErr('Failed');}};
-  const saveEmp = async () => { if(!ef.name||!ef.hourlyRate){setErr('Name & rate required');return;} try{if(editEmp)await updateEmployee(editEmp.id,ef);else await createEmployee(ef);setShowEmp(false);setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:''});showMsg(editEmp?'Updated':'Added');await loadEmps();}catch{setErr('Failed');}};
+  const saveEmp = async () => { if(!ef.name||!ef.hourlyRate){setErr('Name & rate required');return;} try{if(editEmp)await updateEmployee(editEmp.id,ef);else await createEmployee(ef);setShowEmp(false);setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'',description:'',annualVacationDays:''});showMsg(editEmp?'Updated':'Added');await loadEmps();}catch{setErr('Failed');}};
 
   const createPR = async () => { if(!prDates.weekStart||!prDates.weekEnd){setErr('Select dates');return;} try{const r=await createPayroll(prDates);setActivePR(r.data.data);setShowNewPR(false);showMsg('Created');await loadPR();}catch(e){setErr(e.response?.data?.error?.message||'Failed');}};
   const updateEntry = async (entry, upd) => { if(!activePR)return; try{await updatePayrollEntry(activePR.id,entry.id,upd);const r=await getPayrolls();setPayrolls(r.data.data||[]);const u=(r.data.data||[]).find(p=>p.id===activePR.id);if(u)setActivePR(u);}catch{setErr('Failed');}};
   const addOT = async (entry) => { if(!otDate)return; const d=[...(entry.overtimeDetails||[]),{date:otDate,hours:otHrs}]; await updateEntry(entry,{overtimeDetails:d,overtimeHours:d.reduce((s,x)=>s+x.hours,0)}); setOtModal(null);setOtDate('');setOtHrs(0.5); };
+
+  // Print: Payroll Service Sheet (matches the format you send to payroll company)
+  const printPayrollService = (pr) => {
+    const entries = (pr.entries || []).map(en => {
+      const emp = emps.find(e => e.id === en.employeeId) || {};
+      return { ...en, controlNumber: emp.controlNumber || '', deductions: emp.deductions || '', description: emp.description || '' };
+    });
+    const w = window.open('', '_blank');
+    w.document.write(`<html><head><title>Payroll ${pr.weekStart} to ${pr.weekEnd}</title>
+    <style>body{font-family:Arial,sans-serif;margin:20px;font-size:12px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:6px 8px;text-align:left}th{background:#e0e0e0;font-weight:bold}td.num{text-align:center}.title{font-size:16px;font-weight:bold;margin-bottom:4px}.dates{font-size:12px;color:#555;margin-bottom:12px}@media print{body{margin:10px}}</style>
+    </head><body>
+    <div class="title">Carolina Rolling Co., Inc. — Weekly Payroll</div>
+    <div class="dates">Week: ${new Date(pr.weekStart+'T12:00:00').toLocaleDateString()} — ${new Date(pr.weekEnd+'T12:00:00').toLocaleDateString()}</div>
+    <table>
+      <thead><tr><th>Control #</th><th>Employee Name</th><th>Deductions</th><th>Description</th><th>Rate</th><th>Reg Hours</th><th>OT</th><th>Other Pay</th><th>Notes</th></tr></thead>
+      <tbody>${entries.map(en => {
+        const otherPay = [];
+        if (parseFloat(en.vacationHours) > 0) otherPay.push('Vac: ' + en.vacationHours + 'h');
+        if (parseFloat(en.bonus) > 0) otherPay.push('Bonus: $' + parseFloat(en.bonus).toFixed(2));
+        const notes = [];
+        if (en.overtimeDetails && en.overtimeDetails.length > 0) notes.push('OT: ' + en.overtimeDetails.map(d => new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' + d.hours + 'h').join(', '));
+        return `<tr><td>${en.controlNumber}</td><td>${en.employeeName}</td><td>${en.deductions}</td><td>${en.description}</td><td>$${parseFloat(en.hourlyRate).toFixed(2)}</td><td class="num">${en.regularHours}</td><td class="num">${en.overtimeHours}</td><td>${otherPay.join(', ')}</td><td style="font-size:10px">${notes.join('; ')}</td></tr>`;
+      }).join('')}</tbody>
+    </table>
+    </body></html>`);
+    w.document.close();
+    w.print();
+  };
+
+  // Print: Detailed Report (internal — includes OT dates, vacation dates, bonuses)
+  const printPayrollDetailed = (pr) => {
+    const entries = (pr.entries || []).map(en => {
+      const emp = emps.find(e => e.id === en.employeeId) || {};
+      return { ...en, annualVacationDays: emp.annualVacationDays || 0, vacationDaysUsed: emp.vacationDaysUsed || 0 };
+    });
+    const w = window.open('', '_blank');
+    w.document.write(`<html><head><title>Detailed Payroll ${pr.weekStart} to ${pr.weekEnd}</title>
+    <style>body{font-family:Arial,sans-serif;margin:20px;font-size:12px}.title{font-size:18px;font-weight:bold;margin-bottom:4px}.dates{font-size:13px;color:#555;margin-bottom:16px}.emp-card{border:1px solid #ccc;border-radius:6px;padding:12px 16px;margin-bottom:12px;page-break-inside:avoid}.emp-name{font-size:14px;font-weight:bold;border-bottom:1px solid #ddd;padding-bottom:6px;margin-bottom:8px}.row{display:flex;gap:24px;margin-bottom:4px;font-size:12px}.label{color:#666;min-width:100px}.val{font-weight:bold}.section{margin-top:8px;padding-top:6px;border-top:1px solid #eee;font-size:11px}.ot-detail{color:#e65100}.vac-detail{color:#1565c0}.grand{margin-top:16px;padding:10px;background:#e8f5e9;border-radius:6px;font-size:14px;font-weight:bold;text-align:right}@media print{body{margin:10px}.emp-card{break-inside:avoid}}</style>
+    </head><body>
+    <div class="title">Carolina Rolling Co., Inc. — Detailed Payroll Report</div>
+    <div class="dates">Week: ${new Date(pr.weekStart+'T12:00:00').toLocaleDateString()} — ${new Date(pr.weekEnd+'T12:00:00').toLocaleDateString()}</div>
+    ${entries.map(en => {
+      const rate = parseFloat(en.hourlyRate) || 0;
+      const reg = parseFloat(en.regularHours) || 0;
+      const ot = parseFloat(en.overtimeHours) || 0;
+      const vac = parseFloat(en.vacationHours) || 0;
+      const bonus = parseFloat(en.bonus) || 0;
+      const regPay = reg * rate;
+      const otPay = ot * rate * 1.5;
+      const vacPay = vac * rate;
+      const vacDaysThisWeek = vac / 8;
+      const vacRemaining = parseFloat(en.annualVacationDays) - parseFloat(en.vacationDaysUsed);
+      return `<div class="emp-card">
+        <div class="emp-name">${en.employeeName} — $${rate.toFixed(2)}/hr</div>
+        <div class="row"><span class="label">Regular Hours:</span><span class="val">${reg}h × $${rate.toFixed(2)} = $${regPay.toFixed(2)}</span></div>
+        ${ot > 0 ? `<div class="row"><span class="label">Overtime:</span><span class="val">${ot}h × $${(rate * 1.5).toFixed(2)} = $${otPay.toFixed(2)}</span></div>` : ''}
+        ${ot > 0 && en.overtimeDetails && en.overtimeDetails.length > 0 ? `<div class="section ot-detail"><strong>OT Detail:</strong> ${en.overtimeDetails.map(d => new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' — ' + d.hours + 'h').join(' | ')}</div>` : ''}
+        ${vac > 0 ? `<div class="row"><span class="label">Vacation:</span><span class="val">${vac}h (${vacDaysThisWeek.toFixed(1)} days) × $${rate.toFixed(2)} = $${vacPay.toFixed(2)}</span></div>` : ''}
+        ${vac > 0 && en.vacationDates && en.vacationDates.length > 0 ? `<div class="section vac-detail"><strong>Vacation Dates:</strong> ${en.vacationDates.map(d => new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})).join(', ')}</div>` : ''}
+        ${parseFloat(en.annualVacationDays) > 0 ? `<div class="section"><strong>Vacation Balance:</strong> ${vacRemaining.toFixed(1)} days remaining of ${parseFloat(en.annualVacationDays).toFixed(1)} annual</div>` : ''}
+        ${bonus > 0 ? `<div class="row"><span class="label">Bonus:</span><span class="val">$${bonus.toFixed(2)}${en.bonusNotes ? ' — ' + en.bonusNotes : ''}</span></div>` : ''}
+        <div class="row" style="margin-top:8px;padding-top:6px;border-top:2px solid #333;font-size:13px"><span class="label">Gross Pay:</span><span class="val" style="color:#2e7d32;font-size:14px">$${parseFloat(en.grossPay).toFixed(2)}</span></div>
+      </div>`;
+    }).join('')}
+    <div class="grand">Total Gross: $${parseFloat(pr.totalGross).toFixed(2)}</div>
+    </body></html>`);
+    w.document.close();
+    w.print();
+  };
 
   const TABS = [
     {key:'invoicing',label:'Invoicing',icon:<FileText size={16}/>},
@@ -311,21 +380,25 @@ function BusinessPage() {
       {/* EMPLOYEES & PAYROLL */}
       {tab === 'employees' && (<div>
         <div className="card" style={{marginBottom:16}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}><h3 style={{margin:0}}>👥 Employee Roster</h3><button className="btn btn-primary btn-sm" onClick={()=>{setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:''});setShowEmp(true);}}><Plus size={16}/> Add Employee</button></div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}><h3 style={{margin:0}}>👥 Employee Roster</h3><button className="btn btn-primary btn-sm" onClick={()=>{setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'',description:'',annualVacationDays:''});setShowEmp(true);}}><Plus size={16}/> Add Employee</button></div>
           {empLoad?<div style={{textAlign:'center',padding:20}}>Loading...</div>:emps.length===0?<div style={{textAlign:'center',padding:20,color:'#888'}}>No employees yet</div>:
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:12}}>{emps.map(e=>(
             <div key={e.id} style={{padding:16,borderRadius:10,border:'1px solid #e0e0e0',background:e.isActive?'white':'#f9f9f9',opacity:e.isActive?1:0.6}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                 <div><div style={{fontWeight:700,fontSize:'1rem'}}>{e.name}</div>{e.role&&<div style={{fontSize:'0.85rem',color:'#1976d2'}}>{e.role}</div>}</div>
                 <div style={{display:'flex',gap:4}}>
-                  <button onClick={()=>{setEditEmp(e);setEf({name:e.name,phone:e.phone||'',hourlyRate:e.hourlyRate,role:e.role||'',startDate:e.startDate||''});setShowEmp(true);}} style={{background:'#f0f0f0',border:'none',borderRadius:4,padding:'4px 6px',cursor:'pointer',fontSize:'0.8rem'}}>✏️</button>
+                  <button onClick={()=>{setEditEmp(e);setEf({name:e.name,phone:e.phone||'',hourlyRate:e.hourlyRate,role:e.role||'',startDate:e.startDate||'',controlNumber:e.controlNumber||'',deductions:e.deductions||'',description:e.description||'',annualVacationDays:e.annualVacationDays||''});setShowEmp(true);}} style={{background:'#f0f0f0',border:'none',borderRadius:4,padding:'4px 6px',cursor:'pointer',fontSize:'0.8rem'}}>✏️</button>
                   {e.isActive&&<button onClick={async()=>{if(!window.confirm(`Deactivate ${e.name}?`))return;try{await deleteEmployee(e.id);await loadEmps();}catch{}}} style={{background:'none',border:'1px solid #e0e0e0',borderRadius:4,padding:'4px 6px',cursor:'pointer',color:'#c62828',fontSize:'0.8rem'}}>✕</button>}
                 </div>
               </div>
               <div style={{marginTop:8,fontSize:'0.85rem',color:'#555'}}>
                 <div style={{fontWeight:700,color:'#2e7d32',fontSize:'1.1rem'}}>{fmt(e.hourlyRate)}/hr</div>
                 {e.phone&&<div>📞 {e.phone}</div>}
+                {e.controlNumber&&<div style={{color:'#1565c0'}}>Control#: {e.controlNumber}</div>}
+                {e.description&&<div style={{color:'#666',fontSize:'0.8rem'}}>{e.description}</div>}
+                {e.deductions&&<div style={{color:'#888',fontSize:'0.8rem'}}>{e.deductions}</div>}
                 {e.startDate&&<div>Started: {new Date(e.startDate+'T12:00:00').toLocaleDateString()}</div>}
+                {parseFloat(e.annualVacationDays)>0&&<div style={{marginTop:4,padding:'3px 8px',background:'#e3f2fd',borderRadius:4,display:'inline-block',fontSize:'0.8rem'}}>🏖️ {(parseFloat(e.annualVacationDays)-(parseFloat(e.vacationDaysUsed)||0)).toFixed(1)} / {parseFloat(e.annualVacationDays).toFixed(1)} days left</div>}
                 {!e.isActive&&<div style={{color:'#c62828',fontWeight:600}}>Inactive</div>}
               </div>
             </div>))}</div>}
@@ -348,7 +421,12 @@ function BusinessPage() {
                 )}
                 <span style={{padding:'2px 8px',borderRadius:4,fontSize:'0.8rem',fontWeight:600,background:activePR.status==='submitted'?'#c8e6c9':'#fff3e0',color:activePR.status==='submitted'?'#2e7d32':'#E65100'}}>{activePR.status==='submitted'?'✓ Submitted':'Draft'}</span>
               </div>
-              <div style={{display:'flex',gap:8}}>{activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{if(!window.confirm('Submit payroll?'))return;try{await submitPayroll(activePR.id);showMsg('Submitted');setActivePR(null);await loadPR();}catch{setErr('Failed');}}} style={{background:'#2e7d32',color:'white'}}>📤 Submit</button>}<button className="btn btn-sm btn-outline" onClick={()=>setActivePR(null)}>Close</button></div>
+              <div style={{display:'flex',gap:8}}>
+                {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{if(!window.confirm('Submit payroll?'))return;try{await submitPayroll(activePR.id);showMsg('Submitted');setActivePR(null);await loadPR();await loadEmps();}catch{setErr('Failed');}}} style={{background:'#2e7d32',color:'white'}}>📤 Submit</button>}
+                <button className="btn btn-sm" onClick={()=>printPayrollService(activePR)} style={{background:'#1565c0',color:'white'}}>🖨️ Payroll Sheet</button>
+                <button className="btn btn-sm" onClick={()=>printPayrollDetailed(activePR)} style={{background:'#6a1b9a',color:'white'}}>🖨️ Detailed</button>
+                <button className="btn btn-sm btn-outline" onClick={()=>setActivePR(null)}>Close</button>
+              </div>
             </div>
             <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.9rem'}}>
               <thead><tr style={{background:'#e3f2fd'}}><th style={{padding:'8px 12px',textAlign:'left'}}>Employee</th><th style={{padding:'8px',textAlign:'center',width:80}}>Rate</th><th style={{padding:'8px',textAlign:'center',width:90}}>Regular</th><th style={{padding:'8px',textAlign:'center',width:100}}>Overtime</th><th style={{padding:'8px',textAlign:'center',width:90}}>Vacation</th><th style={{padding:'8px',textAlign:'center',width:90}}>Bonus</th><th style={{padding:'8px 12px',textAlign:'right',width:100}}>Gross</th></tr></thead>
@@ -358,8 +436,8 @@ function BusinessPage() {
                   <td style={{padding:'8px',textAlign:'center',color:'#888'}}>{fmt(en.hourlyRate)}</td>
                   <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<input key={en.id+'-r-'+en.regularHours} type="number" step="0.5" className="form-input" defaultValue={en.regularHours} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.regularHours))updateEntry(en,{regularHours:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>:en.regularHours}</td>
                   <td style={{padding:'4px 8px',textAlign:'center'}}><div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}><span style={{fontWeight:600,color:en.overtimeHours>0?'#E65100':'#888'}}>{en.overtimeHours}</span>{activePR.status==='draft'&&<button onClick={()=>{setOtModal(en.id);setOtDate('');setOtHrs(0.5);}} style={{background:'#ff9800',color:'white',border:'none',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.75rem'}}>+OT</button>}</div>{en.overtimeDetails&&en.overtimeDetails.length>0&&<div style={{fontSize:'0.7rem',color:'#888',marginTop:2}}>{en.overtimeDetails.map((d,i)=><span key={i}>{new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}:{d.hours}h{i<en.overtimeDetails.length-1?', ':''}</span>)}</div>}</td>
-                  <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<input key={en.id+'-v-'+en.vacationHours} type="number" step="0.5" className="form-input" defaultValue={en.vacationHours} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.vacationHours))updateEntry(en,{vacationHours:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>:en.vacationHours}</td>
-                  <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<input key={en.id+'-b-'+en.bonus} type="number" step="1" className="form-input" defaultValue={en.bonus} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.bonus))updateEntry(en,{bonus:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>:fmt(en.bonus)}</td>
+                  <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<div><input key={en.id+'-v-'+en.vacationHours} type="number" step="0.5" className="form-input" defaultValue={en.vacationHours} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.vacationHours))updateEntry(en,{vacationHours:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>{parseFloat(en.vacationHours)>0&&<div style={{marginTop:2}}><input type="date" className="form-input" style={{width:120,padding:'2px 4px',fontSize:'0.7rem'}} onChange={e=>{if(!e.target.value)return;const dates=[...(en.vacationDates||[])];if(!dates.includes(e.target.value)){dates.push(e.target.value);updateEntry(en,{vacationDates:dates});}e.target.value='';}} />{(en.vacationDates||[]).length>0&&<div style={{fontSize:'0.65rem',color:'#1565c0',marginTop:1}}>{(en.vacationDates||[]).map((d,i)=><span key={i}>{new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}{i<en.vacationDates.length-1?', ':''}</span>)}</div>}</div>}</div>:en.vacationHours}</td>
+                  <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<div><input key={en.id+'-b-'+en.bonus} type="number" step="1" className="form-input" defaultValue={en.bonus} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.bonus))updateEntry(en,{bonus:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>{parseFloat(en.bonus)>0&&<input key={en.id+'-bn-'+(en.bonusNotes||'')} className="form-input" defaultValue={en.bonusNotes||''} onBlur={e=>{if(e.target.value!==(en.bonusNotes||''))updateEntry(en,{bonusNotes:e.target.value});}} placeholder="reason" style={{width:80,padding:'2px 4px',fontSize:'0.7rem',marginTop:2}}/>}</div>:parseFloat(en.bonus)>0?<div>{fmt(en.bonus)}{en.bonusNotes&&<div style={{fontSize:'0.7rem',color:'#888'}}>{en.bonusNotes}</div>}</div>:fmt(en.bonus)}</td>
                   <td style={{padding:'8px 12px',textAlign:'right',fontWeight:700,color:'#2e7d32'}}>{fmt(en.grossPay)}</td>
                 </tr>))}
                 <tr style={{background:'#e8f5e9'}}><td colSpan={6} style={{padding:'10px 12px',fontWeight:700,textAlign:'right'}}>Total Gross</td><td style={{padding:'10px 12px',textAlign:'right',fontWeight:800,fontSize:'1.1rem',color:'#2e7d32'}}>{fmt(activePR.totalGross)}</td></tr>
@@ -379,6 +457,11 @@ function BusinessPage() {
             <div className="form-group" style={{margin:0}}><label className="form-label">Name *</label><input className="form-input" value={ef.name} onChange={e=>setEf({...ef,name:e.target.value})}/></div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Hourly Rate *</label><input type="number" step="0.01" className="form-input" value={ef.hourlyRate} onChange={e=>setEf({...ef,hourlyRate:e.target.value})}/></div><div className="form-group" style={{margin:0}}><label className="form-label">Phone</label><input className="form-input" value={ef.phone} onChange={e=>setEf({...ef,phone:e.target.value})}/></div></div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Role</label><input className="form-input" value={ef.role} onChange={e=>setEf({...ef,role:e.target.value})} placeholder="e.g. Welder"/></div><div className="form-group" style={{margin:0}}><label className="form-label">Start Date</label><input type="date" className="form-input" value={ef.startDate} onChange={e=>setEf({...ef,startDate:e.target.value})}/></div></div>
+            <div style={{borderTop:'1px solid #e0e0e0',paddingTop:12,marginTop:4}}><h4 style={{margin:'0 0 8px',fontSize:'0.9rem',color:'#1565c0'}}>📋 Payroll Service Fields</h4></div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Control Number</label><input className="form-input" value={ef.controlNumber} onChange={e=>setEf({...ef,controlNumber:e.target.value})} placeholder="e.g. 3676774"/></div><div className="form-group" style={{margin:0}}><label className="form-label">Deductions</label><input className="form-input" value={ef.deductions} onChange={e=>setEf({...ef,deductions:e.target.value})} placeholder="e.g. ACH 100%"/></div></div>
+            <div className="form-group" style={{margin:0}}><label className="form-label">Description</label><input className="form-input" value={ef.description} onChange={e=>setEf({...ef,description:e.target.value})} placeholder="e.g. CA3400 Metal Goods Mfg"/></div>
+            <div style={{borderTop:'1px solid #e0e0e0',paddingTop:12,marginTop:4}}><h4 style={{margin:'0 0 8px',fontSize:'0.9rem',color:'#2e7d32'}}>🏖️ Vacation</h4></div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Annual Vacation Days</label><input type="number" step="0.5" className="form-input" value={ef.annualVacationDays} onChange={e=>setEf({...ef,annualVacationDays:e.target.value})} placeholder="0"/></div><div className="form-group" style={{margin:0}}><label className="form-label">Days Used ({new Date().getFullYear()})</label><div style={{padding:'8px 12px',background:'#f5f5f5',borderRadius:6,fontWeight:600}}>{editEmp?parseFloat(editEmp.vacationDaysUsed||0).toFixed(1):'0.0'}</div></div></div>
           </div>
           <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowEmp(false)}>Cancel</button><button className="btn btn-primary" onClick={saveEmp}>{editEmp?'Update':'Add'}</button></div>
         </div></div>}
