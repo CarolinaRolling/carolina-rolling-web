@@ -55,9 +55,6 @@ function BusinessPage() {
   const [activePR, setActivePR] = useState(null);
   const [showNewPR, setShowNewPR] = useState(false);
   const [prDates, setPrDates] = useState({ weekStart:'',weekEnd:'' });
-  const [otModal, setOtModal] = useState(null);
-  const [otDate, setOtDate] = useState('');
-  const [otHrs, setOtHrs] = useState(0.5);
 
   // Health
   const [health, setHealth] = useState(null);
@@ -105,10 +102,43 @@ function BusinessPage() {
     if(editEmp)await updateEmployee(editEmp.id,data);else await createEmployee(data);setShowEmp(false);setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'ACH 100%',description:'',annualVacationDays:''});showMsg(editEmp?'Updated':'Added');await loadEmps();}catch(e){setErr(e.response?.data?.error?.message||'Failed to save');}};
 
   const createPR = async () => { if(!prDates.weekStart||!prDates.weekEnd){setErr('Select dates');return;} try{const r=await createPayroll(prDates);setActivePR(r.data.data);setShowNewPR(false);showMsg('Created');await loadPR();}catch(e){setErr(e.response?.data?.error?.message||'Failed');}};
-  const updateEntry = async (entry, upd) => { if(!activePR)return; try{await updatePayrollEntry(activePR.id,entry.id,upd);const r=await getPayrolls();setPayrolls(r.data.data||[]);const u=(r.data.data||[]).find(p=>p.id===activePR.id);if(u)setActivePR(u);}catch{setErr('Failed');}};
-  const addOT = async (entry) => { if(!otDate)return; const d=[...(entry.overtimeDetails||[]),{date:otDate,hours:otHrs}]; await updateEntry(entry,{overtimeDetails:d,overtimeHours:d.reduce((s,x)=>s+x.hours,0)}); setOtModal(null);setOtDate('');setOtHrs(0.5); };
+  const updateEntry = async (entry, upd) => { 
+    if(!activePR)return; 
+    try{
+      const res = await updatePayrollEntry(activePR.id,entry.id,upd);
+      const updated = res.data.data;
+      // Update in-place instead of refetching everything
+      setActivePR(prev => {
+        if (!prev) return prev;
+        const entries = (prev.entries||[]).map(e => e.id === entry.id ? { ...e, ...updated } : e);
+        const totalGross = entries.reduce((s,e) => s + (parseFloat(e.grossPay)||0), 0);
+        return { ...prev, entries, totalGross };
+      });
+    }catch{setErr('Failed');}
+  };
 
-  // Print: Payroll Service Sheet (matches the format you send to payroll company)
+  // OT editor state
+  const [otEntry, setOtEntry] = useState(null); // the payroll entry being edited
+  const [otList, setOtList] = useState([]); // working copy of overtimeDetails
+  const [otNewDate, setOtNewDate] = useState('');
+  const [otNewHrs, setOtNewHrs] = useState(0.5);
+
+  const openOtEditor = (en) => {
+    setOtEntry(en);
+    setOtList([...(en.overtimeDetails || [])]);
+    setOtNewDate('');
+    setOtNewHrs(0.5);
+  };
+
+  const saveOt = async () => {
+    if (!otEntry) return;
+    const totalOtHours = otList.reduce((s, x) => s + (parseFloat(x.hours) || 0), 0);
+    await updateEntry(otEntry, { overtimeDetails: otList, overtimeHours: totalOtHours });
+    setOtEntry(null);
+    setOtList([]);
+    // Sync back to payrolls list too
+    await loadPR();
+  };
   const printPayrollService = (pr) => {
     const entries = (pr.entries || []).map(en => {
       const emp = emps.find(e => e.id === en.employeeId) || {};
@@ -411,9 +441,12 @@ function BusinessPage() {
                 {e.description&&<div style={{color:'#666',fontSize:'0.8rem'}}>{e.description}</div>}
                 {e.deductions&&<div style={{color:'#888',fontSize:'0.8rem'}}>{e.deductions}</div>}
                 {e.startDate&&<div>Started: {new Date(e.startDate+'T12:00:00').toLocaleDateString()}</div>}
-                {parseFloat(e.annualVacationDays)>0&&<div style={{marginTop:4,display:'flex',alignItems:'center',gap:6}}>
-                  <span style={{padding:'3px 8px',background:'#e3f2fd',borderRadius:4,fontSize:'0.8rem'}}>🏖️ {(parseFloat(e.annualVacationDays)-(parseFloat(e.vacationDaysUsed)||0)).toFixed(1)} / {parseFloat(e.annualVacationDays).toFixed(1)} days left</span>
-                  <button onClick={(ev)=>{ev.stopPropagation();setVacEmp(e);setVacLog([...(e.vacationLog||[])]);}} style={{background:'none',border:'1px solid #90caf9',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.7rem',color:'#1565c0'}}>Edit</button>
+                {parseFloat(e.annualVacationDays)>0&&<div style={{marginTop:4}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{padding:'3px 8px',background:'#e3f2fd',borderRadius:4,fontSize:'0.8rem'}}>🏖️ {(parseFloat(e.annualVacationDays)-(parseFloat(e.vacationDaysUsed)||0)).toFixed(1)} / {parseFloat(e.annualVacationDays).toFixed(1)} days left</span>
+                    <button onClick={(ev)=>{ev.stopPropagation();setVacEmp(e);setVacLog([...(e.vacationLog||[])]);}} style={{background:'none',border:'1px solid #90caf9',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.7rem',color:'#1565c0'}}>Edit</button>
+                  </div>
+                  {(()=>{const today=new Date().toISOString().split('T')[0];const upcoming=(e.vacationLog||[]).filter(v=>v.date>today).sort((a,b)=>a.date.localeCompare(b.date));return upcoming.length>0?<div style={{fontSize:'0.7rem',color:'#1565c0',marginTop:3}}>📅 Upcoming: {upcoming.slice(0,5).map((v,i)=><span key={i}>{new Date(v.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})} ({v.hours}h){i<Math.min(upcoming.length,5)-1?', ':''}</span>)}{upcoming.length>5?` +${upcoming.length-5} more`:''}</div>:null;})()}
                 </div>}
                 {!e.isActive&&<div style={{color:'#c62828',fontWeight:600}}>Inactive</div>}
               </div>
@@ -452,7 +485,7 @@ function BusinessPage() {
                   <td style={{padding:'8px 12px',fontWeight:600}}>{en.employeeName}</td>
                   <td style={{padding:'8px',textAlign:'center',color:'#888'}}>{fmt(en.hourlyRate)}</td>
                   <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<input key={en.id+'-r-'+en.regularHours} type="number" step="0.5" className="form-input" defaultValue={en.regularHours} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.regularHours))updateEntry(en,{regularHours:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>:en.regularHours}</td>
-                  <td style={{padding:'4px 8px',textAlign:'center'}}><div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}><span style={{fontWeight:600,color:en.overtimeHours>0?'#E65100':'#888'}}>{en.overtimeHours}</span>{activePR.status==='draft'&&<button onClick={()=>{setOtModal(en.id);setOtDate('');setOtHrs(0.5);}} style={{background:'#ff9800',color:'white',border:'none',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.75rem'}}>+OT</button>}</div>{en.overtimeDetails&&en.overtimeDetails.length>0&&<div style={{fontSize:'0.7rem',color:'#888',marginTop:2}}>{en.overtimeDetails.map((d,i)=><span key={i}>{new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}:{d.hours}h{i<en.overtimeDetails.length-1?', ':''}</span>)}</div>}</td>
+                  <td style={{padding:'4px 8px',textAlign:'center'}}><div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}><span style={{fontWeight:600,color:en.overtimeHours>0?'#E65100':'#888'}}>{en.overtimeHours}</span>{activePR.status==='draft'&&<button onClick={()=>openOtEditor(en)} style={{background:'#ff9800',color:'white',border:'none',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.75rem'}}>{en.overtimeHours>0?'✏️':'+ OT'}</button>}</div>{en.overtimeDetails&&en.overtimeDetails.length>0&&<div style={{fontSize:'0.7rem',color:'#888',marginTop:2}}>{en.overtimeDetails.map((d,i)=><span key={i}>{new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}:{d.hours}h{i<en.overtimeDetails.length-1?', ':''}</span>)}</div>}</td>
                   <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<div><input key={en.id+'-v-'+en.vacationHours} type="number" step="0.5" className="form-input" defaultValue={en.vacationHours} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.vacationHours))updateEntry(en,{vacationHours:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>{parseFloat(en.vacationHours)>0&&<div style={{marginTop:2}}><input type="date" className="form-input" style={{width:120,padding:'2px 4px',fontSize:'0.7rem'}} onChange={e=>{if(!e.target.value)return;const dates=[...(en.vacationDates||[])];if(!dates.includes(e.target.value)){dates.push(e.target.value);updateEntry(en,{vacationDates:dates});}e.target.value='';}} />{(en.vacationDates||[]).length>0&&<div style={{fontSize:'0.65rem',color:'#1565c0',marginTop:1}}>{(en.vacationDates||[]).map((d,i)=><span key={i}>{new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}{i<en.vacationDates.length-1?', ':''}</span>)}</div>}</div>}</div>:en.vacationHours}</td>
                   <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<div><input key={en.id+'-b-'+en.bonus} type="number" step="1" className="form-input" defaultValue={en.bonus} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.bonus))updateEntry(en,{bonus:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>{parseFloat(en.bonus)>0&&<input key={en.id+'-bn-'+(en.bonusNotes||'')} className="form-input" defaultValue={en.bonusNotes||''} onBlur={e=>{if(e.target.value!==(en.bonusNotes||''))updateEntry(en,{bonusNotes:e.target.value});}} placeholder="reason" style={{width:80,padding:'2px 4px',fontSize:'0.7rem',marginTop:2}}/>}</div>:parseFloat(en.bonus)>0?<div>{fmt(en.bonus)}{en.bonusNotes&&<div style={{fontSize:'0.7rem',color:'#888'}}>{en.bonusNotes}</div>}</div>:fmt(en.bonus)}</td>
                   <td style={{padding:'8px 12px',textAlign:'right',fontWeight:700,color:'#2e7d32'}}>{fmt(en.grossPay)}</td>
@@ -502,13 +535,63 @@ function BusinessPage() {
           </div>
           <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowNewPR(false)}>Cancel</button><button className="btn btn-primary" onClick={createPR}>Create</button></div>
         </div></div>}
-        {otModal&&<div className="modal-overlay" onClick={()=>setOtModal(null)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:350}}>
-          <div className="modal-header"><h3 className="modal-title">Add Overtime</h3><button className="modal-close" onClick={()=>setOtModal(null)}>&times;</button></div>
-          <div style={{padding:20,display:'flex',flexDirection:'column',gap:12}}>
-            <div className="form-group" style={{margin:0}}><label className="form-label">Date</label><input type="date" className="form-input" value={otDate} onChange={e=>setOtDate(e.target.value)}/></div>
-            <div className="form-group" style={{margin:0}}><label className="form-label">Hours</label><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{OT_INC.map(h=><button key={h} onClick={()=>setOtHrs(h)} style={{padding:'6px 12px',borderRadius:6,border:otHrs===h?'2px solid #1976d2':'1px solid #ddd',background:otHrs===h?'#e3f2fd':'white',cursor:'pointer',fontWeight:otHrs===h?700:400,fontSize:'0.85rem'}}>{h}h</button>)}</div></div>
+        {/* Overtime Editor Modal */}
+        {otEntry&&<div className="modal-overlay"><div className="modal" style={{maxWidth:550}}>
+          <div className="modal-header">
+            <h3 className="modal-title">⏱️ Overtime — {otEntry.employeeName}</h3>
+            <button className="modal-close" onClick={()=>setOtEntry(null)}>&times;</button>
           </div>
-          <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setOtModal(null)}>Cancel</button><button className="btn btn-primary" onClick={()=>{const en=(activePR?.entries||[]).find(e=>e.id===otModal);if(en)addOT(en);}}>Add {otHrs}h OT</button></div>
+          <div style={{padding:'4px 20px 0',fontSize:'0.85rem',color:'#666'}}>
+            Pay period: {activePR?new Date(activePR.weekStart+'T12:00:00').toLocaleDateString()+' — '+new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString():''}
+            &nbsp;|&nbsp; Rate: ${parseFloat(otEntry.hourlyRate).toFixed(2)} × 1.5 = <strong>${(parseFloat(otEntry.hourlyRate)*1.5).toFixed(2)}/hr OT</strong>
+          </div>
+          <div style={{padding:20}}>
+            {/* Add new OT entry */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr auto',gap:8,marginBottom:12,padding:10,background:'#fff3e0',borderRadius:8}}>
+              <div className="form-group" style={{margin:0}}><label className="form-label" style={{fontSize:'0.75rem'}}>Date</label><input type="date" className="form-input" value={otNewDate} onChange={e=>setOtNewDate(e.target.value)} min={activePR?.weekStart} max={activePR?.weekEnd} style={{fontSize:'0.85rem',padding:'4px 8px'}}/></div>
+              <div className="form-group" style={{margin:0}}><label className="form-label" style={{fontSize:'0.75rem'}}>Hours</label>
+                <select className="form-select" value={otNewHrs} onChange={e=>setOtNewHrs(parseFloat(e.target.value))} style={{fontSize:'0.85rem',padding:'4px 8px'}}>
+                  {[0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,7,8].map(h=><option key={h} value={h}>{h}h</option>)}
+                </select>
+              </div>
+              <button onClick={()=>{if(!otNewDate)return;setOtList([...otList,{date:otNewDate,hours:otNewHrs}].sort((a,b)=>a.date.localeCompare(b.date)));setOtNewDate('');setOtNewHrs(0.5);}} style={{background:'#E65100',color:'white',border:'none',borderRadius:6,padding:'4px 14px',cursor:'pointer',fontWeight:600,alignSelf:'end',marginBottom:2}}>+ Add</button>
+            </div>
+
+            {/* OT entries list */}
+            {otList.length===0?<div style={{textAlign:'center',padding:16,color:'#999',fontSize:'0.85rem'}}>No overtime entries</div>:
+            <div style={{border:'1px solid #e0e0e0',borderRadius:8,overflow:'hidden'}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
+                <thead><tr style={{background:'#fff3e0'}}>
+                  <th style={{padding:'8px 12px',textAlign:'left'}}>Date</th>
+                  <th style={{padding:'8px',textAlign:'center',width:90}}>Hours</th>
+                  <th style={{padding:'8px',textAlign:'right',width:90}}>Pay</th>
+                  <th style={{padding:'8px',width:40}}></th>
+                </tr></thead>
+                <tbody>{otList.map((ot,idx)=>(
+                  <tr key={idx} style={{borderBottom:'1px solid #f0f0f0'}}>
+                    <td style={{padding:'6px 12px'}}>{new Date(ot.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</td>
+                    <td style={{padding:'6px 8px',textAlign:'center'}}>
+                      <select value={ot.hours} onChange={e=>{const l=[...otList];l[idx]={...l[idx],hours:parseFloat(e.target.value)};setOtList(l);}} style={{width:60,padding:'2px',fontSize:'0.8rem',border:'1px solid #ddd',borderRadius:4}}>
+                        {[0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,7,8].map(h=><option key={h} value={h}>{h}h</option>)}
+                      </select>
+                    </td>
+                    <td style={{padding:'6px 8px',textAlign:'right',fontWeight:600,color:'#E65100'}}>${(ot.hours*parseFloat(otEntry.hourlyRate)*1.5).toFixed(2)}</td>
+                    <td style={{padding:'6px 4px',textAlign:'center'}}><button onClick={()=>{const l=[...otList];l.splice(idx,1);setOtList(l);}} style={{background:'none',border:'none',cursor:'pointer',color:'#c62828',fontSize:'0.85rem'}}>✕</button></td>
+                  </tr>
+                ))}</tbody>
+                <tfoot><tr style={{background:'#fff3e0'}}>
+                  <td style={{padding:'8px 12px',fontWeight:700}}>Total</td>
+                  <td style={{padding:'8px',textAlign:'center',fontWeight:700}}>{otList.reduce((s,e)=>s+e.hours,0).toFixed(1)}h</td>
+                  <td style={{padding:'8px',textAlign:'right',fontWeight:700,color:'#E65100'}}>${(otList.reduce((s,e)=>s+e.hours,0)*parseFloat(otEntry.hourlyRate)*1.5).toFixed(2)}</td>
+                  <td></td>
+                </tr></tfoot>
+              </table>
+            </div>}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={()=>setOtEntry(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={saveOt} style={{background:'#E65100'}}>💾 Save Overtime ({otList.reduce((s,e)=>s+e.hours,0).toFixed(1)}h)</button>
+          </div>
         </div></div>}
 
         {/* Vacation Log Modal */}
@@ -516,10 +599,21 @@ function BusinessPage() {
           <div className="modal-header"><h3 className="modal-title">🏖️ Vacation Log — {vacEmp.name}</h3><button className="modal-close" onClick={()=>setVacEmp(null)}>&times;</button></div>
           <div style={{padding:20}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-              <div style={{fontSize:'0.9rem'}}>
-                <strong>Annual:</strong> {parseFloat(vacEmp.annualVacationDays||0).toFixed(1)} days &nbsp;|&nbsp;
-                <strong>Used:</strong> {(vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0)/8).toFixed(1)} days ({vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0).toFixed(1)}h) &nbsp;|&nbsp;
-                <strong style={{color:'#1565c0'}}>Remaining:</strong> {(parseFloat(vacEmp.annualVacationDays||0) - vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0)/8).toFixed(1)} days
+              <div style={{fontSize:'0.85rem',lineHeight:1.6}}>
+                {(()=>{
+                  const today=new Date().toISOString().split('T')[0];
+                  const taken=vacLog.filter(e=>e.date<=today);
+                  const planned=vacLog.filter(e=>e.date>today);
+                  const takenH=taken.reduce((s,e)=>s+(parseFloat(e.hours)||0),0);
+                  const plannedH=planned.reduce((s,e)=>s+(parseFloat(e.hours)||0),0);
+                  const totalH=takenH+plannedH;
+                  const annual=parseFloat(vacEmp.annualVacationDays||0);
+                  return <>
+                    <div><strong>Annual:</strong> {annual.toFixed(1)} days ({(annual*8).toFixed(0)}h)</div>
+                    <div><span style={{color:'#2e7d32'}}>✅ Taken:</span> <strong>{(takenH/8).toFixed(1)} days</strong> ({takenH.toFixed(1)}h) &nbsp;|&nbsp; <span style={{color:'#1565c0'}}>📅 Planned:</span> <strong>{(plannedH/8).toFixed(1)} days</strong> ({plannedH.toFixed(1)}h)</div>
+                    <div><strong style={{color:annual-(totalH/8)<0?'#c62828':'#1565c0'}}>Remaining: {(annual-(totalH/8)).toFixed(1)} days</strong> (after planned)</div>
+                  </>;
+                })()}
               </div>
             </div>
 
@@ -547,9 +641,12 @@ function BusinessPage() {
                   <th style={{padding:'8px 12px',textAlign:'left'}}>Note</th>
                   <th style={{padding:'8px',width:40}}></th>
                 </tr></thead>
-                <tbody>{vacLog.map((entry,idx)=>(
-                  <tr key={idx} style={{borderBottom:'1px solid #f0f0f0'}}>
-                    <td style={{padding:'6px 12px'}}>{new Date(entry.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</td>
+                <tbody>{vacLog.map((entry,idx)=>{const isFuture=entry.date>new Date().toISOString().split('T')[0];return(
+                  <tr key={idx} style={{borderBottom:'1px solid #f0f0f0',background:isFuture?'#e3f2fd':''}}>
+                    <td style={{padding:'6px 12px'}}>
+                      <input type="date" value={entry.date} onChange={e=>{const l=[...vacLog];l[idx]={...l[idx],date:e.target.value};setVacLog(l.sort((a,b)=>a.date.localeCompare(b.date)));}} style={{border:'1px solid #ddd',borderRadius:4,padding:'2px 6px',fontSize:'0.8rem',width:130}}/>
+                      <span style={{marginLeft:6,fontSize:'0.75rem',color:isFuture?'#1565c0':'#2e7d32',fontWeight:600}}>{isFuture?'📅 Planned':'✅ Taken'}</span>
+                    </td>
                     <td style={{padding:'6px 8px',textAlign:'center'}}>
                       <select value={entry.hours} onChange={e=>{const l=[...vacLog];l[idx]={...l[idx],hours:parseFloat(e.target.value)};setVacLog(l);}} style={{width:55,padding:'2px',fontSize:'0.8rem',border:'1px solid #ddd',borderRadius:4}}>
                         <option value="1">1h</option><option value="2">2h</option><option value="3">3h</option><option value="4">4h</option>
@@ -562,9 +659,9 @@ function BusinessPage() {
                     </td>
                     <td style={{padding:'6px 4px',textAlign:'center'}}><button onClick={()=>{const l=[...vacLog];l.splice(idx,1);setVacLog(l);}} style={{background:'none',border:'none',cursor:'pointer',color:'#c62828',fontSize:'0.85rem'}}>✕</button></td>
                   </tr>
-                ))}</tbody>
+                )})}</tbody>
                 <tfoot><tr style={{background:'#e3f2fd'}}>
-                  <td style={{padding:'8px 12px',fontWeight:700}}>Total</td>
+                  <td style={{padding:'8px 12px',fontWeight:700}}>Total ({vacLog.filter(e=>e.date<=new Date().toISOString().split('T')[0]).length} taken, {vacLog.filter(e=>e.date>new Date().toISOString().split('T')[0]).length} planned)</td>
                   <td style={{padding:'8px',textAlign:'center',fontWeight:700}}>{vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0).toFixed(1)}h</td>
                   <td style={{padding:'8px',textAlign:'center',fontWeight:700,color:'#1565c0'}}>{(vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0)/8).toFixed(2)}d</td>
                   <td colSpan={2}></td>
