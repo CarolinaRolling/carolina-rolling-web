@@ -42,7 +42,7 @@ function BusinessPage() {
   const [empLoad, setEmpLoad] = useState(false);
   const [showEmp, setShowEmp] = useState(false);
   const [editEmp, setEditEmp] = useState(null);
-  const [ef, setEf] = useState({ name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'',description:'',annualVacationDays:'' });
+  const [ef, setEf] = useState({ name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'ACH 100%',description:'',annualVacationDays:'' });
 
   // Payroll
   const [payrolls, setPayrolls] = useState([]);
@@ -89,7 +89,14 @@ function BusinessPage() {
   };
 
   const saveBill = async () => { if(!bf.name||!bf.amount){setErr('Name & amount required');return;} try{if(editBill)await updateLiability(editBill.id,bf);else await createLiability(bf);setShowBill(false);setEditBill(null);setBf({name:'',category:'other',amount:'',dueDate:'',recurring:false,recurringInterval:'monthly',vendor:'',notes:'',referenceNumber:'',vendorInvoiceNumber:'',poNumber:''});showMsg(editBill?'Updated':'Added');await loadLiabs();}catch{setErr('Failed');}};
-  const saveEmp = async () => { if(!ef.name||!ef.hourlyRate){setErr('Name & rate required');return;} try{if(editEmp)await updateEmployee(editEmp.id,ef);else await createEmployee(ef);setShowEmp(false);setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'',description:'',annualVacationDays:''});showMsg(editEmp?'Updated':'Added');await loadEmps();}catch{setErr('Failed');}};
+  const saveEmp = async () => { if(!ef.name||!ef.hourlyRate){setErr('Name & rate required');return;} try{
+    const data = { ...ef };
+    // Clean numeric fields — empty strings break Postgres DECIMAL
+    if (!data.annualVacationDays || data.annualVacationDays === '') data.annualVacationDays = 0;
+    if (!data.hourlyRate || data.hourlyRate === '') data.hourlyRate = 0;
+    // Set defaults
+    if (!data.deductions) data.deductions = 'ACH 100%';
+    if(editEmp)await updateEmployee(editEmp.id,data);else await createEmployee(data);setShowEmp(false);setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'ACH 100%',description:'',annualVacationDays:''});showMsg(editEmp?'Updated':'Added');await loadEmps();}catch(e){setErr(e.response?.data?.error?.message||'Failed to save');}};
 
   const createPR = async () => { if(!prDates.weekStart||!prDates.weekEnd){setErr('Select dates');return;} try{const r=await createPayroll(prDates);setActivePR(r.data.data);setShowNewPR(false);showMsg('Created');await loadPR();}catch(e){setErr(e.response?.data?.error?.message||'Failed');}};
   const updateEntry = async (entry, upd) => { if(!activePR)return; try{await updatePayrollEntry(activePR.id,entry.id,upd);const r=await getPayrolls();setPayrolls(r.data.data||[]);const u=(r.data.data||[]).find(p=>p.id===activePR.id);if(u)setActivePR(u);}catch{setErr('Failed');}};
@@ -380,7 +387,7 @@ function BusinessPage() {
       {/* EMPLOYEES & PAYROLL */}
       {tab === 'employees' && (<div>
         <div className="card" style={{marginBottom:16}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}><h3 style={{margin:0}}>👥 Employee Roster</h3><button className="btn btn-primary btn-sm" onClick={()=>{setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'',description:'',annualVacationDays:''});setShowEmp(true);}}><Plus size={16}/> Add Employee</button></div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}><h3 style={{margin:0}}>👥 Employee Roster</h3><button className="btn btn-primary btn-sm" onClick={()=>{setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'ACH 100%',description:'',annualVacationDays:''});setShowEmp(true);}}><Plus size={16}/> Add Employee</button></div>
           {empLoad?<div style={{textAlign:'center',padding:20}}>Loading...</div>:emps.length===0?<div style={{textAlign:'center',padding:20,color:'#888'}}>No employees yet</div>:
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:12}}>{emps.map(e=>(
             <div key={e.id} style={{padding:16,borderRadius:10,border:'1px solid #e0e0e0',background:e.isActive?'white':'#f9f9f9',opacity:e.isActive?1:0.6}}>
@@ -459,7 +466,7 @@ function BusinessPage() {
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Role</label><input className="form-input" value={ef.role} onChange={e=>setEf({...ef,role:e.target.value})} placeholder="e.g. Welder"/></div><div className="form-group" style={{margin:0}}><label className="form-label">Start Date</label><input type="date" className="form-input" value={ef.startDate} onChange={e=>setEf({...ef,startDate:e.target.value})}/></div></div>
             <div style={{borderTop:'1px solid #e0e0e0',paddingTop:12,marginTop:4}}><h4 style={{margin:'0 0 8px',fontSize:'0.9rem',color:'#1565c0'}}>📋 Payroll Service Fields</h4></div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Control Number</label><input className="form-input" value={ef.controlNumber} onChange={e=>setEf({...ef,controlNumber:e.target.value})} placeholder="e.g. 3676774"/></div><div className="form-group" style={{margin:0}}><label className="form-label">Deductions</label><input className="form-input" value={ef.deductions} onChange={e=>setEf({...ef,deductions:e.target.value})} placeholder="e.g. ACH 100%"/></div></div>
-            <div className="form-group" style={{margin:0}}><label className="form-label">Description</label><input className="form-input" value={ef.description} onChange={e=>setEf({...ef,description:e.target.value})} placeholder="e.g. CA3400 Metal Goods Mfg"/></div>
+            <div className="form-group" style={{margin:0}}><label className="form-label">Description</label><select className="form-select" value={ef.description} onChange={e=>setEf({...ef,description:e.target.value})}><option value="">Select...</option><option value="CA3400 Metal Goods Mfg">CA3400 Metal Goods Mfg</option><option value="CA8810 Clerical Office Employee">CA8810 Clerical Office Employee</option><option value="CA0000 Exempt Officer">CA0000 Exempt Officer</option></select></div>
             <div style={{borderTop:'1px solid #e0e0e0',paddingTop:12,marginTop:4}}><h4 style={{margin:'0 0 8px',fontSize:'0.9rem',color:'#2e7d32'}}>🏖️ Vacation</h4></div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div className="form-group" style={{margin:0}}><label className="form-label">Annual Vacation Days</label><input type="number" step="0.5" className="form-input" value={ef.annualVacationDays} onChange={e=>setEf({...ef,annualVacationDays:e.target.value})} placeholder="0"/></div><div className="form-group" style={{margin:0}}><label className="form-label">Days Used ({new Date().getFullYear()})</label><div style={{padding:'8px 12px',background:'#f5f5f5',borderRadius:6,fontWeight:600}}>{editEmp?parseFloat(editEmp.vacationDaysUsed||0).toFixed(1):'0.0'}</div></div></div>
           </div>
