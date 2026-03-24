@@ -123,6 +123,12 @@ function BusinessPage() {
   const [otNewDate, setOtNewDate] = useState('');
   const [otNewHrs, setOtNewHrs] = useState(0.5);
 
+  // Vacation editor state (payroll entry)
+  const [vacEntry, setVacEntry] = useState(null);
+  const [vacEntryList, setVacEntryList] = useState([]); // [{date, hours}]
+  const [vacEntryNewDate, setVacEntryNewDate] = useState('');
+  const [vacEntryNewHrs, setVacEntryNewHrs] = useState(8);
+
   const openOtEditor = (en) => {
     setOtEntry(en);
     setOtList([...(en.overtimeDetails || [])]);
@@ -137,6 +143,32 @@ function BusinessPage() {
     setOtEntry(null);
     setOtList([]);
     // Sync back to payrolls list too
+    await loadPR();
+  };
+
+  const openVacEntryEditor = (en) => {
+    setVacEntry(en);
+    // Build list from vacationDates + vacationHours
+    const dates = en.vacationDates || [];
+    if (dates.length > 0) {
+      const hoursEach = dates.length > 0 ? (parseFloat(en.vacationHours) || 0) / dates.length : 8;
+      setVacEntryList(dates.map(d => ({ date: typeof d === 'string' ? d : d.date, hours: typeof d === 'object' ? (d.hours || hoursEach) : hoursEach })));
+    } else if (parseFloat(en.vacationHours) > 0) {
+      setVacEntryList([{ date: activePR?.weekStart || '', hours: parseFloat(en.vacationHours) }]);
+    } else {
+      setVacEntryList([]);
+    }
+    setVacEntryNewDate('');
+    setVacEntryNewHrs(8);
+  };
+
+  const saveVacEntry = async () => {
+    if (!vacEntry) return;
+    const totalVacHours = vacEntryList.reduce((s, x) => s + (parseFloat(x.hours) || 0), 0);
+    const dates = vacEntryList.map(v => ({ date: v.date, hours: parseFloat(v.hours) || 8 }));
+    await updateEntry(vacEntry, { vacationDates: dates, vacationHours: totalVacHours });
+    setVacEntry(null);
+    setVacEntryList([]);
     await loadPR();
   };
   const printPayrollService = (pr) => {
@@ -160,7 +192,7 @@ function BusinessPage() {
       td.c { text-align: center; }
       tr:nth-child(even) { background: #f9f9f9; }
       .foot { margin-top: 20px; padding-top: 10px; border-top: 2px solid #1a1a1a; display: flex; justify-content: space-between; font-size: 10px; color: #888; }
-      @media print { body { margin: 0; padding: 15px 20px; } @page { margin: 0.4in; } }`;
+      @media print { body { margin: 0; padding: 15px 20px; } @page { margin: 0.4in; size: portrait; } }`;
     const rows = entries.map(en => {
       const op = [];
       if (parseFloat(en.vacationHours) > 0) op.push('Vac: ' + en.vacationHours + 'h');
@@ -206,7 +238,7 @@ function BusinessPage() {
       .gp { display: flex; justify-content: space-between; border-top: 1.5px solid #000; padding: 3px 0 0; margin-top: 3px; font-weight: 800; font-size: 11px; }
       .tot { border: 2px solid #000; padding: 8px 12px; margin-top: 10px; font-size: 14px; font-weight: 800; text-align: right; }
       .ft { margin-top: 12px; padding-top: 6px; border-top: 1px solid #bbb; display: flex; justify-content: space-between; font-size: 9px; color: #999; }
-      @media print { body { padding: 10px 16px; } @page { margin: 0.3in; } .emp { break-inside: avoid; } }`;
+      @media print { body { padding: 10px 16px; } @page { margin: 0.3in; size: portrait; } .emp { break-inside: avoid; } }`;
     const cards = entries.map(en => {
       const rate = parseFloat(en.hourlyRate) || 0;
       const reg = parseFloat(en.regularHours) || 0;
@@ -226,7 +258,7 @@ function BusinessPage() {
       }
       if (vac > 0) {
         h += '<div class="r"><span class="l">Vacation</span><span class="v" style="color:#1565c0">' + vac + 'h (' + vacDays.toFixed(1) + 'd) \u00d7 $' + rate.toFixed(2) + ' = $' + vacPay.toFixed(2) + '</span></div>';
-        if (en.vacationDates && en.vacationDates.length > 0) h += '<div class="vc-box">' + en.vacationDates.map(d => new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})).join(', ') + '</div>';
+        if (en.vacationDates && en.vacationDates.length > 0) h += '<div class="vc-box">' + en.vacationDates.map(d => { const dt = typeof d === 'string' ? d : d.date; const hrs = typeof d === 'object' && d.hours ? d.hours + 'h' : ''; return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + (hrs ? ' (' + hrs + ')' : ''); }).join(', ') + '</div>';
       }
       if (parseFloat(en.annualVacationDays) > 0) h += '<div class="bal">Vacation balance: ' + vacRem.toFixed(1) + ' / ' + parseFloat(en.annualVacationDays).toFixed(1) + ' days</div>';
       if (bonus > 0) h += '<div class="r"><span class="l">Bonus' + (en.bonusNotes ? ' \u2014 ' + en.bonusNotes : '') + '</span><span class="v">$' + bonus.toFixed(2) + '</span></div>';
@@ -524,7 +556,7 @@ function BusinessPage() {
                   <td style={{padding:'8px',textAlign:'center',color:'#888'}}>{fmt(en.hourlyRate)}</td>
                   <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<input key={en.id+'-r-'+en.regularHours} type="number" step="0.5" className="form-input" defaultValue={en.regularHours} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.regularHours))updateEntry(en,{regularHours:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>:en.regularHours}</td>
                   <td style={{padding:'4px 8px',textAlign:'center'}}><div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}><span style={{fontWeight:600,color:en.overtimeHours>0?'#E65100':'#888'}}>{en.overtimeHours}</span>{activePR.status==='draft'&&<button onClick={()=>openOtEditor(en)} style={{background:'#ff9800',color:'white',border:'none',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.75rem'}}>{en.overtimeHours>0?'✏️':'+ OT'}</button>}</div>{en.overtimeDetails&&en.overtimeDetails.length>0&&<div style={{fontSize:'0.7rem',color:'#888',marginTop:2}}>{en.overtimeDetails.map((d,i)=><span key={i}>{new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}:{d.hours}h{i<en.overtimeDetails.length-1?', ':''}</span>)}</div>}</td>
-                  <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<div><input key={en.id+'-v-'+en.vacationHours} type="number" step="0.5" className="form-input" defaultValue={en.vacationHours} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.vacationHours))updateEntry(en,{vacationHours:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>{parseFloat(en.vacationHours)>0&&<div style={{marginTop:2}}><input type="date" className="form-input" style={{width:120,padding:'2px 4px',fontSize:'0.7rem'}} onChange={e=>{if(!e.target.value)return;const dates=[...(en.vacationDates||[])];if(!dates.includes(e.target.value)){dates.push(e.target.value);updateEntry(en,{vacationDates:dates});}e.target.value='';}} />{(en.vacationDates||[]).length>0&&<div style={{fontSize:'0.65rem',color:'#1565c0',marginTop:1}}>{(en.vacationDates||[]).map((d,i)=><span key={i}>{new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}{i<en.vacationDates.length-1?', ':''}</span>)}</div>}</div>}</div>:en.vacationHours}</td>
+                  <td style={{padding:'4px 8px',textAlign:'center'}}><div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}><span style={{fontWeight:600,color:en.vacationHours>0?'#1565c0':'#888'}}>{en.vacationHours}</span>{activePR.status==='draft'&&<button onClick={()=>openVacEntryEditor(en)} style={{background:'#1565c0',color:'white',border:'none',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.75rem'}}>{en.vacationHours>0?'✏️':'+ Vac'}</button>}</div>{en.vacationDates&&en.vacationDates.length>0&&<div style={{fontSize:'0.7rem',color:'#1565c0',marginTop:2}}>{(en.vacationDates||[]).map((d,i)=>{const dt=typeof d==='string'?d:d.date;const hrs=typeof d==='object'?d.hours:null;return <span key={i}>{new Date(dt+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}{hrs?':'+hrs+'h':''}{i<en.vacationDates.length-1?', ':''}</span>;})}</div>}</td>
                   <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<div><input key={en.id+'-b-'+en.bonus} type="number" step="1" className="form-input" defaultValue={en.bonus} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.bonus))updateEntry(en,{bonus:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>{parseFloat(en.bonus)>0&&<input key={en.id+'-bn-'+(en.bonusNotes||'')} className="form-input" defaultValue={en.bonusNotes||''} onBlur={e=>{if(e.target.value!==(en.bonusNotes||''))updateEntry(en,{bonusNotes:e.target.value});}} placeholder="reason" style={{width:80,padding:'2px 4px',fontSize:'0.7rem',marginTop:2}}/>}</div>:parseFloat(en.bonus)>0?<div>{fmt(en.bonus)}{en.bonusNotes&&<div style={{fontSize:'0.7rem',color:'#888'}}>{en.bonusNotes}</div>}</div>:fmt(en.bonus)}</td>
                   <td style={{padding:'8px 12px',textAlign:'right',fontWeight:700,color:'#2e7d32'}}>{fmt(en.grossPay)}</td>
                 </tr>))}
@@ -629,6 +661,67 @@ function BusinessPage() {
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setOtEntry(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={saveOt} style={{background:'#E65100'}}>💾 Save Overtime ({otList.reduce((s,e)=>s+e.hours,0).toFixed(1)}h)</button>
+          </div>
+        </div></div>}
+
+        {/* Vacation Entry Editor (payroll) */}
+        {vacEntry&&<div className="modal-overlay"><div className="modal" style={{maxWidth:550}}>
+          <div className="modal-header">
+            <h3 className="modal-title">🏖️ Vacation — {vacEntry.employeeName}</h3>
+            <button className="modal-close" onClick={()=>setVacEntry(null)}>&times;</button>
+          </div>
+          <div style={{padding:'4px 20px 0',fontSize:'0.85rem',color:'#666'}}>
+            Pay period: {activePR?new Date(activePR.weekStart+'T12:00:00').toLocaleDateString()+' — '+new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString():''}
+            &nbsp;|&nbsp; Rate: ${parseFloat(vacEntry.hourlyRate).toFixed(2)}/hr
+          </div>
+          <div style={{padding:20}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr auto',gap:8,marginBottom:12,padding:10,background:'#e3f2fd',borderRadius:8}}>
+              <div className="form-group" style={{margin:0}}><label className="form-label" style={{fontSize:'0.75rem'}}>Date</label><input type="date" className="form-input" value={vacEntryNewDate} onChange={e=>setVacEntryNewDate(e.target.value)} style={{fontSize:'0.85rem',padding:'4px 8px'}}/></div>
+              <div className="form-group" style={{margin:0}}><label className="form-label" style={{fontSize:'0.75rem'}}>Hours</label>
+                <select className="form-select" value={vacEntryNewHrs} onChange={e=>setVacEntryNewHrs(parseFloat(e.target.value))} style={{fontSize:'0.85rem',padding:'4px 8px'}}>
+                  <option value="1">1h</option><option value="2">2h</option><option value="3">3h</option><option value="4">4h (half day)</option>
+                  <option value="5">5h</option><option value="6">6h</option><option value="7">7h</option><option value="8">8h (full day)</option>
+                </select>
+              </div>
+              <button onClick={()=>{if(!vacEntryNewDate)return;setVacEntryList([...vacEntryList,{date:vacEntryNewDate,hours:vacEntryNewHrs}].sort((a,b)=>a.date.localeCompare(b.date)));setVacEntryNewDate('');setVacEntryNewHrs(8);}} style={{background:'#1565c0',color:'white',border:'none',borderRadius:6,padding:'4px 14px',cursor:'pointer',fontWeight:600,alignSelf:'end',marginBottom:2}}>+ Add</button>
+            </div>
+            {vacEntryList.length===0?<div style={{textAlign:'center',padding:16,color:'#999',fontSize:'0.85rem'}}>No vacation entries</div>:
+            <div style={{border:'1px solid #e0e0e0',borderRadius:8,overflow:'hidden'}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
+                <thead><tr style={{background:'#e3f2fd'}}>
+                  <th style={{padding:'8px 12px',textAlign:'left'}}>Date</th>
+                  <th style={{padding:'8px',textAlign:'center',width:90}}>Hours</th>
+                  <th style={{padding:'8px',textAlign:'center',width:70}}>Days</th>
+                  <th style={{padding:'8px',textAlign:'right',width:90}}>Pay</th>
+                  <th style={{padding:'8px',width:40}}></th>
+                </tr></thead>
+                <tbody>{vacEntryList.map((v,idx)=>(
+                  <tr key={idx} style={{borderBottom:'1px solid #f0f0f0'}}>
+                    <td style={{padding:'6px 12px'}}>{new Date(v.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</td>
+                    <td style={{padding:'6px 8px',textAlign:'center'}}>
+                      <select value={v.hours} onChange={e=>{const l=[...vacEntryList];l[idx]={...l[idx],hours:parseFloat(e.target.value)};setVacEntryList(l);}} style={{width:60,padding:'2px',fontSize:'0.8rem',border:'1px solid #ddd',borderRadius:4}}>
+                        <option value="1">1h</option><option value="2">2h</option><option value="3">3h</option><option value="4">4h</option>
+                        <option value="5">5h</option><option value="6">6h</option><option value="7">7h</option><option value="8">8h</option>
+                      </select>
+                    </td>
+                    <td style={{padding:'6px 8px',textAlign:'center',color:'#1565c0',fontWeight:600}}>{(v.hours/8).toFixed(2)}</td>
+                    <td style={{padding:'6px 8px',textAlign:'right',fontWeight:600,color:'#1565c0'}}>${(v.hours*parseFloat(vacEntry.hourlyRate)).toFixed(2)}</td>
+                    <td style={{padding:'6px 4px',textAlign:'center'}}><button onClick={()=>{const l=[...vacEntryList];l.splice(idx,1);setVacEntryList(l);}} style={{background:'none',border:'none',cursor:'pointer',color:'#c62828',fontSize:'0.85rem'}}>✕</button></td>
+                  </tr>
+                ))}</tbody>
+                <tfoot><tr style={{background:'#e3f2fd'}}>
+                  <td style={{padding:'8px 12px',fontWeight:700}}>Total</td>
+                  <td style={{padding:'8px',textAlign:'center',fontWeight:700}}>{vacEntryList.reduce((s,e)=>s+e.hours,0).toFixed(1)}h</td>
+                  <td style={{padding:'8px',textAlign:'center',fontWeight:700,color:'#1565c0'}}>{(vacEntryList.reduce((s,e)=>s+e.hours,0)/8).toFixed(2)}d</td>
+                  <td style={{padding:'8px',textAlign:'right',fontWeight:700,color:'#1565c0'}}>${(vacEntryList.reduce((s,e)=>s+e.hours,0)*parseFloat(vacEntry.hourlyRate)).toFixed(2)}</td>
+                  <td></td>
+                </tr></tfoot>
+              </table>
+            </div>}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={()=>setVacEntry(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={saveVacEntry}>💾 Save Vacation ({vacEntryList.reduce((s,e)=>s+e.hours,0).toFixed(1)}h)</button>
           </div>
         </div></div>}
 
