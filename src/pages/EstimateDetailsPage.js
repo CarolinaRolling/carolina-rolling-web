@@ -338,7 +338,7 @@ function EstimateDetailsPage() {
 
   const calculatePartTotal = (part) => {
     // Per-each pricing: (mat cost × markup + labor) × qty
-    if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType)) {
+    if (['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType)) {
       const qty = parseInt(part.quantity) || 1;
       const materialCost = parseFloat(part.materialTotal) || 0;
       const materialMarkup = parseFloat(part.materialMarkupPercent) || 0;
@@ -509,7 +509,7 @@ function EstimateDetailsPage() {
     let highestMinimum = 0;
     let highestMinRule = null;
 
-    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
+    const EA_PRICED = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
 
     parts.forEach(part => {
       if (!EA_PRICED.includes(part.partType)) return;
@@ -546,7 +546,7 @@ function EstimateDetailsPage() {
     parts.forEach(part => {
       if (part.partType === 'rush_service') return; // handle separately
       const calc = calculatePartTotal(part);
-      if (['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType)) {
+      if (['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType)) {
         eaPricedTotal += calc.partTotal;
       } else {
         partsSubtotal += calc.partTotal;
@@ -1377,7 +1377,7 @@ function EstimateDetailsPage() {
       const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
       const linkedParent = isLinkedService ? parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
       const calc = calculatePartTotal(part);
-      const isEaPricing = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
+      const isEaPricing = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
       const laborRatio = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEaPricing) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
       const adjLaborEach = calc.laborEach * laborRatio;
       const adjUnitPrice = (calc.materialEach || 0) + adjLaborEach;
@@ -2159,7 +2159,7 @@ function EstimateDetailsPage() {
               const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
               const linkedParent = isLinkedService ? parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
               // Adjust labor proportionally when minimum charge applies
-              const isEa = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
+              const isEa = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
               const laborRatio = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEa) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
               const adjLabor = (calc.laborEach || 0) * laborRatio;
               const adjUnitPrice = (calc.materialEach || 0) + adjLabor;
@@ -2357,7 +2357,7 @@ function EstimateDetailsPage() {
                   </div>
 
                   {/* Material Section - only show if we supply material (old part types) */}
-                  {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType) && part.weSupplyMaterial && part.materialDescription && (
+                  {!['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType) && part.weSupplyMaterial && part.materialDescription && (
                     <div style={{ background: '#fff3e0', borderRadius: 8, padding: 12, marginBottom: 8 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <strong>📦 Material supplied by: Carolina Rolling Company</strong>
@@ -2371,7 +2371,7 @@ function EstimateDetailsPage() {
                   )}
 
                   {/* Costs Section - ea pricing */}
-                  {['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType) ? (
+                  {['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType) ? (
                     <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
                       {part.clientPartNumber && (
                         <div style={{ fontSize: '0.8rem', color: '#1565c0', fontWeight: 600, marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid #e0e0e0' }}>
@@ -3003,7 +3003,7 @@ function EstimateDetailsPage() {
                   })().map(part => {
                     const calc = calculatePartTotal(part);
                     const isLS = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
-                    const isEa = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
+                    const isEa = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
                     const lr = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEa) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
                     const adjTotal = isEa ? ((calc.materialEach || 0) + (calc.laborEach || 0) * lr) * (parseInt(part.quantity) || 1) : calc.partTotal;
                     return (
@@ -3294,7 +3294,7 @@ function EstimateDetailsPage() {
             <div className="modal-body">
 
               {/* Common fields for all part types (plate_roll, angle_roll, flat_stock have their own) */}
-              {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'cone_roll', 'tee_bar', 'press_brake', 'fab_service'].includes(partData.partType) && (
+              {!['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'cone_roll', 'tee_bar', 'press_brake', 'fab_service'].includes(partData.partType) && (
               <div className="grid grid-2" style={{ marginBottom: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Client Part Number</label>

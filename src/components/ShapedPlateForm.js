@@ -11,6 +11,7 @@ const THICKNESS_OPTIONS = [
 const SHAPE_OPTIONS = [
   { value: 'round', label: '⭕ Round Plate', desc: 'Solid circular plate' },
   { value: 'donut', label: '🍩 Donut', desc: 'Ring — outer and inner diameter' },
+  { value: 'head', label: '🥣 Formed Head', desc: 'Dished / elliptical head' },
   { value: 'custom', label: '📐 Custom Shape', desc: 'Per DXF or drawing' }
 ];
 
@@ -60,6 +61,9 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
       parts.push(`${od} x ${id} Donut`);
       if (partData._donutPurpose === 'cylinder') parts.push('(For Cylinder)');
       if (partData._donutPurpose === 'head') parts.push('(For Elliptical Head)');
+    } else if (shape === 'head') {
+      if (partData.outerDiameter) parts.push(`${partData.outerDiameter}" OD Formed Head`);
+      else parts.push('Formed Head');
     } else {
       parts.push('Custom Shape');
       if (partData._customDescription) parts.push(`— ${partData._customDescription}`);
@@ -68,9 +72,34 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
     return parts.join(' ');
   }, [partData.thickness, partData.material, partData._materialOrigin, partData.outerDiameter, partData._innerDiameter, partData._shapeType, partData._donutPurpose, partData._customDescription, partData.quantity, shape]);
 
+  // Build rolling/forming description
+  const rollingDescription = useMemo(() => {
+    const d = [];
+    if (partData._rollToMethod === 'per_print') {
+      d.push('Roll Per Print');
+    } else if (partData._rollToMethod === 'per_sample') {
+      d.push('Roll Per Sample');
+    }
+    
+    if (shape === 'round' && partData._rollDiameter) {
+      d.push(`Roll to ${partData._rollDiameter}" Diameter`);
+    } else if (shape === 'donut' && partData._donutPurpose === 'cylinder' && partData._rollDiameter) {
+      d.push(`Form to ${partData._rollDiameter}" Cylinder Diameter`);
+    } else if (shape === 'donut' && partData._donutPurpose === 'head' && partData._headDepth) {
+      d.push(`Form to Head — ${partData._headDepth}" Depth`);
+    } else if (shape === 'head' && partData._headDepth) {
+      d.push(`Dish Depth: ${partData._headDepth}"`);
+    } else if (shape === 'custom' && partData._rollDiameter) {
+      d.push(`Form to ${partData._rollDiameter}" Diameter`);
+    }
+
+    if (partData.specialInstructions) d.push(partData.specialInstructions);
+    return d.join(' — ');
+  }, [shape, partData._rollToMethod, partData._rollDiameter, partData._headDepth, partData._donutPurpose, partData.specialInstructions]);
+
   useEffect(() => {
-    setPartData(prev => ({ ...prev, materialDescription, _materialDescription: materialDescription }));
-  }, [materialDescription]);
+    setPartData(prev => ({ ...prev, materialDescription, _materialDescription: materialDescription, _rollingDescription: rollingDescription }));
+  }, [materialDescription, rollingDescription]);
 
   // Pricing calculations
   const qty = parseInt(partData.quantity) || 1;
@@ -213,6 +242,71 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
           </div>
         </>
       )}
+
+      {shape === 'head' && (
+        <>
+          <div className="form-group">
+            <label className="form-label">Outer Diameter (OD) *</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="number" step="any" className="form-input" value={partData.outerDiameter || ''}
+                onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} placeholder="e.g. 48" />
+              <span style={{ color: '#888', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>inches</span>
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Dish Depth</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="number" step="any" className="form-input" value={partData._headDepth || ''}
+                onChange={(e) => setPartData({ ...partData, _headDepth: e.target.value })} placeholder="Optional" />
+              <span style={{ color: '#888', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>inches</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* === FORMING / ROLLING === */}
+      <div style={sectionStyle}>
+        {sectionTitle('🔄', 'Forming', '#0288d1')}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Method</label>
+            <select className="form-select" value={partData._rollToMethod || ''}
+              onChange={(e) => setPartData({ ...partData, _rollToMethod: e.target.value })}>
+              <option value="">Flat (no forming)</option>
+              <option value="to_diameter">Roll to Diameter</option>
+              <option value="per_print">Per Print</option>
+              <option value="per_sample">Per Sample</option>
+            </select>
+          </div>
+          {/* Roll Diameter — shown for round plate, donut+cylinder, custom */}
+          {(shape === 'round' || (shape === 'donut' && partData._donutPurpose === 'cylinder') || shape === 'custom') && partData._rollToMethod === 'to_diameter' && (
+            <div className="form-group">
+              <label className="form-label">{shape === 'donut' ? 'Cylinder Diameter' : 'Roll Diameter'}</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input type="number" step="any" className="form-input" value={partData._rollDiameter || ''}
+                  onChange={(e) => setPartData({ ...partData, _rollDiameter: e.target.value })} placeholder="Optional" />
+                <span style={{ color: '#888', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>inches</span>
+              </div>
+            </div>
+          )}
+          {/* Head Depth — shown for donut+head */}
+          {shape === 'donut' && partData._donutPurpose === 'head' && (
+            <div className="form-group">
+              <label className="form-label">Head Depth</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input type="number" step="any" className="form-input" value={partData._headDepth || ''}
+                  onChange={(e) => setPartData({ ...partData, _headDepth: e.target.value })} placeholder="Optional" />
+                <span style={{ color: '#888', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>inches</span>
+              </div>
+            </div>
+          )}
+        </div>
+        {rollingDescription && (
+          <div style={{ marginTop: 8, padding: 8, background: '#e1f5fe', borderRadius: 6, fontSize: '0.85rem', color: '#0277bd', fontWeight: 600 }}>
+            🔄 {rollingDescription}
+          </div>
+        )}
+      </div>
 
       {/* === MATERIAL === */}
       <div style={sectionStyle}>
