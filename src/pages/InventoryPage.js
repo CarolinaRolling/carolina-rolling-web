@@ -31,16 +31,67 @@ function InventoryPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  // Derive search from URL — survives back button
-  const searchQuery = searchParams.get('q') || '';
-  const updateSearch = (val) => {
-    if (val) {
-      setSearchParams({ q: val }, { replace: true });
-    } else {
-      setSearchParams({}, { replace: true });
-    }
+  // Cookie helpers
+  const getCookie = (name) => { const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)')); return m ? decodeURIComponent(m[2]) : null; };
+  const setCookie = (name, val) => { document.cookie = `${name}=${encodeURIComponent(val)};path=/;max-age=${60*60*24*365}`; };
+
+  // Chip-based search + filters (persisted in cookies)
+  const [searchInput, setSearchInput] = useState(() => getCookie('inv_search') || '');
+  const [searchQuery, setSearchQuery] = useState(() => getCookie('inv_search') || '');
+  const [activeFilters, setActiveFilters] = useState(() => {
+    try { return JSON.parse(getCookie('inv_filters') || '[]'); } catch { return []; }
+  });
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+
+  // Close filter menu on outside click
+  useEffect(() => {
+    if (!showFilterMenu) return;
+    const handleClick = () => setShowFilterMenu(false);
+    setTimeout(() => document.addEventListener('click', handleClick), 0);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showFilterMenu]);
+
+  const doSearch = () => { if (searchInput.trim()) { setSearchQuery(searchInput.trim()); setCookie('inv_search', searchInput.trim()); } };
+  const clearSearch = () => { setSearchInput(''); setSearchQuery(''); setCookie('inv_search', ''); };
+
+  const addFilter = (type, value, label) => {
+    const key = `${type}:${value}`;
+    if (activeFilters.some(f => f.key === key)) return;
+    const newFilters = [...activeFilters, { key, type, value, label }];
+    setActiveFilters(newFilters);
+    setCookie('inv_filters', JSON.stringify(newFilters));
+    setShowFilterMenu(false);
   };
-  const [searchResults, setSearchResults] = useState(null); // null = not searching, [] = no results
+  const removeFilter = (key) => {
+    const newFilters = activeFilters.filter(f => f.key !== key);
+    setActiveFilters(newFilters);
+    setCookie('inv_filters', JSON.stringify(newFilters));
+  };
+  const clearAll = () => { clearSearch(); setActiveFilters([]); setCookie('inv_filters', '[]'); };
+
+  const FILTER_OPTIONS = [
+    { group: 'Status', type: 'status', items: [
+      { value: 'waiting_for_materials', label: 'Waiting for Materials' },
+      { value: 'received', label: 'Material Received' },
+      { value: 'processing', label: 'Processing' },
+      { value: 'stored', label: 'Stored (Ready to Ship)' },
+      { value: 'shipped', label: 'Shipped' },
+      { value: 'archived', label: 'Archived' },
+    ]},
+    { group: 'Material', type: 'material', items: [
+      { value: 'mat_ordered', label: 'Material Ordered (PO sent)' },
+      { value: 'mat_not_ordered', label: 'Material NOT Ordered' },
+      { value: 'customer_supplied', label: 'Customer Supplied' },
+    ]},
+    { group: 'Other', type: 'other', items: [
+      { value: 'has_rush', label: 'Rush / Emergency' },
+      { value: 'has_due_date', label: 'Has Due Date' },
+      { value: 'overdue', label: 'Overdue' },
+      { value: 'voided', label: 'Voided' },
+    ]},
+  ];
+
+  const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
   
   const [statusFilter, setStatusFilter] = useState(() => {
@@ -104,10 +155,10 @@ function InventoryPage() {
     navigate(`/workorders?newFromShipment=${shipmentId}`);
   };
 
-  // Debounced server-side search across ALL statuses (including archived/shipped)
+  // Debounced server-side search across ALL statuses
   const searchTimer = useRef(null);
   useEffect(() => {
-    if (!searchQuery || searchQuery.length < 2) {
+    if (!searchQuery) {
       setSearchResults(null);
       setSearching(false);
       return;
@@ -116,7 +167,7 @@ function InventoryPage() {
     clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(async () => {
       try {
-        const response = await getWorkOrders({ search: searchQuery, limit: 50, view: 'list' });
+        const response = await getWorkOrders({ search: searchQuery, limit: 200, view: 'list' });
         setSearchResults(response.data.data || []);
       } catch (err) {
         console.error('Search error:', err);
@@ -161,67 +212,58 @@ function InventoryPage() {
   const visibleCompletions = recentlyCompleted.filter(o => !dismissedCompletions.includes(o.id));
 
   const getFilteredOrders = () => {
-    // When searching, use server-side results (includes archived/shipped)
-    if (searchQuery && searchQuery.length >= 2 && searchResults !== null) {
-      let filtered = [...searchResults];
-      // Sort
-      filtered.sort((a, b) => {
-        switch (sortBy) {
-          case 'dr_desc': return (b.drNumber || 0) - (a.drNumber || 0);
-          case 'dr_asc': return (a.drNumber || 0) - (b.drNumber || 0);
-          case 'client': return (a.clientName || '').localeCompare(b.clientName || '');
-          case 'date': return new Date(b.createdAt) - new Date(a.createdAt);
-          case 'location': return (a.storageLocation || '').localeCompare(b.storageLocation || '');
-          default: return (b.drNumber || 0) - (a.drNumber || 0);
-        }
-      });
-      return filtered;
+    // When searching, use server-side results (includes all statuses)
+    let filtered = (searchQuery && searchResults !== null) ? [...searchResults] : [...workOrders];
+
+    // If NOT searching, apply status tab filter
+    if (!searchQuery) {
+      if (statusFilter === 'waiting_for_materials') {
+        filtered = filtered.filter(o => o.status === 'waiting_for_materials');
+      } else if (statusFilter === 'received') {
+        filtered = filtered.filter(o => o.status === 'received' || o.status === 'draft');
+      } else if (statusFilter === 'processing') {
+        filtered = filtered.filter(o => o.status === 'processing' || o.status === 'in_progress');
+      } else if (statusFilter === 'stored') {
+        filtered = filtered.filter(o => o.status === 'stored' || o.status === 'completed');
+      } else if (statusFilter === 'active') {
+        filtered = filtered.filter(o => o.status !== 'archived' && o.status !== 'shipped');
+      }
     }
 
-    let filtered = [...workOrders];
+    // Apply chip filters on top of everything
+    const statusChips = activeFilters.filter(f => f.type === 'status').map(f => f.value);
+    const matChips = activeFilters.filter(f => f.type === 'material').map(f => f.value);
+    const otherChips = activeFilters.filter(f => f.type === 'other').map(f => f.value);
 
-    // Filter by status
-    if (statusFilter === 'waiting_for_materials') {
-      filtered = filtered.filter(o => o.status === 'waiting_for_materials');
-    } else if (statusFilter === 'received') {
-      filtered = filtered.filter(o => o.status === 'received' || o.status === 'draft');
-    } else if (statusFilter === 'processing') {
-      filtered = filtered.filter(o => o.status === 'processing' || o.status === 'in_progress');
-    } else if (statusFilter === 'stored') {
-      filtered = filtered.filter(o => o.status === 'stored' || o.status === 'completed');
-    } else if (statusFilter === 'active') {
-      // All non-archived, non-shipped, non-picked-up
-      filtered = filtered.filter(o => o.status !== 'archived' && o.status !== 'shipped');
+    if (statusChips.length > 0) {
+      filtered = filtered.filter(o => statusChips.includes(o.status));
     }
-
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(o =>
-        o.clientName?.toLowerCase().includes(query) ||
-        o.orderNumber?.toLowerCase().includes(query) ||
-        o.clientPurchaseOrderNumber?.toLowerCase().includes(query) ||
-        (o.drNumber && `DR-${o.drNumber}`.toLowerCase().includes(query)) ||
-        (o.drNumber && o.drNumber.toString().includes(query)) ||
-        o.storageLocation?.toLowerCase().includes(query)
-      );
+    for (const mf of matChips) {
+      if (mf === 'mat_ordered') filtered = filtered.filter(o => o.parts?.some(p => p.materialOrdered));
+      if (mf === 'mat_not_ordered') filtered = filtered.filter(o => o.parts?.some(p => !p.materialOrdered && p.materialSource === 'we_order'));
+      if (mf === 'customer_supplied') filtered = filtered.filter(o => o.parts?.some(p => p.materialSource === 'customer_supplied'));
+    }
+    for (const of2 of otherChips) {
+      if (of2 === 'has_rush') filtered = filtered.filter(o => o.parts?.some(p => p.partType === 'rush_service'));
+      if (of2 === 'has_due_date') filtered = filtered.filter(o => o.dueDate);
+      if (of2 === 'overdue') filtered = filtered.filter(o => o.dueDate && new Date(o.dueDate) < new Date() && !['completed', 'shipped', 'archived'].includes(o.status));
+      if (of2 === 'voided') filtered = filtered.filter(o => o.isVoided);
     }
 
     // Sort
     filtered.sort((a, b) => {
+      // Rush orders always go to top
+      const aRush = a.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'archived'].includes(a.status);
+      const bRush = b.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'archived'].includes(b.status);
+      if (aRush && !bRush) return -1;
+      if (!aRush && bRush) return 1;
       switch (sortBy) {
-        case 'dr_desc':
-          return (b.drNumber || 0) - (a.drNumber || 0);
-        case 'dr_asc':
-          return (a.drNumber || 0) - (b.drNumber || 0);
-        case 'client':
-          return (a.clientName || '').localeCompare(b.clientName || '');
-        case 'date':
-          return new Date(b.createdAt) - new Date(a.createdAt);
-        case 'location':
-          return (a.storageLocation || '').localeCompare(b.storageLocation || '');
-        default:
-          return (b.drNumber || 0) - (a.drNumber || 0);
+        case 'dr_desc': return (b.drNumber || 0) - (a.drNumber || 0);
+        case 'dr_asc': return (a.drNumber || 0) - (b.drNumber || 0);
+        case 'client': return (a.clientName || '').localeCompare(b.clientName || '');
+        case 'date': return new Date(b.createdAt) - new Date(a.createdAt);
+        case 'location': return (a.storageLocation || '').localeCompare(b.storageLocation || '');
+        default: return (b.drNumber || 0) - (a.drNumber || 0);
       }
     });
 
@@ -287,7 +329,8 @@ function InventoryPage() {
     <div>
       <div className="page-header">
         <h1 className="page-title">
-          {statusFilter === 'archived' ? '📁 Archived (Shipped)' : 
+          {searchQuery ? '🔍 Search Results' :
+           statusFilter === 'archived' ? '📁 Archived (Shipped)' : 
            statusFilter === 'waiting_for_materials' ? '⏳ Waiting for Materials' : 
            statusFilter === 'stored' ? '✅ Stored (Ready to Ship)' :
            statusFilter === 'processing' ? '🔧 Processing' :
@@ -368,28 +411,51 @@ function InventoryPage() {
         </button>
       </div>
 
-      {/* Search and Sort */}
+      {/* Search, Filters & Sort */}
       <div className="card" style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="search-box" style={{ flex: 1, minWidth: 200, marginBottom: 0, position: 'relative' }}>
-            <Search size={18} className="search-box-icon" />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
+            <Search size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
             <input
               type="text"
+              className="form-input"
               placeholder="Search by DR#, client, PO#, estimate#, location..."
-              value={searchQuery}
-              onChange={(e) => updateSearch(e.target.value)}
-              className="search-box-input"
-              style={{ borderColor: searchQuery ? '#1976d2' : undefined, background: searchQuery ? '#f0f7ff' : undefined }}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') doSearch(); }}
+              style={{ paddingLeft: 40 }}
             />
-            {searchQuery && (
-              <button onClick={() => updateSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: '#1976d2', color: 'white', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>✕</button>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={doSearch} style={{ padding: '8px 16px' }}>
+            <Search size={14} /> Search
+          </button>
+          <div style={{ position: 'relative' }}>
+            <button className="btn btn-sm btn-outline" onClick={(e) => { e.stopPropagation(); setShowFilterMenu(!showFilterMenu); }} style={{ padding: '8px 12px' }}>
+              🔽 Filter
+            </button>
+            {showFilterMenu && (
+              <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: 'white', border: '1px solid #ddd', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 100, width: 280, maxHeight: 400, overflowY: 'auto' }}>
+                {FILTER_OPTIONS.map(group => (
+                  <div key={group.group}>
+                    <div style={{ padding: '8px 14px', fontWeight: 700, fontSize: '0.8rem', color: '#555', background: '#f5f5f5', borderBottom: '1px solid #eee' }}>{group.group}</div>
+                    {group.items.map(item => {
+                      const key = `${group.type}:${item.value}`;
+                      const isActive = activeFilters.some(f => f.key === key);
+                      return (
+                        <div key={item.value}
+                          onClick={() => { if (!isActive) addFilter(group.type, item.value, item.label); }}
+                          style={{ padding: '8px 14px', cursor: isActive ? 'default' : 'pointer', background: isActive ? '#e3f2fd' : 'white', color: isActive ? '#999' : '#333', fontSize: '0.85rem', borderBottom: '1px solid #f5f5f5' }}
+                          onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = '#f0f7ff'; }}
+                          onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'white'; }}>
+                          {isActive ? '✓ ' : ''}{item.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-          {searchQuery && searchQuery.length >= 2 && (
-            <span style={{ fontSize: '0.8rem', color: '#1565c0', fontWeight: 600, whiteSpace: 'nowrap' }}>
-              {searching ? '⏳ Searching...' : `🔍 All statuses (${filteredOrders.length} found)`}
-            </span>
-          )}
           <select 
             className="form-select" 
             value={sortBy} 
@@ -403,6 +469,26 @@ function InventoryPage() {
             <option value="location">Location</option>
           </select>
         </div>
+
+        {/* Active Search & Filter Chips */}
+        {(searchQuery || activeFilters.length > 0) && (
+          <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {searchQuery && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 20, fontSize: '0.8rem', fontWeight: 600, color: '#1565c0' }}>
+                🔍 "{searchQuery}"
+                <button onClick={clearSearch} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1565c0', fontWeight: 800, fontSize: '0.85rem', padding: 0, lineHeight: 1 }}>✕</button>
+              </span>
+            )}
+            {activeFilters.map(f => (
+              <span key={f.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 20, fontSize: '0.8rem', fontWeight: 600, color: '#1565c0' }}>
+                {f.label}
+                <button onClick={() => removeFilter(f.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1565c0', fontWeight: 800, fontSize: '0.85rem', padding: 0, lineHeight: 1 }}>✕</button>
+              </span>
+            ))}
+            <button onClick={clearAll} style={{ background: 'none', border: '1px solid #ccc', borderRadius: 20, padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem', color: '#888' }}>Clear All</button>
+            {searching && <span style={{ fontSize: '0.8rem', color: '#1565c0' }}>⏳ Searching...</span>}
+          </div>
+        )}
       </div>
 
       {/* Results count */}
