@@ -1995,6 +1995,17 @@ function WorkOrderDetailsPage() {
                   {isCODClient && !codPaid && <span style={{ marginLeft: 6, fontSize: '0.7rem' }}>💰</span>}
                 </button>
               )}
+              {['waiting_for_materials', 'received', 'processing'].includes(order.status) && !order.pickupHistory?.length && (
+                <button className="btn" onClick={() => {
+                  const items = {};
+                  order.parts?.forEach(p => { items[p.id] = { selected: false, useCustomQty: false, customQty: String(p.quantity || 1) }; });
+                  setPickupData({ pickedUpBy: '', type: 'partial', items });
+                  setShowPickupModal(true);
+                }}
+                  style={{ background: '#e65100', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Truck size={16} /> Ship Partial
+                </button>
+              )}
             </>
           )}
           <div style={{ position: 'relative' }}>
