@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Package, Truck, CheckCircle, Clock, FileText, Inbox, Image, AlertCircle } from 'lucide-react';
 import { getWorkOrders, getUnlinkedShipments, getRecentlyCompletedOrders, getLowStockSupplies } from '../services/api';
 
@@ -21,7 +21,6 @@ const STATUSES = {
 
 function InventoryPage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [workOrders, setWorkOrders] = useState([]);
   const [unlinkedShipments, setUnlinkedShipments] = useState([]);
   const [recentlyCompleted, setRecentlyCompleted] = useState([]);

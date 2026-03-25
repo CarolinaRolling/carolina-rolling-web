@@ -3309,7 +3309,6 @@ function EstimateDetailsPage() {
 
               {/* Type-specific form */}
               {partData.partType === 'flat_stock' ? (
-                <>
                 <div className="grid grid-2">
                   <FlatStockForm
                     partData={partData}
@@ -3322,10 +3321,7 @@ function EstimateDetailsPage() {
                     setError={setError}
                   />
                 </div>
-                
-                </>
               ) : partData.partType === 'plate_roll' ? (
-                <>
                 <div className="grid grid-2">
                   <PlateRollForm
                     partData={partData}
@@ -3338,10 +3334,7 @@ function EstimateDetailsPage() {
                     setError={setError}
                   />
                 </div>
-                
-                </>
               ) : partData.partType === 'shaped_plate' ? (
-                <>
                 <div className="grid grid-2">
                   <ShapedPlateForm
                     partData={partData}
@@ -3354,8 +3347,6 @@ function EstimateDetailsPage() {
                     setError={setError}
                   />
                 </div>
-                
-                </>
               ) : partData.partType === 'angle_roll' ? (
                 <div className="grid grid-2">
                   <AngleRollForm
