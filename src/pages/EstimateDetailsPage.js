@@ -2506,7 +2506,13 @@ function EstimateDetailsPage() {
                             <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 700, color: '#4527a0', fontSize: '0.9rem' }}>{dxfFile.originalName}</div>
                               <div style={{ fontSize: '0.7rem', color: '#888' }}>
-                                {dxfFile.updatedAt ? new Date(dxfFile.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + new Date(dxfFile.updatedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : dxfFile.createdAt ? new Date(dxfFile.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + new Date(dxfFile.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
+                                {(() => {
+                                  const d = dxfFile.fileLastModified || dxfFile.updatedAt || dxfFile.createdAt;
+                                  if (!d) return '';
+                                  const dt = new Date(d);
+                                  const label = dxfFile.fileLastModified ? 'File modified' : 'Uploaded';
+                                  return label + ': ' + dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                                })()}
                               </div>
                             </div>
                             <button onClick={() => handleViewPartFile(part.id, dxfFile)}

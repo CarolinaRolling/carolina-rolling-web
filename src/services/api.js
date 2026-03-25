@@ -207,12 +207,17 @@ export const getEstimatePartFiles = (estimateId, partId) => api.get(`/estimates/
 export const viewEstimatePartFile = (estimateId, partId, fileId) => api.get(`/estimates/${estimateId}/parts/${partId}/files/${fileId}/view`);
 export const uploadEstimatePartFile = (estimateId, partId, fileOrFiles, fileType = 'other') => {
   const formData = new FormData();
+  const firstFile = Array.isArray(fileOrFiles) ? fileOrFiles[0] : fileOrFiles;
   if (Array.isArray(fileOrFiles)) {
     fileOrFiles.forEach(f => formData.append('files', f));
   } else {
     formData.append('files', fileOrFiles);
   }
   formData.append('fileType', fileType);
+  // Send the file's actual last-modified date from the filesystem
+  if (firstFile && firstFile.lastModified) {
+    formData.append('fileLastModified', String(firstFile.lastModified));
+  }
   return api.post(`/estimates/${estimateId}/parts/${partId}/files`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
