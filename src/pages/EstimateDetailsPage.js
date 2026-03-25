@@ -1239,11 +1239,6 @@ function EstimateDetailsPage() {
   };
 
   const handleViewPartFile = async (partId, file) => {
-    // S3 files: open directly — no proxy needed
-    if (file.url && file.url.includes('amazonaws.com')) {
-      window.open(file.url, '_blank');
-      return;
-    }
     try {
       const response = await viewEstimatePartFile(id, partId, file.id);
       const url = response.data?.data?.url || response.data?.url;
@@ -1265,6 +1260,57 @@ function EstimateDetailsPage() {
       showMessage('File deleted');
     } catch (err) { setError('Failed to delete file'); }
   };
+
+  // Reusable DXF/Cut Print upload section for plate_roll, shaped_plate, flat_stock
+  const renderCutFileSection = () => (
+    <div style={{ marginTop: 12, padding: 12, background: '#EDE7F6', borderRadius: 8, border: '1px solid #B39DDB' }}>
+      <label className="form-label" style={{ marginBottom: 8, color: '#4527a0' }}>📐 Cut Print (DXF/STEP) <span style={{ fontWeight: 400, color: '#999' }}>— attached to vendor RFQs</span></label>
+      {partData.cutFileReference && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 10px', background: 'white', borderRadius: 6, border: '1px solid #B39DDB' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4527a0' }}>📄 {partData.cutFileReference}</span>
+          <button onClick={() => setPartData({ ...partData, cutFileReference: '' })}
+            style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.8rem' }}>✕ Remove</button>
+        </div>
+      )}
+      {editingPart && editingPart.files && editingPart.files.filter(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.(dxf|step|stp)$/i)).length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          {editingPart.files.filter(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.(dxf|step|stp)$/i)).map(f => (
+            <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px', background: 'white', borderRadius: 4, marginBottom: 4, fontSize: '0.85rem', border: '1px solid #D1C4E9' }}>
+              <span style={{ color: '#4527a0', fontWeight: 600 }}>📐 {f.originalName}</span>
+              <button onClick={() => handleViewPartFile(editingPart.id, f)}
+                style={{ background: 'none', border: 'none', color: '#4527a0', cursor: 'pointer', fontSize: '0.8rem' }}>View</button>
+              <button onClick={async () => { await handleDeletePartFile(editingPart.id, f.id); }}
+                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: 'white', border: '1px solid #7E57C2', borderRadius: 6, color: '#4527a0', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+          📎 Upload DXF/STEP
+          <input type="file" accept=".dxf,.step,.stp,.DXF,.STEP,.STP,.pdf,.PDF" hidden
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setPartData(prev => ({ ...prev, cutFileReference: file.name }));
+              if (editingPart) {
+                try {
+                  await uploadEstimatePartFile(id, editingPart.id, [file], 'cut_file');
+                  await loadEstimate();
+                  showMessage(`Uploaded ${file.name}`);
+                } catch (err) { setError('Failed to upload file'); }
+              } else {
+                showMessage(`${file.name} will be uploaded when part is saved`);
+              }
+              e.target.value = '';
+            }} />
+        </label>
+        {!editingPart && partData.cutFileReference && (
+          <span style={{ fontSize: '0.75rem', color: '#ff9800' }}>⚠ Save part first to upload file</span>
+        )}
+      </div>
+    </div>
+  );
 
   // Send estimate for pricing review
   const handleSendForReview = async () => {
@@ -3225,6 +3271,7 @@ function EstimateDetailsPage() {
 
               {/* Type-specific form */}
               {partData.partType === 'flat_stock' ? (
+                <>
                 <div className="grid grid-2">
                   <FlatStockForm
                     partData={partData}
@@ -3237,7 +3284,10 @@ function EstimateDetailsPage() {
                     setError={setError}
                   />
                 </div>
+                {renderCutFileSection()}
+                </>
               ) : partData.partType === 'plate_roll' ? (
+                <>
                 <div className="grid grid-2">
                   <PlateRollForm
                     partData={partData}
@@ -3250,7 +3300,10 @@ function EstimateDetailsPage() {
                     setError={setError}
                   />
                 </div>
+                {renderCutFileSection()}
+                </>
               ) : partData.partType === 'shaped_plate' ? (
+                <>
                 <div className="grid grid-2">
                   <ShapedPlateForm
                     partData={partData}
@@ -3263,6 +3316,8 @@ function EstimateDetailsPage() {
                     setError={setError}
                   />
                 </div>
+                {renderCutFileSection()}
+                </>
               ) : partData.partType === 'angle_roll' ? (
                 <div className="grid grid-2">
                   <AngleRollForm
@@ -3503,67 +3558,6 @@ function EstimateDetailsPage() {
                 </div>
               )}
             </div>
-
-            {/* DXF/Cut Print Upload — for plates, shaped plates, and flat stock */}
-            {['plate_roll', 'shaped_plate', 'flat_stock'].includes(partData.partType) && (
-            <div style={{ margin: '0 20px 12px', padding: 12, background: '#f5f5f5', borderRadius: 8 }}>
-              <label className="form-label" style={{ marginBottom: 8 }}>📐 Cut File (DXF/STEP) <span style={{ fontWeight: 400, color: '#999' }}>— attached to RFQs and POs</span></label>
-              {/* Show existing cut file */}
-              {partData.cutFileReference && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 10px', background: 'white', borderRadius: 6, border: '1px solid #ddd' }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1565c0' }}>📄 {partData.cutFileReference}</span>
-                  <button onClick={() => setPartData({ ...partData, cutFileReference: '' })}
-                    style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.8rem' }}>✕ Remove</button>
-                </div>
-              )}
-              {/* Show uploaded DXF files for this part */}
-              {editingPart && editingPart.files && editingPart.files.filter(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.(dxf|step|stp)$/i)).length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  {editingPart.files.filter(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.(dxf|step|stp)$/i)).map(f => (
-                    <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px', background: '#E3F2FD', borderRadius: 4, marginBottom: 4, fontSize: '0.85rem' }}>
-                      <span style={{ color: '#1565c0', fontWeight: 600 }}>📐 {f.originalName}</span>
-                      <button onClick={() => handleViewPartFile(editingPart.id, f)}
-                        style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: '0.8rem' }}>View</button>
-                      <button onClick={async () => {
-                        try {
-                          await deleteEstimatePartFile(id, editingPart.id, f.id);
-                          await loadEstimate();
-                          showMessage('File deleted');
-                        } catch { setError('Failed to delete file'); }
-                      }} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* Upload button */}
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: 'white', border: '1px solid #1565c0', borderRadius: 6, color: '#1565c0', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
-                  📎 Upload DXF/STEP
-                  <input type="file" accept=".dxf,.step,.stp,.DXF,.STEP,.STP" hidden
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      // Set the filename as reference
-                      setPartData(prev => ({ ...prev, cutFileReference: file.name }));
-                      // If editing existing part, upload immediately
-                      if (editingPart) {
-                        try {
-                          await uploadEstimatePartFile(id, editingPart.id, [file], 'cut_file');
-                          await loadEstimate();
-                          showMessage(`Uploaded ${file.name}`);
-                        } catch (err) { setError('Failed to upload file'); }
-                      } else {
-                        showMessage(`${file.name} will be uploaded when part is saved`);
-                      }
-                      e.target.value = '';
-                    }} />
-                </label>
-                {!editingPart && partData.cutFileReference && (
-                  <span style={{ fontSize: '0.75rem', color: '#ff9800' }}>⚠ Save part first to upload file</span>
-                )}
-              </div>
-            </div>
-            )}
 
             {/* Outside Processing — available on all part types except fab_service/shop_rate/rush_service */}
             {!['fab_service', 'shop_rate', 'rush_service'].includes(partData.partType) && (
