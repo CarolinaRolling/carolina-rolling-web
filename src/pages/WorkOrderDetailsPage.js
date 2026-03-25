@@ -858,35 +858,39 @@ function WorkOrderDetailsPage() {
   const handlePickup = async () => {
     try {
       setError(null);
+      setSaving(true);
       if (pickupData.type === 'full') {
         await recordPickup(id, { type: 'full', pickedUpBy: pickupData.pickedUpBy });
       } else {
-        // Build items list from selections
+        // Build items list from qty inputs
         const selectedItems = Object.entries(pickupData.items)
-          .filter(([_, v]) => v.selected)
+          .filter(([_, v]) => (parseInt(v.qty) || 0) > 0)
           .map(([partId, v]) => {
             const part = order.parts.find(p => p.id === partId);
+            const fd = part?.formData && typeof part.formData === 'object' ? part.formData : {};
             return {
               partId,
               partNumber: part?.partNumber,
               partType: part?.partType,
-              description: part?.materialDescription || part?.sectionSize || PART_TYPES[part?.partType]?.label || part?.partType,
-              quantity: v.useCustomQty ? parseInt(v.customQty) || 0 : (part?.quantity || 1)
+              clientPartNumber: part?.clientPartNumber || '',
+              description: fd._materialDescription || part?.materialDescription || part?.sectionSize || PART_TYPES[part?.partType]?.label || part?.partType,
+              rollingDescription: fd._rollingDescription || part?.rollingDescription || '',
+              quantity: parseInt(v.qty) || 0
             };
           })
           .filter(i => i.quantity > 0);
         
-        if (selectedItems.length === 0) { setError('Select at least one item'); return; }
+        if (selectedItems.length === 0) { setError('Enter quantity for at least one item'); setSaving(false); return; }
         await recordPickup(id, { type: 'partial', pickedUpBy: pickupData.pickedUpBy, items: selectedItems });
       }
       await loadOrder();
       setShowPickupModal(false);
       setPickupData({ pickedUpBy: '', type: null, items: {} });
-      showMessage(pickupData.type === 'full' ? 'Full pickup recorded' : 'Partial pickup recorded');
+      showMessage(pickupData.type === 'full' ? 'Full pickup recorded' : 'Partial pickup recorded & receipt saved');
     } catch (err) {
       console.error('Pickup error:', err.response?.data || err);
       setError(err.response?.data?.error?.message || 'Failed to record pickup');
-    }
+    } finally { setSaving(false); }
   };
 
   // Compute remaining quantities per part based on pickup history
@@ -1998,8 +2002,8 @@ function WorkOrderDetailsPage() {
               {['waiting_for_materials', 'received', 'processing'].includes(order.status) && !order.pickupHistory?.length && (
                 <button className="btn" onClick={() => {
                   const items = {};
-                  order.parts?.forEach(p => { items[p.id] = { selected: false, useCustomQty: false, customQty: String(p.quantity || 1) }; });
-                  setPickupData({ pickedUpBy: '', type: 'partial', items });
+                  order.parts?.forEach(p => { items[p.id] = { qty: 0 }; });
+                  setPickupData({ pickedUpBy: '', type: 'partial', items, _fromShipPartial: true });
                   setShowPickupModal(true);
                 }}
                   style={{ background: '#e65100', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -3807,7 +3811,7 @@ function WorkOrderDetailsPage() {
                   </button>
                   <button className="btn" onClick={() => {
                     const items = {};
-                    order.parts?.forEach(p => { items[p.id] = { selected: false, useCustomQty: false, customQty: String(p.quantity || 1) }; });
+                    order.parts?.forEach(p => { items[p.id] = { qty: 0 }; });
                     setPickupData(prev => ({ ...prev, type: 'partial', items }));
                   }}
                     style={{ flex: 1, padding: 20, background: '#fff3e0', border: '2px solid #ff9800', borderRadius: 8, cursor: 'pointer', textAlign: 'center' }}>
@@ -3859,66 +3863,67 @@ function WorkOrderDetailsPage() {
               {pickupData.type === 'partial' && (
                 <div>
                   <div style={{ background: '#fff3e0', padding: 12, borderRadius: 8, marginBottom: 12, fontSize: '0.85rem' }}>
-                    Select items being picked up. Check the qty box to enter a partial quantity for that item.
+                    Enter the quantity being shipped for each part. Leave at 0 to skip.
                   </div>
                   
                   {(() => {
                     const summary = getPickupSummary();
                     return summary.map(p => {
-                      const item = pickupData.items[p.id] || { selected: false, useCustomQty: false, customQty: String(p.remaining) };
+                      const item = pickupData.items[p.id] || { qty: 0 };
                       const maxQty = p.remaining;
+                      const fd = p.formData && typeof p.formData === 'object' ? p.formData : {};
+                      const desc = fd._materialDescription || p.materialDescription || PART_TYPES[p.partType]?.label || p.partType;
                       return (
                         <div key={p.id} style={{ 
-                          padding: 12, marginBottom: 8, borderRadius: 8, 
-                          border: item.selected ? '2px solid #ff9800' : '1px solid #eee',
-                          background: maxQty === 0 ? '#f5f5f5' : item.selected ? '#fff8e1' : 'white',
-                          opacity: maxQty === 0 ? 0.5 : 1
+                          padding: 12, marginBottom: 6, borderRadius: 8, 
+                          border: (parseInt(item.qty) || 0) > 0 ? '2px solid #ff9800' : '1px solid #eee',
+                          background: maxQty === 0 ? '#f5f5f5' : (parseInt(item.qty) || 0) > 0 ? '#fff8e1' : 'white',
+                          opacity: maxQty === 0 ? 0.5 : 1,
+                          display: 'flex', alignItems: 'center', gap: 12
                         }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <input type="checkbox" checked={item.selected} disabled={maxQty === 0}
-                              onChange={(e) => setPickupData(prev => ({ 
-                                ...prev, items: { ...prev.items, [p.id]: { ...item, selected: e.target.checked, customQty: String(maxQty) } } 
-                              }))}
-                              style={{ width: 18, height: 18 }} />
-                            <div style={{ flex: 1 }}>
-                              <strong>#{p.partNumber}</strong> {PART_TYPES[p.partType]?.label || p.partType}
-                              {p.materialDescription && <span style={{ color: '#666', fontSize: '0.8rem' }}> — {p.materialDescription}</span>}
-                              <div style={{ fontSize: '0.75rem', color: '#999' }}>
-                                Total: {p.totalQty} | Previously picked: {p.picked} | <strong style={{ color: maxQty > 0 ? '#e65100' : '#999' }}>Remaining: {maxQty}</strong>
-                              </div>
+                          <div style={{ minWidth: 65 }}>
+                            <input type="number" min="0" max={maxQty} disabled={maxQty === 0}
+                              value={item.qty || ''}
+                              onChange={(e) => {
+                                let val = parseInt(e.target.value) || 0;
+                                if (val > maxQty) val = maxQty;
+                                if (val < 0) val = 0;
+                                setPickupData(prev => ({ ...prev, items: { ...prev.items, [p.id]: { qty: val } } }));
+                              }}
+                              onFocus={(e) => { if (e.target.value === '0') e.target.select(); }}
+                              placeholder="0"
+                              style={{ width: 60, padding: '6px 4px', textAlign: 'center', border: '2px solid #ddd', borderRadius: 6, fontWeight: 700, fontSize: '1rem' }} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div><strong>#{p.partNumber}</strong> {p.clientPartNumber && <span style={{ color: '#1976d2' }}>{p.clientPartNumber}</span>}</div>
+                            <div style={{ fontSize: '0.8rem', color: '#555' }}>{desc}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#999' }}>
+                              Total: {p.totalQty} | Shipped: {p.picked} | <strong style={{ color: maxQty > 0 ? '#e65100' : '#999' }}>Remaining: {maxQty}</strong>
                             </div>
-                            {item.selected && maxQty > 1 && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <label style={{ fontSize: '0.75rem', color: '#666', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                  <input type="checkbox" checked={item.useCustomQty}
-                                    onChange={(e) => setPickupData(prev => ({
-                                      ...prev, items: { ...prev.items, [p.id]: { ...item, useCustomQty: e.target.checked, customQty: String(maxQty) } }
-                                    }))} />
-                                  Partial qty
-                                </label>
-                                {item.useCustomQty && (
-                                  <input type="number" min="1" max={maxQty} value={item.customQty}
-                                    onChange={(e) => setPickupData(prev => ({
-                                      ...prev, items: { ...prev.items, [p.id]: { ...item, customQty: e.target.value } }
-                                    }))}
-                                    onFocus={(e) => e.target.select()}
-                                    style={{ width: 60, padding: '4px 6px', textAlign: 'center', border: '2px solid #ff9800', borderRadius: 4, fontWeight: 700 }} />
-                                )}
-                              </div>
-                            )}
                           </div>
                         </div>
                       );
                     });
                   })()}
                   
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-                    <button className="btn btn-secondary" onClick={() => setPickupData(prev => ({ ...prev, type: null }))}>Back</button>
-                    <button className="btn" onClick={handlePickup} disabled={saving}
-                      style={{ background: '#ff9800', color: 'white', border: 'none' }}>
-                      <Check size={18} /> {saving ? 'Processing...' : 'Record Partial Pickup'}
-                    </button>
-                  </div>
+                  {(() => {
+                    const summary = getPickupSummary();
+                    const totalShipping = summary.reduce((s, p) => s + (parseInt(pickupData.items[p.id]?.qty) || 0), 0);
+                    return (
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 600, color: totalShipping > 0 ? '#e65100' : '#999' }}>
+                          {totalShipping > 0 ? `📦 Shipping ${totalShipping} item${totalShipping > 1 ? 's' : ''}` : 'Enter quantities to ship'}
+                        </span>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {pickupData._fromShipPartial ? null : <button className="btn btn-secondary" onClick={() => setPickupData(prev => ({ ...prev, type: null }))}>Back</button>}
+                          <button className="btn" onClick={handlePickup} disabled={saving || totalShipping === 0}
+                            style={{ background: totalShipping > 0 ? '#ff9800' : '#ccc', color: 'white', border: 'none' }}>
+                            <Check size={18} /> {saving ? 'Processing...' : 'Record Partial Pickup'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
