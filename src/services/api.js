@@ -500,6 +500,16 @@ export const updatePayrollEntry = (payrollId, entryId, data) => api.put(`/busine
 export const updatePayrollWeek = (id, data) => api.put(`/business/payroll/${id}`, data);
 export const submitPayroll = (id, data) => api.post(`/business/payroll/${id}/submit`, data);
 export const deletePayroll = (id) => api.delete(`/business/payroll/${id}`);
+
+// Weld Procedures (WPS)
+export const getWeldProcedures = () => api.get('/business/wps');
+export const getWeldProcedure = (id) => api.get(`/business/wps/${id}`);
+export const createWeldProcedure = (data) => api.post('/business/wps', data);
+export const updateWeldProcedure = (id, data) => api.put(`/business/wps/${id}`, data);
+export const deleteWeldProcedure = (id) => api.delete(`/business/wps/${id}`);
+
+// Certificate of Conformance
+export const generateCOC = (workOrderId, data) => api.post(`/workorders/${workOrderId}/coc`, data, { responseType: 'blob' });
 // Calendar
 export const getCalendarEvents = (params) => api.get('/business/calendar', { params });
 export const getUpcomingEvents = () => api.get('/business/calendar/upcoming');

@@ -28,7 +28,8 @@ import {
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, recordPayment, clearPayment,
-  exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL
+  exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL,
+  generateCOC, getWeldProcedures
 } from '../services/api';
 
 const PART_TYPES = {
@@ -81,6 +82,12 @@ function WorkOrderDetailsPage() {
   const [showPickupModal, setShowPickupModal] = useState(false);
   const [pickupData, setPickupData] = useState({ pickedUpBy: '', type: null, items: {} });
   const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [showCocModal, setShowCocModal] = useState(false);
+  const [cocWpsList, setCocWpsList] = useState([]);
+  const [cocWpsId, setCocWpsId] = useState('');
+  const [cocCertifiedBy, setCocCertifiedBy] = useState('Jason Thornton');
+  const [cocDate, setCocDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [cocGenerating, setCocGenerating] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [orderPONumber, setOrderPONumber] = useState('');
   const [selectedPartIds, setSelectedPartIds] = useState([]);
@@ -2059,6 +2066,13 @@ function WorkOrderDetailsPage() {
                   📗 Export Invoice (.iif)
                 </button>
                 
+                <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
+                
+                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Certificates</div>
+                <button onClick={() => { setShowPrintMenu(false); setShowCocModal(true); }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #6A1B9A', background: 'white', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#6A1B9A', textAlign: 'center', margin: '4px 0' }}>
+                  📜 Certificate of Conformance (COC)
+                </button>
+
                 <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
                 <button onClick={() => { setShowPrintMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: '#f5f5f5', borderRadius: 8, cursor: 'pointer', color: '#666', fontSize: '0.9rem', textAlign: 'center', fontWeight: 600 }}>Cancel</button>
               </div>
@@ -4276,6 +4290,69 @@ function WorkOrderDetailsPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* COC Modal */}
+      {showCocModal && (
+        <div className="modal-overlay"><div className="modal" style={{ maxWidth: 500 }}>
+          <div className="modal-header">
+            <h3 className="modal-title">📜 Certificate of Conformance</h3>
+            <button className="modal-close" onClick={() => setShowCocModal(false)}>&times;</button>
+          </div>
+          <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ padding: 12, background: '#f3e5f5', borderRadius: 8, fontSize: '0.9rem' }}>
+              <strong>DR-{order.drNumber}</strong> — {order.clientName}
+              <div style={{ fontSize: '0.8rem', color: '#666', marginTop: 4 }}>
+                {(order.parts || []).filter(p => !['fab_service','shop_rate','rush_service'].includes(p.partType)).length} part(s) will be included
+              </div>
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Certified By</label>
+              <input className="form-input" value={cocCertifiedBy} onChange={e => setCocCertifiedBy(e.target.value)} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Date</label>
+              <input type="date" className="form-input" value={cocDate} onChange={e => setCocDate(e.target.value)} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Attach Weld Procedure (WPS) <span style={{ fontWeight: 400, color: '#999' }}>— optional</span></label>
+              <select className="form-select" value={cocWpsId} onChange={e => setCocWpsId(e.target.value)}
+                onFocus={async () => {
+                  if (cocWpsList.length === 0) {
+                    try { const r = await getWeldProcedures(); setCocWpsList(r.data.data || []); } catch {}
+                  }
+                }}>
+                <option value="">None — COC only</option>
+                {cocWpsList.map(w => (
+                  <option key={w.id} value={w.id}>{w.wpsNumber} — {w.name} ({w.process})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={() => setShowCocModal(false)}>Cancel</button>
+            <button className="btn btn-primary" disabled={cocGenerating}
+              onClick={async () => {
+                try {
+                  setCocGenerating(true);
+                  const response = await generateCOC(order.id, {
+                    wpsId: cocWpsId || null,
+                    certifiedBy: cocCertifiedBy,
+                    certDate: cocDate
+                  });
+                  const blob = new Blob([response.data], { type: 'application/pdf' });
+                  const url = window.URL.createObjectURL(blob);
+                  window.open(url, '_blank');
+                  setShowCocModal(false);
+                  showMessage('COC generated');
+                } catch (err) {
+                  setError('Failed to generate COC');
+                } finally { setCocGenerating(false); }
+              }}
+              style={{ background: '#6A1B9A' }}>
+              {cocGenerating ? '⏳ Generating...' : '📜 Generate COC'}
+            </button>
+          </div>
+        </div></div>
       )}
     </div>
   );
