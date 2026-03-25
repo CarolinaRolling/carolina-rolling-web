@@ -4343,7 +4343,8 @@ function WorkOrderDetailsPage() {
                   const url = window.URL.createObjectURL(blob);
                   window.open(url, '_blank');
                   setShowCocModal(false);
-                  showMessage('COC generated');
+                  showMessage('COC generated & saved to documents');
+                  await loadOrder();
                 } catch (err) {
                   setError('Failed to generate COC');
                 } finally { setCocGenerating(false); }

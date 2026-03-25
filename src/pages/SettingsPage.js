@@ -100,6 +100,8 @@ function SettingsPage() {
     setTimeout(() => setSuccess(null), 3000);
   };
 
+  const [settingsTab, setSettingsTab] = useState('general');
+
   return (
     <div>
       <div className="page-header">
@@ -109,6 +111,13 @@ function SettingsPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
+      {/* Tabs */}
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        <button className={`tab ${settingsTab === 'general' ? 'active' : ''}`} onClick={() => setSettingsTab('general')}>⚙️ General</button>
+        <button className={`tab ${settingsTab === 'wps' ? 'active' : ''}`} onClick={() => setSettingsTab('wps')}>🔥 Weld Procedures</button>
+      </div>
+
+      {settingsTab === 'general' && (<>
       <div className="grid grid-2">
         {/* Location Settings */}
         <div 
@@ -301,8 +310,35 @@ function SettingsPage() {
         </button>
       </div>
 
-      {/* Weld Procedures (WPS) Management */}
+      {/* App Info */}
       <div className="card" style={{ marginTop: 24 }}>
+        <h3 className="card-title" style={{ marginBottom: 16 }}>About</h3>
+        <div className="detail-grid">
+          <div className="detail-item">
+            <div className="detail-item-label">Application</div>
+            <div className="detail-item-value">CR Admin Web</div>
+          </div>
+          <div className="detail-item">
+            <div className="detail-item-label">Version</div>
+            <div className="detail-item-value">1.0.0</div>
+          </div>
+          <div className="detail-item">
+            <div className="detail-item-label">Company</div>
+            <div className="detail-item-value">Carolina Rolling</div>
+          </div>
+          <div className="detail-item">
+            <div className="detail-item-label">API</div>
+            <div className="detail-item-value" style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}>
+              {process.env.REACT_APP_API_URL || 'https://carolina-rolling-inventory-api-641af96c90aa.herokuapp.com/api'}
+            </div>
+          </div>
+        </div>
+      </div>
+      </>)}
+
+      {settingsTab === 'wps' && (<>
+      {/* Weld Procedures (WPS) Management */}
+      <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 className="card-title" style={{ margin: 0 }}>🔥 Weld Procedure Specifications (WPS)</h3>
           <button className="btn btn-primary btn-sm" onClick={() => { setEditWps(null); setWf(emptyWf); setShowWpsModal(true); }}><Plus size={16} /> Add WPS</button>
@@ -395,31 +431,7 @@ function SettingsPage() {
           </div>
         </div></div>
       )}
-
-      {/* App Info */}
-      <div className="card" style={{ marginTop: 24 }}>
-        <h3 className="card-title" style={{ marginBottom: 16 }}>About</h3>
-        <div className="detail-grid">
-          <div className="detail-item">
-            <div className="detail-item-label">Application</div>
-            <div className="detail-item-value">CR Admin Web</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">Version</div>
-            <div className="detail-item-value">1.0.0</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">Company</div>
-            <div className="detail-item-value">Carolina Rolling</div>
-          </div>
-          <div className="detail-item">
-            <div className="detail-item-label">API</div>
-            <div className="detail-item-value" style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}>
-              {process.env.REACT_APP_API_URL || 'https://carolina-rolling-inventory-api-641af96c90aa.herokuapp.com/api'}
-            </div>
-          </div>
-        </div>
-      </div>
+      </>)}
     </div>
   );
 }
