@@ -3198,8 +3198,11 @@ function EstimateDetailsPage() {
         <div className="modal-overlay">
           <div className="modal modal-flex" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800 }}>
             <div className="modal-header">
-              <h3 className="modal-title">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 {editingPart ? 'Edit Part' : 'Add Part'} — {PART_TYPES[partData.partType]?.icon} {PART_TYPES[partData.partType]?.label || partData.partType}
+                {editingPart && <select value={partData.partType} onChange={(e) => { if (window.confirm(`Change part type to ${PART_TYPES[e.target.value]?.label}? This will reset type-specific fields.`)) { setPartData(prev => ({ ...prev, partType: e.target.value })); }}} style={{ marginLeft: 8, padding: '2px 8px', fontSize: '0.8rem', borderRadius: 4, border: '1px solid #ccc', background: '#f5f5f5', cursor: 'pointer' }}>
+                  {Object.entries(PART_TYPES).filter(([k]) => !['rush_service'].includes(k)).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+                </select>}
               </h3>
               <button className="modal-close" onClick={() => setShowPartModal(false)}>&times;</button>
             </div>
@@ -3501,7 +3504,8 @@ function EstimateDetailsPage() {
               )}
             </div>
 
-            {/* DXF/Cut File Upload — inside Material section */}
+            {/* DXF/Cut Print Upload — for plates, shaped plates, and flat stock */}
+            {['plate_roll', 'shaped_plate', 'flat_stock'].includes(partData.partType) && (
             <div style={{ margin: '0 20px 12px', padding: 12, background: '#f5f5f5', borderRadius: 8 }}>
               <label className="form-label" style={{ marginBottom: 8 }}>📐 Cut File (DXF/STEP) <span style={{ fontWeight: 400, color: '#999' }}>— attached to RFQs and POs</span></label>
               {/* Show existing cut file */}
@@ -3559,6 +3563,7 @@ function EstimateDetailsPage() {
                 )}
               </div>
             </div>
+            )}
 
             {/* Outside Processing — available on all part types except fab_service/shop_rate/rush_service */}
             {!['fab_service', 'shop_rate', 'rush_service'].includes(partData.partType) && (
