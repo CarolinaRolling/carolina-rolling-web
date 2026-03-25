@@ -11,18 +11,68 @@ function WorkOrdersPage() {
   const [error, setError] = useState(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  // Derive search from URL — survives back button navigation
-  const searchQuery = searchParams.get('q') || '';
-  const updateSearch = (val) => {
-    if (val) {
-      setSearchParams({ q: val }, { replace: true });
-    } else {
-      setSearchParams({}, { replace: true });
-    }
-  };
-  const [statusFilter, setStatusFilter] = useState(() => {
-    return localStorage.getItem('workorders_statusFilter') || 'all';
+  // Persist search and filters in cookies
+  const getCookie = (name) => { const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)')); return m ? decodeURIComponent(m[2]) : null; };
+  const setCookie = (name, val) => { document.cookie = `${name}=${encodeURIComponent(val)};path=/;max-age=${60*60*24*365}`; };
+
+  const [searchQuery, setSearchQuery] = useState(() => getCookie('wo_search') || '');
+  const [searchInput, setSearchInput] = useState(() => getCookie('wo_search') || '');
+  const [activeFilters, setActiveFilters] = useState(() => {
+    try { return JSON.parse(getCookie('wo_filters') || '[]'); } catch { return []; }
   });
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+
+  // Close filter menu on outside click
+  useEffect(() => {
+    if (!showFilterMenu) return;
+    const handleClick = () => setShowFilterMenu(false);
+    setTimeout(() => document.addEventListener('click', handleClick), 0);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showFilterMenu]);
+
+  const updateSearch = (val) => { setSearchQuery(val); setCookie('wo_search', val); };
+  const doSearch = () => { if (searchInput.trim()) { updateSearch(searchInput.trim()); } };
+  const clearSearch = () => { setSearchInput(''); updateSearch(''); };
+
+  const addFilter = (type, value, label) => {
+    const key = `${type}:${value}`;
+    if (activeFilters.some(f => f.key === key)) return;
+    const newFilters = [...activeFilters, { key, type, value, label }];
+    setActiveFilters(newFilters);
+    setCookie('wo_filters', JSON.stringify(newFilters));
+    setShowFilterMenu(false);
+  };
+  const removeFilter = (key) => {
+    const newFilters = activeFilters.filter(f => f.key !== key);
+    setActiveFilters(newFilters);
+    setCookie('wo_filters', JSON.stringify(newFilters));
+  };
+  const clearAll = () => { clearSearch(); setActiveFilters([]); setCookie('wo_filters', '[]'); };
+
+  const FILTER_OPTIONS = [
+    { group: 'Status', items: [
+      { value: 'waiting_for_materials', label: 'Waiting for Materials' },
+      { value: 'received', label: 'Material Received' },
+      { value: 'processing', label: 'Processing' },
+      { value: 'stored', label: 'Stored' },
+      { value: 'shipped', label: 'Shipped' },
+      { value: 'completed', label: 'Completed' },
+    ]},
+    { group: 'Material', items: [
+      { value: 'mat_ordered', label: 'Material Ordered (PO sent)' },
+      { value: 'mat_not_ordered', label: 'Material NOT Ordered' },
+      { value: 'customer_supplied', label: 'Customer Supplied' },
+    ]},
+    { group: 'Other', items: [
+      { value: 'has_rush', label: 'Rush / Emergency' },
+      { value: 'has_due_date', label: 'Has Due Date' },
+      { value: 'overdue', label: 'Overdue' },
+      { value: 'voided', label: 'Voided' },
+      { value: 'not_voided', label: 'Not Voided' },
+    ]},
+  ];
+
+  // Legacy statusFilter removed — using activeFilters now
   const [sortBy, setSortBy] = useState(() => {
     return localStorage.getItem('workorders_sortBy') || 'dr_desc';
   });
@@ -74,25 +124,19 @@ function WorkOrdersPage() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('workorders_statusFilter', statusFilter);
-  }, [statusFilter]);
-
-  useEffect(() => {
     localStorage.setItem('workorders_sortBy', sortBy);
   }, [sortBy]);
 
-  // Load orders or run search based on URL search param
+  // Load orders or run search based on search query
   useEffect(() => {
     if (!searchQuery) {
       loadOrders();
       return;
     }
-    if (searchQuery.length < 2) return;
-    
     const timer = setTimeout(async () => {
       try {
         setLoading(true);
-        const response = await getWorkOrders({ search: searchQuery, limit: 100 });
+        const response = await getWorkOrders({ search: searchQuery, limit: 200 });
         setOrders(response.data.data || []);
       } catch (err) {
         console.error('Search failed:', err);
@@ -150,23 +194,29 @@ function WorkOrdersPage() {
   const getFilteredOrders = () => {
     let filtered = [...orders];
 
-    // Filter by status (skip when searching — show all matching statuses)
-    if (statusFilter !== 'all' && !searchQuery) {
-      filtered = filtered.filter(o => o.status === statusFilter);
+    // Apply active filters
+    const statusFilters = activeFilters.filter(f => f.type === 'status').map(f => f.value);
+    const matFilters = activeFilters.filter(f => f.type === 'material').map(f => f.value);
+    const otherFilters = activeFilters.filter(f => f.type === 'other').map(f => f.value);
+
+    if (statusFilters.length > 0) {
+      filtered = filtered.filter(o => statusFilters.includes(o.status));
     }
 
-    // Filter by search query (only for local filtering when search < 2 chars)
-    // Server-side search handles 2+ char queries — don't double-filter
-    if (searchQuery && searchQuery.length < 2) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(o =>
-        o.clientName?.toLowerCase().includes(query) ||
-        o.orderNumber?.toLowerCase().includes(query) ||
-        o.clientPurchaseOrderNumber?.toLowerCase().includes(query) ||
-        o.drNumber?.toString().includes(query) ||
-        o.contactName?.toLowerCase().includes(query)
-      );
+    for (const mf of matFilters) {
+      if (mf === 'mat_ordered') filtered = filtered.filter(o => o.parts?.some(p => p.materialOrdered));
+      if (mf === 'mat_not_ordered') filtered = filtered.filter(o => o.parts?.some(p => !p.materialOrdered && p.materialSource === 'we_order'));
+      if (mf === 'customer_supplied') filtered = filtered.filter(o => o.parts?.some(p => p.materialSource === 'customer_supplied'));
     }
+
+    for (const of2 of otherFilters) {
+      if (of2 === 'has_rush') filtered = filtered.filter(o => o.parts?.some(p => p.partType === 'rush_service'));
+      if (of2 === 'has_due_date') filtered = filtered.filter(o => o.dueDate);
+      if (of2 === 'overdue') filtered = filtered.filter(o => o.dueDate && new Date(o.dueDate) < new Date() && !['completed', 'shipped', 'archived'].includes(o.status));
+      if (of2 === 'voided') filtered = filtered.filter(o => o.isVoided);
+      if (of2 === 'not_voided') filtered = filtered.filter(o => !o.isVoided);
+    }
+
 
     // Sort
     filtered.sort((a, b) => {
@@ -310,30 +360,48 @@ function WorkOrdersPage() {
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      {/* Filters */}
+      {/* Search & Filters */}
       <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Search by client, DR#, PO#..."
-                value={searchQuery}
-                onChange={(e) => updateSearch(e.target.value)}
-                style={{ paddingLeft: 40, paddingRight: searchQuery ? 36 : 12, borderColor: searchQuery ? '#1976d2' : undefined, background: searchQuery ? '#f0f7ff' : undefined }}
-              />
-              {searchQuery && (
-                <button onClick={() => updateSearch('')}
-                  style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: '#1976d2', color: 'white', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>
-                  ✕
-                </button>
-              )}
-            </div>
-            {searchQuery && searchQuery.length >= 2 && (
-              <div style={{ fontSize: '0.8rem', color: '#1976d2', fontWeight: 600, marginTop: 4 }}>
-                🔍 Searching all statuses for "{searchQuery}" — {orders.length} results
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
+            <Search size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Search by client, DR#, PO#..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') doSearch(); }}
+              style={{ paddingLeft: 40 }}
+            />
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={doSearch} style={{ padding: '8px 16px' }}>
+            <Search size={14} /> Search
+          </button>
+          <div style={{ position: 'relative' }}>
+            <button className="btn btn-sm btn-outline" onClick={(e) => { e.stopPropagation(); setShowFilterMenu(!showFilterMenu); }} style={{ padding: '8px 12px' }}>
+              🔽 Filter
+            </button>
+            {showFilterMenu && (
+              <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: 'white', border: '1px solid #ddd', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 100, width: 280, maxHeight: 400, overflowY: 'auto' }}>
+                {FILTER_OPTIONS.map(group => (
+                  <div key={group.group}>
+                    <div style={{ padding: '8px 14px', fontWeight: 700, fontSize: '0.8rem', color: '#555', background: '#f5f5f5', borderBottom: '1px solid #eee' }}>{group.group}</div>
+                    {group.items.map(item => {
+                      const key = `${group.group.toLowerCase()}:${item.value}`;
+                      const isActive = activeFilters.some(f => f.key === key);
+                      return (
+                        <div key={item.value}
+                          onClick={() => { if (!isActive) addFilter(group.group.toLowerCase(), item.value, item.label); }}
+                          style={{ padding: '8px 14px', cursor: isActive ? 'default' : 'pointer', background: isActive ? '#e3f2fd' : 'white', color: isActive ? '#999' : '#333', fontSize: '0.85rem', borderBottom: '1px solid #f5f5f5' }}
+                          onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = '#f0f7ff'; }}
+                          onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = 'white'; }}>
+                          {isActive ? '✓ ' : ''}{item.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -341,7 +409,7 @@ function WorkOrdersPage() {
             className="form-select" 
             value={sortBy} 
             onChange={(e) => setSortBy(e.target.value)}
-            style={{ width: 180 }}
+            style={{ width: 160 }}
           >
             <option value="dr_desc">DR# (Newest)</option>
             <option value="dr_asc">DR# (Oldest)</option>
@@ -352,25 +420,24 @@ function WorkOrdersPage() {
           </select>
         </div>
 
-        {/* Status Tabs */}
-        <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {[
-            { value: 'all', label: 'All' },
-            { value: 'waiting_for_materials', label: 'Waiting Materials' },
-            { value: 'received', label: 'Received' },
-            { value: 'processing', label: 'Processing' },
-            { value: 'stored', label: 'Stored' },
-            { value: 'shipped', label: 'Shipped' }
-          ].map(status => (
-            <button
-              key={status.value}
-              className={`tab ${statusFilter === status.value ? 'active' : ''}`}
-              onClick={() => setStatusFilter(status.value)}
-            >
-              {status.label}
-            </button>
-          ))}
-        </div>
+        {/* Active Search & Filter Chips */}
+        {(searchQuery || activeFilters.length > 0) && (
+          <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {searchQuery && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 20, fontSize: '0.8rem', fontWeight: 600, color: '#1565c0' }}>
+                🔍 "{searchQuery}"
+                <button onClick={clearSearch} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1565c0', fontWeight: 800, fontSize: '0.85rem', padding: 0, lineHeight: 1 }}>✕</button>
+              </span>
+            )}
+            {activeFilters.map(f => (
+              <span key={f.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 20, fontSize: '0.8rem', fontWeight: 600, color: '#1565c0' }}>
+                {f.label}
+                <button onClick={() => removeFilter(f.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1565c0', fontWeight: 800, fontSize: '0.85rem', padding: 0, lineHeight: 1 }}>✕</button>
+              </span>
+            ))}
+            <button onClick={clearAll} style={{ background: 'none', border: '1px solid #ccc', borderRadius: 20, padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem', color: '#888' }}>Clear All</button>
+          </div>
+        )}
       </div>
 
       {/* Work Orders Grid */}
@@ -378,7 +445,7 @@ function WorkOrdersPage() {
         <div className="empty-state">
           <div className="empty-state-icon">📋</div>
           <div className="empty-state-title">No work orders found</div>
-          <p>{searchQuery || statusFilter !== 'all' ? 'Try adjusting your filters' : 'Create a work order to get started'}</p>
+          <p>{searchQuery || activeFilters.length > 0 ? 'Try adjusting your search or filters' : 'Create a work order to get started'}</p>
         </div>
       ) : (
         <div className="grid grid-3">
