@@ -263,9 +263,17 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
     const parts = [];
-    parts.push(completeRings && ringCalc && !ringCalc.error
-      ? `${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' length(s):`
-      : `${qty}pc:`);
+    // For complete rings, use stored sticks info from partData instead of ringCalc
+    if (completeRings && partData._ringSticksNeeded) {
+      const rawLen = partData.length || '';
+      const lenMatch = rawLen.match(/([\d.]+)/);
+      const lenVal = lenMatch ? parseFloat(lenMatch[1]) : 0;
+      const lenIn = (rawLen.includes("'") || rawLen.includes('ft')) ? lenVal * 12 : lenVal;
+      const stLen = lenIn > 0 ? (lenIn / 12).toFixed(0) : '?';
+      parts.push(`${partData._ringSticksNeeded} × ${stLen}' length(s):`);
+    } else {
+      parts.push(`${qty}pc:`);
+    }
 
     if (selectedSize) {
       if (selectedSize.type === 'pipe') {
@@ -290,7 +298,42 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     if (origin) parts.push(origin);
 
     return parts.join(' ');
-  }, [partData._pipeSize, partData._schedule, partData.outerDiameter, partData.wallThickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, selectedSize, completeRings, ringCalc]);
+  }, [partData._pipeSize, partData._schedule, partData.outerDiameter, partData.wallThickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, partData._ringSticksNeeded, selectedSize, completeRings]);
+
+  // Parse length to inches
+  const lengthInches = useMemo(() => {
+    const raw = partData.length || '';
+    const m = raw.match(/([\d.]+)/);
+    if (!m) return 0;
+    const val = parseFloat(m[1]);
+    if (raw.includes("'") || raw.includes('ft')) return val * 12;
+    return val;
+  }, [partData.length]);
+
+  // Complete rings calculation
+  const ringCalc = useMemo(() => {
+    if (!completeRings || !rollCalc || rollCalc.centerlineDia <= 0) return null;
+    const circumference = Math.PI * rollCalc.centerlineDia;
+    const tang = parseFloat(tangentLength) || 0;
+    const kerf = parseFloat(kerfWidth) || 0.125;
+    const numRings = parseInt(ringsNeeded) || 1;
+    const cutLengthPerRing = circumference + (2 * tang);
+    if (cutLengthPerRing <= 0) return { error: 'Invalid ring dimensions' };
+    if (circumference <= lengthInches) {
+      const ringsPerStick = Math.floor(lengthInches / (cutLengthPerRing + kerf)) || 1;
+      const sticksNeeded = Math.ceil(numRings / ringsPerStick);
+      const totalMaterialUsed = sticksNeeded * lengthInches;
+      const usefulMaterial = numRings * cutLengthPerRing;
+      const wastePercent = totalMaterialUsed > 0 ? ((totalMaterialUsed - usefulMaterial) / totalMaterialUsed * 100) : 0;
+      return { circumference, cutLengthPerRing, ringsPerStick, sticksNeeded, tangent: tang, kerf, multiSegment: false, wastePercent, stockLength: lengthInches };
+    } else {
+      const usablePerStick = lengthInches - (2 * tang);
+      if (usablePerStick <= 0) return { error: 'Stock too short for tangents' };
+      const segmentsPerRing = Math.ceil(circumference / usablePerStick);
+      const sticksNeeded = segmentsPerRing * numRings;
+      return { circumference, cutLengthPerRing, segmentsPerRing, sticksNeeded, tangent: tang, kerf, multiSegment: true, stockLength: lengthInches };
+    }
+  }, [completeRings, rollCalc, lengthInches, tangentLength, kerfWidth, ringsNeeded]);
 
   // Pitch / Helix calculations — cross-convert between input methods
   const pitchCalc = useMemo(() => {
@@ -366,42 +409,6 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     if (rise !== null && rise > 0) return { rise, chord };
     return null;
   }, [rollCalc]);
-
-  // Parse length to inches
-  const lengthInches = useMemo(() => {
-    const raw = partData.length || '';
-    const m = raw.match(/([\d.]+)/);
-    if (!m) return 0;
-    const val = parseFloat(m[1]);
-    if (raw.includes("'") || raw.includes('ft')) return val * 12;
-    return val;
-  }, [partData.length]);
-
-  // Complete rings calculation
-  const ringCalc = useMemo(() => {
-    if (!completeRings || !rollCalc || rollCalc.centerlineDia <= 0) return null;
-    const circumference = Math.PI * rollCalc.centerlineDia;
-    const tang = parseFloat(tangentLength) || 0;
-    const kerf = parseFloat(kerfWidth) || 0.125;
-    const numRings = parseInt(ringsNeeded) || 1;
-    const cutLengthPerRing = circumference + (2 * tang);
-    if (cutLengthPerRing <= 0) return { error: 'Invalid ring dimensions' };
-    if (circumference <= lengthInches) {
-      const ringsPerStick = Math.floor(lengthInches / (cutLengthPerRing + kerf)) || 1;
-      const sticksNeeded = Math.ceil(numRings / ringsPerStick);
-      const totalMaterialUsed = sticksNeeded * lengthInches;
-      const usefulMaterial = numRings * cutLengthPerRing;
-      const wastePercent = totalMaterialUsed > 0 ? ((totalMaterialUsed - usefulMaterial) / totalMaterialUsed * 100) : 0;
-      return { circumference, cutLengthPerRing, ringsPerStick, sticksNeeded, tangent: tang, kerf, multiSegment: false, wastePercent, stockLength: lengthInches };
-    } else {
-      const usablePerStick = lengthInches - (2 * tang);
-      if (usablePerStick <= 0) return { error: 'Stock too short for tangents' };
-      const segmentsPerRing = Math.ceil(circumference / usablePerStick);
-      const sticksNeeded = segmentsPerRing * numRings;
-      return { circumference, cutLengthPerRing, segmentsPerRing, sticksNeeded, tangent: tang, kerf, multiSegment: true, stockLength: lengthInches };
-    }
-  }, [completeRings, rollCalc, lengthInches, tangentLength, kerfWidth, ringsNeeded]);
-
   // Auto-update quantity when complete rings changes
   useEffect(() => {
     if (completeRings && ringCalc && !ringCalc.error) {
