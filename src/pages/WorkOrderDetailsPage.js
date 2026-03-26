@@ -1479,7 +1479,7 @@ function WorkOrderDetailsPage() {
       @page { size: letter; margin: 0.5in; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #000; padding: 0.5in; }
-      .header { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; margin-bottom: 0; }
+      .header { display: flex; align-items: center; gap: 14px; padding-bottom: 20px; margin-bottom: 0; }
       .logo { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
       .company-name { font-family: 'Yellowcake', cursive; font-size: 22px; color: #333; line-height: 1.2; }
       .company-contact { font-size: 8.5px; color: #666; margin-top: 2px; }
