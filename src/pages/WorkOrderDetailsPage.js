@@ -2209,113 +2209,6 @@ function WorkOrderDetailsPage() {
           )}
 
           {/* Shipping History */}
-          {(order?.pickupHistory || []).length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <h4 style={{ fontSize: '0.85rem', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>Shipments Out</h4>
-              {(order.pickupHistory || []).map((entry, idx) => (
-                <div key={idx} style={{ 
-                  marginBottom: 12, padding: 14, borderRadius: 8,
-                  background: entry.type === 'full' ? '#e8f5e9' : '#fff8e1',
-                  border: `1px solid ${entry.type === 'full' ? '#a5d6a7' : '#ffe082'}`
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <div>
-                      <strong style={{ color: entry.type === 'full' ? '#2e7d32' : '#e65100' }}>
-                        {entry.type === 'full' ? '📦 Full Shipment' : `📦 Partial Shipment #${idx + 1}`}
-                      </strong>
-                      <span style={{ color: '#666', marginLeft: 8, fontSize: '0.85rem' }}>
-                        — picked up by <strong>{entry.pickedUpBy}</strong>
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: '0.8rem', color: '#888' }}>
-                        {new Date(entry.date).toLocaleDateString()} {new Date(entry.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <button onClick={async () => {
-                        if (!window.confirm(`Delete this ${entry.type === 'full' ? 'full' : 'partial'} shipment record? Quantities will be restored.`)) return;
-                        try {
-                          await deletePickupEntry(id, idx);
-                          await loadOrder();
-                          showMessage('Shipment record deleted');
-                        } catch (err) { setError('Failed to delete'); }
-                      }} title="Delete this shipment record"
-                        style={{ background: 'none', border: '1px solid #c62828', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', color: '#c62828', fontSize: '0.7rem' }}>
-                        <X size={12} />
-                      </button>
-                    </div>
-                  </div>
-                  <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-                        <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 600, color: '#555' }}>Part</th>
-                        <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 600, color: '#555' }}>Description</th>
-                        <th style={{ textAlign: 'center', padding: '4px 8px', fontWeight: 600, color: '#555' }}>Qty Shipped</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(entry.items || []).map((item, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                          <td style={{ padding: '4px 8px', fontWeight: 600 }}>#{item.partNumber} {item.clientPartNumber && <span style={{ color: '#1976d2', fontWeight: 400 }}>{item.clientPartNumber}</span>}</td>
-                          <td style={{ padding: '4px 8px', color: '#666' }}>
-                            {(item.description || PART_TYPES[item.partType]?.label || item.partType || '—').replace(/^\d+pc:\s*/i, '')}
-                          </td>
-                          <td style={{ padding: '4px 8px', textAlign: 'center', fontWeight: 700 }}>
-                            {item.quantity}
-                            <button onClick={async () => {
-                              const newQty = prompt(`Edit quantity for Part #${item.partNumber}:`, item.quantity);
-                              if (newQty === null) return;
-                              const qty = parseInt(newQty);
-                              if (isNaN(qty) || qty < 0) { setError('Invalid quantity'); return; }
-                              try {
-                                const updatedItems = [...entry.items];
-                                if (qty === 0) {
-                                  updatedItems.splice(i, 1);
-                                } else {
-                                  updatedItems[i] = { ...updatedItems[i], quantity: qty };
-                                }
-                                if (updatedItems.length === 0) {
-                                  await deletePickupEntry(id, idx);
-                                } else {
-                                  await updatePickupEntry(id, idx, { items: updatedItems });
-                                }
-                                await loadOrder();
-                                showMessage(qty === 0 ? 'Item removed from shipment' : 'Quantity updated');
-                              } catch (err) { setError('Failed to update'); }
-                            }} title="Edit quantity"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1976d2', padding: '0 4px', fontSize: '0.7rem' }}>✏️</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Remaining Balance */}
-          {(order?.pickupHistory || []).length > 0 && (() => {
-            const summary = getPickupSummary();
-            const remaining = summary.filter(p => p.remaining > 0);
-            if (remaining.length === 0) return null;
-            return (
-              <div style={{ marginTop: 12, padding: 14, borderRadius: 8, background: '#fff3e0', border: '1px solid #ffcc80' }}>
-                <strong style={{ color: '#e65100', display: 'block', marginBottom: 8 }}>⏳ Remaining to Ship</strong>
-                <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
-                  <tbody>
-                    {remaining.map(p => (
-                      <tr key={p.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                        <td style={{ padding: '4px 8px', fontWeight: 600 }}>#{p.partNumber}</td>
-                        <td style={{ padding: '4px 8px', color: '#666' }}>{PART_TYPES[p.partType]?.label || p.partType}</td>
-                        <td style={{ padding: '4px 8px', textAlign: 'center', fontWeight: 700, color: '#e65100' }}>{p.remaining} of {p.totalQty}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })()}
-
           {/* Photos */}
           {shipment.photos && shipment.photos.length > 0 && (
             <div style={{ marginTop: 16 }}>
@@ -2788,6 +2681,7 @@ function WorkOrderDetailsPage() {
       <div id="wo-tabs" style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginTop: 20, marginBottom: 0 }}>
         {[
           { key: 'parts', label: '📦 Parts', count: order.parts?.length || 0 },
+          { key: 'shipping', label: '🚚 Shipping', count: (order.pickupHistory || []).length || undefined },
           { key: 'materials', label: '📋 Materials' },
           { key: 'summary', label: '📊 Summary' }
         ].map(tab => (
@@ -3418,6 +3312,177 @@ function WorkOrderDetailsPage() {
         </div>
       </div>
       </>
+      )}
+
+      {/* ===== SHIPPING TAB ===== */}
+      {woTab === 'shipping' && (
+        <div style={{ marginTop: 0, minHeight: '70vh' }}>
+          {/* Remaining Balance Overview */}
+          {(() => {
+            const summary = getPickupSummary();
+            const totalOrdered = summary.reduce((s, p) => s + p.totalQty, 0);
+            const totalShipped = summary.reduce((s, p) => s + p.picked, 0);
+            const totalRemaining = summary.reduce((s, p) => s + p.remaining, 0);
+            return (
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h3 className="card-title" style={{ margin: 0 }}>📊 Shipping Overview</h3>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {totalRemaining > 0 && !(order.isVoided || order.status === 'void') && (
+                      <button className="btn" onClick={() => {
+                        const items = {};
+                        order.parts?.forEach(p => { items[p.id] = { qty: 0 }; });
+                        setPickupData({ pickedUpBy: '', type: 'partial', items, _fromShipPartial: true });
+                        setShowPickupModal(true);
+                      }} style={{ background: '#e65100', color: 'white', border: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Truck size={16} /> Ship Partial
+                      </button>
+                    )}
+                    {totalRemaining > 0 && order.status === 'stored' && !(order.isVoided || order.status === 'void') && (
+                      <button className="btn btn-success" onClick={() => handleCODCheck('pickup')}>
+                        <Check size={16} /> Ship All Remaining
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div style={{ background: '#f5f5f5', borderRadius: 8, overflow: 'hidden', height: 24, marginBottom: 16, position: 'relative' }}>
+                  <div style={{ width: totalOrdered > 0 ? `${(totalShipped / totalOrdered) * 100}%` : '0%', background: totalRemaining === 0 ? '#4caf50' : '#ff9800', height: '100%', borderRadius: 8, transition: 'width 0.3s' }} />
+                  <span style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', fontSize: '0.8rem', fontWeight: 700, color: '#333' }}>
+                    {totalShipped} of {totalOrdered} shipped ({totalOrdered > 0 ? Math.round((totalShipped / totalOrdered) * 100) : 0}%)
+                  </span>
+                </div>
+
+                {/* Per-part breakdown */}
+                <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
+                      <th style={{ textAlign: 'left', padding: '8px', color: '#555' }}>Part</th>
+                      <th style={{ textAlign: 'left', padding: '8px', color: '#555' }}>Description</th>
+                      <th style={{ textAlign: 'center', padding: '8px', color: '#555' }}>Ordered</th>
+                      <th style={{ textAlign: 'center', padding: '8px', color: '#2e7d32' }}>Shipped</th>
+                      <th style={{ textAlign: 'center', padding: '8px', color: '#e65100' }}>Remaining</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.filter(p => !['fab_service', 'shop_rate', 'rush_service'].includes(p.partType)).map(p => {
+                      const fd = p.formData && typeof p.formData === 'object' ? p.formData : {};
+                      return (
+                        <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                          <td style={{ padding: '8px', fontWeight: 600 }}>#{p.partNumber} {p.clientPartNumber && <span style={{ color: '#1976d2', fontWeight: 400 }}>{p.clientPartNumber}</span>}</td>
+                          <td style={{ padding: '8px', color: '#666', fontSize: '0.8rem' }}>{(fd._materialDescription || p.materialDescription || PART_TYPES[p.partType]?.label || '').replace(/^\d+pc:\s*/i, '')}</td>
+                          <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>{p.totalQty}</td>
+                          <td style={{ padding: '8px', textAlign: 'center', fontWeight: 700, color: '#2e7d32' }}>{p.picked}</td>
+                          <td style={{ padding: '8px', textAlign: 'center', fontWeight: 700, color: p.remaining > 0 ? '#e65100' : '#4caf50' }}>
+                            {p.remaining > 0 ? p.remaining : '✅'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+
+          {/* Shipment History */}
+          <div className="card">
+            <h3 className="card-title" style={{ marginBottom: 16 }}>📋 Shipment History ({(order.pickupHistory || []).length})</h3>
+            {(order.pickupHistory || []).length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 30, color: '#999' }}>
+                <Truck size={40} style={{ marginBottom: 8, opacity: 0.3 }} />
+                <div>No shipments recorded yet</div>
+                <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Use "Ship Partial" to start shipping pieces as they're ready</div>
+              </div>
+            ) : (
+              (order.pickupHistory || []).map((entry, idx) => {
+                const entryDate = new Date(entry.date);
+                const totalItems = (entry.items || []).reduce((s, i) => s + (i.quantity || 0), 0);
+                return (
+                  <div key={idx} style={{ 
+                    marginBottom: 12, borderRadius: 8, overflow: 'hidden',
+                    border: `1px solid ${entry.type === 'full' ? '#a5d6a7' : '#ffe082'}`
+                  }}>
+                    {/* Entry header */}
+                    <div style={{ 
+                      padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      background: entry.type === 'full' ? '#e8f5e9' : '#fff8e1'
+                    }}>
+                      <div>
+                        <strong style={{ color: entry.type === 'full' ? '#2e7d32' : '#e65100', fontSize: '0.95rem' }}>
+                          {entry.type === 'full' ? '📦 Full Shipment' : `📦 Partial Shipment #${idx + 1}`}
+                        </strong>
+                        <span style={{ color: '#666', marginLeft: 8, fontSize: '0.85rem' }}>
+                          — {totalItems} item{totalItems !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333' }}>
+                            {entryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} {entryDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#888' }}>by {entry.pickedUpBy || 'unknown'}</div>
+                        </div>
+                        <button onClick={async () => {
+                          if (!window.confirm(`Delete this shipment record? Quantities will be restored.`)) return;
+                          try { await deletePickupEntry(id, idx); await loadOrder(); showMessage('Shipment deleted'); } catch { setError('Failed'); }
+                        }} title="Delete shipment" style={{ background: 'none', border: '1px solid #c62828', borderRadius: 4, padding: '3px 6px', cursor: 'pointer', color: '#c62828' }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    {/* Items table */}
+                    <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: '#fafafa', borderBottom: '1px solid #eee' }}>
+                          <th style={{ textAlign: 'center', padding: '6px 8px', color: '#555', width: 50 }}>Qty</th>
+                          <th style={{ textAlign: 'left', padding: '6px 8px', color: '#555' }}>Part #</th>
+                          <th style={{ textAlign: 'left', padding: '6px 8px', color: '#555' }}>Description</th>
+                          <th style={{ textAlign: 'center', padding: '6px 8px', color: '#555', width: 50 }}>Edit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(entry.items || []).map((item, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                            <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700 }}>{item.quantity}</td>
+                            <td style={{ padding: '6px 8px', fontWeight: 600 }}>
+                              #{item.partNumber}
+                              {item.clientPartNumber && <span style={{ color: '#1976d2', fontWeight: 400, marginLeft: 4 }}>{item.clientPartNumber}</span>}
+                            </td>
+                            <td style={{ padding: '6px 8px', color: '#666' }}>
+                              {(item.description || PART_TYPES[item.partType]?.label || '—').replace(/^\d+pc:\s*/i, '')}
+                              {item.rollingDescription && <div style={{ fontSize: '0.75rem', color: '#999' }}>{item.rollingDescription}</div>}
+                            </td>
+                            <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                              <button onClick={async () => {
+                                const newQty = prompt(`Edit quantity for Part #${item.partNumber}${item.clientPartNumber ? ' (' + item.clientPartNumber + ')' : ''}:`, item.quantity);
+                                if (newQty === null) return;
+                                const qty = parseInt(newQty);
+                                if (isNaN(qty) || qty < 0) { setError('Invalid quantity'); return; }
+                                try {
+                                  const updatedItems = [...entry.items];
+                                  if (qty === 0) updatedItems.splice(i, 1);
+                                  else updatedItems[i] = { ...updatedItems[i], quantity: qty };
+                                  if (updatedItems.length === 0) await deletePickupEntry(id, idx);
+                                  else await updatePickupEntry(id, idx, { items: updatedItems });
+                                  await loadOrder();
+                                  showMessage(qty === 0 ? 'Item removed' : 'Quantity updated');
+                                } catch { setError('Failed to update'); }
+                              }} style={{ background: 'none', border: '1px solid #1976d2', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', color: '#1976d2', fontSize: '0.75rem' }}>
+                                ✏️ Edit
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       )}
 
       {/* ===== MATERIALS TAB ===== */}
