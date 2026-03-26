@@ -1291,7 +1291,7 @@ function WorkOrderDetailsPage() {
   ` : ''}
 
   <div style="margin-top:30px;padding-top:16px;border-top:2px solid #ddd;color:#666;font-size:0.8em">
-    ${title} — ${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber} | Printed: ${new Date().toLocaleString()}
+    ${title} — ${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber} | Printed: ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}
     ${!includePricing ? '<br/><em>Production Copy</em>' : ''}
     ${allPdfUrls.length > 0 ? `
       <div style="margin-top:8px;padding:8px 10px;background:#f5f5f5;border-radius:4px;font-size:0.85rem;color:#333">
@@ -1412,7 +1412,7 @@ function WorkOrderDetailsPage() {
     const parts = order?.parts || [];
     const SERVICE_TYPES = ['fab_service', 'shop_rate', 'rush_service'];
     const regularParts = parts.filter(p => !SERVICE_TYPES.includes(p.partType)).sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
-    const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const today = new Date().toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'long', day: 'numeric', year: 'numeric' });
 
     const getPartDesc = (p) => {
       const fd = p.formData || {};
@@ -1479,11 +1479,11 @@ function WorkOrderDetailsPage() {
       @page { size: letter; margin: 0.5in; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #000; padding: 0.5in; }
-      .header { display: flex; align-items: center; gap: 14px; padding-bottom: 10px; margin-bottom: 0; }
-      .logo { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
+      .header { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; margin-bottom: 0; }
+      .logo { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
       .company-name { font-family: 'Yellowcake', cursive; font-size: 22px; color: #333; line-height: 1.2; }
       .company-contact { font-size: 8.5px; color: #666; margin-top: 2px; }
-      .divider { border: none; border-top: 1px solid #ccc; margin: 8px 0; }
+      .divider { border: none; border-top: 1px solid #ccc; margin: 10px 0; }
       .doc-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px; }
       .doc-title { font-size: 18px; font-weight: 700; color: #1976d2; }
       .doc-info { text-align: right; }
@@ -1625,9 +1625,9 @@ function WorkOrderDetailsPage() {
     // Date-only strings like "2026-02-27" are parsed as UTC midnight, which shifts back a day in US timezones
     // Append T12:00:00 to force midday so timezone offset never flips the date
     const dateStr = typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d + 'T12:00:00' : d;
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return new Date(dateStr).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', year: 'numeric' });
   };
-  const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'N/A';
+  const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'N/A';
   // === Link Estimate Handlers ===
   const handleSearchEstimates = async (query) => {
     setEstimateSearchQuery(query);
@@ -2208,7 +2208,6 @@ function WorkOrderDetailsPage() {
             </div>
           )}
 
-          {/* Shipping History */}
           {/* Photos */}
           {shipment.photos && shipment.photos.length > 0 && (
             <div style={{ marginTop: 16 }}>
@@ -2606,76 +2605,6 @@ function WorkOrderDetailsPage() {
         </div>
       </div>
 
-      {/* Shipping History Section */}
-      {order.pickupHistory?.length > 0 && (
-        <div className="card" style={{ marginTop: 20 }}>
-          <div className="card-header">
-            <h3 className="card-title"><Truck size={20} style={{ marginRight: 8 }} />Shipping History ({order.pickupHistory.length})</h3>
-          </div>
-          <div style={{ padding: 16 }}>
-            {(() => {
-              const summary = getPickupSummary();
-              const hasRemaining = summary.some(p => p.remaining > 0);
-              return (
-                <>
-                  {/* Remaining Inventory */}
-                  {hasRemaining && (
-                    <div style={{ background: '#fff3e0', padding: 12, borderRadius: 8, marginBottom: 16, border: '1px solid #ffcc80' }}>
-                      <strong style={{ color: '#e65100', fontSize: '0.9rem' }}>⚠ Items Still in Inventory</strong>
-                      <div style={{ marginTop: 8 }}>
-                        {summary.filter(p => p.remaining > 0).map(p => (
-                          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #ffe0b2', fontSize: '0.85rem' }}>
-                            <span><strong>#{p.partNumber}</strong> {PART_TYPES[p.partType]?.label || p.partType}</span>
-                            <span><strong style={{ color: '#e65100' }}>{p.remaining}</strong> of {p.totalQty} remaining</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* All picked up notice */}
-                  {!hasRemaining && (
-                    <div style={{ background: '#e8f5e9', padding: 12, borderRadius: 8, marginBottom: 16, border: '1px solid #a5d6a7' }}>
-                      <strong style={{ color: '#2e7d32' }}>✓ All items picked up</strong>
-                    </div>
-                  )}
-
-                  {/* History entries */}
-                  {order.pickupHistory.slice().reverse().map((entry, idx) => (
-                    <div key={idx} style={{ 
-                      border: '1px solid #e0e0e0', borderRadius: 8, padding: 12, marginBottom: 10,
-                      background: entry.type === 'full' ? '#f1f8e9' : '#fafafa' 
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <div>
-                          <span style={{ 
-                            background: entry.type === 'full' ? '#4caf50' : '#ff9800', 
-                            color: 'white', padding: '2px 8px', borderRadius: 4, fontSize: '0.7rem', fontWeight: 700, marginRight: 8 
-                          }}>
-                            {entry.type === 'full' ? 'FULL PICKUP' : 'PARTIAL PICKUP'}
-                          </span>
-                          <strong style={{ fontSize: '0.85rem' }}>{entry.pickedUpBy}</strong>
-                        </div>
-                        <span style={{ fontSize: '0.8rem', color: '#666' }}>
-                          {new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      <div>
-                        {(entry.items || []).map((item, i) => (
-                          <div key={i} style={{ fontSize: '0.8rem', padding: '3px 0', borderTop: i > 0 ? '1px solid #eee' : 'none', display: 'flex', justifyContent: 'space-between' }}>
-                            <span>#{item.partNumber} {PART_TYPES[item.partType]?.label || item.partType || item.description}</span>
-                            <span style={{ fontWeight: 600 }}>Qty: {item.quantity}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </>
-              );
-            })()}
-          </div>
-        </div>
-      )}
 
       {/* Tab Navigation */}
       <div id="wo-tabs" style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginTop: 20, marginBottom: 0 }}>
@@ -3420,7 +3349,7 @@ function WorkOrderDetailsPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ textAlign: 'right' }}>
                           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333' }}>
-                            {entryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} {entryDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                            {entryDate.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', year: 'numeric' })} {entryDate.toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit' })}
                           </div>
                           <div style={{ fontSize: '0.75rem', color: '#888' }}>by {entry.pickedUpBy || 'unknown'}</div>
                         </div>
