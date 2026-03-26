@@ -27,7 +27,7 @@ import {
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
-  getWorkOrderPrintPackage, updateDRNumber, recordPickup, recordPayment, clearPayment,
+  getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, recordPayment, clearPayment,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL,
   generateCOC, getWeldProcedures
 } from '../services/api';
@@ -2221,15 +2221,28 @@ function WorkOrderDetailsPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <div>
                       <strong style={{ color: entry.type === 'full' ? '#2e7d32' : '#e65100' }}>
-                        {entry.type === 'full' ? '📦 Full Shipment' : '📦 Partial Shipment'}
+                        {entry.type === 'full' ? '📦 Full Shipment' : `📦 Partial Shipment #${idx + 1}`}
                       </strong>
                       <span style={{ color: '#666', marginLeft: 8, fontSize: '0.85rem' }}>
                         — picked up by <strong>{entry.pickedUpBy}</strong>
                       </span>
                     </div>
-                    <span style={{ fontSize: '0.8rem', color: '#888' }}>
-                      {new Date(entry.date).toLocaleDateString()} {new Date(entry.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: '0.8rem', color: '#888' }}>
+                        {new Date(entry.date).toLocaleDateString()} {new Date(entry.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <button onClick={async () => {
+                        if (!window.confirm(`Delete this ${entry.type === 'full' ? 'full' : 'partial'} shipment record? Quantities will be restored.`)) return;
+                        try {
+                          await deletePickupEntry(id, idx);
+                          await loadOrder();
+                          showMessage('Shipment record deleted');
+                        } catch (err) { setError('Failed to delete'); }
+                      }} title="Delete this shipment record"
+                        style={{ background: 'none', border: '1px solid #c62828', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', color: '#c62828', fontSize: '0.7rem' }}>
+                        <X size={12} />
+                      </button>
+                    </div>
                   </div>
                   <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
                     <thead>
@@ -2242,11 +2255,35 @@ function WorkOrderDetailsPage() {
                     <tbody>
                       {(entry.items || []).map((item, i) => (
                         <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                          <td style={{ padding: '4px 8px', fontWeight: 600 }}>#{item.partNumber}</td>
+                          <td style={{ padding: '4px 8px', fontWeight: 600 }}>#{item.partNumber} {item.clientPartNumber && <span style={{ color: '#1976d2', fontWeight: 400 }}>{item.clientPartNumber}</span>}</td>
                           <td style={{ padding: '4px 8px', color: '#666' }}>
-                            {item.description || PART_TYPES[item.partType]?.label || item.partType || '—'}
+                            {(item.description || PART_TYPES[item.partType]?.label || item.partType || '—').replace(/^\d+pc:\s*/i, '')}
                           </td>
-                          <td style={{ padding: '4px 8px', textAlign: 'center', fontWeight: 700 }}>{item.quantity}</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'center', fontWeight: 700 }}>
+                            {item.quantity}
+                            <button onClick={async () => {
+                              const newQty = prompt(`Edit quantity for Part #${item.partNumber}:`, item.quantity);
+                              if (newQty === null) return;
+                              const qty = parseInt(newQty);
+                              if (isNaN(qty) || qty < 0) { setError('Invalid quantity'); return; }
+                              try {
+                                const updatedItems = [...entry.items];
+                                if (qty === 0) {
+                                  updatedItems.splice(i, 1);
+                                } else {
+                                  updatedItems[i] = { ...updatedItems[i], quantity: qty };
+                                }
+                                if (updatedItems.length === 0) {
+                                  await deletePickupEntry(id, idx);
+                                } else {
+                                  await updatePickupEntry(id, idx, { items: updatedItems });
+                                }
+                                await loadOrder();
+                                showMessage(qty === 0 ? 'Item removed from shipment' : 'Quantity updated');
+                              } catch (err) { setError('Failed to update'); }
+                            }} title="Edit quantity"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1976d2', padding: '0 4px', fontSize: '0.7rem' }}>✏️</button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
