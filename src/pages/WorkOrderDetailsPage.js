@@ -27,7 +27,7 @@ import {
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
-  getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, recordPayment, clearPayment,
+  getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL,
   generateCOC, getWeldProcedures
 } from '../services/api';
@@ -2681,9 +2681,9 @@ function WorkOrderDetailsPage() {
       <div id="wo-tabs" style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginTop: 20, marginBottom: 0 }}>
         {[
           { key: 'parts', label: '📦 Parts', count: order.parts?.length || 0 },
-          { key: 'shipping', label: '🚚 Shipping', count: (order.pickupHistory || []).length || undefined },
           { key: 'materials', label: '📋 Materials' },
-          { key: 'summary', label: '📊 Summary' }
+          { key: 'summary', label: '📊 Summary' },
+          { key: 'shipping', label: '🚚 Shipping', count: (order.pickupHistory || []).length || undefined }
         ].map(tab => (
           <button key={tab.key} onClick={(e) => { e.preventDefault(); setWoTab(tab.key); setTimeout(() => document.getElementById('wo-tabs')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}
             style={{
@@ -3424,6 +3424,16 @@ function WorkOrderDetailsPage() {
                           </div>
                           <div style={{ fontSize: '0.75rem', color: '#888' }}>by {entry.pickedUpBy || 'unknown'}</div>
                         </div>
+                        <button onClick={async () => {
+                          try {
+                            const response = await getPickupReceipt(id, idx);
+                            const blob = new Blob([response.data], { type: 'application/pdf' });
+                            const url = window.URL.createObjectURL(blob);
+                            window.open(url, '_blank');
+                          } catch { setError('Failed to generate receipt'); }
+                        }} title="Print pickup receipt" style={{ background: 'none', border: '1px solid #1976d2', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', color: '#1976d2', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <Printer size={12} /> Print
+                        </button>
                         <button onClick={async () => {
                           if (!window.confirm(`Delete this shipment record? Quantities will be restored.`)) return;
                           try { await deletePickupEntry(id, idx); await loadOrder(); showMessage('Shipment deleted'); } catch { setError('Failed'); }

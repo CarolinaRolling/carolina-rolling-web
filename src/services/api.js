@@ -273,6 +273,7 @@ export const archiveWorkOrder = (id) => api.post(`/workorders/${id}/archive`);
 export const recordPickup = (id, data) => api.post(`/workorders/${id}/pickup`, data);
 export const deletePickupEntry = (id, index) => api.delete(`/workorders/${id}/pickup/${index}`);
 export const updatePickupEntry = (id, index, data) => api.put(`/workorders/${id}/pickup/${index}`, data);
+export const getPickupReceipt = (id, index) => api.get(`/workorders/${id}/pickup/${index}/receipt`, { responseType: 'blob' });
 export const recordPayment = (id, data) => api.post(`/workorders/${id}/record-payment`, data);
 export const clearPayment = (id) => api.post(`/workorders/${id}/clear-payment`);
 export const getArchivedWorkOrders = (params) => api.get('/workorders/archived', { params });
