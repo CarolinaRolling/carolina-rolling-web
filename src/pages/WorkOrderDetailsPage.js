@@ -668,8 +668,12 @@ function WorkOrderDetailsPage() {
     if (selectedPartType === 'beam_roll') {
       if (!partData._beamSize) warnings.push('Beam size is required');
       if (partData._beamSize === 'Custom' && !partData._customBeamSize) warnings.push('Custom beam size is required');
-      if (!partData.rollType) warnings.push('Roll Direction is required');
-      if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+      if (partData._isCamber) {
+        if (!partData._camberDepth) warnings.push('Camber depth is required');
+      } else {
+        if (!partData.rollType) warnings.push('Roll Direction is required');
+        if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value is required');
+      }
     }
     if (selectedPartType === 'tee_bar') {
       if (!partData._teeSize) warnings.push('Tee size is required');
