@@ -12,6 +12,7 @@ import FlatBarRollForm from '../components/FlatBarRollForm';
 import ChannelRollForm from '../components/ChannelRollForm';
 import BeamRollForm from '../components/BeamRollForm';
 import ConeRollForm from '../components/ConeRollForm';
+import ShapedPlateForm from '../components/ShapedPlateForm';
 import TeeBarRollForm from '../components/TeeBarRollForm';
 import RushServiceForm, { EXPEDITE_OPTIONS, EMERGENCY_OPTIONS } from '../components/RushServiceForm';
 import PressBrakeForm from '../components/PressBrakeForm';
@@ -34,6 +35,7 @@ import {
 
 const PART_TYPES = {
   plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
+  shaped_plate: { label: 'Shaped Plate', icon: '⭕', desc: 'Round plates, donuts, and custom shapes', fields: ['material', 'thickness', 'outerDiameter'] },
   cone_roll: { label: 'Cone Layout', icon: '🔺', desc: 'Cone segment design with AutoCAD export', fields: ['material', 'thickness', 'width', 'length'] },
   angle_roll: { label: 'Angle Roll', icon: '📐', desc: 'Angle iron rolling', fields: ['material', 'sectionSize', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees', 'flangeOut'] },
   flat_bar: { label: 'Flat & Square Bar', icon: '▬', desc: 'Flat bar and square bar bending', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
@@ -343,7 +345,7 @@ function WorkOrderDetailsPage() {
 
   const getMinimumInfo = () => {
     let totalLabor = 0, totalMaterial = 0, highestMinimum = 0, highestMinRule = null;
-    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
+    const EA_PRICED = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
     const parts = order?.parts || [];
 
     parts.forEach(part => {
@@ -610,6 +612,16 @@ function WorkOrderDetailsPage() {
       if (!partData.rollType) warnings.push('Roll Direction (Easy Way / Hard Way) is required');
       if (!partData._rollToMethod && !partData._rollValue && !partData.radius && !partData.diameter) warnings.push('Roll value (radius or diameter) is required');
     }
+    if (selectedPartType === 'shaped_plate') {
+      if (!partData.thickness) warnings.push('Thickness is required');
+      const shape = partData._shapeType || 'round';
+      if ((shape === 'round' || shape === 'donut') && !partData.outerDiameter) warnings.push('Outer Diameter (OD) is required');
+      if (shape === 'donut' && !partData._innerDiameter) warnings.push('Inner Diameter (ID) is required');
+      if (shape === 'donut' && partData._innerDiameter && partData.outerDiameter && parseFloat(partData._innerDiameter) >= parseFloat(partData.outerDiameter)) {
+        warnings.push('Inner Diameter must be smaller than Outer Diameter');
+      }
+      if (shape === 'custom' && !partData._customDescription) warnings.push('Shape description is required');
+    }
     if (selectedPartType === 'flat_stock') {
       if (!partData.thickness) warnings.push('Thickness is required');
     }
@@ -722,7 +734,7 @@ function WorkOrderDetailsPage() {
       }
       
       // Recalculate partTotal at save time for ea-priced parts
-      const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
+      const EA_PRICED = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
       // Clean price fields to exact 2-decimal values
       if (dataToSend.laborTotal) dataToSend.laborTotal = (Math.round(parseFloat(dataToSend.laborTotal) * 100) / 100).toFixed(2);
       if (dataToSend.materialTotal) dataToSend.materialTotal = (Math.round(parseFloat(dataToSend.materialTotal) * 100) / 100).toFixed(2);
@@ -1683,7 +1695,7 @@ function WorkOrderDetailsPage() {
   const calculateTotals = () => {
     const parts = order?.parts || [];
     const minInfo = getMinimumInfo();
-    const EA_PRICED = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
+    const EA_PRICED = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
     
     let nonEaTotal = 0;
     let eaPricedTotal = 0;
@@ -3011,7 +3023,7 @@ function WorkOrderDetailsPage() {
                   return grouped;
                 })().map(part => {
                   const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
-                  const isEa = ['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
+                  const isEa = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
                   const woTotals = calculateTotals();
                   const lr = (woTotals.minInfo.minimumApplies && woTotals.minInfo.totalLabor > 0 && isEa) ? woTotals.minInfo.adjustedLabor / woTotals.minInfo.totalLabor : 1;
                   const adjLabor = (parseFloat(part.laborTotal) || 0) * lr;
@@ -3713,7 +3725,7 @@ function WorkOrderDetailsPage() {
               )}
 
               {/* Common fields for types that have their own form */}
-              {!['plate_roll', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'cone_roll', 'tee_bar', 'press_brake', 'fab_service', 'shop_rate', 'rush_service'].includes(selectedPartType) && (
+              {!['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'cone_roll', 'tee_bar', 'press_brake', 'fab_service', 'shop_rate', 'rush_service'].includes(selectedPartType) && (
               <div className="grid grid-2" style={{ marginBottom: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Client Part Number</label>
@@ -3738,6 +3750,10 @@ function WorkOrderDetailsPage() {
               ) : selectedPartType === 'plate_roll' ? (
                 <div className="grid grid-2">
                   <PlateRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                </div>
+              ) : selectedPartType === 'shaped_plate' ? (
+                <div className="grid grid-2">
+                  <ShapedPlateForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
                 </div>
               ) : selectedPartType === 'angle_roll' ? (
                 <div className="grid grid-2">

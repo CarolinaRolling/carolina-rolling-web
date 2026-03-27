@@ -85,6 +85,8 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
     else if (partData.diameter) { setRollValue(partData.diameter); setRollMeasureType('diameter'); }
     if (partData._rollMeasureType) setRollMeasureType(partData._rollMeasureType);
     if (partData._rollMeasurePoint) setRollMeasurePoint(partData._rollMeasurePoint);
+    // Default to Hard Way for beams
+    if (!partData.rollType) setPartData(prev => ({ ...prev, rollType: 'hard_way' }));
   }, []);
 
   useEffect(() => {

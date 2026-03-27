@@ -77,6 +77,8 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
     else if (partData.diameter) { setRollValue(partData.diameter); setRollMeasureType('diameter'); }
     if (partData._rollMeasureType) setRollMeasureType(partData._rollMeasureType);
     if (partData._rollMeasurePoint) setRollMeasurePoint(partData._rollMeasurePoint);
+    // Default to Hard Way for channels
+    if (!partData.rollType) setPartData(prev => ({ ...prev, rollType: 'hard_way' }));
   }, []);
 
   useEffect(() => {
