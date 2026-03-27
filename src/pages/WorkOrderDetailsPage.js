@@ -24,7 +24,7 @@ import {
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
   uploadPartFiles, getPartFileSignedUrl, downloadPartFile, deletePartFile,
-  uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, downloadWorkOrderDocument, deleteWorkOrderDocument, regeneratePODocument, createPODocument,
+  uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, downloadWorkOrderDocument, deleteWorkOrderDocument, regeneratePODocument, createPODocument, toggleDocumentPortal,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
@@ -2105,6 +2105,48 @@ function WorkOrderDetailsPage() {
                 </button>
 
                 <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
+                
+                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Labels</div>
+                <button onClick={() => {
+                  setShowPrintMenu(false);
+                  const SERVICE_TYPES = ['fab_service', 'shop_rate', 'rush_service'];
+                  const labelParts = (order.parts || []).filter(p => !SERVICE_TYPES.includes(p.partType));
+                  if (labelParts.length === 0) { showMessage('No parts to label'); return; }
+                  const clientPO = order.clientPurchaseOrderNumber || '';
+                  const drLabel = order.drNumber ? `DR-${order.drNumber}` : (order.orderNumber || '');
+                  const totalLabels = labelParts.reduce((s, p) => s + (p.quantity || 1), 0);
+                  const printWindow = window.open('', '_blank');
+                  printWindow.document.write(`<!DOCTYPE html><html><head><title>Labels - ${drLabel}</title>
+                    <style>
+                      @page { size: 62mm 29mm; margin: 0; }
+                      body { margin: 0; padding: 0; }
+                      .label { width: 62mm; height: 29mm; padding: 2mm; box-sizing: border-box; font-family: Arial, sans-serif; page-break-after: always; display: flex; flex-direction: column; justify-content: center; }
+                      .label:last-child { page-break-after: auto; }
+                      .lg { font-size: 14pt; font-weight: bold; line-height: 1.2; }
+                      .sm { font-size: 9pt; color: #333; }
+                    </style></head><body>`);
+                  labelParts.forEach(part => {
+                    const qty = part.quantity || 1;
+                    const fd = part.formData && typeof part.formData === 'object' ? part.formData : {};
+                    const label1 = part.clientPartNumber || fd.clientPartNumber || `Part ${part.partNumber}`;
+                    for (let i = 0; i < qty; i++) {
+                      printWindow.document.write(`<div class="label">
+                        <div class="lg">${label1}</div>
+                        <div class="sm">${drLabel}</div>
+                        ${clientPO ? `<div class="sm">PO: ${clientPO}</div>` : ''}
+                        ${part.heatNumber ? `<div class="sm">Heat: ${part.heatNumber}</div>` : ''}
+                        <div class="sm">${i + 1} of ${qty}</div>
+                      </div>`);
+                    }
+                  });
+                  printWindow.document.write('</body></html>');
+                  printWindow.document.close();
+                  printWindow.onload = () => printWindow.print();
+                }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #795548', background: '#EFEBE9', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#795548', textAlign: 'center', margin: '4px 0' }}>
+                  🏷️ Print All Labels ({(order.parts || []).filter(p => !['fab_service', 'shop_rate', 'rush_service'].includes(p.partType)).reduce((s, p) => s + (p.quantity || 1), 0)})
+                </button>
+
+                <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
                 <button onClick={() => { setShowPrintMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: '#f5f5f5', borderRadius: 8, cursor: 'pointer', color: '#666', fontSize: '0.9rem', textAlign: 'center', fontWeight: 600 }}>Cancel</button>
               </div>
             )}
@@ -2550,10 +2592,19 @@ function WorkOrderDetailsPage() {
           {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').map(doc => (
-                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f5f5f5', padding: '8px 12px', borderRadius: 6, fontSize: '0.85rem' }}>
+                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: doc.portalVisible ? '#e8f5e9' : '#f5f5f5', padding: '8px 12px', borderRadius: 6, fontSize: '0.85rem', border: doc.portalVisible ? '1px solid #a5d6a7' : '1px solid transparent' }}>
                   <File size={16} color="#1976d2" />
-                  <span style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
+                  <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
                   <button onClick={() => handleViewDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><Eye size={14} /></button>
+                  <button onClick={async () => {
+                    try {
+                      await toggleDocumentPortal(id, doc.id, !doc.portalVisible);
+                      await loadOrder();
+                    } catch {}
+                  }} title={doc.portalVisible ? 'Visible on client portal — click to hide' : 'Hidden from client portal — click to show'}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, fontSize: '0.75rem', color: doc.portalVisible ? '#2e7d32' : '#bbb' }}>
+                    {doc.portalVisible ? '🌐' : '🔒'}
+                  </button>
                   <button onClick={() => handleDeleteDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}><X size={14} /></button>
                 </div>
               ))}

@@ -6,7 +6,7 @@ import {
   addEstimatePart, updateEstimatePart, deleteEstimatePart,
   uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
   downloadEstimatePDF, convertEstimateToWorkOrder,
-  uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile,
+  uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile, toggleEstimateFilePortal,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
   getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
   sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument
@@ -2561,17 +2561,23 @@ function EstimateDetailsPage() {
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         {part.files.filter(f => f.fileType !== 'cut_file' && !(f.originalName || '').match(/\.dxf$/i)).map(file => (
                           <div key={file.id} style={{
-                            display: 'flex', alignItems: 'center', gap: 6, background: 'white',
-                            padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: '0.8rem'
+                            display: 'flex', alignItems: 'center', gap: 6, background: file.portalVisible ? '#e8f5e9' : 'white',
+                            padding: '6px 10px', borderRadius: 6, border: file.portalVisible ? '1px solid #a5d6a7' : '1px solid #ddd', fontSize: '0.8rem'
                           }}>
                             <FileText size={14} style={{ color: '#1976d2', flexShrink: 0 }} />
-                            <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                            <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
                               {file.originalName || file.filename}
                             </span>
                             <button onClick={() => handleViewPartFile(part.id, file)}
                               title="View file"
                               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1976d2', padding: 2, flexShrink: 0 }}>
                               <Eye size={14} />
+                            </button>
+                            <button onClick={async () => {
+                              try { await toggleEstimateFilePortal(id, part.id, file.id, !file.portalVisible); await loadEstimate(); } catch {}
+                            }} title={file.portalVisible ? 'Visible on client portal — click to hide' : 'Hidden from client portal — click to show'}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, flexShrink: 0, color: file.portalVisible ? '#2e7d32' : '#bbb' }}>
+                              {file.portalVisible ? '🌐' : '🔒'}
                             </button>
                             <button onClick={() => handleDeletePartFile(part.id, file.id)}
                               title="Delete file"

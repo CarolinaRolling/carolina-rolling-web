@@ -172,6 +172,8 @@ export const regeneratePODocument = (workOrderId, documentId) =>
   api.post(`/workorders/${workOrderId}/documents/${documentId}/regenerate`);
 export const createPODocument = (workOrderId, poNumber) => 
   api.post(`/workorders/${workOrderId}/create-po-pdf`, { poNumber });
+export const toggleDocumentPortal = (workOrderId, documentId, portalVisible) =>
+  api.patch(`/workorders/${workOrderId}/documents/${documentId}/portal`, { portalVisible });
 
 // Work Order Material Ordering
 export const orderWorkOrderMaterial = (workOrderId, data) => 
@@ -233,6 +235,8 @@ export const aiParseDocument = (estimateId, file, additionalNotes = '') => {
 };
 export const deleteEstimatePartFile = (estimateId, partId, fileId) => 
   api.delete(`/estimates/${estimateId}/parts/${partId}/files/${fileId}`);
+export const toggleEstimateFilePortal = (estimateId, partId, fileId, portalVisible) =>
+  api.patch(`/estimates/${estimateId}/parts/${partId}/files/${fileId}/portal`, { portalVisible });
 
 // Reset estimate conversion (if work order is missing)
 export const resetEstimateConversion = (estimateId) => api.post(`/estimates/${estimateId}/reset-conversion`);
