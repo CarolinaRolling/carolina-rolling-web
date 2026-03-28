@@ -1,146 +1,243 @@
-# Shipment Tracker Web App
+# 🎯 Carolina Order Portal v2.0
 
-A React-based web application for managing warehouse inventory and shipments. This is the web companion to the Android app.
+**Complete authenticated dashboard with Carolina database integration**
 
-## Features
+Login → View Dashboard → Track Orders → Done! ✅
 
-- **Inventory Management** - View, search, and filter all shipments
-- **Create Shipments** - Add new shipments with photos and documents
-- **Shipment Details** - View and edit shipment information, upload files
-- **Status Updates** - Change shipment status (Received, In Progress, Completed, Shipped)
-- **QR Codes** - Generate and download QR codes for shipments
-- **Inbound Orders** - Track expected deliveries
-- **Location Settings** - Configure warehouse locations
-- **Email Notifications** - Set up notification email
+---
 
-## Getting Started
+## ✨ Features
 
-### Prerequisites
+### **Authentication:**
+- 🔐 Secure login page
+- 🔑 JWT token-based auth
+- 👤 User management
+- 🛡️ Role-based access
 
-- Node.js 16+ installed
-- npm or yarn
+### **Dashboard:**
+- 📊 Statistics overview
+- 📋 Estimates list
+- 🔧 Work orders list
+- 🔄 Auto-refresh (5 min)
+- 📱 Mobile responsive
 
-### Installation
+### **Data:**
+- 💾 Portal DB: User authentication
+- 💾 Carolina DB: Order data (read-only)
+- 🔗 Dual database connections
+- ⚡ Real-time from Carolina
 
-1. Navigate to the web-app directory:
-   ```bash
-   cd web-app
-   ```
+---
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+## 🚀 Quick Deploy
 
-3. Start the development server:
-   ```bash
-   npm start
-   ```
+**Time: 20 minutes**
 
-4. Open http://localhost:3000 in your browser
+1. **Setup users database** (5 min)
+2. **Upload files to GitHub** (10 min)
+3. **Set environment variables** (2 min)
+4. **Deploy on Heroku** (2 min)
+5. **Login and test!** (1 min)
 
-### Environment Variables
+**See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for complete guide**
 
-Create a `.env` file in the web-app directory if you want to override the API URL:
+---
 
-```
-REACT_APP_API_URL=https://your-api-url.herokuapp.com/api
-```
+## 🎯 Default Login
 
-Default API URL: `https://carolina-rolling-inventory-api-641af96c90aa.herokuapp.com/api`
+**Username:** `admin`  
+**Password:** `admin123`  
+**Company:** Nowell
 
-## Deployment
+*Change password after first login!*
 
-### Option 1: Deploy to Vercel (Recommended)
+---
 
-1. Install Vercel CLI:
-   ```bash
-   npm install -g vercel
-   ```
+## 📦 What's Included
 
-2. Deploy:
-   ```bash
-   vercel
-   ```
+- ✅ Complete backend (Express + PostgreSQL)
+- ✅ Complete frontend (React)
+- ✅ Authentication system (bcrypt + JWT)
+- ✅ Dashboard with statistics
+- ✅ Orders display
+- ✅ Database setup scripts
+- ✅ Complete documentation
+- ✅ Ready to deploy!
 
-### Option 2: Deploy to Netlify
+---
 
-1. Build the app:
-   ```bash
-   npm run build
-   ```
+## 🗄️ Database Structure
 
-2. Drag and drop the `build` folder to Netlify
-
-### Option 3: Deploy to Heroku
-
-1. Add the following buildpack:
-   ```bash
-   heroku buildpacks:set mars/create-react-app
-   ```
-
-2. Deploy:
-   ```bash
-   git push heroku main
-   ```
-
-### Option 4: Host on Synology NAS (Local Network Only)
-
-1. Build the app:
-   ```bash
-   npm run build
-   ```
-
-2. Copy the contents of the `build` folder to your Synology Web Station folder
-
-3. Access via your NAS IP address
-
-## Project Structure
-
-```
-web-app/
-├── public/
-│   └── index.html
-├── src/
-│   ├── components/
-│   │   └── Layout.js
-│   ├── pages/
-│   │   ├── InventoryPage.js
-│   │   ├── ShipmentDetailsPage.js
-│   │   ├── NewShipmentPage.js
-│   │   ├── InboundPage.js
-│   │   ├── InboundDetailsPage.js
-│   │   ├── SettingsPage.js
-│   │   └── LocationSettingsPage.js
-│   ├── services/
-│   │   └── api.js
-│   ├── App.js
-│   ├── App.css
-│   └── index.js
-└── package.json
+### **Portal DB (Authentication):**
+```sql
+users
+├── id
+├── username
+├── email
+├── password_hash
+├── company_name
+├── role
+└── created_at
 ```
 
-## Tech Stack
+### **Carolina DB (Read-Only):**
+```sql
+Estimates
+WorkOrders
+WorkOrderParts
+```
 
-- React 18
-- React Router v6
-- Axios for API calls
-- Lucide React for icons
-- QRCode library for QR generation
+---
 
-## API Endpoints Used
+## 🔧 Tech Stack
 
-- `GET /shipments` - List all shipments
-- `GET /shipments/:id` - Get shipment details
-- `POST /shipments` - Create shipment
-- `PUT /shipments/:id` - Update shipment
-- `DELETE /shipments/:id` - Delete shipment
-- `POST /shipments/:id/photos` - Upload photos
-- `POST /shipments/:id/documents` - Upload documents
-- `GET /settings/locations` - Get locations
-- `GET /inbound` - List inbound orders
-- And more...
+- **Backend:** Node.js + Express
+- **Frontend:** React 18
+- **Database:** PostgreSQL (dual connections)
+- **Auth:** bcryptjs + JWT
+- **Hosting:** Heroku
+- **Styling:** Pure CSS
 
-## License
+---
 
-Private - Carolina Rolling
+## 📱 Screenshots
+
+### Login Page:
+Clean, simple login with username/password
+
+### Dashboard:
+- Statistics cards at top
+- Estimates section with cards
+- Work orders section with cards
+- Refresh button
+- Logout button
+
+---
+
+## 🎯 What It Shows
+
+### **For Each Estimate:**
+- Estimate number
+- Status (sent/accepted/declined)
+- Amount
+- Dates
+- Color-coded status badges
+
+### **For Each Work Order:**
+- DR number
+- Work order number
+- Status
+- Promised date
+- Material status
+- Location
+- Completion dates
+
+---
+
+## 🔐 Security
+
+- ✅ Passwords hashed with bcrypt
+- ✅ JWT tokens (7-day expiry)
+- ✅ Read-only Carolina DB access
+- ✅ HTTPS only
+- ✅ CORS enabled
+- ✅ SQL injection prevention
+
+---
+
+## 📖 Documentation
+
+- **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Complete deployment guide
+- **[.env.example](.env.example)** - Environment variables
+- **[backend/database/setup.sql](backend/database/setup.sql)** - Database setup
+
+---
+
+## 🐛 Troubleshooting
+
+### **Can't login?**
+- Check users table exists
+- Verify password hash
+- Check JWT_SECRET set
+
+### **No orders showing?**
+- Check CAROLINA_DATABASE_URL
+- Verify company_name in users table
+- Test Carolina DB connection
+
+### **Build failed?**
+- Set NPM_CONFIG_PRODUCTION=false
+- Check all files uploaded
+- View Heroku build logs
+
+**See DEPLOYMENT.md for detailed troubleshooting!**
+
+---
+
+## ✅ Success Criteria
+
+After deployment:
+- [ ] Login page loads
+- [ ] Can login with admin/admin123
+- [ ] Dashboard displays
+- [ ] Orders show (if any exist)
+- [ ] Statistics accurate
+- [ ] Refresh works
+- [ ] Logout works
+
+---
+
+## 🎊 What Makes This Different
+
+### **vs. Simple Tracker:**
+- ✅ Full authentication
+- ✅ Multi-user support
+- ✅ Role-based access
+- ✅ Secure login
+
+### **vs. Old Portal:**
+- ✅ Direct DB connection (no API)
+- ✅ Faster data loading
+- ✅ Simpler architecture
+- ✅ Actually works!
+
+---
+
+## 💡 Future Enhancements
+
+Easy to add:
+- 📧 Email notifications
+- 👥 More user roles
+- 📊 Advanced statistics
+- 📄 PDF export
+- 🔍 Advanced search
+- 📱 Push notifications
+
+---
+
+## 📞 Support
+
+**Check documentation first:**
+- DEPLOYMENT.md
+- Heroku logs
+- Browser console
+
+**Common issues:**
+- Database not setup
+- Environment variables missing
+- Build not completing
+
+---
+
+## 🎉 You're Ready!
+
+**Download the package**  
+**Follow DEPLOYMENT.md**  
+**Deploy in 20 minutes**  
+**Enjoy your working dashboard!**
+
+---
+
+**Made with ❤️ for Carolina Rolling**
+
+*Version 2.0 - Complete Authenticated Dashboard*
