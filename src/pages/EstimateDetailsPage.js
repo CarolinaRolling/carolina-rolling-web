@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, Upload, Eye, X, Printer, Check, FileDown, Package, FileText, Edit } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Upload, Eye, X, Printer, Check, FileDown, Package, FileText, Edit, ChevronUp, ChevronDown } from 'lucide-react';
 import {
   getEstimateById, createEstimate, updateEstimate,
-  addEstimatePart, updateEstimatePart, deleteEstimatePart,
+  addEstimatePart, updateEstimatePart, deleteEstimatePart, reorderEstimateParts,
   uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
   downloadEstimatePDF, convertEstimateToWorkOrder,
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile, toggleEstimateFilePortal,
@@ -1194,6 +1194,21 @@ function EstimateDetailsPage() {
     } catch (err) { setError('Failed to delete part'); }
   };
 
+  const handleMovePart = async (partId, direction) => {
+    const sorted = [...parts].sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+    const idx = sorted.findIndex(p => p.id === partId);
+    if (idx < 0) return;
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === sorted.length - 1) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    const newOrder = [...sorted];
+    [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
+    try {
+      await reorderEstimateParts(id, newOrder.map(p => p.id));
+      await loadEstimate();
+    } catch { setError('Failed to reorder'); }
+  };
+
   const handleFileUpload = async (uploadedFiles) => {
     if (isNew) { setError('Save first'); return; }
     try {
@@ -2190,7 +2205,17 @@ function EstimateDetailsPage() {
                         {(part._cutPerPrint || (part.formData && part.formData._cutPerPrint)) && <span style={{ marginLeft: 6, padding: '1px 5px', background: '#7B1FA2', color: 'white', borderRadius: 3, fontSize: '0.7rem', fontWeight: 600 }}>✂️ CUT PER PRINT</span>}
                       </div>
                     </div>
-                    <div className="actions-row">
+                    <div className="actions-row" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginRight: 4 }}>
+                        <button onClick={() => handleMovePart(part.id, 'up')} title="Move up"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: '#999', lineHeight: 1 }}>
+                          <ChevronUp size={16} />
+                        </button>
+                        <button onClick={() => handleMovePart(part.id, 'down')} title="Move down"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: '#999', lineHeight: 1 }}>
+                          <ChevronDown size={16} />
+                        </button>
+                      </div>
                       {part.materialOrdered && (
                         <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '4px 8px', borderRadius: 4, fontSize: '0.75rem' }}>
                           <Check size={12} /> PO: {part.materialPurchaseOrderNumber}

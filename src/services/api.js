@@ -135,6 +135,7 @@ export const getWorkOrderPrintPackage = (id, mode, html) => api.post(`/workorder
 export const addWorkOrderPart = (workOrderId, data) => api.post(`/workorders/${workOrderId}/parts`, data);
 export const updateWorkOrderPart = (workOrderId, partId, data) => api.put(`/workorders/${workOrderId}/parts/${partId}`, data);
 export const deleteWorkOrderPart = (workOrderId, partId) => api.delete(`/workorders/${workOrderId}/parts/${partId}`);
+export const reorderWorkOrderParts = (workOrderId, partIds) => api.put(`/workorders/${workOrderId}/parts/reorder`, { partIds });
 
 // Work Order Part Files
 export const uploadPartFiles = (workOrderId, partId, files) => {
@@ -202,6 +203,7 @@ export const addEstimatePart = (estimateId, data) => api.post(`/estimates/${esti
 export const generateOutsideProcessingPO = (estimateId, partId, notes) => api.post(`/estimates/${estimateId}/parts/${partId}/outside-processing-po`, { notes });
 export const emailOutsideProcessingPO = (estimateId, partId, contactEmail) => api.post(`/estimates/${estimateId}/parts/${partId}/outside-processing-email`, { contactEmail });
 export const updateEstimatePart = (estimateId, partId, data) => api.put(`/estimates/${estimateId}/parts/${partId}`, data);
+export const reorderEstimateParts = (estimateId, partIds) => api.put(`/estimates/${estimateId}/parts/reorder`, { partIds });
 export const deleteEstimatePart = (estimateId, partId) => api.delete(`/estimates/${estimateId}/parts/${partId}`);
 
 // Estimate Part Files

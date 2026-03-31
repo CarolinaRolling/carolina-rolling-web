@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
-  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink, RefreshCw
+  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink, RefreshCw, ChevronUp, ChevronDown
 } from 'lucide-react';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
@@ -22,7 +22,7 @@ import ShopRateForm from '../components/ShopRateForm';
 import HeatNumberInput from '../components/HeatNumberInput';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
-  addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart,
+  addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart, reorderWorkOrderParts,
   uploadPartFiles, getPartFileSignedUrl, downloadPartFile, deletePartFile,
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, downloadWorkOrderDocument, deleteWorkOrderDocument, regeneratePODocument, createPODocument, toggleDocumentPortal,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
@@ -812,6 +812,21 @@ function WorkOrderDetailsPage() {
     } catch (err) {
       setError('Failed to delete part');
     }
+  };
+
+  const handleMovePart = async (partId, direction) => {
+    const sorted = [...(order.parts || [])].sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+    const idx = sorted.findIndex(p => p.id === partId);
+    if (idx < 0) return;
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === sorted.length - 1) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    const newOrder = [...sorted];
+    [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
+    try {
+      await reorderWorkOrderParts(id, newOrder.map(p => p.id));
+      await loadOrder();
+    } catch { setError('Failed to reorder'); }
   };
 
   const handlePartStatusChange = async (partId, status) => {
@@ -2846,7 +2861,17 @@ function WorkOrderDetailsPage() {
                     ) : null}
                     {part.cutFileReference && <div style={{ color: '#1565c0', fontSize: '0.875rem' }}>📐 Cut File: {part.cutFileReference}</div>}
                   </div>
-                  <div className="actions-row">
+                  <div className="actions-row" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginRight: 2 }}>
+                      <button onClick={() => handleMovePart(part.id, 'up')} title="Move up"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: '#999', lineHeight: 1 }}>
+                        <ChevronUp size={16} />
+                      </button>
+                      <button onClick={() => handleMovePart(part.id, 'down')} title="Move down"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: '#999', lineHeight: 1 }}>
+                        <ChevronDown size={16} />
+                      </button>
+                    </div>
                     <select className="form-select" value={part.status} onChange={(e) => handlePartStatusChange(part.id, e.target.value)} style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
                       <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>
                     </select>
@@ -3975,44 +4000,90 @@ function WorkOrderDetailsPage() {
               {pickupData.type === 'partial' && (
                 <div>
                   <div style={{ background: '#fff3e0', padding: 12, borderRadius: 8, marginBottom: 12, fontSize: '0.85rem' }}>
-                    Enter the quantity being shipped for each part. Leave at 0 to skip.
+                    Enter the quantity being shipped for each part. Linked services auto-follow their parent.
                   </div>
                   
                   {(() => {
                     const summary = getPickupSummary();
-                    return summary.map(p => {
+                    // Build linked services map: parentId -> [child parts]
+                    const linkedMap = {};
+                    summary.forEach(p => {
+                      const fd = p.formData && typeof p.formData === 'object' ? p.formData : {};
+                      const linkedTo = fd._linkedPartId || p._linkedPartId;
+                      if (linkedTo && ['fab_service', 'shop_rate'].includes(p.partType)) {
+                        if (!linkedMap[linkedTo]) linkedMap[linkedTo] = [];
+                        linkedMap[linkedTo].push(p);
+                      }
+                    });
+                    const linkedChildIds = new Set(Object.values(linkedMap).flat().map(c => c.id));
+
+                    return summary.filter(p => !linkedChildIds.has(p.id)).map(p => {
                       const item = pickupData.items[p.id] || { qty: 0 };
                       const maxQty = p.remaining;
                       const fd = p.formData && typeof p.formData === 'object' ? p.formData : {};
                       const desc = fd._materialDescription || p.materialDescription || PART_TYPES[p.partType]?.label || p.partType;
+                      const linkedChildren = linkedMap[p.id] || [];
                       return (
-                        <div key={p.id} style={{ 
-                          padding: 12, marginBottom: 6, borderRadius: 8, 
-                          border: (parseInt(item.qty) || 0) > 0 ? '2px solid #ff9800' : '1px solid #eee',
-                          background: maxQty === 0 ? '#f5f5f5' : (parseInt(item.qty) || 0) > 0 ? '#fff8e1' : 'white',
-                          opacity: maxQty === 0 ? 0.5 : 1,
-                          display: 'flex', alignItems: 'center', gap: 12
-                        }}>
-                          <div style={{ minWidth: 65 }}>
-                            <input type="number" min="0" max={maxQty} disabled={maxQty === 0}
-                              value={item.qty || ''}
-                              onChange={(e) => {
-                                let val = parseInt(e.target.value) || 0;
-                                if (val > maxQty) val = maxQty;
-                                if (val < 0) val = 0;
-                                setPickupData(prev => ({ ...prev, items: { ...prev.items, [p.id]: { qty: val } } }));
-                              }}
-                              onFocus={(e) => { if (e.target.value === '0') e.target.select(); }}
-                              placeholder="0"
-                              style={{ width: 60, padding: '6px 4px', textAlign: 'center', border: '2px solid #ddd', borderRadius: 6, fontWeight: 700, fontSize: '1rem' }} />
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div><strong>#{p.partNumber}</strong> {p.clientPartNumber && <span style={{ color: '#1976d2' }}>{p.clientPartNumber}</span>}</div>
-                            <div style={{ fontSize: '0.8rem', color: '#555' }}>{desc}</div>
-                            <div style={{ fontSize: '0.75rem', color: '#999' }}>
-                              Total: {p.totalQty} | Shipped: {p.picked} | <strong style={{ color: maxQty > 0 ? '#e65100' : '#999' }}>Remaining: {maxQty}</strong>
+                        <div key={p.id}>
+                          <div style={{ 
+                            padding: 12, marginBottom: linkedChildren.length > 0 ? 0 : 6, borderRadius: linkedChildren.length > 0 ? '8px 8px 0 0' : 8, 
+                            border: (parseInt(item.qty) || 0) > 0 ? '2px solid #ff9800' : '1px solid #eee',
+                            borderBottom: linkedChildren.length > 0 ? 'none' : undefined,
+                            background: maxQty === 0 ? '#f5f5f5' : (parseInt(item.qty) || 0) > 0 ? '#fff8e1' : 'white',
+                            opacity: maxQty === 0 ? 0.5 : 1,
+                            display: 'flex', alignItems: 'center', gap: 12
+                          }}>
+                            <div style={{ minWidth: 65 }}>
+                              <input type="number" min="0" max={maxQty} disabled={maxQty === 0}
+                                value={item.qty || ''}
+                                onChange={(e) => {
+                                  let val = parseInt(e.target.value) || 0;
+                                  if (val > maxQty) val = maxQty;
+                                  if (val < 0) val = 0;
+                                  // Auto-set linked services to same qty
+                                  const updates = { [p.id]: { qty: val } };
+                                  linkedChildren.forEach(child => {
+                                    const childMax = child.remaining;
+                                    updates[child.id] = { qty: Math.min(val, childMax) };
+                                  });
+                                  setPickupData(prev => ({ ...prev, items: { ...prev.items, ...updates } }));
+                                }}
+                                onFocus={(e) => { if (e.target.value === '0') e.target.select(); }}
+                                placeholder="0"
+                                style={{ width: 60, padding: '6px 4px', textAlign: 'center', border: '2px solid #ddd', borderRadius: 6, fontWeight: 700, fontSize: '1rem' }} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div><strong>#{p.partNumber}</strong> {p.clientPartNumber && <span style={{ color: '#1976d2' }}>{p.clientPartNumber}</span>}</div>
+                              <div style={{ fontSize: '0.8rem', color: '#555' }}>{desc}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#999' }}>
+                                Total: {p.totalQty} | Shipped: {p.picked} | <strong style={{ color: maxQty > 0 ? '#e65100' : '#999' }}>Remaining: {maxQty}</strong>
+                              </div>
                             </div>
                           </div>
+                          {/* Linked services shown indented */}
+                          {linkedChildren.map(child => {
+                            const childItem = pickupData.items[child.id] || { qty: 0 };
+                            const childFd = child.formData && typeof child.formData === 'object' ? child.formData : {};
+                            return (
+                              <div key={child.id} style={{
+                                padding: '8px 12px 8px 40px', marginBottom: 6,
+                                borderRadius: '0 0 8px 8px',
+                                border: (parseInt(item.qty) || 0) > 0 ? '2px solid #ff9800' : '1px solid #eee',
+                                borderTop: '1px dashed #ddd',
+                                background: (parseInt(childItem.qty) || 0) > 0 ? '#f5f5f5' : '#fafafa',
+                                display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem'
+                              }}>
+                                <span style={{ color: '#9e9e9e' }}>↳</span>
+                                <span style={{ fontWeight: 600, color: '#666' }}>#{child.partNumber}</span>
+                                <span style={{ color: '#888' }}>{PART_TYPES[child.partType]?.label || child.partType}</span>
+                                {childFd._serviceType && <span style={{ color: '#888' }}>— {childFd._serviceType}</span>}
+                                <span style={{ marginLeft: 'auto', fontWeight: 700, color: (parseInt(childItem.qty) || 0) > 0 ? '#e65100' : '#999' }}>
+                                  {parseInt(childItem.qty) || 0}
+                                </span>
+                                <span style={{ fontSize: '0.7rem', color: '#999' }}>auto</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       );
                     });
