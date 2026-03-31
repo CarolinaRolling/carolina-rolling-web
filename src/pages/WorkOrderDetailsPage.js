@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
-  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink, RefreshCw, ChevronUp, ChevronDown
+  Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink, RefreshCw
 } from 'lucide-react';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
@@ -74,6 +74,8 @@ function WorkOrderDetailsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
   const [showPartModal, setShowPartModal] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
+  const [reorderParts, setReorderParts] = useState([]);
   const [showPartTypePicker, setShowPartTypePicker] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
   const [partData, setPartData] = useState({});
@@ -812,21 +814,6 @@ function WorkOrderDetailsPage() {
     } catch (err) {
       setError('Failed to delete part');
     }
-  };
-
-  const handleMovePart = async (partId, direction) => {
-    const sorted = [...(order.parts || [])].sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
-    const idx = sorted.findIndex(p => p.id === partId);
-    if (idx < 0) return;
-    if (direction === 'up' && idx === 0) return;
-    if (direction === 'down' && idx === sorted.length - 1) return;
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    const newOrder = [...sorted];
-    [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
-    try {
-      await reorderWorkOrderParts(id, newOrder.map(p => p.id));
-      await loadOrder();
-    } catch { setError('Failed to reorder'); }
   };
 
   const handlePartStatusChange = async (partId, status) => {
@@ -2737,6 +2724,17 @@ function WorkOrderDetailsPage() {
               </button>
             )}
             <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
+            {order.parts?.length > 1 && (
+              <button className="btn btn-sm" onClick={() => {
+                const sorted = [...(order.parts || [])].sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0));
+                // Group: regular parts only (services follow their parent)
+                const regular = sorted.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !(p._linkedPartId || (p.formData || {})._linkedPartId));
+                setReorderParts(regular);
+                setReorderMode(true);
+              }} style={{ background: '#546e7a', color: 'white', border: 'none' }}>
+                ↕️ Reorder
+              </button>
+            )}
           </div>
         </div>
         {/* Progress Bar */}
@@ -2861,17 +2859,7 @@ function WorkOrderDetailsPage() {
                     ) : null}
                     {part.cutFileReference && <div style={{ color: '#1565c0', fontSize: '0.875rem' }}>📐 Cut File: {part.cutFileReference}</div>}
                   </div>
-                  <div className="actions-row" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginRight: 2, border: '1px solid #ddd', borderRadius: 4, background: '#fafafa' }}>
-                      <button onClick={() => handleMovePart(part.id, 'up')} title="Move up"
-                        style={{ background: 'none', border: 'none', borderBottom: '1px solid #eee', cursor: 'pointer', padding: '2px 4px', color: '#666', lineHeight: 1 }}>
-                        <ChevronUp size={14} />
-                      </button>
-                      <button onClick={() => handleMovePart(part.id, 'down')} title="Move down"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#666', lineHeight: 1 }}>
-                        <ChevronDown size={14} />
-                      </button>
-                    </div>
+                  <div className="actions-row">
                     <select className="form-select" value={part.status} onChange={(e) => handlePartStatusChange(part.id, e.target.value)} style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
                       <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>
                     </select>
@@ -4109,6 +4097,106 @@ function WorkOrderDetailsPage() {
                   })()}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reorder Parts Modal */}
+      {reorderMode && (
+        <div className="modal-overlay" onClick={() => setReorderMode(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>↕️ Reorder Parts</h3>
+              <button className="btn btn-icon" onClick={() => setReorderMode(false)}><X size={20} /></button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: 12 }}>
+                Use the arrows to move parts. Linked services will follow their parent automatically.
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {reorderParts.map((part, idx) => {
+                  const fd = part.formData && typeof part.formData === 'object' ? part.formData : {};
+                  const desc = fd._materialDescription || part.materialDescription || PART_TYPES[part.partType]?.label || part.partType;
+                  const linkedServices = (order.parts || []).filter(sp => {
+                    const lid = sp._linkedPartId || (sp.formData || {})._linkedPartId;
+                    return lid && String(lid) === String(part.id) && ['fab_service', 'shop_rate'].includes(sp.partType);
+                  });
+                  return (
+                    <div key={part.id}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                        background: '#fff', border: '2px solid #e0e0e0', borderRadius: 8, marginBottom: 4,
+                        transition: 'all 0.2s ease'
+                      }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <button onClick={() => {
+                            if (idx === 0) return;
+                            const arr = [...reorderParts];
+                            [arr[idx], arr[idx - 1]] = [arr[idx - 1], arr[idx]];
+                            setReorderParts(arr);
+                          }} disabled={idx === 0}
+                            style={{ background: 'none', border: '1px solid #ccc', borderRadius: 4, cursor: idx === 0 ? 'default' : 'pointer', padding: '4px 8px', color: idx === 0 ? '#ddd' : '#333', fontSize: '1rem', lineHeight: 1 }}>
+                            ▲
+                          </button>
+                          <button onClick={() => {
+                            if (idx === reorderParts.length - 1) return;
+                            const arr = [...reorderParts];
+                            [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+                            setReorderParts(arr);
+                          }} disabled={idx === reorderParts.length - 1}
+                            style={{ background: 'none', border: '1px solid #ccc', borderRadius: 4, cursor: idx === reorderParts.length - 1 ? 'default' : 'pointer', padding: '4px 8px', color: idx === reorderParts.length - 1 ? '#ddd' : '#333', fontSize: '1rem', lineHeight: 1 }}>
+                            ▼
+                          </button>
+                        </div>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1976d2', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>
+                          {idx + 1}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600 }}>
+                            {PART_TYPES[part.partType]?.icon} {PART_TYPES[part.partType]?.label || part.partType}
+                            {part.clientPartNumber && <span style={{ color: '#1976d2', marginLeft: 6 }}>{part.clientPartNumber}</span>}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {desc.replace(/^\d+pc:\s*/i, '')}
+                          </div>
+                        </div>
+                      </div>
+                      {linkedServices.map(sp => (
+                        <div key={sp.id} style={{ marginLeft: 56, padding: '4px 12px', fontSize: '0.8rem', color: '#7b1fa2', background: '#f3e5f5', borderRadius: 4, marginBottom: 4, marginTop: -2 }}>
+                          ↳ {PART_TYPES[sp.partType]?.label} {(sp.formData || {})._serviceType ? `— ${(sp.formData || {})._serviceType}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+                <button className="btn btn-secondary" onClick={() => setReorderMode(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={async () => {
+                  try {
+                    // Build full order: reorderParts + their linked services interleaved
+                    const fullOrder = [];
+                    reorderParts.forEach(rp => {
+                      fullOrder.push(rp.id);
+                      (order.parts || []).forEach(sp => {
+                        const lid = sp._linkedPartId || (sp.formData || {})._linkedPartId;
+                        if (lid && String(lid) === String(rp.id) && ['fab_service', 'shop_rate'].includes(sp.partType)) {
+                          fullOrder.push(sp.id);
+                        }
+                      });
+                    });
+                    // Add any orphan parts not in fullOrder
+                    (order.parts || []).forEach(p => { if (!fullOrder.includes(p.id)) fullOrder.push(p.id); });
+                    await reorderWorkOrderParts(id, fullOrder);
+                    await loadOrder();
+                    setReorderMode(false);
+                    showMessage('Part order updated');
+                  } catch { setError('Failed to reorder'); }
+                }}>
+                  <Check size={16} /> Apply Order
+                </button>
+              </div>
             </div>
           </div>
         </div>
