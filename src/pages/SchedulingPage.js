@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Calendar, Clock, Search, 
-  AlertTriangle, Filter, Edit2, Check, X
+  Clock, Search, 
+  AlertTriangle, Check, X
 } from 'lucide-react';
 import { getWorkOrders, updateWorkOrder } from '../services/api';
 
@@ -37,6 +37,7 @@ function SchedulingPage() {
   const [workOrders, setWorkOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  // eslint-disable-next-line no-unused-vars
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   
