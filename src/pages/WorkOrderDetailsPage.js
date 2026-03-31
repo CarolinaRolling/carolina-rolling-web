@@ -2862,14 +2862,14 @@ function WorkOrderDetailsPage() {
                     {part.cutFileReference && <div style={{ color: '#1565c0', fontSize: '0.875rem' }}>📐 Cut File: {part.cutFileReference}</div>}
                   </div>
                   <div className="actions-row" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginRight: 2 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginRight: 2, border: '1px solid #ddd', borderRadius: 4, background: '#fafafa' }}>
                       <button onClick={() => handleMovePart(part.id, 'up')} title="Move up"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: '#999', lineHeight: 1 }}>
-                        <ChevronUp size={16} />
+                        style={{ background: 'none', border: 'none', borderBottom: '1px solid #eee', cursor: 'pointer', padding: '2px 4px', color: '#666', lineHeight: 1 }}>
+                        <ChevronUp size={14} />
                       </button>
                       <button onClick={() => handleMovePart(part.id, 'down')} title="Move down"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: '#999', lineHeight: 1 }}>
-                        <ChevronDown size={16} />
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#666', lineHeight: 1 }}>
+                        <ChevronDown size={14} />
                       </button>
                     </div>
                     <select className="form-select" value={part.status} onChange={(e) => handlePartStatusChange(part.id, e.target.value)} style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
