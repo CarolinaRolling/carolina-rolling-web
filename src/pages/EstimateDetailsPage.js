@@ -2160,7 +2160,7 @@ function EstimateDetailsPage() {
                     setReorderParts(regular);
                     setReorderMode(true);
                   }} style={{ background: '#546e7a', color: 'white', border: 'none' }}>
-                    ↕️ Reorder
+                    ↕️ Arrange
                   </button>
                 )}
                 <button className="btn btn-primary btn-sm" onClick={openAddPartModal} disabled={isNew}>
@@ -3289,17 +3289,17 @@ function EstimateDetailsPage() {
       </div>
 
       {/* Part Type Picker Modal */}
-      {/* Reorder Parts Modal */}
+      {/* Arrange Parts Modal */}
       {reorderMode && (
         <div className="modal-overlay" onClick={() => setReorderMode(false)}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
             <div className="modal-header">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>↕️ Reorder Parts</h3>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>↕️ Arrange Parts</h3>
               <button className="modal-close" onClick={() => setReorderMode(false)}>&times;</button>
             </div>
             <div style={{ padding: 20 }}>
               <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: 12 }}>
-                Use the arrows to move parts. Linked services will follow their parent automatically.
+                Drag parts into the order you want. Linked services follow their parent.
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                 {reorderParts.map((part, idx) => {
@@ -3376,10 +3376,10 @@ function EstimateDetailsPage() {
                     await reorderEstimateParts(id, fullOrder);
                     await loadEstimate();
                     setReorderMode(false);
-                    showMessage('Part order updated');
-                  } catch { setError('Failed to reorder'); }
+                    showMessage('Parts rearranged');
+                  } catch { setError('Failed to rearrange parts'); }
                 }}>
-                  <Check size={16} /> Apply Order
+                  <Check size={16} /> Apply Changes
                 </button>
               </div>
             </div>
