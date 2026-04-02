@@ -842,7 +842,7 @@ function AdminPage({ section = 'users-logs' }) {
 
   const openEditModal = (user) => {
     setEditingUser(user);
-    setEditData({ username: user.username, role: user.role });
+    setEditData({ username: user.username, role: user.role, signatureName: user.signatureName || '' });
     setShowEditModal(true);
     setError(null);
   };
@@ -3080,6 +3080,16 @@ function AdminPage({ section = 'users-logs' }) {
                     You cannot change your own role
                   </small>
                 )}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Signature Name <span style={{ color: '#999', fontWeight: 400 }}>(for emails & RFQs)</span></label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editData.signatureName || ''}
+                  onChange={(e) => setEditData({ ...editData, signatureName: e.target.value })}
+                  placeholder="e.g. Jason Thornton"
+                />
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>

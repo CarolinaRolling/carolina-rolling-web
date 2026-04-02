@@ -66,6 +66,8 @@ function WorkOrderDetailsPage() {
   const [woTab, setWoTab] = useState('parts');
   const [clientPaymentTerms, setClientPaymentTerms] = useState(null);
   const [shipment, setShipment] = useState(null);
+  const [allShipments, setAllShipments] = useState([]);
+  const [activeShipmentIdx, setActiveShipmentIdx] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -224,12 +226,14 @@ function WorkOrderDetailsPage() {
         minimumOverrideReason: data.minimumOverrideReason || '',
       });
 
-      // Load linked shipment
+      // Load linked shipments
       try {
         const shipmentResponse = await getShipmentByWorkOrderId(data.id);
         setShipment(shipmentResponse.data.data);
+        setAllShipments(shipmentResponse.data.all || [shipmentResponse.data.data]);
       } catch (shipErr) {
         setShipment(null);
+        setAllShipments([]);
       }
     } catch (err) {
       setError('Failed to load work order');
@@ -2201,7 +2205,7 @@ function WorkOrderDetailsPage() {
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
             <Truck size={18} />
-            {showReceivingInfo ? 'Hide Shipping Details' : 'Shipping Details'}
+            {showReceivingInfo ? 'Hide Inbound Details' : 'Inbound Shipment Details'}
             {shipment.photos?.length > 0 && <span style={{ background: '#4caf50', color: 'white', borderRadius: 10, padding: '2px 6px', fontSize: '0.7rem' }}>{shipment.photos.length} 📷</span>}
             {(order?.pickupHistory || []).length > 0 && <span style={{ background: '#1976d2', color: 'white', borderRadius: 10, padding: '2px 6px', fontSize: '0.7rem' }}>{(order?.pickupHistory || []).length} shipment{(order?.pickupHistory || []).length > 1 ? 's' : ''}</span>}
           </button>
@@ -2229,94 +2233,112 @@ function WorkOrderDetailsPage() {
       )}
 
       {/* Shipping Details Panel */}
-      {showReceivingInfo && shipment && (
+      {showReceivingInfo && allShipments.length > 0 && (
         <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid #4caf50' }}>
           <div className="card-header">
-            <h3 className="card-title"><Truck size={20} style={{ marginRight: 8 }} />Shipping Details</h3>
+            <h3 className="card-title"><Truck size={20} style={{ marginRight: 8 }} />Inbound Shipment Details</h3>
           </div>
           
-          {/* Receiving Info */}
-          <div style={{ marginBottom: 16 }}>
-            <h4 style={{ fontSize: '0.85rem', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Receiving</h4>
-            <div className="detail-grid">
-              <div className="detail-item">
-                <div className="detail-item-label"><Clock size={14} /> Received</div>
-                <div className="detail-item-value">{formatDateTime(shipment.receivedAt)}</div>
-              </div>
-              {shipment.receivedBy && (
-                <div className="detail-item">
-                  <div className="detail-item-label"><User size={14} /> Received By</div>
-                  <div className="detail-item-value">{shipment.receivedBy}</div>
-                </div>
-              )}
-              <div className="detail-item">
-                <div className="detail-item-label">Quantity</div>
-                <div className="detail-item-value">{shipment.quantity} piece{shipment.quantity !== 1 ? 's' : ''}</div>
-              </div>
-              {shipment.location && (
-                <div className="detail-item">
-                  <div className="detail-item-label"><MapPin size={14} /> Storage Location</div>
-                  <div className="detail-item-value">{shipment.location}</div>
-                </div>
-              )}
-              {order.pickedUpAt && (
-                <div className="detail-item">
-                  <div className="detail-item-label"><Truck size={14} /> Shipped</div>
-                  <div className="detail-item-value" style={{ color: '#2e7d32', fontWeight: 600 }}>{formatDateTime(order.pickedUpAt)}</div>
-                </div>
-              )}
-              {!order.pickedUpAt && order.pickupHistory?.length > 0 && (
-                <div className="detail-item">
-                  <div className="detail-item-label"><Truck size={14} /> First Shipment</div>
-                  <div className="detail-item-value" style={{ color: '#e65100', fontWeight: 600 }}>{formatDateTime(order.pickupHistory[0].date)}</div>
-                </div>
-              )}
-              {order.pickedUpBy && (
-                <div className="detail-item">
-                  <div className="detail-item-label"><User size={14} /> Picked Up By</div>
-                  <div className="detail-item-value">{order.pickedUpBy}</div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {shipment.description && (
-            <div style={{ marginBottom: 16, padding: 16, background: '#e3f2fd', borderRadius: 8, borderLeft: '4px solid #1976d2' }}>
-              <div style={{ fontWeight: 600, color: '#1565c0', marginBottom: 8 }}>Material Description</div>
-              <div style={{ whiteSpace: 'pre-wrap' }}>{shipment.description}</div>
+          {/* Shipment tabs when multiple */}
+          {allShipments.length > 1 && (
+            <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginBottom: 16 }}>
+              {allShipments.map((s, idx) => (
+                <button key={s.id} onClick={() => setActiveShipmentIdx(idx)}
+                  style={{
+                    padding: '8px 16px', border: 'none', cursor: 'pointer',
+                    background: activeShipmentIdx === idx ? '#4caf50' : 'transparent',
+                    color: activeShipmentIdx === idx ? 'white' : '#666',
+                    fontWeight: activeShipmentIdx === idx ? 700 : 500,
+                    fontSize: '0.85rem', borderRadius: '6px 6px 0 0'
+                  }}>
+                  Shipment {idx + 1}
+                  {s.receivedAt && <span style={{ marginLeft: 6, fontSize: '0.7rem', opacity: 0.8 }}>
+                    {new Date(s.receivedAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' })}
+                  </span>}
+                </button>
+              ))}
             </div>
           )}
 
-          {shipment.notes && (
-            <div style={{ marginBottom: 16, padding: 16, background: '#fff3e0', borderRadius: 8, borderLeft: '4px solid #ff9800' }}>
-              <div style={{ fontWeight: 600, color: '#e65100', marginBottom: 8 }}>Receiving Notes</div>
-              <div style={{ whiteSpace: 'pre-wrap' }}>{shipment.notes}</div>
-            </div>
-          )}
-
-          {/* Photos */}
-          {shipment.photos && shipment.photos.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>📷 Photos ({shipment.photos.length})</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 12 }}>
-                {shipment.photos.map(photo => (
-                  <div key={photo.id} style={{ 
-                    aspectRatio: '1', 
-                    borderRadius: 8, 
-                    overflow: 'hidden', 
-                    cursor: 'pointer',
-                    border: '2px solid #ddd'
-                  }} onClick={() => window.open(photo.url, '_blank')}>
-                    <img 
-                      src={photo.thumbnailUrl || photo.url} 
-                      alt="Shipment" 
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
+          {(() => {
+            const activeShipment = allShipments[activeShipmentIdx] || allShipments[0];
+            if (!activeShipment) return null;
+            return (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <h4 style={{ fontSize: '0.85rem', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Receiving</h4>
+                  <div className="detail-grid">
+                    <div className="detail-item">
+                      <div className="detail-item-label"><Clock size={14} /> Received</div>
+                      <div className="detail-item-value">{formatDateTime(activeShipment.receivedAt)}</div>
+                    </div>
+                    {activeShipment.receivedBy && (
+                      <div className="detail-item">
+                        <div className="detail-item-label"><User size={14} /> Received By</div>
+                        <div className="detail-item-value">{activeShipment.receivedBy}</div>
+                      </div>
+                    )}
+                    <div className="detail-item">
+                      <div className="detail-item-label">Quantity</div>
+                      <div className="detail-item-value">{activeShipment.quantity} piece{activeShipment.quantity !== 1 ? 's' : ''}</div>
+                    </div>
+                    {activeShipment.location && (
+                      <div className="detail-item">
+                        <div className="detail-item-label"><MapPin size={14} /> Storage Location</div>
+                        <div className="detail-item-value">{activeShipment.location}</div>
+                      </div>
+                    )}
+                    {activeShipmentIdx === 0 && order.pickedUpAt && (
+                      <div className="detail-item">
+                        <div className="detail-item-label"><Truck size={14} /> Shipped</div>
+                        <div className="detail-item-value" style={{ color: '#2e7d32', fontWeight: 600 }}>{formatDateTime(order.pickedUpAt)}</div>
+                      </div>
+                    )}
+                    {activeShipmentIdx === 0 && !order.pickedUpAt && order.pickupHistory?.length > 0 && (
+                      <div className="detail-item">
+                        <div className="detail-item-label"><Truck size={14} /> First Outbound</div>
+                        <div className="detail-item-value" style={{ color: '#e65100', fontWeight: 600 }}>{formatDateTime(order.pickupHistory[0].date)}</div>
+                      </div>
+                    )}
+                    {activeShipmentIdx === 0 && order.pickedUpBy && (
+                      <div className="detail-item">
+                        <div className="detail-item-label"><User size={14} /> Picked Up By</div>
+                        <div className="detail-item-value">{order.pickedUpBy}</div>
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+
+                {activeShipment.description && (
+                  <div style={{ marginBottom: 16, padding: 16, background: '#e3f2fd', borderRadius: 8, borderLeft: '4px solid #1976d2' }}>
+                    <div style={{ fontWeight: 600, color: '#1565c0', marginBottom: 8 }}>Material Description</div>
+                    <div style={{ whiteSpace: 'pre-wrap' }}>{activeShipment.description}</div>
+                  </div>
+                )}
+
+                {activeShipment.notes && (
+                  <div style={{ marginBottom: 16, padding: 16, background: '#fff3e0', borderRadius: 8, borderLeft: '4px solid #ff9800' }}>
+                    <div style={{ fontWeight: 600, color: '#e65100', marginBottom: 8 }}>Receiving Notes</div>
+                    <div style={{ whiteSpace: 'pre-wrap' }}>{activeShipment.notes}</div>
+                  </div>
+                )}
+
+                {activeShipment.photos && activeShipment.photos.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 8 }}>📷 Photos ({activeShipment.photos.length})</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 12 }}>
+                      {activeShipment.photos.map(photo => (
+                        <div key={photo.id} style={{ aspectRatio: '1', borderRadius: 8, overflow: 'hidden', cursor: 'pointer', border: '2px solid #ddd' }}
+                          onClick={() => window.open(photo.url, '_blank')}>
+                          <img src={photo.thumbnailUrl || photo.url} alt="Shipment" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -2604,100 +2626,6 @@ function WorkOrderDetailsPage() {
           );
         })()}
 
-        {/* Order Documents Section */}
-        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #eee' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <File size={18} /> Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').length || 0})
-            </div>
-            <button className="btn btn-sm btn-outline" onClick={() => docInputRef.current?.click()} disabled={uploadingDocs}>
-              <Upload size={14} />{uploadingDocs ? 'Uploading...' : 'Upload'}
-            </button>
-            <input type="file" multiple accept=".pdf,.doc,.docx,image/*" ref={docInputRef} style={{ display: 'none' }} 
-              onChange={(e) => handleDocumentUpload(Array.from(e.target.files))} />
-          </div>
-          <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Upload customer POs, supplier quotes, drawings, etc.</p>
-          {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').map(doc => (
-                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: doc.portalVisible ? '#e8f5e9' : '#f5f5f5', padding: '8px 12px', borderRadius: 6, fontSize: '0.85rem', border: doc.portalVisible ? '1px solid #a5d6a7' : '1px solid transparent' }}>
-                  <File size={16} color="#1976d2" />
-                  <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
-                  <button onClick={() => handleViewDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><Eye size={14} /></button>
-                  <button onClick={async () => {
-                    try {
-                      await toggleDocumentPortal(id, doc.id, !doc.portalVisible);
-                      await loadOrder();
-                    } catch {}
-                  }} title={doc.portalVisible ? 'Visible on client portal — click to hide' : 'Hidden from client portal — click to show'}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, fontSize: '0.75rem', color: doc.portalVisible ? '#2e7d32' : '#bbb' }}>
-                    {doc.portalVisible ? '🌐' : '🔒'}
-                  </button>
-                  <button onClick={() => handleDeleteDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}><X size={14} /></button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* MTR (Material Test Reports) Section */}
-        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #eee' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, color: '#6a1b9a' }}>
-              <FileText size={18} /> MTRs ({order.documents?.filter(d => d.documentType === 'mtr').length || 0})
-            </div>
-            <button className="btn btn-sm" onClick={() => mtrInputRef.current?.click()} disabled={uploadingMtrs}
-              style={{ background: '#6a1b9a', color: 'white', border: 'none' }}>
-              <Upload size={14} />{uploadingMtrs ? 'Uploading...' : 'Upload MTR'}
-            </button>
-            <input type="file" multiple accept=".pdf" ref={mtrInputRef} style={{ display: 'none' }} 
-              onChange={(e) => { handleMtrUpload(Array.from(e.target.files)); e.target.value = ''; }} />
-          </div>
-          <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Upload Material Test Reports (PDF)</p>
-          {order.documents?.filter(d => d.documentType === 'mtr').length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {order.documents.filter(d => d.documentType === 'mtr').map(doc => (
-                <div key={doc.id} style={{ 
-                  display: 'flex', alignItems: 'center', gap: 8, 
-                  background: '#f3e5f5', padding: '10px 14px', borderRadius: 8, 
-                  border: '1px solid #ce93d8', fontSize: '0.85rem' 
-                }}>
-                  <FileText size={18} color="#6a1b9a" />
-                  <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
-                  <span style={{ fontSize: '0.7rem', color: '#999' }}>
-                    {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
-                  </span>
-                  <button onClick={() => handleViewDocument(doc.id)} 
-                    style={{ background: '#6a1b9a', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
-                    <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
-                  </button>
-                  <button onClick={async () => {
-                    try {
-                      const response = await downloadWorkOrderDocument(id, doc.id);
-                      const contentType = response.headers['content-type'] || 'application/pdf';
-                      const blob = new Blob([response.data], { type: contentType });
-                      const url = window.URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url; a.download = doc.originalName || 'MTR.pdf';
-                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                      window.URL.revokeObjectURL(url);
-                    } catch { setError('Failed to download'); }
-                  }} style={{ background: '#4527a0', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
-                    ⬇ Download
-                  </button>
-                  <button onClick={() => handleDeleteDocument(doc.id)} 
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}>
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ background: '#fafafa', padding: 16, borderRadius: 8, textAlign: 'center', color: '#999', fontSize: '0.85rem' }}>
-              No MTRs uploaded yet
-            </div>
-          )}
-        </div>
       </div>
 
 
@@ -2705,9 +2633,10 @@ function WorkOrderDetailsPage() {
       <div id="wo-tabs" style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginTop: 20, marginBottom: 0 }}>
         {[
           { key: 'parts', label: '📦 Parts', count: order.parts?.length || 0 },
+          { key: 'documents', label: '📄 Documents', count: (order.documents?.filter(d => d.documentType !== 'purchase_order').length || 0) || undefined },
           { key: 'materials', label: '📋 Materials' },
           { key: 'summary', label: '📊 Summary' },
-          { key: 'shipping', label: '🚚 Shipping', count: (order.pickupHistory || []).length || undefined }
+          { key: 'shipping', label: '🚚 Outbound', count: (order.pickupHistory || []).length || undefined }
         ].map(tab => (
           <button key={tab.key} onClick={(e) => { e.preventDefault(); setWoTab(tab.key); setTimeout(() => document.getElementById('wo-tabs')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}
             style={{
@@ -3350,7 +3279,99 @@ function WorkOrderDetailsPage() {
       </>
       )}
 
-      {/* ===== SHIPPING TAB ===== */}
+      {/* ===== DOCUMENTS TAB ===== */}
+      {woTab === 'documents' && (
+        <div style={{ marginTop: 0, minHeight: '70vh' }}>
+          {/* Order Documents */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header">
+              <h3 className="card-title"><File size={20} style={{ marginRight: 8 }} />Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').length || 0})</h3>
+              <div>
+                <button className="btn btn-sm btn-outline" onClick={() => docInputRef.current?.click()} disabled={uploadingDocs}>
+                  <Upload size={14} />{uploadingDocs ? 'Uploading...' : 'Upload'}
+                </button>
+                <input type="file" multiple accept=".pdf,.doc,.docx,image/*" ref={docInputRef} style={{ display: 'none' }} 
+                  onChange={(e) => handleDocumentUpload(Array.from(e.target.files))} />
+              </div>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Customer POs, supplier quotes, drawings, COCs, etc.</p>
+            {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').map(doc => (
+                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: doc.portalVisible ? '#e8f5e9' : '#f5f5f5', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', border: doc.portalVisible ? '1px solid #a5d6a7' : '1px solid #eee' }}>
+                    <File size={16} color="#1976d2" />
+                    <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#999' }}>
+                      {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }) : ''}
+                    </span>
+                    {doc.documentType === 'coc' && <span style={{ background: '#6a1b9a', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>COC</span>}
+                    <button onClick={() => handleViewDocument(doc.id)} style={{ background: '#1976d2', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
+                      <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
+                    </button>
+                    <button onClick={async () => {
+                      try { await toggleDocumentPortal(id, doc.id, !doc.portalVisible); await loadOrder(); } catch {}
+                    }} title={doc.portalVisible ? 'Visible on client portal' : 'Hidden from client portal'}
+                      style={{ background: 'none', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', fontSize: '0.75rem', color: doc.portalVisible ? '#2e7d32' : '#bbb' }}>
+                      {doc.portalVisible ? '🌐 Portal' : '🔒'}
+                    </button>
+                    <button onClick={() => handleDeleteDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: '#fafafa', padding: 20, borderRadius: 8, textAlign: 'center', color: '#999' }}>No documents uploaded yet</div>
+            )}
+          </div>
+
+          {/* MTR Section */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title" style={{ color: '#6a1b9a' }}><FileText size={20} style={{ marginRight: 8 }} />Material Test Reports ({order.documents?.filter(d => d.documentType === 'mtr').length || 0})</h3>
+              <div>
+                <button className="btn btn-sm" onClick={() => mtrInputRef.current?.click()} disabled={uploadingMtrs}
+                  style={{ background: '#6a1b9a', color: 'white', border: 'none' }}>
+                  <Upload size={14} />{uploadingMtrs ? 'Uploading...' : 'Upload MTR'}
+                </button>
+                <input type="file" multiple accept=".pdf" ref={mtrInputRef} style={{ display: 'none' }} 
+                  onChange={(e) => { handleMtrUpload(Array.from(e.target.files)); e.target.value = ''; }} />
+              </div>
+            </div>
+            {order.documents?.filter(d => d.documentType === 'mtr').length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {order.documents.filter(d => d.documentType === 'mtr').map(doc => (
+                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f3e5f5', padding: '10px 14px', borderRadius: 8, border: '1px solid #ce93d8', fontSize: '0.85rem' }}>
+                    <FileText size={18} color="#6a1b9a" />
+                    <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#999' }}>
+                      {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }) : ''}
+                    </span>
+                    <button onClick={() => handleViewDocument(doc.id)} 
+                      style={{ background: '#6a1b9a', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
+                      <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
+                    </button>
+                    <button onClick={async () => {
+                      try {
+                        const response = await downloadWorkOrderDocument(id, doc.id);
+                        const blob = new Blob([response.data], { type: response.headers['content-type'] || 'application/pdf' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a'); a.href = url; a.download = doc.originalName || 'MTR.pdf';
+                        document.body.appendChild(a); a.click(); document.body.removeChild(a); window.URL.revokeObjectURL(url);
+                      } catch { setError('Failed to download'); }
+                    }} style={{ background: '#4527a0', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
+                      ⬇ Download
+                    </button>
+                    <button onClick={() => handleDeleteDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: '#fafafa', padding: 20, borderRadius: 8, textAlign: 'center', color: '#999' }}>No MTRs uploaded yet</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== OUTBOUND SHIPPING TAB ===== */}
       {woTab === 'shipping' && (
         <div style={{ marginTop: 0, minHeight: '70vh' }}>
           {/* Remaining Balance Overview */}
