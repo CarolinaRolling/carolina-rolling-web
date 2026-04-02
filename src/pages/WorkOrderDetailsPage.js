@@ -816,6 +816,32 @@ function WorkOrderDetailsPage() {
     }
   };
 
+  const handleDuplicatePart = (part) => {
+    const fd = part.formData && typeof part.formData === 'object' ? part.formData : {};
+    const newData = {
+      ...part, ...fd,
+      partType: part.partType,
+      quantity: part.quantity || 1,
+      clientPartNumber: part.clientPartNumber || '',
+      heatNumber: '',
+      cutFileReference: part.cutFileReference || '',
+    };
+    delete newData.id;
+    delete newData.createdAt;
+    delete newData.updatedAt;
+    delete newData.workOrderId;
+    delete newData.files;
+    delete newData.formData;
+    delete newData.status;
+    delete newData.completedBy;
+    delete newData.completedAt;
+    setEditingPart(null);
+    setSelectedPartType(part.partType);
+    setPartData(newData);
+    setShowPartModal(true);
+    showMessage('Part duplicated — edit and save');
+  };
+
   const handlePartStatusChange = async (partId, status) => {
     try {
       await updateWorkOrderPart(id, partId, { status });
@@ -2868,6 +2894,7 @@ function WorkOrderDetailsPage() {
                     )}
                     <button className="btn btn-sm btn-outline" onClick={() => printPartLabel(part)} title="Print Label"><Tag size={14} /></button>
                     <button className="btn btn-sm btn-outline" onClick={() => openEditPartModal(part)}><Edit size={14} /></button>
+                    <button className="btn btn-sm btn-outline" onClick={() => handleDuplicatePart(part)} title="Duplicate part" style={{ color: '#546e7a' }}>📋</button>
                     <button className="btn btn-sm btn-danger" onClick={() => handleDeletePart(part.id)}><Trash2 size={14} /></button>
                   </div>
                 </div>

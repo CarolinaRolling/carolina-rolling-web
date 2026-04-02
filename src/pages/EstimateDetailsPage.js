@@ -1196,6 +1196,29 @@ function EstimateDetailsPage() {
     } catch (err) { setError('Failed to delete part'); }
   };
 
+  const handleDuplicatePart = (part) => {
+    const fd = part.formData && typeof part.formData === 'object' ? part.formData : {};
+    const newData = {
+      ...part, ...fd,
+      partType: part.partType,
+      quantity: part.quantity || 1,
+      clientPartNumber: part.clientPartNumber || '',
+      heatNumber: '',
+      cutFileReference: part.cutFileReference || '',
+    };
+    // Remove IDs and timestamps
+    delete newData.id;
+    delete newData.createdAt;
+    delete newData.updatedAt;
+    delete newData.estimateId;
+    delete newData.files;
+    delete newData.formData;
+    setEditingPart(null);
+    setPartData(newData);
+    setShowPartModal(true);
+    showMessage('Part duplicated — edit and save');
+  };
+
   const handleFileUpload = async (uploadedFiles) => {
     if (isNew) { setError('Save first'); return; }
     try {
@@ -2211,6 +2234,7 @@ function EstimateDetailsPage() {
                         </span>
                       )}
                       <button className="btn btn-sm btn-outline" onClick={() => openEditPartModal(part)}>✏️</button>
+                      <button className="btn btn-sm btn-outline" onClick={() => handleDuplicatePart(part)} title="Duplicate part" style={{ color: '#546e7a' }}>📋</button>
                       <button className="btn btn-sm btn-danger" onClick={() => handleDeletePart(part.id)}><Trash2 size={14} /></button>
                     </div>
                   </div>
