@@ -2497,8 +2497,8 @@ function EstimateDetailsPage() {
                   </div>
                   )}
 
-                  {/* DXF Cut File Section — plate_roll, shaped_plate, flat_stock only */}
-                  {['plate_roll', 'shaped_plate', 'flat_stock'].includes(part.partType) && (() => {
+                  {/* DXF Cut File Section — plate_roll, shaped_plate, flat_stock, cone_roll */}
+                  {['plate_roll', 'shaped_plate', 'flat_stock', 'cone_roll'].includes(part.partType) && (() => {
                     const dxfFile = (part.files || []).find(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.dxf$/i));
                     const fd = part.formData && typeof part.formData === 'object' ? part.formData : {};
                     const hasCutPerPrint = part._cutPerPrint || fd._cutPerPrint;
