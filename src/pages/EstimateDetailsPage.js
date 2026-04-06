@@ -4212,6 +4212,30 @@ function EstimateDetailsPage() {
                       setAiAddingParts(true);
                       // Add each part to the estimate
                       for (const p of aiParseResults.parts) {
+                        // Build formData with roll measurement point from AI
+                        const fd = p.formData || {};
+                        // Map measurePoint from AI → _rollMeasurePoint
+                        if (p.measurePoint === 'outside' || p.measurePoint === 'OD') {
+                          fd._rollMeasurePoint = 'outside';
+                        } else if (p.measurePoint === 'inside' || p.measurePoint === 'ID') {
+                          fd._rollMeasurePoint = 'inside';
+                        } else if (p.measurePoint === 'centerline' || p.measurePoint === 'CL') {
+                          fd._rollMeasurePoint = 'centerline';
+                        } else if (p.outerDiameter && !p.radius) {
+                          // If AI gave outerDiameter, default to outside measurement
+                          fd._rollMeasurePoint = 'outside';
+                        }
+                        // Set roll value and type
+                        if (p.outerDiameter || p.diameter) {
+                          fd._rollValue = String(p.outerDiameter || p.diameter);
+                          fd._rollMeasureType = p.measureType || 'diameter';
+                        } else if (p.radius) {
+                          fd._rollValue = String(p.radius);
+                          fd._rollMeasureType = 'radius';
+                        }
+                        if (p.rollType) fd.rollType = p.rollType;
+                        if (p.description) fd._materialDescription = p.description;
+
                         const partPayload = {
                           partNumber: p.partNumber,
                           partType: p.partType || 'plate_roll',
@@ -4232,7 +4256,7 @@ function EstimateDetailsPage() {
                           clientPartNumber: p.clientPartNumber || '',
                           materialDescription: p.description || '',
                           materialSource: p.materialSource || 'customer_supplied',
-                          formData: p.formData || {}
+                          formData: fd
                         };
                         await addEstimatePart(id, partPayload);
                       }
