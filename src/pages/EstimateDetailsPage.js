@@ -3081,11 +3081,23 @@ function EstimateDetailsPage() {
                     totalMaterialCost += matCost * qty;
                     totalMaterialBilled += matBilled * qty;
 
-                    const labor = parseFloat(p.laborTotal) || 0;
-                    totalLaborInHouse += labor * qty;
-
-                    // New multi-operation outside processing (vendor work only — transport is order-level)
                     const ops = p.outsideProcessing || [];
+                    const opEnabled = ops.length > 0;
+                    // In-house labor only applies if part is NOT outsourced.
+                    // For OP parts, the saved laborTotal is just the OP markup (profit), which is already counted in totalOutsideBilled.
+                    if (!opEnabled) {
+                      // Use base labor (the user-entered in-house rate). Falls back to laborTotal if no shadow field.
+                      const baseLabor = (() => {
+                        const stored = parseFloat((p.formData || {})._baseLaborTotal);
+                        if (!isNaN(stored)) return stored;
+                        const stored2 = parseFloat(p._baseLaborTotal);
+                        if (!isNaN(stored2)) return stored2;
+                        return parseFloat(p.laborTotal) || 0;
+                      })();
+                      totalLaborInHouse += baseLabor * qty;
+                    }
+
+                    // Outside processing (vendor work only — transport is order-level)
                     ops.forEach(op => {
                       const opCostPerPart = parseFloat(op.costPerPart) || 0;
                       const opExpedite = parseFloat(op.expediteCost) || 0;

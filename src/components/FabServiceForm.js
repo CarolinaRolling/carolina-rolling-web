@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getSettings } from '../services/api';
+import OutsideProcessingSection, { calculateOpTotals } from './OutsideProcessingSection';
 
 const SERVICE_TYPES = [
   { key: 'weld_100', label: '100% Weld', icon: '🔥', color: '#c62828', hasWeldCalc: true },
@@ -233,8 +234,14 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
 
   // Pricing
   const qty = parseInt(partData.quantity) || 1;
-  const laborEach = weldCalc ? weldCalc.total : (parseFloat(partData.laborTotal) || 0);
-  const lineTotal = laborEach * qty;
+  const baseLaborEach = weldCalc ? weldCalc.total : (parseFloat(partData._baseLaborTotal) || parseFloat(partData.laborTotal) || 0);
+  const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
+  const opEnabled = (partData.outsideProcessing || []).length > 0;
+  // When OP enabled, in-house labor is $0 (vendor does the work). OP markup IS the profit.
+  const effectiveBaseLabor = opEnabled ? 0 : baseLaborEach;
+  const laborEach = effectiveBaseLabor + opTotals.totalProfit;
+  const opCostEach = opTotals.totalCost;
+  const lineTotal = (laborEach + opCostEach) * qty;
 
   // Auto-set weld rate on part link
   useEffect(() => {
@@ -246,12 +253,15 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
   // Sync computed values — use ref to prevent infinite loops
   useEffect(() => {
     if (isEditingPriceRef.current) return;
-    const syncKey = lineTotal.toFixed(2) + '|' + serviceDescription + '|' + (serviceConfig ? serviceConfig.label : '');
+    const syncKey = lineTotal.toFixed(2) + '|' + serviceDescription + '|' + (serviceConfig ? serviceConfig.label : '') + '|' + (opEnabled ? '1' : '0');
     if (syncKey !== prevSyncRef.current) {
       prevSyncRef.current = syncKey;
       const updates = {
         partTotal: lineTotal.toFixed(2),
+        // laborTotal is the customer-billed labor: base (or 0 if OP) + OP profit
         laborTotal: laborEach.toFixed(2),
+        // _baseLaborTotal is the in-house base labor before OP markup
+        _baseLaborTotal: baseLaborEach.toFixed(2),
         materialDescription: serviceDescription,
         _materialDescription: serviceDescription,
         _rollingDescription: serviceConfig ? serviceConfig.label : '',
@@ -264,7 +274,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
       }
       setPartData(prev => ({ ...prev, ...updates }));
     }
-  }, [lineTotal, laborEach, serviceDescription, serviceConfig, weldCalc]);
+  }, [lineTotal, laborEach, baseLaborEach, serviceDescription, serviceConfig, weldCalc, opEnabled]);
 
   const update = (fields) => {
     setPartData(prev => ({ ...prev, ...fields }));
@@ -602,13 +612,15 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
           {sTitle('💰', 'Pricing', serviceConfig.color || '#1976d2')}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
-              <label className="form-label">Labor Cost (per piece)</label>
+              <label className="form-label" style={{ color: opEnabled ? '#999' : undefined }}>Labor Cost (per piece){opEnabled && <span style={{ marginLeft: 4, fontSize: '0.7rem', color: '#E65100' }}>(disabled — outsourced)</span>}</label>
               <div style={{ position: 'relative' }}>
-                <input type="number" step="any" className="form-input" value={partData.laborTotal || ''}
-                  onChange={(e) => update({ laborTotal: e.target.value })} 
+                <input type="number" step="any" className="form-input"
+                  value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')}
+                  onChange={(e) => update({ _baseLaborTotal: e.target.value, laborTotal: e.target.value })}
                   onFocus={(e) => { isEditingPriceRef.current = true; e.target.select(); }}
-                  onBlur={() => { isEditingPriceRef.current = false; }} 
-                  placeholder="0.00" style={{ paddingLeft: 20 }} />
+                  onBlur={() => { isEditingPriceRef.current = false; }}
+                  placeholder="0.00" style={{ paddingLeft: 20, background: opEnabled ? '#f5f5f5' : undefined, color: opEnabled ? '#999' : undefined }}
+                  disabled={opEnabled} />
                 <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
               </div>
             </div>
@@ -628,16 +640,35 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
         </div>
       )}
 
+      {/* Outside Processing */}
+      {serviceType && linkedPart && (
+        <OutsideProcessingSection partData={partData} setPartData={setPartData} />
+      )}
+
       {/* Pricing Summary */}
       {serviceType && linkedPart && (
         <div style={{ ...sectionStyle }}>
           <div style={{ background: '#f0f7ff', padding: 14, borderRadius: 8, border: '1px solid #bbdefb' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
-              <span>{serviceConfig ? serviceConfig.label : 'Service'} (per piece)</span>
-              <span>${laborEach.toFixed(2)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: opEnabled ? '#999' : '#555' }}>
+              <span>{serviceConfig ? serviceConfig.label : 'Service'} (per piece){opEnabled && <span style={{ fontSize: '0.7rem', marginLeft: 4 }}>(outsourced)</span>}</span>
+              <span style={opEnabled ? { textDecoration: 'line-through' } : {}}>${baseLaborEach.toFixed(2)}</span>
             </div>
+            {opCostEach > 0 && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#E65100' }}>
+                  <span>🏭 Outside Processing (vendor cost)</span>
+                  <span>${opCostEach.toFixed(2)}</span>
+                </div>
+                {opTotals.totalProfit > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#2e7d32' }}>
+                    <span>+ OP Markup (rolled into labor)</span>
+                    <span>${opTotals.totalProfit.toFixed(2)}</span>
+                  </div>
+                )}
+              </>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9', marginTop: 4 }}>
-              <strong>Line Total ({qty} × ${laborEach.toFixed(2)})</strong>
+              <strong>Line Total ({qty} × ${(laborEach + opCostEach).toFixed(2)})</strong>
               <strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong>
             </div>
           </div>

@@ -2807,8 +2807,25 @@ function WorkOrderDetailsPage() {
               serviceParts.forEach(sp => { if (!usedServiceIds.has(sp.id)) grouped.push(sp); });
               return grouped;
             })().map(part => {
+              // Compute transport allocations for all parts on this order
+              const { partTransports: transportAllocations } = calculateTransportAllocations(order.opTransports || [], order.parts || []);
               const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
               const linkedParent = isLinkedService ? order.parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
+              // Get this part's transport allocation (split between material and labor)
+              const transportAlloc = transportAllocations[part.id] || { materialBilled: 0, laborBilled: 0, billed: 0 };
+              const partQty = parseInt(part.quantity) || 1;
+              const transportMatPerPart = partQty > 0 ? transportAlloc.materialBilled / partQty : 0;
+              const transportLabPerPart = partQty > 0 ? transportAlloc.laborBilled / partQty : 0;
+              // Compute display values that include transport allocation
+              const baseLaborPerPart = parseFloat(part.laborTotal) || 0;
+              const baseMaterialPerPart = (() => {
+                const matCost = parseFloat(part.materialTotal) || 0;
+                const matMarkup = parseFloat(part.materialMarkupPercent) || 0;
+                return matCost * (1 + matMarkup / 100);
+              })();
+              const displayLabor = baseLaborPerPart + transportLabPerPart;
+              const displayMaterial = baseMaterialPerPart + transportMatPerPart;
+              const displayTotal = (displayLabor + displayMaterial) * partQty;
               return (
               <div key={part.id} style={{
                 border: isLinkedService ? '2px solid #ce93d8' : '1px solid #e0e0e0',
@@ -3050,13 +3067,13 @@ function WorkOrderDetailsPage() {
                 })()}
                 {part.specialInstructions && <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: '0.875rem' }}><strong>Instructions:</strong> {part.specialInstructions}</div>}
                 
-                {/* Pricing Summary */}
+                {/* Pricing Summary — Material and Labor lines include allocated transport (bundled, hidden from customer view) */}
                 {(part.partTotal || part.laborTotal || part.materialTotal) && (
                   <div style={{ marginTop: 8, padding: 8, background: '#e3f2fd', borderRadius: 4, fontSize: '0.85rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                    {part.laborTotal && <span><strong>Labor:</strong> ${parseFloat(part.laborTotal).toFixed(2)}</span>}
-                    {part.materialTotal && <span><strong>Material:</strong> ${parseFloat(part.materialTotal).toFixed(2)}</span>}
+                    {displayLabor > 0 && <span><strong>{part.partType === 'fab_service' ? 'Service' : 'Labor'}:</strong> ${displayLabor.toFixed(2)}/ea</span>}
+                    {displayMaterial > 0 && <span><strong>Material:</strong> ${displayMaterial.toFixed(2)}/ea</span>}
                     {part.setupCharge && <span><strong>Setup:</strong> ${parseFloat(part.setupCharge).toFixed(2)}</span>}
-                    {part.partTotal && <span style={{ fontWeight: 600, color: '#1565c0' }}><strong>Total:</strong> ${parseFloat(part.partTotal).toFixed(2)}</span>}
+                    {displayTotal > 0 && <span style={{ fontWeight: 600, color: '#1565c0' }}><strong>Total:</strong> ${displayTotal.toFixed(2)}</span>}
                   </div>
                 )}
                 
@@ -3914,10 +3931,21 @@ function WorkOrderDetailsPage() {
               const matBilled = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
               totalMaterialCost += matCost * qty;
               totalMaterialBilled += matBilled * qty;
-              totalLaborInHouse += (parseFloat(p.laborTotal) || 0) * qty;
+
+              const ops = p.outsideProcessing || [];
+              const opEnabled = ops.length > 0;
+              if (!opEnabled) {
+                const baseLabor = (() => {
+                  const stored = parseFloat((p.formData || {})._baseLaborTotal);
+                  if (!isNaN(stored)) return stored;
+                  const stored2 = parseFloat(p._baseLaborTotal);
+                  if (!isNaN(stored2)) return stored2;
+                  return parseFloat(p.laborTotal) || 0;
+                })();
+                totalLaborInHouse += baseLabor * qty;
+              }
 
               // Multi-operation outside processing (vendor work only)
-              const ops = p.outsideProcessing || [];
               ops.forEach(op => {
                 const opCostPerPart = parseFloat(op.costPerPart) || 0;
                 const opExpedite = parseFloat(op.expediteCost) || 0;
