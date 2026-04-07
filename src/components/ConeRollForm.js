@@ -276,8 +276,13 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
 
   // Pricing
   var qty = parseInt(partData.quantity) || 1;
-  var matEa = parseFloat(partData.materialTotal) || 0, labEa = parseFloat(partData.laborTotal) || 0;
-  var unitPrice = matEa + labEa, lineTotal = unitPrice * qty;
+  var matCost = parseFloat(partData.materialTotal) || 0;
+  var matMarkup = parseFloat(partData.materialMarkupPercent) || 0;
+  var matEaRaw = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
+  var rounding = partData._materialRounding || 'none';
+  var matEa = rounding === 'dollar' && matEaRaw > 0 ? Math.ceil(matEaRaw) : rounding === 'five' && matEaRaw > 0 ? Math.ceil(matEaRaw / 5) * 5 : matEaRaw;
+  var labEa = parseFloat(partData.laborTotal) || 0;
+  var unitPrice = matEa + labEa, lineTotal = Math.round(unitPrice * qty * 100) / 100;
   useEffect(function() { setPartData(function(p) { return Object.assign({}, p, { partTotal: lineTotal.toFixed(2) }); }); }, [lineTotal]);
 
   var isCustomThk = partData.thickness && !THICKNESS_OPTIONS.includes(partData.thickness) && partData.thickness !== 'Custom';
@@ -527,12 +532,32 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       {/* PRICING */}
       <div style={secStyle}>
         {secHead('💰', 'Pricing', '#1976d2')}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="form-group"><label className="form-label">Material (each)</label><input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialTotal: e.target.value })); }} placeholder="0.00" /></div>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
+          <div className="form-group"><label className="form-label">Material Cost (each)</label><input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialTotal: e.target.value })); }} placeholder="0.00" /></div>
+          <div className="form-group"><label className="form-label">Markup %</label><input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialMarkupPercent: e.target.value })); }} placeholder="20" /></div>
           <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input" value={partData.laborTotal || ''} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { laborTotal: e.target.value })); }} placeholder="0.00" /></div>
         </div>
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material (ea)</span><span>${matEa.toFixed(2)}</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material Cost (ea)</span><span>${matCost.toFixed(2)}</span></div>
+          {matMarkup > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#e65100' }}>
+            <span>+ Markup ({matMarkup}%)</span>
+            <span>${(matEaRaw - matCost).toFixed(2)}</span>
+          </div>}
+          {matMarkup > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555', fontWeight: 600 }}>
+            <span>Material w/ Markup</span>
+            <span>{matEaRaw !== matEa && <span style={{ textDecoration: 'line-through', color: '#999', marginRight: 4, fontSize: '0.8rem' }}>${matEaRaw.toFixed(2)}</span>}${matEa.toFixed(2)}</span>
+          </div>}
+          {matMarkup > 0 && <div style={{ display: 'flex', gap: 4, padding: '4px 0 2px' }}>
+            <span style={{ fontSize: '0.75rem', color: '#888', alignSelf: 'center' }}>Round up:</span>
+            {[{k:'none',l:'None'},{k:'dollar',l:'↑ $1'},{k:'five',l:'↑ $5'}].map(o => (
+              <button key={o.k} type="button" onClick={() => setPartData(prev => Object.assign({}, prev, { _materialRounding: o.k }))}
+                style={{ padding: '2px 8px', fontSize: '0.7rem', borderRadius: 4, cursor: 'pointer',
+                  border: (partData._materialRounding || 'none') === o.k ? '2px solid #1976d2' : '1px solid #ccc',
+                  background: (partData._materialRounding || 'none') === o.k ? '#e3f2fd' : '#fff',
+                  color: (partData._materialRounding || 'none') === o.k ? '#1976d2' : '#666',
+                  fontWeight: (partData._materialRounding || 'none') === o.k ? 700 : 400 }}>{o.l}</button>
+            ))}
+          </div>}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Labor (ea)</span><span>${labEa.toFixed(2)}</span></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9', marginTop: 4 }}><strong>Unit Price</strong><strong style={{ color: '#1976d2' }}>${unitPrice.toFixed(2)}</strong></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9' }}><strong>Line Total ({qty} × ${unitPrice.toFixed(2)})</strong><strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong></div>
