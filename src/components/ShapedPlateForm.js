@@ -109,7 +109,11 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
   const materialEachRaw = Math.round(materialCost * (1 + materialMarkup / 100) * 100) / 100;
   const rounding = partData._materialRounding || 'none';
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
-  const baseLaborEach = parseFloat(partData.laborTotal) || 0;
+  const baseLaborEach = (() => {
+    const stored = parseFloat(partData._baseLaborTotal);
+    if (!isNaN(stored)) return stored;
+    return parseFloat(partData.laborTotal) || 0;
+  })();
   const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
   const laborEach = baseLaborEach + opTotals.totalProfit;
   const opCostEach = opTotals.totalCost;

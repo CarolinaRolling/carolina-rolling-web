@@ -767,8 +767,9 @@ function WorkOrderDetailsPage() {
         const matCost = parseFloat(dataToSend.materialTotal) || 0;
         const matMarkup = parseFloat(dataToSend.materialMarkupPercent) || 0;
         const matEach = roundUpMaterial(Math.round(matCost * (1 + matMarkup / 100) * 100) / 100, dataToSend._materialRounding);
-        const baseLabEach = parseFloat(dataToSend.laborTotal) || 0;
-        // Outside processing: roll vendor cost and profit into per-part totals
+        // Use base labor (before OP markup) — falls back to laborTotal on first save
+        let baseLabEach = parseFloat(dataToSend._baseLaborTotal);
+        if (isNaN(baseLabEach)) baseLabEach = parseFloat(dataToSend.laborTotal) || 0;
         const ops = dataToSend.outsideProcessing || [];
         let opCostLot = 0, opProfitLot = 0;
         ops.forEach(op => {
@@ -780,6 +781,7 @@ function WorkOrderDetailsPage() {
         });
         const opCostPerPart = qty > 0 ? opCostLot / qty : 0;
         const opProfitPerPart = qty > 0 ? opProfitLot / qty : 0;
+        dataToSend._baseLaborTotal = baseLabEach.toFixed(2);
         dataToSend.laborTotal = (baseLabEach + opProfitPerPart).toFixed(2);
         const labEachWithOp = baseLabEach + opProfitPerPart;
         dataToSend.partTotal = (Math.round((matEach + labEachWithOp + opCostPerPart) * qty * 100) / 100).toFixed(2);

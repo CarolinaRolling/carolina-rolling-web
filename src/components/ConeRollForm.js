@@ -282,7 +282,11 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   var matEaRaw = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
   var rounding = partData._materialRounding || 'none';
   var matEa = rounding === 'dollar' && matEaRaw > 0 ? Math.ceil(matEaRaw) : rounding === 'five' && matEaRaw > 0 ? Math.ceil(matEaRaw / 5) * 5 : matEaRaw;
-  var baseLabEa = parseFloat(partData.laborTotal) || 0;
+  var baseLabEa = (function() {
+    var s = parseFloat(partData._baseLaborTotal);
+    if (!isNaN(s)) return s;
+    return parseFloat(partData.laborTotal) || 0;
+  })();
   var opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
   var labEa = baseLabEa + opTotals.totalProfit;
   var opCostEach = opTotals.totalCost;
@@ -539,7 +543,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
           <div className="form-group"><label className="form-label">Material Cost (each)</label><input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialTotal: e.target.value })); }} placeholder="0.00" /></div>
           <div className="form-group"><label className="form-label">Markup %</label><input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialMarkupPercent: e.target.value })); }} placeholder="20" /></div>
-          <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input" value={partData.laborTotal || ''} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { laborTotal: e.target.value })); }} placeholder="0.00" /></div>
+          <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input" value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { _baseLaborTotal: e.target.value, laborTotal: e.target.value })); }} placeholder="0.00" /></div>
         </div>
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material Cost (ea)</span><span>${matCost.toFixed(2)}</span></div>

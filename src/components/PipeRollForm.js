@@ -584,7 +584,11 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const materialEachRaw = Math.round(materialCost * (1 + materialMarkup / 100) * 100) / 100;
   const rounding = partData._materialRounding || 'none';
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
-  const baseLaborEach = parseFloat(partData.laborTotal) || 0;
+  const baseLaborEach = (() => {
+    const stored = parseFloat(partData._baseLaborTotal);
+    if (!isNaN(stored)) return stored;
+    return parseFloat(partData.laborTotal) || 0;
+  })();
   const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
   const laborEach = baseLaborEach + opTotals.totalProfit;
   const opCostEach = opTotals.totalCost;
@@ -1261,7 +1265,11 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
           </div>
           <div className="form-group">
             <label className="form-label">Labor (each)</label>
-            <input type="number" step="any" className="form-input" value={partData.laborTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" />
+            <input type="number" step="any" className="form-input"
+              value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value })}
+              placeholder="0.00" />
           </div>
         </div>
 

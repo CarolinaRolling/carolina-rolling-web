@@ -234,7 +234,11 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
   const materialEachRaw = Math.round(materialCost * (1 + materialMarkup / 100) * 100) / 100;
   const rounding = partData._materialRounding || 'none';
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
-  const baseLaborEach = parseFloat(partData.laborTotal) || 0;
+  const baseLaborEach = (() => {
+    const stored = parseFloat(partData._baseLaborTotal);
+    if (!isNaN(stored)) return stored;
+    return parseFloat(partData.laborTotal) || 0;
+  })();
   const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
   const laborEach = baseLaborEach + opTotals.totalProfit;
   const opCostEach = opTotals.totalCost;
@@ -570,7 +574,11 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
           <div className="form-group"><label className="form-label">Material Cost (each)</label><input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" /></div>
           <div className="form-group"><label className="form-label">Markup %</label><input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" /></div>
-          <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input" value={partData.laborTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, laborTotal: e.target.value })} placeholder="0.00" /></div>
+          <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input"
+              value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value })}
+              placeholder="0.00" /></div>
         </div>
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material Cost (ea)</span><span>${materialCost.toFixed(2)}</span></div>

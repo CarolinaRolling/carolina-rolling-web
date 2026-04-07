@@ -340,7 +340,7 @@ function EstimateDetailsPage() {
   };
 
   const calculatePartTotal = (part) => {
-    // Per-each pricing: (mat cost × markup + labor) × qty
+    // Per-each pricing: (mat cost × markup + labor + OP) × qty
     if (['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType)) {
       const qty = parseInt(part.quantity) || 1;
       const materialCost = parseFloat(part.materialTotal) || 0;
@@ -348,9 +348,17 @@ function EstimateDetailsPage() {
       const materialEachRaw = materialCost * (1 + materialMarkup / 100);
       const materialEach = roundUpMaterial(materialEachRaw, part._materialRounding);
       const laborEach = parseFloat(part.laborTotal) || 0;
-      const unitPrice = materialEach + laborEach;
+      // Outside processing: vendor cost + markup (markup already in laborTotal after save)
+      const ops = part.outsideProcessing || [];
+      let opCostPerPart = 0;
+      ops.forEach(op => {
+        const cost = parseFloat(op.costPerPart) || 0;
+        const expedite = parseFloat(op.expediteCost) || 0;
+        opCostPerPart += cost + expedite;
+      });
+      const unitPrice = materialEach + laborEach + opCostPerPart;
       const partTotal = unitPrice * qty;
-      return { materialCost, materialMarkup, materialEachRaw, materialEach, laborEach, unitPrice, qty, partTotal };
+      return { materialCost, materialMarkup, materialEachRaw, materialEach, laborEach, opCostPerPart, unitPrice, qty, partTotal };
     }
     
     const qty = parseInt(part.quantity) || 1;
@@ -1105,7 +1113,10 @@ function EstimateDetailsPage() {
         const matMarkup = parseFloat(dataToSend.materialMarkupPercent) || 0;
         const matEachRaw = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
         const matEach = roundUpMaterial(matEachRaw, dataToSend._materialRounding);
-        const baseLabEach = parseFloat(dataToSend.laborTotal) || 0;
+        // Use the base labor (before any OP markup) — stored in _baseLaborTotal
+        // First save: fall back to current laborTotal as the base
+        let baseLabEach = parseFloat(dataToSend._baseLaborTotal);
+        if (isNaN(baseLabEach)) baseLabEach = parseFloat(dataToSend.laborTotal) || 0;
         // Outside processing: roll vendor cost and profit into per-part totals
         const ops = dataToSend.outsideProcessing || [];
         let opCostLot = 0, opProfitLot = 0;
@@ -1118,9 +1129,10 @@ function EstimateDetailsPage() {
         });
         const opCostPerPart = qty > 0 ? opCostLot / qty : 0;
         const opProfitPerPart = qty > 0 ? opProfitLot / qty : 0;
-        // Roll OP profit into the labor stored on the part so summary calcs read it correctly
+        // Persist base labor in formData so resaves don't double-add the markup
+        dataToSend._baseLaborTotal = baseLabEach.toFixed(2);
+        // Roll OP profit into laborTotal so summary calcs and totals see it
         dataToSend.laborTotal = (baseLabEach + opProfitPerPart).toFixed(2);
-        // Add OP cost to the part total via material side
         const labEachWithOp = baseLabEach + opProfitPerPart;
         dataToSend.partTotal = ((matEach + labEachWithOp + opCostPerPart) * qty).toFixed(2);
       }
@@ -2219,7 +2231,7 @@ function EstimateDetailsPage() {
               const isEa = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
               const laborRatio = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEa) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
               const adjLabor = (calc.laborEach || 0) * laborRatio;
-              const adjUnitPrice = (calc.materialEach || 0) + adjLabor;
+              const adjUnitPrice = (calc.materialEach || 0) + adjLabor + (calc.opCostPerPart || 0);
               const adjPartTotal = adjUnitPrice * (parseInt(part.quantity) || 1);
               return (
                 <div key={part.id} style={{
@@ -2458,6 +2470,12 @@ function EstimateDetailsPage() {
                         <span>{part.partType === 'fab_service' ? 'Service' : part.partType === 'shop_rate' ? 'Shop Rate' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}</span>
                         <strong>{formatCurrency(adjLabor)}</strong>
                       </div>
+                      {(calc.opCostPerPart || 0) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#E65100' }}>
+                          <span>🏭 Outside Processing <span style={{ fontSize: '0.7rem', color: '#888' }}>(internal)</span></span>
+                          <strong>{formatCurrency(calc.opCostPerPart)}</strong>
+                        </div>
+                      )}
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #ddd', marginTop: 4, fontWeight: 600 }}>
                         <span>Unit Price</span>
                         <span style={{ color: '#1976d2' }}>{formatCurrency(adjUnitPrice)}</span>
