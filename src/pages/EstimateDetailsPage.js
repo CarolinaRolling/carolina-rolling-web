@@ -2226,14 +2226,24 @@ function EstimateDetailsPage() {
               serviceParts.forEach(sp => { if (!usedServiceIds.has(sp.id)) grouped.push(sp); });
               return grouped;
             })().map(part => {
+              // Compute transport allocations for all parts (memoized via closure on each render)
+              const { partTransports: transportAllocations } = calculateTransportAllocations(formData.opTransports || [], parts);
               const calc = calculatePartTotal(part);
               const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
               const linkedParent = isLinkedService ? parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
               // Adjust labor proportionally when minimum charge applies
               const isEa = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
               const laborRatio = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEa) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
-              const adjLabor = (calc.laborEach || 0) * laborRatio;
-              const adjUnitPrice = (calc.materialEach || 0) + adjLabor + (calc.opCostPerPart || 0);
+              // Get this part's allocated transport billed amount (per part)
+              const transportAlloc = transportAllocations[part.id] || { billed: 0 };
+              const transportPerPart = (parseInt(part.quantity) || 1) > 0 ? transportAlloc.billed / (parseInt(part.quantity) || 1) : 0;
+              // Bundle OP cost + OP markup + transport allocation into the rolling line
+              const opEnabled = (part.outsideProcessing || []).length > 0;
+              const bundledRolling = opEnabled
+                ? (calc.opCostPerPart || 0) + (calc.laborEach || 0) + transportPerPart
+                : ((calc.laborEach || 0) * laborRatio + transportPerPart);
+              const adjLabor = bundledRolling;
+              const adjUnitPrice = (calc.materialEach || 0) + adjLabor;
               const adjPartTotal = adjUnitPrice * (parseInt(part.quantity) || 1);
               return (
                 <div key={part.id} style={{
@@ -2467,17 +2477,11 @@ function EstimateDetailsPage() {
                           <strong>{formatCurrency(calc.materialEach)}</strong>
                         </div>
                       )}
-                      {/* Rolling/Labor line */}
+                      {/* Rolling/Labor line — bundles in OP cost+markup and transport allocation */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
                         <span>{part.partType === 'fab_service' ? 'Service' : part.partType === 'shop_rate' ? 'Shop Rate' : (part.partType === 'flat_stock' ? 'Handling' : 'Rolling')}</span>
                         <strong>{formatCurrency(adjLabor)}</strong>
                       </div>
-                      {(calc.opCostPerPart || 0) > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#E65100' }}>
-                          <span>🏭 Outside Processing <span style={{ fontSize: '0.7rem', color: '#888' }}>(internal)</span></span>
-                          <strong>{formatCurrency(calc.opCostPerPart)}</strong>
-                        </div>
-                      )}
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #ddd', marginTop: 4, fontWeight: 600 }}>
                         <span>Unit Price</span>
                         <span style={{ color: '#1976d2' }}>{formatCurrency(adjUnitPrice)}</span>
