@@ -13,6 +13,7 @@ import {
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
 import OutsideProcessingSection from '../components/OutsideProcessingSection';
+import OpTransportsSection, { calculateTransportAllocations } from '../components/OpTransportsSection';
 import AngleRollForm from '../components/AngleRollForm';
 import FlatStockForm from '../components/FlatStockForm';
 import FabServiceForm from '../components/FabServiceForm';
@@ -561,6 +562,15 @@ function EstimateDetailsPage() {
     } else {
       partsSubtotal += eaPricedTotal;
     }
+
+    // Order-level outside processing transport (billed amount, hidden in customer total)
+    let opTransportBilled = 0;
+    (formData.opTransports || []).forEach(trip => {
+      const cost = parseFloat(trip.cost) || 0;
+      const markup = parseFloat(trip.markup) || 0;
+      opTransportBilled += cost * (1 + markup / 100);
+    });
+    partsSubtotal += opTransportBilled;
     
     // Rush service: calculate expedite and emergency
     let expediteAmount = 0, emergencyAmount = 0, expediteLabel = '', emergencyLabel = '';
@@ -1095,15 +1105,24 @@ function EstimateDetailsPage() {
         const matMarkup = parseFloat(dataToSend.materialMarkupPercent) || 0;
         const matEachRaw = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
         const matEach = roundUpMaterial(matEachRaw, dataToSend._materialRounding);
-        const labEach = parseFloat(dataToSend.laborTotal) || 0;
-        // Outside processing with markup
-        const opCost = parseFloat(dataToSend.outsideProcessingCost) || 0;
-        const opMarkup = parseFloat(dataToSend.outsideProcessingMarkupPercent) || 0;
-        const opEach = Math.round(opCost * (1 + opMarkup / 100) * 100) / 100;
-        const opTransport = parseFloat(dataToSend.outsideProcessingTransportCost) || 0;
-        const opTransportMarkup = parseFloat(dataToSend.outsideProcessingTransportMarkupPercent) || 0;
-        const opTransportEach = Math.round(opTransport * (1 + opTransportMarkup / 100) * 100) / 100;
-        dataToSend.partTotal = ((matEach + labEach + opEach + opTransportEach) * qty).toFixed(2);
+        const baseLabEach = parseFloat(dataToSend.laborTotal) || 0;
+        // Outside processing: roll vendor cost and profit into per-part totals
+        const ops = dataToSend.outsideProcessing || [];
+        let opCostLot = 0, opProfitLot = 0;
+        ops.forEach(op => {
+          const cost = parseFloat(op.costPerPart) || 0;
+          const expedite = parseFloat(op.expediteCost) || 0;
+          const markup = parseFloat(op.markup) || 0;
+          opCostLot += (cost + expedite) * qty;
+          opProfitLot += cost * (markup / 100) * qty;
+        });
+        const opCostPerPart = qty > 0 ? opCostLot / qty : 0;
+        const opProfitPerPart = qty > 0 ? opProfitLot / qty : 0;
+        // Roll OP profit into the labor stored on the part so summary calcs read it correctly
+        dataToSend.laborTotal = (baseLabEach + opProfitPerPart).toFixed(2);
+        // Add OP cost to the part total via material side
+        const labEachWithOp = baseLabEach + opProfitPerPart;
+        dataToSend.partTotal = ((matEach + labEachWithOp + opCostPerPart) * qty).toFixed(2);
       }
       
       let savedPartId = editingPart?.id;
@@ -2859,6 +2878,22 @@ function EstimateDetailsPage() {
                 <p style={{ color: '#666', fontSize: '0.85rem', marginBottom: 16 }}>
                   Operations across all parts. Edit individual operations on each part's form.
                 </p>
+
+                {/* Transport Trips */}
+                <OpTransportsSection
+                  trips={formData.opTransports || []}
+                  parts={parts}
+                  onChange={async (newTrips) => {
+                    setFormData({ ...formData, opTransports: newTrips });
+                    try {
+                      await updateEstimate(id, { opTransports: newTrips });
+                      showMessage('Transport trips saved');
+                    } catch (err) {
+                      setError('Failed to save transport: ' + (err.response?.data?.error?.message || err.message));
+                    }
+                  }}
+                  isWorkOrder={false}
+                />
                 {(() => {
                   // Build flat list of all operations across all parts
                   const allOps = [];
@@ -2899,10 +2934,9 @@ function EstimateDetailsPage() {
                                   <th style={{ padding: 8, textAlign: 'left' }}>Service</th>
                                   <th style={{ padding: 8, textAlign: 'right' }}>Qty</th>
                                   <th style={{ padding: 8, textAlign: 'right' }}>Cost/Part</th>
-                                  <th style={{ padding: 8, textAlign: 'right' }}>Outbound</th>
-                                  <th style={{ padding: 8, textAlign: 'right' }}>Inbound</th>
+                                  <th style={{ padding: 8, textAlign: 'right' }}>Markup</th>
                                   <th style={{ padding: 8, textAlign: 'right' }}>Profit</th>
-                                  <th style={{ padding: 8, textAlign: 'right' }}>Total Cost</th>
+                                  <th style={{ padding: 8, textAlign: 'right' }}>Vendor Cost</th>
                                   <th style={{ padding: 8, textAlign: 'right' }}>Billed</th>
                                 </tr>
                               </thead>
@@ -2912,17 +2946,8 @@ function EstimateDetailsPage() {
                                   const cost = parseFloat(op.costPerPart) || 0;
                                   const expedite = parseFloat(op.expediteCost) || 0;
                                   const markup = parseFloat(op.markup) || 0;
-                                  const out = op.outboundTransport;
-                                  const inb = op.inboundTransport;
-                                  const outCost = out ? (parseFloat(out.cost) || 0) : 0;
-                                  const outMarkup = out ? (parseFloat(out.markup) || 0) : 0;
-                                  const inCost = inb ? (parseFloat(inb.cost) || 0) : 0;
-                                  const inMarkup = inb ? (parseFloat(inb.markup) || 0) : 0;
-                                  const totalCost = (cost + expedite) * qty + outCost + inCost;
-                                  const costProfit = cost * (markup / 100) * qty;
-                                  const outProfit = outCost * (outMarkup / 100);
-                                  const inProfit = inCost * (inMarkup / 100);
-                                  const profit = costProfit + outProfit + inProfit;
+                                  const totalCost = (cost + expedite) * qty;
+                                  const profit = cost * (markup / 100) * qty;
                                   const totalBilled = totalCost + profit;
                                   vendorCost += totalCost;
                                   vendorBilled += totalBilled;
@@ -2934,9 +2959,8 @@ function EstimateDetailsPage() {
                                       </td>
                                       <td style={{ padding: 8 }}>{op.serviceType || '—'}</td>
                                       <td style={{ padding: 8, textAlign: 'right' }}>{qty}</td>
-                                      <td style={{ padding: 8, textAlign: 'right' }}>${cost.toFixed(2)}{markup > 0 && <span style={{ color: '#888', fontSize: '0.7rem' }}> +{markup}%</span>}</td>
-                                      <td style={{ padding: 8, textAlign: 'right' }}>{outCost > 0 ? <>${outCost.toFixed(2)}<div style={{ fontSize: '0.7rem', color: '#888' }}>{out.vendorName || '—'}</div></> : '—'}</td>
-                                      <td style={{ padding: 8, textAlign: 'right' }}>{inCost > 0 ? <>${inCost.toFixed(2)}<div style={{ fontSize: '0.7rem', color: '#888' }}>{inb.vendorName || '—'}</div></> : '—'}</td>
+                                      <td style={{ padding: 8, textAlign: 'right' }}>${cost.toFixed(2)}</td>
+                                      <td style={{ padding: 8, textAlign: 'right' }}>{markup}%</td>
                                       <td style={{ padding: 8, textAlign: 'right', color: '#2e7d32', fontWeight: 600 }}>${profit.toFixed(2)}</td>
                                       <td style={{ padding: 8, textAlign: 'right' }}>${totalCost.toFixed(2)}</td>
                                       <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: '#E65100' }}>${totalBilled.toFixed(2)}</td>
@@ -2944,7 +2968,7 @@ function EstimateDetailsPage() {
                                   );
                                 })}
                                 <tr style={{ background: '#FFF8E1', fontWeight: 700 }}>
-                                  <td colSpan={7} style={{ padding: 8, textAlign: 'right' }}>Vendor Total:</td>
+                                  <td colSpan={6} style={{ padding: 8, textAlign: 'right' }}>Vendor Total:</td>
                                   <td style={{ padding: 8, textAlign: 'right' }}>${vendorCost.toFixed(2)}</td>
                                   <td style={{ padding: 8, textAlign: 'right', color: '#E65100' }}>${vendorBilled.toFixed(2)}</td>
                                 </tr>
@@ -2960,17 +2984,20 @@ function EstimateDetailsPage() {
                           const cost = parseFloat(op.costPerPart) || 0;
                           const expedite = parseFloat(op.expediteCost) || 0;
                           const markup = parseFloat(op.markup) || 0;
-                          const out = op.outboundTransport;
-                          const inb = op.inboundTransport;
-                          const outCost = out ? (parseFloat(out.cost) || 0) : 0;
-                          const outMarkup = out ? (parseFloat(out.markup) || 0) : 0;
-                          const inCost = inb ? (parseFloat(inb.cost) || 0) : 0;
-                          const inMarkup = inb ? (parseFloat(inb.markup) || 0) : 0;
-                          const totalCost = (cost + expedite) * qty + outCost + inCost;
-                          const profit = (cost * markup / 100) * qty + (outCost * outMarkup / 100) + (inCost * inMarkup / 100);
+                          const totalCost = (cost + expedite) * qty;
+                          const profit = (cost * markup / 100) * qty;
                           grandCost += totalCost;
                           grandBilled += totalCost + profit;
                           grandProfit += profit;
+                        });
+                        // Add order-level transport totals
+                        (formData.opTransports || []).forEach(trip => {
+                          const tCost = parseFloat(trip.cost) || 0;
+                          const tMarkup = parseFloat(trip.markup) || 0;
+                          const tBilled = tCost * (1 + tMarkup / 100);
+                          grandCost += tCost;
+                          grandBilled += tBilled;
+                          grandProfit += (tBilled - tCost);
                         });
                         return (
                           <div style={{ padding: 16, background: '#FFF3E0', borderRadius: 8, border: '2px solid #FFB74D' }}>
@@ -3028,24 +3055,24 @@ function EstimateDetailsPage() {
                     const labor = parseFloat(p.laborTotal) || 0;
                     totalLaborInHouse += labor * qty;
 
-                    // New multi-operation outside processing
+                    // New multi-operation outside processing (vendor work only — transport is order-level)
                     const ops = p.outsideProcessing || [];
                     ops.forEach(op => {
                       const opCostPerPart = parseFloat(op.costPerPart) || 0;
                       const opExpedite = parseFloat(op.expediteCost) || 0;
                       const opMarkup = parseFloat(op.markup) || 0;
-                      const out = op.outboundTransport;
-                      const inb = op.inboundTransport;
-                      const outCost = out ? (parseFloat(out.cost) || 0) : 0;
-                      const outMarkup = out ? (parseFloat(out.markup) || 0) : 0;
-                      const inCost = inb ? (parseFloat(inb.cost) || 0) : 0;
-                      const inMarkup = inb ? (parseFloat(inb.markup) || 0) : 0;
                       const opCostBilled = opCostPerPart * (1 + opMarkup / 100);
                       totalOutsideCost += (opCostPerPart + opExpedite) * qty;
                       totalOutsideBilled += (opCostBilled + opExpedite) * qty;
-                      totalTransportCost += outCost + inCost;
-                      totalTransportBilled += outCost * (1 + outMarkup / 100) + inCost * (1 + inMarkup / 100);
                     });
+                  });
+
+                  // Order-level transport trips
+                  (formData.opTransports || []).forEach(trip => {
+                    const cost = parseFloat(trip.cost) || 0;
+                    const markup = parseFloat(trip.markup) || 0;
+                    totalTransportCost += cost;
+                    totalTransportBilled += cost * (1 + markup / 100);
                   });
 
                   // Services (fab, shop rate)

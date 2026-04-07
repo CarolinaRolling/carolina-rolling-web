@@ -17,13 +17,14 @@ import TeeBarRollForm from '../components/TeeBarRollForm';
 import RushServiceForm, { EXPEDITE_OPTIONS, EMERGENCY_OPTIONS } from '../components/RushServiceForm';
 import PressBrakeForm from '../components/PressBrakeForm';
 import FlatStockForm from '../components/FlatStockForm';
+import OpTransportsSection, { calculateTransportAllocations } from '../components/OpTransportsSection';
 import FabServiceForm from '../components/FabServiceForm';
 import ShopRateForm from '../components/ShopRateForm';
 import HeatNumberInput from '../components/HeatNumberInput';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart, reorderWorkOrderParts,
-  createOutsideProcessingPO, updateOutsideProcessingStatus,
+  createOutsideProcessingPO, updateOutsideProcessingStatus, createTransportPO,
   uploadPartFiles, getPartFileSignedUrl, downloadPartFile, deletePartFile,
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, downloadWorkOrderDocument, deleteWorkOrderDocument, regeneratePODocument, createPODocument, toggleDocumentPortal,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
@@ -766,8 +767,22 @@ function WorkOrderDetailsPage() {
         const matCost = parseFloat(dataToSend.materialTotal) || 0;
         const matMarkup = parseFloat(dataToSend.materialMarkupPercent) || 0;
         const matEach = roundUpMaterial(Math.round(matCost * (1 + matMarkup / 100) * 100) / 100, dataToSend._materialRounding);
-        const labEach = parseFloat(dataToSend.laborTotal) || 0;
-        dataToSend.partTotal = (Math.round((matEach + labEach) * qty * 100) / 100).toFixed(2);
+        const baseLabEach = parseFloat(dataToSend.laborTotal) || 0;
+        // Outside processing: roll vendor cost and profit into per-part totals
+        const ops = dataToSend.outsideProcessing || [];
+        let opCostLot = 0, opProfitLot = 0;
+        ops.forEach(op => {
+          const cost = parseFloat(op.costPerPart) || 0;
+          const expedite = parseFloat(op.expediteCost) || 0;
+          const markup = parseFloat(op.markup) || 0;
+          opCostLot += (cost + expedite) * qty;
+          opProfitLot += cost * (markup / 100) * qty;
+        });
+        const opCostPerPart = qty > 0 ? opCostLot / qty : 0;
+        const opProfitPerPart = qty > 0 ? opProfitLot / qty : 0;
+        dataToSend.laborTotal = (baseLabEach + opProfitPerPart).toFixed(2);
+        const labEachWithOp = baseLabEach + opProfitPerPart;
+        dataToSend.partTotal = (Math.round((matEach + labEachWithOp + opCostPerPart) * qty * 100) / 100).toFixed(2);
       }
       
       let savedPartId = editingPart?.id;
@@ -1794,6 +1809,15 @@ function WorkOrderDetailsPage() {
     
     const rushTotal = expediteAmount + emergencyAmount;
     partsSubtotal += rushTotal;
+
+    // Order-level outside processing transport (billed amount, hidden in customer total)
+    let opTransportBilled = 0;
+    (order?.opTransports || []).forEach(trip => {
+      const cost = parseFloat(trip.cost) || 0;
+      const markup = parseFloat(trip.markup) || 0;
+      opTransportBilled += cost * (1 + markup / 100);
+    });
+    partsSubtotal += opTransportBilled;
     
     const trucking = parseFloat(editData.truckingCost) || parseFloat(order?.truckingCost) || 0;
     const subtotal = partsSubtotal + trucking;
@@ -3708,6 +3732,32 @@ function WorkOrderDetailsPage() {
       {woTab === 'outside_processing' && (
         <div className="card" style={{ marginTop: 0, minHeight: '70vh' }}>
           <h3 className="card-title" style={{ marginBottom: 16 }}>🏭 Outside Processing Operations</h3>
+
+          {/* Transport Trips */}
+          <OpTransportsSection
+            trips={order.opTransports || []}
+            parts={order.parts || []}
+            onChange={async (newTrips) => {
+              try {
+                await updateWorkOrder(id, { opTransports: newTrips });
+                showMessage('Transport trips saved');
+                await loadOrder();
+              } catch (err) {
+                setError('Failed to save transport: ' + (err.response?.data?.error?.message || err.message));
+              }
+            }}
+            isWorkOrder={true}
+            onGeneratePO={async (trip) => {
+              try {
+                const res = await createTransportPO(id, trip.id);
+                showMessage(res.data.message || 'Trucking PO created');
+                await loadOrder();
+              } catch (err) {
+                setError('Failed to create trucking PO: ' + (err.response?.data?.error?.message || err.message));
+              }
+            }}
+          />
+
           {(() => {
             const allOps = [];
             (order.parts || []).forEach(p => {
@@ -3746,8 +3796,6 @@ function WorkOrderDetailsPage() {
               <div>
                 {Object.entries(groups).map(([key, group]) => {
                   let groupVendorCost = 0, groupVendorBilled = 0, totalUnits = 0;
-                  // Aggregate transport across all ops in this group
-                  const transportLegs = []; // [{vendorName, vendorId, cost, markup, leg, partNum}]
                   group.ops.forEach(op => {
                     const qty = parseInt(op.part.quantity) || 1;
                     const cost = parseFloat(op.costPerPart) || 0;
@@ -3757,12 +3805,6 @@ function WorkOrderDetailsPage() {
                     groupVendorCost += (cost + expedite) * qty;
                     groupVendorBilled += (cost + expedite) * qty + costProfit;
                     totalUnits += qty;
-                    if (op.outboundTransport && parseFloat(op.outboundTransport.cost) > 0) {
-                      transportLegs.push({ ...op.outboundTransport, leg: 'Outbound', partNum: op.part.partNumber });
-                    }
-                    if (op.inboundTransport && parseFloat(op.inboundTransport.cost) > 0) {
-                      transportLegs.push({ ...op.inboundTransport, leg: 'Inbound', partNum: op.part.partNumber });
-                    }
                   });
 
                   return (
@@ -3840,31 +3882,6 @@ function WorkOrderDetailsPage() {
                           </tr>
                         </tbody>
                       </table>
-
-                      {/* Transport legs section */}
-                      {transportLegs.length > 0 && (
-                        <div style={{ background: '#F5F5F5', padding: 12, borderTop: '1px solid #ddd' }}>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#555', marginBottom: 8 }}>🚛 Transport Legs</div>
-                          {transportLegs.map((t, i) => {
-                            const tCost = parseFloat(t.cost) || 0;
-                            const tMarkup = parseFloat(t.markup) || 0;
-                            const tBilled = tCost * (1 + tMarkup / 100);
-                            const tProfit = tBilled - tCost;
-                            return (
-                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: '0.8rem', borderBottom: i < transportLegs.length - 1 ? '1px solid #e0e0e0' : 'none' }}>
-                                <div>
-                                  <strong>{t.leg}</strong> — {t.vendorName || '(no trucking vendor)'} <span style={{ color: '#888' }}>(Part #{t.partNum})</span>
-                                </div>
-                                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                                  <span>Cost: ${tCost.toFixed(2)}</span>
-                                  <span style={{ color: '#2e7d32' }}>+${tProfit.toFixed(2)} ({tMarkup}%)</span>
-                                  <span style={{ fontWeight: 700, color: '#E65100' }}>${tBilled.toFixed(2)}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -3895,24 +3912,24 @@ function WorkOrderDetailsPage() {
               totalMaterialBilled += matBilled * qty;
               totalLaborInHouse += (parseFloat(p.laborTotal) || 0) * qty;
 
-              // Multi-operation outside processing
+              // Multi-operation outside processing (vendor work only)
               const ops = p.outsideProcessing || [];
               ops.forEach(op => {
                 const opCostPerPart = parseFloat(op.costPerPart) || 0;
                 const opExpedite = parseFloat(op.expediteCost) || 0;
                 const opMarkup = parseFloat(op.markup) || 0;
-                const out = op.outboundTransport;
-                const inb = op.inboundTransport;
-                const outCost = out ? (parseFloat(out.cost) || 0) : 0;
-                const outMarkup = out ? (parseFloat(out.markup) || 0) : 0;
-                const inCost = inb ? (parseFloat(inb.cost) || 0) : 0;
-                const inMarkup = inb ? (parseFloat(inb.markup) || 0) : 0;
                 const opCostBilled = opCostPerPart * (1 + opMarkup / 100);
                 totalOutsideCost += (opCostPerPart + opExpedite) * qty;
                 totalOutsideBilled += (opCostBilled + opExpedite) * qty;
-                totalTransportCost += outCost + inCost;
-                totalTransportBilled += outCost * (1 + outMarkup / 100) + inCost * (1 + inMarkup / 100);
               });
+            });
+
+            // Order-level transport trips
+            (order.opTransports || []).forEach(trip => {
+              const cost = parseFloat(trip.cost) || 0;
+              const markup = parseFloat(trip.markup) || 0;
+              totalTransportCost += cost;
+              totalTransportBilled += cost * (1 + markup / 100);
             });
 
             let totalServicesCost = 0;
