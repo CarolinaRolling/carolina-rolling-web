@@ -240,7 +240,8 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
     return parseFloat(partData.laborTotal) || 0;
   })();
   const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
-  const laborEach = baseLaborEach + opTotals.totalProfit;
+  const opEnabled = (partData.outsideProcessing || []).length > 0;
+  const laborEach = (opEnabled ? 0 : baseLaborEach) + opTotals.totalProfit;
   const opCostEach = opTotals.totalCost;
   const unitPrice = materialEach + laborEach + opCostEach;
   const lineTotal = Math.round(unitPrice * qty * 100) / 100;
@@ -578,7 +579,9 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
               value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')}
               onFocus={(e) => e.target.select()}
               onChange={(e) => setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value })}
-              placeholder="0.00" /></div>
+              placeholder="0.00"
+              disabled={opEnabled}
+              style={{ background: opEnabled ? '#f5f5f5' : undefined, color: opEnabled ? '#999' : undefined }} /></div>
         </div>
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material Cost (ea)</span><span>${materialCost.toFixed(2)}</span></div>

@@ -268,9 +268,12 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   })();
   // Calculate outside processing totals
   const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
-  // Add OP cost to material total, and OP profit to labor (for customer billing)
-  const laborEach = baseLaborEach + opTotals.totalProfit;
-  const opCostEach = opTotals.totalCost; // vendor cost (rolled into material)
+  const opEnabled = (partData.outsideProcessing || []).length > 0;
+  // When OP is enabled, rolling labor is disabled (vendor does the work).
+  // Customer pays: material + markup + OP cost + OP markup (markup IS the labor profit)
+  const effectiveBaseLabor = opEnabled ? 0 : baseLaborEach;
+  const laborEach = effectiveBaseLabor + opTotals.totalProfit;
+  const opCostEach = opTotals.totalCost; // vendor cost
   const unitPrice = materialEach + laborEach + opCostEach;
   const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
@@ -759,12 +762,14 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
             <input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" />
           </div>
           <div className="form-group">
-            <label className="form-label">Labor (each)</label>
+            <label className="form-label" style={{ color: opEnabled ? '#999' : undefined }}>Labor (each){opEnabled && <span style={{ marginLeft: 4, fontSize: '0.7rem', color: '#E65100' }}>(disabled — outsourced)</span>}</label>
             <input type="number" step="any" className="form-input"
               value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')}
               onFocus={(e) => e.target.select()}
               onChange={(e) => setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value })}
-              placeholder="0.00" />
+              placeholder="0.00"
+              disabled={opEnabled}
+              style={{ background: opEnabled ? '#f5f5f5' : undefined, color: opEnabled ? '#999' : undefined }} />
           </div>
         </div>
 
@@ -793,9 +798,9 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
                   fontWeight: (partData._materialRounding || 'none') === o.k ? 700 : 400 }}>{o.l}</button>
             ))}
           </div>}
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
-            <span>Labor (ea)</span>
-            <span>${baseLaborEach.toFixed(2)}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: opEnabled ? '#999' : '#555' }}>
+            <span>Labor (ea){opEnabled && <span style={{ fontSize: '0.7rem', marginLeft: 4 }}>(outsourced)</span>}</span>
+            <span style={opEnabled ? { textDecoration: 'line-through' } : {}}>${baseLaborEach.toFixed(2)}</span>
           </div>
           {opTotals.totalCost > 0 && (
             <>

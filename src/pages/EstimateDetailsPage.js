@@ -1114,11 +1114,11 @@ function EstimateDetailsPage() {
         const matEachRaw = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
         const matEach = roundUpMaterial(matEachRaw, dataToSend._materialRounding);
         // Use the base labor (before any OP markup) — stored in _baseLaborTotal
-        // First save: fall back to current laborTotal as the base
         let baseLabEach = parseFloat(dataToSend._baseLaborTotal);
         if (isNaN(baseLabEach)) baseLabEach = parseFloat(dataToSend.laborTotal) || 0;
-        // Outside processing: roll vendor cost and profit into per-part totals
+        // Outside processing
         const ops = dataToSend.outsideProcessing || [];
+        const opEnabled = ops.length > 0;
         let opCostLot = 0, opProfitLot = 0;
         ops.forEach(op => {
           const cost = parseFloat(op.costPerPart) || 0;
@@ -1131,9 +1131,11 @@ function EstimateDetailsPage() {
         const opProfitPerPart = qty > 0 ? opProfitLot / qty : 0;
         // Persist base labor in formData so resaves don't double-add the markup
         dataToSend._baseLaborTotal = baseLabEach.toFixed(2);
-        // Roll OP profit into laborTotal so summary calcs and totals see it
-        dataToSend.laborTotal = (baseLabEach + opProfitPerPart).toFixed(2);
-        const labEachWithOp = baseLabEach + opProfitPerPart;
+        // When OP is enabled, rolling labor is disabled (vendor does the work).
+        // Customer pays: material + markup + OP cost + OP markup. The OP markup IS the labor profit.
+        const effectiveBase = opEnabled ? 0 : baseLabEach;
+        dataToSend.laborTotal = (effectiveBase + opProfitPerPart).toFixed(2);
+        const labEachWithOp = effectiveBase + opProfitPerPart;
         dataToSend.partTotal = ((matEach + labEachWithOp + opCostPerPart) * qty).toFixed(2);
       }
       

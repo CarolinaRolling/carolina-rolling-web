@@ -62,7 +62,8 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
     return parseFloat(partData.laborTotal) || 0;
   })();
   const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
-  const laborEach = baseLaborEach + opTotals.totalProfit;
+  const opEnabled = (partData.outsideProcessing || []).length > 0;
+  const laborEach = (opEnabled ? 0 : baseLaborEach) + opTotals.totalProfit;
   const opCostEach = opTotals.totalCost;
   const unitPrice = materialEach + laborEach + opCostEach;
   const lineTotal = Math.round(unitPrice * qty * 100) / 100;

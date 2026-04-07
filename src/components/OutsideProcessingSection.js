@@ -306,3 +306,8 @@ export function calculateOpTotals(operations, qty = 1) {
     totalBilledLot: totalCostLot + totalProfitLot
   };
 }
+
+// Helper: returns true if part has any OP operations configured
+export function isOutsideProcessed(partData) {
+  return (partData?.outsideProcessing || []).length > 0;
+}
