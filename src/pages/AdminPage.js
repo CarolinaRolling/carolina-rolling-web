@@ -112,7 +112,7 @@ function AdminPage({ section = 'users-logs' }) {
   // API Keys
   const [apiKeys, setApiKeys] = useState([]);
   const [showNewApiKeyModal, setShowNewApiKeyModal] = useState(false);
-  const [newApiKey, setNewApiKey] = useState({ name: '', clientName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '' });
+  const [newApiKey, setNewApiKey] = useState({ name: '', clientName: '', vendorName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '' });
   const [createdApiKey, setCreatedApiKey] = useState(null); // holds key after creation (only shown once)
   const [apiKeysLoading, setApiKeysLoading] = useState(false);
   const [editingApiKey, setEditingApiKey] = useState(null);
@@ -722,13 +722,14 @@ function AdminPage({ section = 'users-logs' }) {
       const response = await createApiKey({
         name: newApiKey.name.trim(),
         clientName: newApiKey.clientName.trim() || null,
+        vendorName: (newApiKey.vendorName || '').trim() || null,
         permissions: newApiKey.permissions,
         allowedIPs: newApiKey.allowedIPs.trim() || null,
         operatorName: newApiKey.operatorName.trim() || null,
         deviceName: newApiKey.deviceName.trim() || null
       });
       setCreatedApiKey(response.data.data);
-      setNewApiKey({ name: '', clientName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '' });
+      setNewApiKey({ name: '', clientName: '', vendorName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '' });
       loadApiKeys();
     } catch (err) {
       setError('Failed to create API key');
@@ -2798,7 +2799,8 @@ function AdminPage({ section = 'users-logs' }) {
                       <td>
                         <div style={{ fontWeight: 600 }}>{key.name}</div>
                         {key.deviceName && <div style={{ fontSize: '0.75rem', color: '#666' }}>📱 {key.deviceName}</div>}
-                        {key.clientName && <div style={{ fontSize: '0.75rem', color: '#1565c0' }}>🔒 {key.clientName}</div>}
+                        {key.clientName && <div style={{ fontSize: '0.75rem', color: '#1565c0' }}>🔒 Client: {key.clientName}</div>}
+                        {key.vendorName && <div style={{ fontSize: '0.75rem', color: '#E65100' }}>🏭 Vendor: {key.vendorName}</div>}
                         {key.allowedIPs && <div style={{ fontSize: '0.7rem', color: '#e65100' }}>🌐 {key.allowedIPs}</div>}
                       </td>
                       <td>{key.operatorName || <span style={{ color: '#ccc' }}>—</span>}</td>
@@ -2914,6 +2916,12 @@ function AdminPage({ section = 'users-logs' }) {
               <input type="text" className="form-input" placeholder="Leave empty for all clients"
                 value={newApiKey.clientName} onChange={(e) => setNewApiKey({ ...newApiKey, clientName: e.target.value })} />
               <small style={{ color: '#666' }}>If set, this key can only see work orders for this specific client.</small>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Vendor Scope (optional)</label>
+              <input type="text" className="form-input" placeholder="Leave empty for non-vendor keys"
+                value={newApiKey.vendorName || ''} onChange={(e) => setNewApiKey({ ...newApiKey, vendorName: e.target.value })} />
+              <small style={{ color: '#666' }}>For vendor portal keys — must exactly match the vendor's name. Grants access to only this vendor's POs, shared files, and issue reporting. Requires Read & Write permission for issue reports.</small>
             </div>
             <div className="form-group">
               <label className="form-label">Permissions</label>

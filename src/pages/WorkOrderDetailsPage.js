@@ -25,6 +25,7 @@ import {
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart, reorderWorkOrderParts,
   createOutsideProcessingPO, updateOutsideProcessingStatus, createTransportPO,
+  toggleVendorShare, resolveVendorIssue,
   uploadPartFiles, getPartFileSignedUrl, downloadPartFile, deletePartFile,
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, downloadWorkOrderDocument, deleteWorkOrderDocument, regeneratePODocument, createPODocument, toggleDocumentPortal,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
@@ -1984,6 +1985,27 @@ function WorkOrderDetailsPage() {
           )}
         </div>
       )}
+
+      {/* Vendor Issues Warning Banner */}
+      {(order.vendorIssues || []).filter(i => i.status !== 'resolved').length > 0 && (
+        <div style={{ background: '#ffebee', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '2px solid #c62828', borderBottom: '2px solid #c62828' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: '1.5rem' }}>⚠️</span>
+            <div>
+              <div style={{ fontWeight: 700, color: '#c62828', fontSize: '1rem' }}>
+                {(order.vendorIssues || []).filter(i => i.status !== 'resolved').length} UNRESOLVED VENDOR {(order.vendorIssues || []).filter(i => i.status !== 'resolved').length === 1 ? 'ISSUE' : 'ISSUES'}
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#666' }}>Review and resolve before proceeding</div>
+            </div>
+          </div>
+          <button
+            onClick={(e) => { e.preventDefault(); setWoTab('vendor_issues'); setTimeout(() => document.getElementById('wo-tabs')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}
+            style={{ background: '#c62828', color: 'white', border: 'none', fontWeight: 700, padding: '10px 20px', fontSize: '0.95rem', borderRadius: 4, cursor: 'pointer' }}>
+            ⚠ Review Issues
+          </button>
+        </div>
+      )}
+
       <div className="detail-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <button className="btn btn-icon btn-secondary" onClick={() => navigate(-1)}><ArrowLeft size={20} /></button>
@@ -2677,15 +2699,16 @@ function WorkOrderDetailsPage() {
           { key: 'documents', label: '📄 Documents', count: (order.documents?.filter(d => d.documentType !== 'purchase_order').length || 0) || undefined },
           { key: 'materials', label: '📋 Materials' },
           ...((order.parts || []).some(p => (p.outsideProcessing || []).length > 0) ? [{ key: 'outside_processing', label: '🏭 Outside Processing', count: (order.parts || []).filter(p => (p.outsideProcessing || []).length > 0).length }] : []),
+          ...(((order.vendorIssues || []).filter(i => i.status !== 'resolved').length > 0) ? [{ key: 'vendor_issues', label: '⚠ Vendor Issues', count: (order.vendorIssues || []).filter(i => i.status !== 'resolved').length, urgent: true }] : []),
           { key: 'summary', label: '📊 Summary' },
           { key: 'shipping', label: '🚚 Outbound', count: (order.pickupHistory || []).length || undefined }
         ].map(tab => (
           <button key={tab.key} onClick={(e) => { e.preventDefault(); setWoTab(tab.key); setTimeout(() => document.getElementById('wo-tabs')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}
             style={{
               padding: '10px 20px', border: 'none', cursor: 'pointer',
-              background: woTab === tab.key ? '#1976d2' : 'transparent',
-              color: woTab === tab.key ? 'white' : '#555',
-              fontWeight: woTab === tab.key ? 700 : 500,
+              background: woTab === tab.key ? (tab.urgent ? '#c62828' : '#1976d2') : (tab.urgent ? '#ffebee' : 'transparent'),
+              color: woTab === tab.key ? 'white' : (tab.urgent ? '#c62828' : '#555'),
+              fontWeight: woTab === tab.key ? 700 : (tab.urgent ? 700 : 500),
               fontSize: '0.95rem', borderRadius: '8px 8px 0 0',
               transition: 'all 0.15s'
             }}>
@@ -3429,6 +3452,88 @@ function WorkOrderDetailsPage() {
             )}
           </div>
 
+          {/* Vendor Portal File Sharing — per-part files with share toggles */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header">
+              <h3 className="card-title" style={{ color: '#E65100' }}>
+                🏭 Vendor Portal Sharing
+              </h3>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>
+              Share part files (drawings, DXF, STEP) with outside processing vendors via the vendor portal.
+              Toggle the button next to each file to make it visible.
+            </p>
+            {(order.parts || []).filter(p => p.files && p.files.length > 0).length === 0 ? (
+              <div style={{ background: '#fafafa', padding: 20, borderRadius: 8, textAlign: 'center', color: '#999', fontSize: '0.85rem' }}>
+                No parts with attached files yet.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {(order.parts || []).filter(p => p.files && p.files.length > 0).map(part => (
+                  <div key={part.id} style={{ background: '#fafafa', padding: 12, borderRadius: 8, border: '1px solid #eee' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #e0e0e0' }}>
+                      <strong style={{ fontSize: '0.9rem' }}>Part #{part.partNumber}</strong>
+                      {part.clientPartNumber && (
+                        <span style={{ fontSize: '0.8rem', color: '#1976d2' }}>
+                          🏷️ {part.clientPartNumber}
+                        </span>
+                      )}
+                      <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#666' }}>
+                        {(part.outsideProcessing || []).length > 0
+                          ? <span style={{ color: '#E65100' }}>🏭 {(part.outsideProcessing || []).map(o => o.vendorName).filter(Boolean).join(', ')}</span>
+                          : <span style={{ color: '#888' }}>In-house</span>}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {part.files.map(file => {
+                        const fname = (file.originalName || file.filename || '').toLowerCase();
+                        const isStep = file.fileType === 'step_file' || fname.match(/\.(step|stp)$/i);
+                        const isDxf = fname.match(/\.(dxf|dwg)$/i);
+                        const isPdf = fname.match(/\.pdf$/i);
+                        const chipBg = isStep ? '#f3e5f5' : isDxf ? '#fff8e1' : isPdf ? '#e3f2fd' : '#f5f5f5';
+                        const chipColor = isStep ? '#7b1fa2' : isDxf ? '#f57f17' : isPdf ? '#1565c0' : '#555';
+                        const isShared = file.vendorPortalVisible === true;
+                        return (
+                          <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: chipBg, borderRadius: 4, fontSize: '0.8rem' }}>
+                            <span style={{ color: chipColor, fontWeight: 600, marginRight: 4 }}>
+                              {isStep ? '🧊' : isDxf ? '📐' : isPdf ? '📄' : '📎'}
+                            </span>
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: chipColor }}>
+                              {file.originalName || file.filename}
+                            </span>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await toggleVendorShare(id, part.id, file.id, !isShared);
+                                  showMessage(isShared ? 'File unshared from vendor portal' : 'File shared with vendor portal');
+                                  await loadOrder();
+                                } catch (err) {
+                                  setError('Failed to toggle vendor share: ' + (err.response?.data?.error?.message || err.message));
+                                }
+                              }}
+                              style={{
+                                background: isShared ? '#2e7d32' : 'white',
+                                color: isShared ? 'white' : '#666',
+                                border: isShared ? '1px solid #2e7d32' : '1px solid #ccc',
+                                padding: '4px 10px',
+                                borderRadius: 4,
+                                cursor: 'pointer',
+                                fontSize: '0.72rem',
+                                fontWeight: 600
+                              }}
+                              title={isShared ? 'Click to hide from vendor portal' : 'Click to share with vendor portal'}>
+                              {isShared ? '✓ Shared with Vendor' : '🏭 Share with Vendor'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* MTR Section */}
           <div className="card">
             <div className="card-header">
@@ -3915,6 +4020,107 @@ function WorkOrderDetailsPage() {
               </div>
             );
           })()}
+        </div>
+      )}
+
+      {/* ===== VENDOR ISSUES TAB ===== */}
+      {woTab === 'vendor_issues' && (
+        <div className="card" style={{ marginTop: 0, minHeight: '70vh' }}>
+          <h3 className="card-title" style={{ marginBottom: 16, color: '#c62828' }}>⚠ Vendor Issue Reports</h3>
+          <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: 16 }}>
+            Issues reported by vendors through the vendor portal. Review each one and mark as resolved with notes.
+          </p>
+          {(!order.vendorIssues || order.vendorIssues.length === 0) ? (
+            <div style={{ background: '#f5f5f5', padding: 24, borderRadius: 8, textAlign: 'center', color: '#999' }}>
+              No vendor issues reported on this work order.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {(order.vendorIssues || []).sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt)).map(issue => {
+                const isResolved = issue.status === 'resolved';
+                return (
+                  <div key={issue.id} style={{
+                    padding: 16,
+                    background: isResolved ? '#f1f8e9' : '#ffebee',
+                    border: isResolved ? '1px solid #c5e1a5' : '2px solid #ef9a9a',
+                    borderRadius: 8
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <strong style={{ color: isResolved ? '#2e7d32' : '#c62828', fontSize: '1rem' }}>
+                            {isResolved ? '✓ Resolved' : '⚠ Open'}
+                          </strong>
+                          {issue.poNumber && (
+                            <span style={{ background: '#E65100', color: 'white', padding: '2px 8px', borderRadius: 4, fontSize: '0.7rem', fontWeight: 700 }}>
+                              {issue.poNumber}
+                            </span>
+                          )}
+                          {issue.workOrderPart && (
+                            <span style={{ background: '#1976d2', color: 'white', padding: '2px 8px', borderRadius: 4, fontSize: '0.7rem', fontWeight: 700 }}>
+                              Part #{issue.workOrderPart.partNumber}
+                              {issue.workOrderPart.clientPartNumber ? ` (${issue.workOrderPart.clientPartNumber})` : ''}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#555', marginTop: 4 }}>
+                          <strong>{issue.vendorName}</strong>
+                          {issue.reportedBy && <span> — reported by {issue.reportedBy}</span>}
+                          <span style={{ color: '#999', marginLeft: 8 }}>
+                            {new Date(issue.reportedAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'white', padding: 12, borderRadius: 4, marginBottom: 8, whiteSpace: 'pre-wrap', fontSize: '0.9rem' }}>
+                      {issue.description}
+                    </div>
+
+                    {issue.photoUrl && (
+                      <div style={{ marginBottom: 8 }}>
+                        <a href={issue.photoUrl} target="_blank" rel="noopener noreferrer">
+                          <img src={issue.photoUrl} alt="Issue photo"
+                            style={{ maxWidth: 400, maxHeight: 300, borderRadius: 4, border: '1px solid #ddd', cursor: 'pointer' }} />
+                        </a>
+                      </div>
+                    )}
+
+                    {isResolved ? (
+                      <div style={{ background: '#e8f5e9', padding: 12, borderRadius: 4, marginTop: 8 }}>
+                        <div style={{ fontSize: '0.75rem', color: '#2e7d32', fontWeight: 700, marginBottom: 4 }}>
+                          RESOLVED by {issue.resolvedBy || 'Admin'} — {new Date(issue.resolvedAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>{issue.resolutionNotes}</div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          const notes = window.prompt(`Resolve this issue reported by ${issue.vendorName}:\n\nEnter resolution notes (required):`);
+                          if (!notes || !notes.trim()) return;
+                          (async () => {
+                            try {
+                              await resolveVendorIssue(id, issue.id, notes.trim());
+                              showMessage('Issue marked as resolved');
+                              await loadOrder();
+                            } catch (err) {
+                              setError('Failed to resolve: ' + (err.response?.data?.error?.message || err.message));
+                            }
+                          })();
+                        }}
+                        style={{
+                          background: '#2e7d32', color: 'white', border: 'none',
+                          padding: '8px 16px', borderRadius: 4, cursor: 'pointer',
+                          fontWeight: 600, fontSize: '0.85rem'
+                        }}>
+                        ✓ Mark as Resolved
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

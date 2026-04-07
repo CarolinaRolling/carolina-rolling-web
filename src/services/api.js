@@ -128,6 +128,10 @@ export const getWorkOrderById = (id) => api.get(`/workorders/${id}`);
 export const createWorkOrder = (data) => api.post('/workorders', data);
 export const updateWorkOrder = (id, data) => api.put(`/workorders/${id}`, data);
 export const createTransportPO = (workOrderId, tripId) => api.post(`/workorders/${workOrderId}/transport-po`, { tripId });
+// Vendor portal admin
+export const toggleVendorShare = (workOrderId, partId, fileId, visible) => api.put(`/workorders/${workOrderId}/parts/${partId}/files/${fileId}/vendor-share`, { visible });
+export const resolveVendorIssue = (workOrderId, issueId, resolutionNotes) => api.put(`/workorders/${workOrderId}/vendor-issues/${issueId}/resolve`, { resolutionNotes });
+export const acknowledgeVendorIssue = (workOrderId, issueId) => api.put(`/workorders/${workOrderId}/vendor-issues/${issueId}/acknowledge`);
 export const updateDRNumber = (id, drNumber) => api.put(`/workorders/${id}/dr-number`, { drNumber });
 export const deleteWorkOrder = (id) => api.delete(`/workorders/${id}`);
 export const getWorkOrderPrintPackage = (id, mode, html) => api.post(`/workorders/${id}/print-package`, { mode, html }, { responseType: 'blob', timeout: 60000 });
