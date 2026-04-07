@@ -3,9 +3,9 @@ import { Plus, Trash2, X } from 'lucide-react';
 import { searchVendors, createVendor } from '../services/api';
 
 const SERVICE_TYPES = [
-  'Welding', 'Beveling', 'Plating', 'Painting', 'Galvanizing',
-  'Heat Treating', 'Forming', 'Machining', 'Cutting',
-  'Sandblasting', 'Pickling & Passivation', 'Other'
+  'Finishing', 'Cutting', 'Beveling', 'Welding', 'Forming',
+  'Heat Treating', 'Machining', 'Galvanizing', 'Powder Coating',
+  'Passivating', 'Sandblasting', 'Other'
 ];
 
 const genId = () => Math.random().toString(36).slice(2, 11);
