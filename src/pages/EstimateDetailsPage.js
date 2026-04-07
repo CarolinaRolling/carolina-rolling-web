@@ -257,7 +257,8 @@ function EstimateDetailsPage() {
         discountReason: data.discountReason || '',
         minimumOverride: data.minimumOverride || false,
         minimumOverrideReason: data.minimumOverrideReason || '',
-        showDualPricing: data.showDualPricing || false
+        showDualPricing: data.showDualPricing || false,
+        opTransports: data.opTransports || []
       });
       setParts((data.parts || []).sort((a, b) => a.partNumber - b.partNumber));
       setFiles(data.files || []);
@@ -2234,17 +2235,21 @@ function EstimateDetailsPage() {
               // Adjust labor proportionally when minimum charge applies
               const isEa = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
               const laborRatio = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEa) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
-              // Get this part's allocated transport billed amount (per part)
-              const transportAlloc = transportAllocations[part.id] || { billed: 0 };
-              const transportPerPart = (parseInt(part.quantity) || 1) > 0 ? transportAlloc.billed / (parseInt(part.quantity) || 1) : 0;
-              // Bundle OP cost + OP markup + transport allocation into the rolling line
+              // Get this part's allocated transport (split into material and labor portions)
+              const transportAlloc = transportAllocations[part.id] || { materialBilled: 0, laborBilled: 0, billed: 0 };
+              const partQty = parseInt(part.quantity) || 1;
+              const transportMatPerPart = partQty > 0 ? transportAlloc.materialBilled / partQty : 0;
+              const transportLabPerPart = partQty > 0 ? transportAlloc.laborBilled / partQty : 0;
+              // Bundle OP cost + OP markup + labor-portion of transport into the rolling line
               const opEnabled = (part.outsideProcessing || []).length > 0;
               const bundledRolling = opEnabled
-                ? (calc.opCostPerPart || 0) + (calc.laborEach || 0) + transportPerPart
-                : ((calc.laborEach || 0) * laborRatio + transportPerPart);
+                ? (calc.opCostPerPart || 0) + (calc.laborEach || 0) + transportLabPerPart
+                : ((calc.laborEach || 0) * laborRatio + transportLabPerPart);
               const adjLabor = bundledRolling;
-              const adjUnitPrice = (calc.materialEach || 0) + adjLabor;
-              const adjPartTotal = adjUnitPrice * (parseInt(part.quantity) || 1);
+              // Material side gets the material-portion of transport (hidden in material line)
+              const adjMaterial = (calc.materialEach || 0) + transportMatPerPart;
+              const adjUnitPrice = adjMaterial + adjLabor;
+              const adjPartTotal = adjUnitPrice * partQty;
               return (
                 <div key={part.id} style={{
                   border: isLinkedService ? '2px solid #9e9e9e' : '2px solid #e0e0e0',
@@ -2470,11 +2475,11 @@ function EstimateDetailsPage() {
                           )}
                         </div>
                       )}
-                      {/* Material line (after markup + rounding) */}
-                      {(calc.materialEach || 0) > 0 && (
+                      {/* Material line (after markup + rounding + transport material portion) */}
+                      {(adjMaterial || 0) > 0 && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
                           <span>Material</span>
-                          <strong>{formatCurrency(calc.materialEach)}</strong>
+                          <strong>{formatCurrency(adjMaterial)}</strong>
                         </div>
                       )}
                       {/* Rolling/Labor line — bundles in OP cost+markup and transport allocation */}

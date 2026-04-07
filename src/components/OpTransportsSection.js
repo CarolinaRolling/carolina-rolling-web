@@ -13,6 +13,7 @@ const emptyTrip = () => ({
   markup: 20,
   allocationMode: 'manual',  // manual | by_value | by_qty
   partIds: [],               // for manual mode
+  materialPercent: 50,       // 0-100, percent of trip cost allocated to material side (rest goes to labor)
   notes: '',
   poNumber: null,
   poSentAt: null
@@ -20,18 +21,22 @@ const emptyTrip = () => ({
 
 /**
  * Calculate per-part transport allocations from a list of trips and the order's parts.
- * Returns { partTransports: { [partId]: { cost, billed, profit, trips: [...] } } }
+ * Returns { partTransports: { [partId]: { cost, billed, profit, materialBilled, laborBilled, trips: [...] } } }
  *
  * Allocation modes:
  * - manual: split among checked partIds
  * - by_value: spread by part dollar value (partTotal)
  * - by_qty: spread evenly by part qty
+ *
+ * Material/Labor split per trip:
+ * - materialPercent (0-100) splits the trip cost between material and labor sides
+ * - If a part has no material (materialTotal = 0), all transport for that part rolls to labor
  */
 export function calculateTransportAllocations(trips, parts) {
   const partTransports = {};
   // Initialize per-part bucket
   (parts || []).forEach(p => {
-    partTransports[p.id] = { cost: 0, billed: 0, profit: 0, trips: [] };
+    partTransports[p.id] = { cost: 0, billed: 0, profit: 0, materialBilled: 0, laborBilled: 0, trips: [] };
   });
 
   (trips || []).forEach(trip => {
@@ -40,6 +45,13 @@ export function calculateTransportAllocations(trips, parts) {
     const billed = cost * (1 + markup / 100);
     const profit = billed - cost;
     if (cost <= 0) return;
+
+    // Material/Labor split (default 50/50 if not set)
+    const matPct = trip.materialPercent !== undefined && trip.materialPercent !== null && trip.materialPercent !== ''
+      ? Math.max(0, Math.min(100, parseFloat(trip.materialPercent)))
+      : 50;
+    const matFraction = matPct / 100;
+    const labFraction = 1 - matFraction;
 
     let targetPartIds = [];
     if (trip.allocationMode === 'manual') {
@@ -76,20 +88,40 @@ export function calculateTransportAllocations(trips, parts) {
     }
 
     targetPartIds.forEach(pid => {
+      const p = (parts || []).find(x => x.id === pid);
+      if (!p) return;
       const share = weights[pid] / totalWeight;
       const partCost = cost * share;
       const partBilled = billed * share;
       const partProfit = profit * share;
+
+      // Determine effective material/labor split for THIS part
+      // If part has no material, redirect everything to labor
+      const partMaterial = parseFloat(p.materialTotal) || 0;
+      let effMatFraction = matFraction;
+      let effLabFraction = labFraction;
+      if (partMaterial <= 0) {
+        effMatFraction = 0;
+        effLabFraction = 1;
+      }
+
+      const partMaterialBilled = partBilled * effMatFraction;
+      const partLaborBilled = partBilled * effLabFraction;
+
       partTransports[pid].cost += partCost;
       partTransports[pid].billed += partBilled;
       partTransports[pid].profit += partProfit;
+      partTransports[pid].materialBilled += partMaterialBilled;
+      partTransports[pid].laborBilled += partLaborBilled;
       partTransports[pid].trips.push({
         tripId: trip.id,
         leg: trip.leg,
         truckingVendorName: trip.truckingVendorName,
         cost: partCost,
         billed: partBilled,
-        profit: partProfit
+        profit: partProfit,
+        materialBilled: partMaterialBilled,
+        laborBilled: partLaborBilled
       });
     });
   });
@@ -104,7 +136,7 @@ export default function OpTransportsSection({ trips, onChange, parts, onGenerate
   const [showAdd, setShowAdd] = useState(false);
 
   const tripsList = trips || [];
-  const opParts = (parts || []).filter(p => (p.outsideProcessing || []).length > 0);
+  const allParts = parts || [];
 
   const updateTrips = (newTrips) => onChange(newTrips);
 
@@ -178,7 +210,7 @@ export default function OpTransportsSection({ trips, onChange, parts, onGenerate
             const markup = parseFloat(trip.markup) || 0;
             const billed = cost * (1 + markup / 100);
             const profit = billed - cost;
-            const allocCount = trip.allocationMode === 'manual' ? (trip.partIds || []).length : opParts.length;
+            const allocCount = trip.allocationMode === 'manual' ? (trip.partIds || []).length : allParts.length;
             return (
               <div key={trip.id} style={{ marginBottom: 8, padding: 10, background: 'white', borderRadius: 6, border: '1px solid #eee' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -192,6 +224,12 @@ export default function OpTransportsSection({ trips, onChange, parts, onGenerate
                       Cost: ${cost.toFixed(2)} + {markup}% = <strong style={{ color: '#E65100' }}>${billed.toFixed(2)}</strong>
                       <span style={{ marginLeft: 8, color: '#2e7d32' }}>profit ${profit.toFixed(2)}</span>
                       <span style={{ marginLeft: 8 }}>• {trip.allocationMode === 'manual' ? `Manual (${allocCount} parts)` : trip.allocationMode === 'by_value' ? 'Auto by value' : 'Auto by qty'}</span>
+                      <span style={{ marginLeft: 8, color: '#1976d2' }}>• Hide: {(() => {
+                        const mp = trip.materialPercent !== undefined && trip.materialPercent !== null && trip.materialPercent !== '' ? parseFloat(trip.materialPercent) : 50;
+                        if (mp === 100) return '100% Material';
+                        if (mp === 0) return '100% Labor';
+                        return `${mp}% Mat / ${100-mp}% Lab`;
+                      })()}</span>
                     </div>
                     {trip.notes && <div style={{ fontSize: '0.75rem', color: '#888', marginTop: 2, fontStyle: 'italic' }}>{trip.notes}</div>}
                   </div>
@@ -332,23 +370,56 @@ export default function OpTransportsSection({ trips, onChange, parts, onGenerate
               </div>
             </div>
 
+            <div className="form-group">
+              <label className="form-label">Hide Cost In <span style={{ fontSize: '0.7rem', color: '#888', fontWeight: 400 }}>(splits transport between Material and Rolling lines on the part)</span></label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {[
+                  { v: 100, l: '100% Material' },
+                  { v: 80,  l: '80% Mat / 20% Lab' },
+                  { v: 50,  l: '50% / 50%' },
+                  { v: 20,  l: '20% Mat / 80% Lab' },
+                  { v: 0,   l: '100% Labor' }
+                ].map(o => {
+                  const current = editingTrip.materialPercent !== undefined && editingTrip.materialPercent !== null && editingTrip.materialPercent !== '' ? parseFloat(editingTrip.materialPercent) : 50;
+                  const selected = current === o.v;
+                  return (
+                    <button key={o.v} type="button"
+                      onClick={() => setEditingTrip({ ...editingTrip, materialPercent: o.v })}
+                      style={{
+                        padding: '6px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem',
+                        border: selected ? '2px solid #E65100' : '1px solid #ccc',
+                        background: selected ? '#FFF3E0' : 'white',
+                        color: selected ? '#E65100' : '#666',
+                        fontWeight: selected ? 700 : 400
+                      }}>
+                      {o.l}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: 4, fontSize: '0.7rem', color: '#888', fontStyle: 'italic' }}>
+                Tip: parts where customer supplies the material will auto-route 100% to Labor for that part.
+              </div>
+            </div>
+
             {editingTrip.allocationMode === 'manual' && (
               <div className="form-group">
                 <label className="form-label">Apply to Parts ({(editingTrip.partIds || []).length} selected)</label>
                 <div style={{ marginBottom: 6, display: 'flex', gap: 8 }}>
-                  <button type="button" onClick={() => setEditingTrip({ ...editingTrip, partIds: opParts.map(p => p.id) })}
+                  <button type="button" onClick={() => setEditingTrip({ ...editingTrip, partIds: allParts.map(p => p.id) })}
                     style={{ background: 'none', border: '1px solid #ccc', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: '0.75rem' }}>Select All</button>
                   <button type="button" onClick={() => setEditingTrip({ ...editingTrip, partIds: [] })}
                     style={{ background: 'none', border: '1px solid #ccc', borderRadius: 3, padding: '4px 8px', cursor: 'pointer', fontSize: '0.75rem' }}>Clear</button>
                 </div>
                 <div style={{ maxHeight: 200, overflow: 'auto', border: '1px solid #ddd', borderRadius: 4, padding: 4 }}>
-                  {opParts.length === 0 ? (
+                  {allParts.length === 0 ? (
                     <div style={{ padding: 8, color: '#999', fontSize: '0.85rem' }}>
-                      No parts have outside processing configured. Add OP to parts first.
+                      No parts on this order yet. Add parts first.
                     </div>
-                  ) : opParts.map(part => {
+                  ) : allParts.map(part => {
                     const checked = (editingTrip.partIds || []).includes(part.id);
                     const ops = part.outsideProcessing || [];
+                    const isOP = ops.length > 0;
                     return (
                       <label key={part.id} style={{
                         display: 'flex', alignItems: 'center', gap: 8, padding: 6, marginBottom: 4,
@@ -365,7 +436,11 @@ export default function OpTransportsSection({ trips, onChange, parts, onGenerate
                         <div style={{ flex: 1, fontSize: '0.85rem' }}>
                           <strong>#{part.partNumber}</strong> {part.clientPartNumber && <span style={{ color: '#1976d2' }}>{part.clientPartNumber}</span>}
                           <span style={{ color: '#666' }}> • Qty {part.quantity}</span>
-                          <span style={{ color: '#888', fontSize: '0.75rem' }}> • {ops.map(o => `${o.serviceType} @ ${o.vendorName}`).join(', ')}</span>
+                          {isOP ? (
+                            <span style={{ color: '#E65100', fontSize: '0.75rem' }}> • 🏭 {ops.map(o => `${o.serviceType} @ ${o.vendorName}`).join(', ')}</span>
+                          ) : (
+                            <span style={{ color: '#1976d2', fontSize: '0.75rem' }}> • In-house</span>
+                          )}
                         </div>
                       </label>
                     );
