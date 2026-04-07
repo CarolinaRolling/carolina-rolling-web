@@ -2646,13 +2646,27 @@ function EstimateDetailsPage() {
                     </div>
                     {part.files && part.files.filter(f => f.fileType !== 'cut_file' && !(f.originalName || '').match(/\.dxf$/i)).length > 0 ? (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {part.files.filter(f => f.fileType !== 'cut_file' && !(f.originalName || '').match(/\.dxf$/i)).map(file => (
+                        {part.files.filter(f => f.fileType !== 'cut_file' && !(f.originalName || '').match(/\.dxf$/i)).map(file => {
+                          const fname = (file.originalName || file.filename || '').toLowerCase();
+                          const isStep = file.fileType === 'step_file' || fname.match(/\.(step|stp)$/i);
+                          const isPdf = fname.match(/\.pdf$/i);
+                          const chipBg = file.portalVisible ? '#e8f5e9'
+                            : isStep ? '#f3e5f5'
+                            : isPdf ? '#e3f2fd'
+                            : 'white';
+                          const chipBorder = file.portalVisible ? '1px solid #a5d6a7'
+                            : isStep ? '1px solid #ce93d8'
+                            : isPdf ? '1px solid #90caf9'
+                            : '1px solid #ddd';
+                          const iconColor = isStep ? '#7b1fa2' : isPdf ? '#1565c0' : '#1976d2';
+                          const labelIcon = isStep ? '🧊' : isPdf ? '📄' : null;
+                          return (
                           <div key={file.id} style={{
-                            display: 'flex', alignItems: 'center', gap: 6, background: file.portalVisible ? '#e8f5e9' : 'white',
-                            padding: '6px 10px', borderRadius: 6, border: file.portalVisible ? '1px solid #a5d6a7' : '1px solid #ddd', fontSize: '0.8rem'
+                            display: 'flex', alignItems: 'center', gap: 6, background: chipBg,
+                            padding: '6px 10px', borderRadius: 6, border: chipBorder, fontSize: '0.8rem'
                           }}>
-                            <FileText size={14} style={{ color: '#1976d2', flexShrink: 0 }} />
-                            <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                            {labelIcon ? <span style={{ fontSize: '0.9rem' }}>{labelIcon}</span> : <FileText size={14} style={{ color: iconColor, flexShrink: 0 }} />}
+                            <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem', color: iconColor, fontWeight: (isStep || isPdf) ? 600 : 400 }}>
                               {file.originalName || file.filename}
                             </span>
                             <button onClick={() => handleViewPartFile(part.id, file)}
@@ -2672,7 +2686,8 @@ function EstimateDetailsPage() {
                               <X size={14} />
                             </button>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <div style={{ color: '#999', fontSize: '0.8rem', textAlign: 'center', padding: 8 }}>

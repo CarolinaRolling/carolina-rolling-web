@@ -794,12 +794,33 @@ const ClientsVendorsPage = () => {
               <div className="form-group">
                 <label className="form-label">Custom Tax Rate (%)</label>
                 <input 
-                  type="number" 
-                  step="0.01" 
+                  type="text"
+                  inputMode="decimal"
                   className="form-input" 
-                  value={formData.customTaxRate ? (parseFloat(formData.customTaxRate) * 100).toFixed(2) : ''} 
-                  onChange={(e) => setFormData({ ...formData, customTaxRate: e.target.value ? parseFloat(e.target.value) / 100 : '' })} 
-                  placeholder="Leave blank for default (9.75%)"
+                  value={formData._customTaxRateInput !== undefined
+                    ? formData._customTaxRateInput
+                    : (formData.customTaxRate ? (parseFloat(formData.customTaxRate) * 100).toString() : '')}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    // Allow only digits and a single decimal point
+                    if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
+                      const parsed = raw === '' || raw === '.' ? '' : parseFloat(raw) / 100;
+                      setFormData({ ...formData, _customTaxRateInput: raw, customTaxRate: isNaN(parsed) ? '' : parsed });
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // On blur, normalize the displayed value
+                    const raw = e.target.value;
+                    if (raw === '' || raw === '.') {
+                      setFormData({ ...formData, _customTaxRateInput: undefined, customTaxRate: '' });
+                    } else {
+                      const num = parseFloat(raw);
+                      if (!isNaN(num)) {
+                        setFormData({ ...formData, _customTaxRateInput: undefined, customTaxRate: num / 100 });
+                      }
+                    }
+                  }}
+                  placeholder="e.g. 3.9375 (leave blank for default)"
                 />
               </div>
               <div className="form-group">

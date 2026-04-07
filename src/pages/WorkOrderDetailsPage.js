@@ -3090,10 +3090,16 @@ function WorkOrderDetailsPage() {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                       {part.files.map(file => {
                         const isStep = file.fileType === 'step_file' || file.originalName?.match(/\.(step|stp)$/i);
+                        const isDxf = file.originalName?.match(/\.(dxf|dwg)$/i);
+                        const chipBg = isStep ? '#f3e5f5' : isDxf ? '#fff8e1' : '#f5f5f5';
+                        const chipBorder = isStep ? '1px solid #ce93d8' : isDxf ? '1px solid #ffd54f' : 'none';
+                        const chipColor = isStep ? '#7b1fa2' : isDxf ? '#f57f17' : 'inherit';
+                        const chipFontWeight = (isStep || isDxf) ? 600 : 400;
                         return (
-                        <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: isStep ? '#f3e5f5' : '#f5f5f5', padding: '4px 8px', borderRadius: 4, fontSize: '0.75rem', border: isStep ? '1px solid #ce93d8' : 'none' }}>
+                        <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: chipBg, padding: '4px 8px', borderRadius: 4, fontSize: '0.75rem', border: chipBorder }}>
                           {isStep && <span title="STEP/3D File">🧊</span>}
-                          <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isStep ? '#7b1fa2' : 'inherit', fontWeight: isStep ? 600 : 400 }}>{file.originalName}</span>
+                          {isDxf && <span title="DXF/DWG File">📐</span>}
+                          <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: chipColor, fontWeight: chipFontWeight }}>{file.originalName}</span>
                           <button onClick={() => handleViewFile(part.id, file.id, file.url)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}><Eye size={12} /></button>
                           <button onClick={() => handleDeleteFile(part.id, file.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d32f2f' }}><X size={12} /></button>
                         </div>
