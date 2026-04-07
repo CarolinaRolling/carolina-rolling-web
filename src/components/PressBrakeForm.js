@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import HeatNumberInput from './HeatNumberInput';
+import OutsideProcessingSection, { calculateOpTotals } from './OutsideProcessingSection';
 
 const THICKNESS_OPTIONS = [
   '16 ga', '14 ga', '12 ga', '11 ga', '10 ga', '7 ga',
@@ -55,8 +56,11 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
   const materialEachRaw = Math.round(materialCost * (1 + materialMarkup / 100) * 100) / 100;
   const rounding = partData._materialRounding || 'none';
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
-  const laborEach = parseFloat(partData.laborTotal) || 0;
-  const unitPrice = materialEach + laborEach;
+  const baseLaborEach = parseFloat(partData.laborTotal) || 0;
+  const opTotals = calculateOpTotals(partData.outsideProcessing);
+  const laborEach = baseLaborEach + opTotals.totalProfit;
+  const opCostEach = opTotals.totalCost;
+  const unitPrice = materialEach + laborEach + opCostEach;
   const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
   useEffect(() => {
@@ -252,11 +256,13 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
                   fontWeight: (partData._materialRounding || 'none') === o.k ? 700 : 400 }}>{o.l}</button>
             ))}
           </div>}
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Labor (ea)</span><span>${laborEach.toFixed(2)}</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Labor (ea)</span><span>${baseLaborEach.toFixed(2)}</span></div>{opTotals.totalCost > 0 && (<div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#E65100' }}><span>🏭 Outside Processing (vendor cost)</span><span>${opTotals.totalCost.toFixed(2)}</span></div>)}{opTotals.totalProfit > 0 && (<div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#2e7d32' }}><span>+ OP Markup (rolled into labor)</span><span>${opTotals.totalProfit.toFixed(2)}</span></div>)}<div style={{ display: 'none' }}></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9', marginTop: 4 }}><strong>Unit Price</strong><strong style={{ color: '#1976d2' }}>${unitPrice.toFixed(2)}</strong></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9' }}><strong>Line Total ({qty} × ${unitPrice.toFixed(2)})</strong><strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong></div>
         </div>
       </div>
+      <OutsideProcessingSection partData={partData} setPartData={setPartData} />
+
 
       <div style={sectionStyle}>
         {sectionTitle('🏷️', 'Tracking', '#616161')}

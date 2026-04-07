@@ -2072,6 +2072,7 @@ function EstimateDetailsPage() {
               {[
                 { key: 'parts', label: '📦 Parts', count: parts.length },
                 { key: 'materials', label: '📋 Materials' },
+                ...(parts.some(p => (p.outsideProcessing || []).length > 0) ? [{ key: 'outside_processing', label: '🏭 Outside Processing', count: parts.filter(p => (p.outsideProcessing || []).length > 0).length }] : []),
                 { key: 'summary', label: '📊 Summary' }
               ].map(tab => (
                 <button key={tab.key} onClick={(e) => { e.preventDefault(); setEstimateTab(tab.key); setTimeout(() => document.getElementById('estimate-tabs')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}
@@ -2850,6 +2851,144 @@ function EstimateDetailsPage() {
             </div>
           )}
 
+          {/* ===== OUTSIDE PROCESSING TAB ===== */}
+          {!isNew && estimateTab === 'outside_processing' && (
+            <div style={{ minHeight: '70vh' }}>
+              <div className="card">
+                <h3 className="card-title" style={{ marginBottom: 16 }}>🏭 Outside Processing Operations</h3>
+                <p style={{ color: '#666', fontSize: '0.85rem', marginBottom: 16 }}>
+                  Operations across all parts. Edit individual operations on each part's form.
+                </p>
+                {(() => {
+                  // Build flat list of all operations across all parts
+                  const allOps = [];
+                  parts.forEach(p => {
+                    (p.outsideProcessing || []).forEach(op => {
+                      allOps.push({ ...op, part: p });
+                    });
+                  });
+
+                  if (allOps.length === 0) {
+                    return <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No outside processing operations yet. Enable Outside Processing on a part form to add one.</div>;
+                  }
+
+                  // Group by vendor
+                  const byVendor = {};
+                  allOps.forEach(o => {
+                    const key = o.vendorId || 'no_vendor';
+                    if (!byVendor[key]) byVendor[key] = { vendorName: o.vendorName || '(no vendor)', ops: [] };
+                    byVendor[key].ops.push(o);
+                  });
+
+                  let grandCost = 0, grandBilled = 0, grandProfit = 0;
+
+                  return (
+                    <>
+                      {Object.entries(byVendor).map(([vendorKey, group]) => {
+                        let vendorCost = 0, vendorBilled = 0;
+                        return (
+                          <div key={vendorKey} style={{ marginBottom: 20, border: '1px solid #FFE0B2', borderRadius: 8, overflow: 'hidden' }}>
+                            <div style={{ background: '#FFF3E0', padding: 12, borderBottom: '1px solid #FFE0B2' }}>
+                              <strong style={{ color: '#E65100' }}>🏭 {group.vendorName}</strong>
+                              <span style={{ marginLeft: 8, fontSize: '0.85rem', color: '#666' }}>{group.ops.length} operation{group.ops.length !== 1 ? 's' : ''}</span>
+                            </div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                              <thead>
+                                <tr style={{ background: '#FFF8E1' }}>
+                                  <th style={{ padding: 8, textAlign: 'left' }}>Part</th>
+                                  <th style={{ padding: 8, textAlign: 'left' }}>Service</th>
+                                  <th style={{ padding: 8, textAlign: 'right' }}>Qty</th>
+                                  <th style={{ padding: 8, textAlign: 'right' }}>Cost/Part</th>
+                                  <th style={{ padding: 8, textAlign: 'right' }}>Transport</th>
+                                  <th style={{ padding: 8, textAlign: 'right' }}>Markup</th>
+                                  <th style={{ padding: 8, textAlign: 'right' }}>Profit</th>
+                                  <th style={{ padding: 8, textAlign: 'right' }}>Total Cost</th>
+                                  <th style={{ padding: 8, textAlign: 'right' }}>Billed</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.ops.map((op, idx) => {
+                                  const qty = parseInt(op.part.quantity) || 1;
+                                  const cost = parseFloat(op.costPerPart) || 0;
+                                  const transport = parseFloat(op.transportCost) || 0;
+                                  const expedite = parseFloat(op.expediteCost) || 0;
+                                  const markup = parseFloat(op.markup) || 0;
+                                  const transMarkup = parseFloat(op.transportMarkup) || 0;
+                                  const subtotal = cost + transport + expedite;
+                                  const profit = (cost * markup / 100) + (transport * transMarkup / 100);
+                                  const totalCost = subtotal * qty;
+                                  const totalBilled = (subtotal + profit) * qty;
+                                  vendorCost += totalCost;
+                                  vendorBilled += totalBilled;
+                                  return (
+                                    <tr key={idx} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                                      <td style={{ padding: 8 }}>
+                                        <strong>#{op.part.partNumber}</strong>
+                                        {op.part.clientPartNumber && <span style={{ color: '#1976d2', marginLeft: 4 }}>{op.part.clientPartNumber}</span>}
+                                      </td>
+                                      <td style={{ padding: 8 }}>{op.serviceType || '—'}</td>
+                                      <td style={{ padding: 8, textAlign: 'right' }}>{qty}</td>
+                                      <td style={{ padding: 8, textAlign: 'right' }}>${cost.toFixed(2)}</td>
+                                      <td style={{ padding: 8, textAlign: 'right' }}>{transport > 0 ? `$${transport.toFixed(2)}` : '—'}</td>
+                                      <td style={{ padding: 8, textAlign: 'right' }}>{markup}%</td>
+                                      <td style={{ padding: 8, textAlign: 'right', color: '#2e7d32', fontWeight: 600 }}>${(profit * qty).toFixed(2)}</td>
+                                      <td style={{ padding: 8, textAlign: 'right' }}>${totalCost.toFixed(2)}</td>
+                                      <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: '#E65100' }}>${totalBilled.toFixed(2)}</td>
+                                    </tr>
+                                  );
+                                })}
+                                <tr style={{ background: '#FFF8E1', fontWeight: 700 }}>
+                                  <td colSpan={7} style={{ padding: 8, textAlign: 'right' }}>Vendor Total:</td>
+                                  <td style={{ padding: 8, textAlign: 'right' }}>${vendorCost.toFixed(2)}</td>
+                                  <td style={{ padding: 8, textAlign: 'right', color: '#E65100' }}>${vendorBilled.toFixed(2)}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })}
+
+                      {(() => {
+                        allOps.forEach(op => {
+                          const qty = parseInt(op.part.quantity) || 1;
+                          const cost = parseFloat(op.costPerPart) || 0;
+                          const transport = parseFloat(op.transportCost) || 0;
+                          const expedite = parseFloat(op.expediteCost) || 0;
+                          const markup = parseFloat(op.markup) || 0;
+                          const transMarkup = parseFloat(op.transportMarkup) || 0;
+                          const subtotal = cost + transport + expedite;
+                          const profit = (cost * markup / 100) + (transport * transMarkup / 100);
+                          grandCost += subtotal * qty;
+                          grandBilled += (subtotal + profit) * qty;
+                          grandProfit += profit * qty;
+                        });
+                        return (
+                          <div style={{ padding: 16, background: '#FFF3E0', borderRadius: 8, border: '2px solid #FFB74D' }}>
+                            <h4 style={{ margin: '0 0 12px', color: '#E65100' }}>📊 Grand Totals</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                              <div style={{ textAlign: 'center', padding: 12, background: 'white', borderRadius: 6 }}>
+                                <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 4 }}>Total Vendor Cost</div>
+                                <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#c62828' }}>${grandCost.toFixed(2)}</div>
+                              </div>
+                              <div style={{ textAlign: 'center', padding: 12, background: 'white', borderRadius: 6 }}>
+                                <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 4 }}>Profit (Markup)</div>
+                                <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#2e7d32' }}>${grandProfit.toFixed(2)}</div>
+                              </div>
+                              <div style={{ textAlign: 'center', padding: 12, background: 'white', borderRadius: 6 }}>
+                                <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 4 }}>Billed to Customer</div>
+                                <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#E65100' }}>${grandBilled.toFixed(2)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
           {/* ===== SUMMARY TAB ===== */}
           {!isNew && estimateTab === 'summary' && (
             <div style={{ minHeight: '70vh' }}>
@@ -2879,17 +3018,21 @@ function EstimateDetailsPage() {
                     const labor = parseFloat(p.laborTotal) || 0;
                     totalLaborInHouse += labor * qty;
 
-                    const opCost = parseFloat(p.outsideProcessingCost) || 0;
-                    const opMarkup = parseFloat(p.outsideProcessingMarkupPercent) || 0;
-                    const opBilled = Math.round(opCost * (1 + opMarkup / 100) * 100) / 100;
-                    totalOutsideCost += opCost * qty;
-                    totalOutsideBilled += opBilled * qty;
-
-                    const tCost = parseFloat(p.outsideProcessingTransportCost) || 0;
-                    const tMarkup = parseFloat(p.outsideProcessingTransportMarkupPercent) || 0;
-                    const tBilled = Math.round(tCost * (1 + tMarkup / 100) * 100) / 100;
-                    totalTransportCost += tCost * qty;
-                    totalTransportBilled += tBilled * qty;
+                    // New multi-operation outside processing
+                    const ops = p.outsideProcessing || [];
+                    ops.forEach(op => {
+                      const opCostPerPart = parseFloat(op.costPerPart) || 0;
+                      const opTransportPerPart = parseFloat(op.transportCost) || 0;
+                      const opExpedite = parseFloat(op.expediteCost) || 0;
+                      const opMarkup = parseFloat(op.markup) || 0;
+                      const opTransMarkup = parseFloat(op.transportMarkup) || 0;
+                      const opCostBilled = opCostPerPart * (1 + opMarkup / 100);
+                      const opTransBilled = opTransportPerPart * (1 + opTransMarkup / 100);
+                      totalOutsideCost += (opCostPerPart + opExpedite) * qty;
+                      totalOutsideBilled += (opCostBilled + opExpedite) * qty;
+                      totalTransportCost += opTransportPerPart * qty;
+                      totalTransportBilled += opTransBilled * qty;
+                    });
                   });
 
                   // Services (fab, shop rate)

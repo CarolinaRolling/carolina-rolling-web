@@ -4,6 +4,7 @@ import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import HeatNumberInput from './HeatNumberInput';
+import OutsideProcessingSection, { calculateOpTotals } from './OutsideProcessingSection';
 
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
@@ -260,8 +261,13 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   const materialEachRaw = Math.round(materialCost * (1 + materialMarkup / 100) * 100) / 100;
   const rounding = partData._materialRounding || 'none';
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
-  const laborEach = parseFloat(partData.laborTotal) || 0;
-  const unitPrice = materialEach + laborEach;
+  const baseLaborEach = parseFloat(partData.laborTotal) || 0;
+  // Calculate outside processing totals
+  const opTotals = calculateOpTotals(partData.outsideProcessing);
+  // Add OP cost to material total, and OP profit to labor (for customer billing)
+  const laborEach = baseLaborEach + opTotals.totalProfit;
+  const opCostEach = opTotals.totalCost; // vendor cost (rolled into material)
+  const unitPrice = materialEach + laborEach + opCostEach;
   const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
   // Auto-update part total
@@ -781,8 +787,22 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
           </div>}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
             <span>Labor (ea)</span>
-            <span>${laborEach.toFixed(2)}</span>
+            <span>${baseLaborEach.toFixed(2)}</span>
           </div>
+          {opTotals.totalCost > 0 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#E65100' }}>
+                <span>🏭 Outside Processing (vendor cost)</span>
+                <span>${opTotals.totalCost.toFixed(2)}</span>
+              </div>
+              {opTotals.totalProfit > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#2e7d32' }}>
+                  <span>+ OP Markup (rolled into labor)</span>
+                  <span>${opTotals.totalProfit.toFixed(2)}</span>
+                </div>
+              )}
+            </>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9', marginTop: 4 }}>
             <strong>Unit Price</strong>
             <strong style={{ color: '#1976d2' }}>${unitPrice.toFixed(2)}</strong>
@@ -792,6 +812,9 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
             <strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong>
           </div>
         </div>
+
+        {/* Outside Processing */}
+        <OutsideProcessingSection partData={partData} setPartData={setPartData} />
       </div>
 
       {/* === TRACKING (Client Part # / Heat #) — moved to bottom === */}

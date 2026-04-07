@@ -2648,6 +2648,7 @@ function WorkOrderDetailsPage() {
           { key: 'parts', label: '📦 Parts', count: order.parts?.length || 0 },
           { key: 'documents', label: '📄 Documents', count: (order.documents?.filter(d => d.documentType !== 'purchase_order').length || 0) || undefined },
           { key: 'materials', label: '📋 Materials' },
+          ...((order.parts || []).some(p => (p.outsideProcessing || []).length > 0) ? [{ key: 'outside_processing', label: '🏭 Outside Processing', count: (order.parts || []).filter(p => (p.outsideProcessing || []).length > 0).length }] : []),
           { key: 'summary', label: '📊 Summary' },
           { key: 'shipping', label: '🚚 Outbound', count: (order.pickupHistory || []).length || undefined }
         ].map(tab => (
@@ -3703,6 +3704,148 @@ function WorkOrderDetailsPage() {
         </div>
       )}
 
+      {/* ===== OUTSIDE PROCESSING TAB ===== */}
+      {woTab === 'outside_processing' && (
+        <div className="card" style={{ marginTop: 0, minHeight: '70vh' }}>
+          <h3 className="card-title" style={{ marginBottom: 16 }}>🏭 Outside Processing Operations</h3>
+          {(() => {
+            const allOps = [];
+            (order.parts || []).forEach(p => {
+              (p.outsideProcessing || []).forEach((op, opIdx) => {
+                allOps.push({ ...op, opIdx, part: p });
+              });
+            });
+
+            if (allOps.length === 0) {
+              return <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No outside processing operations on this order.</div>;
+            }
+
+            // Group by vendor + service (since one PO is for a specific vendor doing a specific service)
+            const groups = {};
+            allOps.forEach(o => {
+              const key = `${o.vendorId || 'no_vendor'}_${o.serviceType || 'unknown'}`;
+              if (!groups[key]) {
+                groups[key] = {
+                  vendorId: o.vendorId,
+                  vendorName: o.vendorName || '(no vendor)',
+                  serviceType: o.serviceType || 'Unknown',
+                  ops: [],
+                  hasPO: false,
+                  poNumber: null
+                };
+              }
+              groups[key].ops.push(o);
+              // If any op in this group has a poNumber stored, mark as having PO
+              if (o.poNumber) {
+                groups[key].hasPO = true;
+                groups[key].poNumber = o.poNumber;
+              }
+            });
+
+            return (
+              <div>
+                {Object.entries(groups).map(([key, group]) => {
+                  let groupCost = 0, groupBilled = 0, totalUnits = 0;
+                  group.ops.forEach(op => {
+                    const qty = parseInt(op.part.quantity) || 1;
+                    const cost = parseFloat(op.costPerPart) || 0;
+                    const transport = parseFloat(op.transportCost) || 0;
+                    const expedite = parseFloat(op.expediteCost) || 0;
+                    const markup = parseFloat(op.markup) || 0;
+                    const transMarkup = parseFloat(op.transportMarkup) || 0;
+                    const profit = (cost * markup / 100) + (transport * transMarkup / 100);
+                    groupCost += (cost + transport + expedite) * qty;
+                    groupBilled += (cost + transport + expedite + profit) * qty;
+                    totalUnits += qty;
+                  });
+
+                  return (
+                    <div key={key} style={{ marginBottom: 20, border: '1px solid #FFE0B2', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ background: '#FFF3E0', padding: 12, borderBottom: '1px solid #FFE0B2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <strong style={{ color: '#E65100' }}>🏭 {group.vendorName}</strong>
+                          <span style={{ marginLeft: 8, color: '#666' }}>— {group.serviceType}</span>
+                          <span style={{ marginLeft: 8, fontSize: '0.85rem', color: '#666' }}>({group.ops.length} part{group.ops.length !== 1 ? 's' : ''}, {totalUnits} units)</span>
+                          {group.hasPO && <span style={{ marginLeft: 8, padding: '2px 8px', background: '#2e7d32', color: 'white', borderRadius: 4, fontSize: '0.7rem', fontWeight: 700 }}>✓ {group.poNumber}</span>}
+                        </div>
+                        {!group.hasPO && group.vendorId && (
+                          <button onClick={async () => {
+                            try {
+                              const partIds = group.ops.map(o => o.part.id);
+                              const firstOp = group.ops[0];
+                              const res = await createOutsideProcessingPO(id, {
+                                partIds,
+                                vendorId: group.vendorId,
+                                serviceType: group.serviceType,
+                                costPerPart: parseFloat(firstOp.costPerPart) || 0,
+                                transportCost: parseFloat(firstOp.transportCost) || 0,
+                                expediteCost: parseFloat(firstOp.expediteCost) || 0,
+                                notes: firstOp.notes || ''
+                              });
+                              showMessage(res.data.message || 'PO created');
+                              await loadOrder();
+                            } catch (err) {
+                              setError('Failed to create PO: ' + (err.response?.data?.error?.message || err.message));
+                            }
+                          }} style={{ background: '#E65100', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                            🖨 Generate PO
+                          </button>
+                        )}
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: '#FFF8E1' }}>
+                            <th style={{ padding: 8, textAlign: 'left' }}>Part</th>
+                            <th style={{ padding: 8, textAlign: 'right' }}>Qty</th>
+                            <th style={{ padding: 8, textAlign: 'right' }}>Cost/Part</th>
+                            <th style={{ padding: 8, textAlign: 'right' }}>Transport</th>
+                            <th style={{ padding: 8, textAlign: 'right' }}>Profit</th>
+                            <th style={{ padding: 8, textAlign: 'right' }}>Total Cost</th>
+                            <th style={{ padding: 8, textAlign: 'right' }}>Billed</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.ops.map((op, idx) => {
+                            const qty = parseInt(op.part.quantity) || 1;
+                            const cost = parseFloat(op.costPerPart) || 0;
+                            const transport = parseFloat(op.transportCost) || 0;
+                            const expedite = parseFloat(op.expediteCost) || 0;
+                            const markup = parseFloat(op.markup) || 0;
+                            const transMarkup = parseFloat(op.transportMarkup) || 0;
+                            const profit = (cost * markup / 100) + (transport * transMarkup / 100);
+                            const totalCost = (cost + transport + expedite) * qty;
+                            const totalBilled = (cost + transport + expedite + profit) * qty;
+                            return (
+                              <tr key={idx} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                                <td style={{ padding: 8 }}>
+                                  <strong>#{op.part.partNumber}</strong>
+                                  {op.part.clientPartNumber && <span style={{ color: '#1976d2', marginLeft: 4 }}>{op.part.clientPartNumber}</span>}
+                                </td>
+                                <td style={{ padding: 8, textAlign: 'right' }}>{qty}</td>
+                                <td style={{ padding: 8, textAlign: 'right' }}>${cost.toFixed(2)}</td>
+                                <td style={{ padding: 8, textAlign: 'right' }}>{transport > 0 ? `$${transport.toFixed(2)}` : '—'}</td>
+                                <td style={{ padding: 8, textAlign: 'right', color: '#2e7d32' }}>${(profit * qty).toFixed(2)}</td>
+                                <td style={{ padding: 8, textAlign: 'right' }}>${totalCost.toFixed(2)}</td>
+                                <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: '#E65100' }}>${totalBilled.toFixed(2)}</td>
+                              </tr>
+                            );
+                          })}
+                          <tr style={{ background: '#FFF8E1', fontWeight: 700 }}>
+                            <td colSpan={5} style={{ padding: 8, textAlign: 'right' }}>Group Total:</td>
+                            <td style={{ padding: 8, textAlign: 'right' }}>${groupCost.toFixed(2)}</td>
+                            <td style={{ padding: 8, textAlign: 'right', color: '#E65100' }}>${groupBilled.toFixed(2)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* ===== SUMMARY TAB ===== */}
       {woTab === 'summary' && (
         <div className="card" style={{ marginTop: 0, minHeight: '70vh' }}>
@@ -3724,15 +3867,21 @@ function WorkOrderDetailsPage() {
               totalMaterialBilled += matBilled * qty;
               totalLaborInHouse += (parseFloat(p.laborTotal) || 0) * qty;
 
-              const opCost = parseFloat(p.outsideProcessingCost) || 0;
-              const opMarkup = parseFloat(p.outsideProcessingMarkupPercent) || 0;
-              totalOutsideCost += opCost * qty;
-              totalOutsideBilled += Math.round(opCost * (1 + opMarkup / 100) * 100) / 100 * qty;
-
-              const tCost = parseFloat(p.outsideProcessingTransportCost) || 0;
-              const tMarkup = parseFloat(p.outsideProcessingTransportMarkupPercent) || 0;
-              totalTransportCost += tCost * qty;
-              totalTransportBilled += Math.round(tCost * (1 + tMarkup / 100) * 100) / 100 * qty;
+              // Multi-operation outside processing
+              const ops = p.outsideProcessing || [];
+              ops.forEach(op => {
+                const opCostPerPart = parseFloat(op.costPerPart) || 0;
+                const opTransportPerPart = parseFloat(op.transportCost) || 0;
+                const opExpedite = parseFloat(op.expediteCost) || 0;
+                const opMarkup = parseFloat(op.markup) || 0;
+                const opTransMarkup = parseFloat(op.transportMarkup) || 0;
+                const opCostBilled = opCostPerPart * (1 + opMarkup / 100);
+                const opTransBilled = opTransportPerPart * (1 + opTransMarkup / 100);
+                totalOutsideCost += (opCostPerPart + opExpedite) * qty;
+                totalOutsideBilled += (opCostBilled + opExpedite) * qty;
+                totalTransportCost += opTransportPerPart * qty;
+                totalTransportBilled += opTransBilled * qty;
+              });
             });
 
             let totalServicesCost = 0;

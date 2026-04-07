@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Upload, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import HeatNumberInput from './HeatNumberInput';
+import OutsideProcessingSection, { calculateOpTotals } from './OutsideProcessingSection';
 
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
@@ -281,8 +282,11 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   var matEaRaw = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
   var rounding = partData._materialRounding || 'none';
   var matEa = rounding === 'dollar' && matEaRaw > 0 ? Math.ceil(matEaRaw) : rounding === 'five' && matEaRaw > 0 ? Math.ceil(matEaRaw / 5) * 5 : matEaRaw;
-  var labEa = parseFloat(partData.laborTotal) || 0;
-  var unitPrice = matEa + labEa, lineTotal = Math.round(unitPrice * qty * 100) / 100;
+  var baseLabEa = parseFloat(partData.laborTotal) || 0;
+  var opTotals = calculateOpTotals(partData.outsideProcessing);
+  var labEa = baseLabEa + opTotals.totalProfit;
+  var opCostEach = opTotals.totalCost;
+  var unitPrice = matEa + labEa + opCostEach, lineTotal = Math.round(unitPrice * qty * 100) / 100;
   useEffect(function() { setPartData(function(p) { return Object.assign({}, p, { partTotal: lineTotal.toFixed(2) }); }); }, [lineTotal]);
 
   var isCustomThk = partData.thickness && !THICKNESS_OPTIONS.includes(partData.thickness) && partData.thickness !== 'Custom';
@@ -558,11 +562,26 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
                   fontWeight: (partData._materialRounding || 'none') === o.k ? 700 : 400 }}>{o.l}</button>
             ))}
           </div>}
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Labor (ea)</span><span>${labEa.toFixed(2)}</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Labor (ea)</span><span>${baseLabEa.toFixed(2)}</span></div>
+          {opTotals.totalCost > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#E65100' }}>
+              <span>🏭 Outside Processing (vendor cost)</span>
+              <span>${opTotals.totalCost.toFixed(2)}</span>
+            </div>
+          )}
+          {opTotals.totalProfit > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#2e7d32' }}>
+              <span>+ OP Markup (rolled into labor)</span>
+              <span>${opTotals.totalProfit.toFixed(2)}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9', marginTop: 4 }}><strong>Unit Price</strong><strong style={{ color: '#1976d2' }}>${unitPrice.toFixed(2)}</strong></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9' }}><strong>Line Total ({qty} × ${unitPrice.toFixed(2)})</strong><strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong></div>
         </div>
       </div>
+
+      {/* OUTSIDE PROCESSING */}
+      <OutsideProcessingSection partData={partData} setPartData={setPartData} />
 
       {/* TRACKING */}
       <div style={secStyle}>
