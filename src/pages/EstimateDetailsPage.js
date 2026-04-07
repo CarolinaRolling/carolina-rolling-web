@@ -856,8 +856,12 @@ function EstimateDetailsPage() {
     // Clear vendor search state from previous part edit
     setVendorSuggestions([]);
     setShowVendorSuggestions(false);
+    // Robust spread: explicitly merge formData (in case backend didn't merge it,
+    // or in case some fields are nested only in formData JSONB)
+    const formDataFields = (part.formData && typeof part.formData === 'object') ? part.formData : {};
     const editData = {
-      ...part,
+      ...formDataFields,  // First: spread nested formData fields (cone, beam, etc)
+      ...part,            // Then: top-level part fields (overrides any duplicates)
       _vendorSearch: undefined, // ensure clean vendor search state
       weSupplyMaterial: part.weSupplyMaterial || false,
       materialUnitCost: part.materialUnitCost || '',
