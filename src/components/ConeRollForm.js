@@ -283,7 +283,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   var rounding = partData._materialRounding || 'none';
   var matEa = rounding === 'dollar' && matEaRaw > 0 ? Math.ceil(matEaRaw) : rounding === 'five' && matEaRaw > 0 ? Math.ceil(matEaRaw / 5) * 5 : matEaRaw;
   var baseLabEa = parseFloat(partData.laborTotal) || 0;
-  var opTotals = calculateOpTotals(partData.outsideProcessing);
+  var opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
   var labEa = baseLabEa + opTotals.totalProfit;
   var opCostEach = opTotals.totalCost;
   var unitPrice = matEa + labEa + opCostEach, lineTotal = Math.round(unitPrice * qty * 100) / 100;

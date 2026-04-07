@@ -225,7 +225,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
   const rounding = partData._materialRounding || 'none';
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
   const baseLaborEach = parseFloat(partData.laborTotal) || 0;
-  const opTotals = calculateOpTotals(partData.outsideProcessing);
+  const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
   const laborEach = baseLaborEach + opTotals.totalProfit;
   const opCostEach = opTotals.totalCost;
   const unitPrice = materialEach + laborEach + opCostEach;

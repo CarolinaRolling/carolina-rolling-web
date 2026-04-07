@@ -3745,18 +3745,24 @@ function WorkOrderDetailsPage() {
             return (
               <div>
                 {Object.entries(groups).map(([key, group]) => {
-                  let groupCost = 0, groupBilled = 0, totalUnits = 0;
+                  let groupVendorCost = 0, groupVendorBilled = 0, totalUnits = 0;
+                  // Aggregate transport across all ops in this group
+                  const transportLegs = []; // [{vendorName, vendorId, cost, markup, leg, partNum}]
                   group.ops.forEach(op => {
                     const qty = parseInt(op.part.quantity) || 1;
                     const cost = parseFloat(op.costPerPart) || 0;
-                    const transport = parseFloat(op.transportCost) || 0;
                     const expedite = parseFloat(op.expediteCost) || 0;
                     const markup = parseFloat(op.markup) || 0;
-                    const transMarkup = parseFloat(op.transportMarkup) || 0;
-                    const profit = (cost * markup / 100) + (transport * transMarkup / 100);
-                    groupCost += (cost + transport + expedite) * qty;
-                    groupBilled += (cost + transport + expedite + profit) * qty;
+                    const costProfit = cost * (markup / 100) * qty;
+                    groupVendorCost += (cost + expedite) * qty;
+                    groupVendorBilled += (cost + expedite) * qty + costProfit;
                     totalUnits += qty;
+                    if (op.outboundTransport && parseFloat(op.outboundTransport.cost) > 0) {
+                      transportLegs.push({ ...op.outboundTransport, leg: 'Outbound', partNum: op.part.partNumber });
+                    }
+                    if (op.inboundTransport && parseFloat(op.inboundTransport.cost) > 0) {
+                      transportLegs.push({ ...op.inboundTransport, leg: 'Inbound', partNum: op.part.partNumber });
+                    }
                   });
 
                   return (
@@ -3778,7 +3784,6 @@ function WorkOrderDetailsPage() {
                                 vendorId: group.vendorId,
                                 serviceType: group.serviceType,
                                 costPerPart: parseFloat(firstOp.costPerPart) || 0,
-                                transportCost: parseFloat(firstOp.transportCost) || 0,
                                 expediteCost: parseFloat(firstOp.expediteCost) || 0,
                                 notes: firstOp.notes || ''
                               });
@@ -3788,7 +3793,7 @@ function WorkOrderDetailsPage() {
                               setError('Failed to create PO: ' + (err.response?.data?.error?.message || err.message));
                             }
                           }} style={{ background: '#E65100', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                            🖨 Generate PO
+                            🖨 Generate Vendor PO
                           </button>
                         )}
                       </div>
@@ -3798,9 +3803,9 @@ function WorkOrderDetailsPage() {
                             <th style={{ padding: 8, textAlign: 'left' }}>Part</th>
                             <th style={{ padding: 8, textAlign: 'right' }}>Qty</th>
                             <th style={{ padding: 8, textAlign: 'right' }}>Cost/Part</th>
-                            <th style={{ padding: 8, textAlign: 'right' }}>Transport</th>
+                            <th style={{ padding: 8, textAlign: 'right' }}>Markup</th>
                             <th style={{ padding: 8, textAlign: 'right' }}>Profit</th>
-                            <th style={{ padding: 8, textAlign: 'right' }}>Total Cost</th>
+                            <th style={{ padding: 8, textAlign: 'right' }}>Vendor Cost</th>
                             <th style={{ padding: 8, textAlign: 'right' }}>Billed</th>
                           </tr>
                         </thead>
@@ -3808,13 +3813,11 @@ function WorkOrderDetailsPage() {
                           {group.ops.map((op, idx) => {
                             const qty = parseInt(op.part.quantity) || 1;
                             const cost = parseFloat(op.costPerPart) || 0;
-                            const transport = parseFloat(op.transportCost) || 0;
                             const expedite = parseFloat(op.expediteCost) || 0;
                             const markup = parseFloat(op.markup) || 0;
-                            const transMarkup = parseFloat(op.transportMarkup) || 0;
-                            const profit = (cost * markup / 100) + (transport * transMarkup / 100);
-                            const totalCost = (cost + transport + expedite) * qty;
-                            const totalBilled = (cost + transport + expedite + profit) * qty;
+                            const profit = cost * (markup / 100) * qty;
+                            const totalCost = (cost + expedite) * qty;
+                            const totalBilled = totalCost + profit;
                             return (
                               <tr key={idx} style={{ borderBottom: '1px solid #f5f5f5' }}>
                                 <td style={{ padding: 8 }}>
@@ -3823,20 +3826,45 @@ function WorkOrderDetailsPage() {
                                 </td>
                                 <td style={{ padding: 8, textAlign: 'right' }}>{qty}</td>
                                 <td style={{ padding: 8, textAlign: 'right' }}>${cost.toFixed(2)}</td>
-                                <td style={{ padding: 8, textAlign: 'right' }}>{transport > 0 ? `$${transport.toFixed(2)}` : '—'}</td>
-                                <td style={{ padding: 8, textAlign: 'right', color: '#2e7d32' }}>${(profit * qty).toFixed(2)}</td>
+                                <td style={{ padding: 8, textAlign: 'right' }}>{markup}%</td>
+                                <td style={{ padding: 8, textAlign: 'right', color: '#2e7d32' }}>${profit.toFixed(2)}</td>
                                 <td style={{ padding: 8, textAlign: 'right' }}>${totalCost.toFixed(2)}</td>
                                 <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: '#E65100' }}>${totalBilled.toFixed(2)}</td>
                               </tr>
                             );
                           })}
                           <tr style={{ background: '#FFF8E1', fontWeight: 700 }}>
-                            <td colSpan={5} style={{ padding: 8, textAlign: 'right' }}>Group Total:</td>
-                            <td style={{ padding: 8, textAlign: 'right' }}>${groupCost.toFixed(2)}</td>
-                            <td style={{ padding: 8, textAlign: 'right', color: '#E65100' }}>${groupBilled.toFixed(2)}</td>
+                            <td colSpan={5} style={{ padding: 8, textAlign: 'right' }}>Vendor Subtotal:</td>
+                            <td style={{ padding: 8, textAlign: 'right' }}>${groupVendorCost.toFixed(2)}</td>
+                            <td style={{ padding: 8, textAlign: 'right', color: '#E65100' }}>${groupVendorBilled.toFixed(2)}</td>
                           </tr>
                         </tbody>
                       </table>
+
+                      {/* Transport legs section */}
+                      {transportLegs.length > 0 && (
+                        <div style={{ background: '#F5F5F5', padding: 12, borderTop: '1px solid #ddd' }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#555', marginBottom: 8 }}>🚛 Transport Legs</div>
+                          {transportLegs.map((t, i) => {
+                            const tCost = parseFloat(t.cost) || 0;
+                            const tMarkup = parseFloat(t.markup) || 0;
+                            const tBilled = tCost * (1 + tMarkup / 100);
+                            const tProfit = tBilled - tCost;
+                            return (
+                              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: '0.8rem', borderBottom: i < transportLegs.length - 1 ? '1px solid #e0e0e0' : 'none' }}>
+                                <div>
+                                  <strong>{t.leg}</strong> — {t.vendorName || '(no trucking vendor)'} <span style={{ color: '#888' }}>(Part #{t.partNum})</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                                  <span>Cost: ${tCost.toFixed(2)}</span>
+                                  <span style={{ color: '#2e7d32' }}>+${tProfit.toFixed(2)} ({tMarkup}%)</span>
+                                  <span style={{ fontWeight: 700, color: '#E65100' }}>${tBilled.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -3871,16 +3899,19 @@ function WorkOrderDetailsPage() {
               const ops = p.outsideProcessing || [];
               ops.forEach(op => {
                 const opCostPerPart = parseFloat(op.costPerPart) || 0;
-                const opTransportPerPart = parseFloat(op.transportCost) || 0;
                 const opExpedite = parseFloat(op.expediteCost) || 0;
                 const opMarkup = parseFloat(op.markup) || 0;
-                const opTransMarkup = parseFloat(op.transportMarkup) || 0;
+                const out = op.outboundTransport;
+                const inb = op.inboundTransport;
+                const outCost = out ? (parseFloat(out.cost) || 0) : 0;
+                const outMarkup = out ? (parseFloat(out.markup) || 0) : 0;
+                const inCost = inb ? (parseFloat(inb.cost) || 0) : 0;
+                const inMarkup = inb ? (parseFloat(inb.markup) || 0) : 0;
                 const opCostBilled = opCostPerPart * (1 + opMarkup / 100);
-                const opTransBilled = opTransportPerPart * (1 + opTransMarkup / 100);
                 totalOutsideCost += (opCostPerPart + opExpedite) * qty;
                 totalOutsideBilled += (opCostBilled + opExpedite) * qty;
-                totalTransportCost += opTransportPerPart * qty;
-                totalTransportBilled += opTransBilled * qty;
+                totalTransportCost += outCost + inCost;
+                totalTransportBilled += outCost * (1 + outMarkup / 100) + inCost * (1 + inMarkup / 100);
               });
             });
 

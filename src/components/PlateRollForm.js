@@ -263,7 +263,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   const materialEach = rounding === 'dollar' && materialEachRaw > 0 ? Math.ceil(materialEachRaw) : rounding === 'five' && materialEachRaw > 0 ? Math.ceil(materialEachRaw / 5) * 5 : materialEachRaw;
   const baseLaborEach = parseFloat(partData.laborTotal) || 0;
   // Calculate outside processing totals
-  const opTotals = calculateOpTotals(partData.outsideProcessing);
+  const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
   // Add OP cost to material total, and OP profit to labor (for customer billing)
   const laborEach = baseLaborEach + opTotals.totalProfit;
   const opCostEach = opTotals.totalCost; // vendor cost (rolled into material)

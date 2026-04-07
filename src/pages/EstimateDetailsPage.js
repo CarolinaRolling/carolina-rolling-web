@@ -2899,8 +2899,8 @@ function EstimateDetailsPage() {
                                   <th style={{ padding: 8, textAlign: 'left' }}>Service</th>
                                   <th style={{ padding: 8, textAlign: 'right' }}>Qty</th>
                                   <th style={{ padding: 8, textAlign: 'right' }}>Cost/Part</th>
-                                  <th style={{ padding: 8, textAlign: 'right' }}>Transport</th>
-                                  <th style={{ padding: 8, textAlign: 'right' }}>Markup</th>
+                                  <th style={{ padding: 8, textAlign: 'right' }}>Outbound</th>
+                                  <th style={{ padding: 8, textAlign: 'right' }}>Inbound</th>
                                   <th style={{ padding: 8, textAlign: 'right' }}>Profit</th>
                                   <th style={{ padding: 8, textAlign: 'right' }}>Total Cost</th>
                                   <th style={{ padding: 8, textAlign: 'right' }}>Billed</th>
@@ -2910,14 +2910,20 @@ function EstimateDetailsPage() {
                                 {group.ops.map((op, idx) => {
                                   const qty = parseInt(op.part.quantity) || 1;
                                   const cost = parseFloat(op.costPerPart) || 0;
-                                  const transport = parseFloat(op.transportCost) || 0;
                                   const expedite = parseFloat(op.expediteCost) || 0;
                                   const markup = parseFloat(op.markup) || 0;
-                                  const transMarkup = parseFloat(op.transportMarkup) || 0;
-                                  const subtotal = cost + transport + expedite;
-                                  const profit = (cost * markup / 100) + (transport * transMarkup / 100);
-                                  const totalCost = subtotal * qty;
-                                  const totalBilled = (subtotal + profit) * qty;
+                                  const out = op.outboundTransport;
+                                  const inb = op.inboundTransport;
+                                  const outCost = out ? (parseFloat(out.cost) || 0) : 0;
+                                  const outMarkup = out ? (parseFloat(out.markup) || 0) : 0;
+                                  const inCost = inb ? (parseFloat(inb.cost) || 0) : 0;
+                                  const inMarkup = inb ? (parseFloat(inb.markup) || 0) : 0;
+                                  const totalCost = (cost + expedite) * qty + outCost + inCost;
+                                  const costProfit = cost * (markup / 100) * qty;
+                                  const outProfit = outCost * (outMarkup / 100);
+                                  const inProfit = inCost * (inMarkup / 100);
+                                  const profit = costProfit + outProfit + inProfit;
+                                  const totalBilled = totalCost + profit;
                                   vendorCost += totalCost;
                                   vendorBilled += totalBilled;
                                   return (
@@ -2928,10 +2934,10 @@ function EstimateDetailsPage() {
                                       </td>
                                       <td style={{ padding: 8 }}>{op.serviceType || '—'}</td>
                                       <td style={{ padding: 8, textAlign: 'right' }}>{qty}</td>
-                                      <td style={{ padding: 8, textAlign: 'right' }}>${cost.toFixed(2)}</td>
-                                      <td style={{ padding: 8, textAlign: 'right' }}>{transport > 0 ? `$${transport.toFixed(2)}` : '—'}</td>
-                                      <td style={{ padding: 8, textAlign: 'right' }}>{markup}%</td>
-                                      <td style={{ padding: 8, textAlign: 'right', color: '#2e7d32', fontWeight: 600 }}>${(profit * qty).toFixed(2)}</td>
+                                      <td style={{ padding: 8, textAlign: 'right' }}>${cost.toFixed(2)}{markup > 0 && <span style={{ color: '#888', fontSize: '0.7rem' }}> +{markup}%</span>}</td>
+                                      <td style={{ padding: 8, textAlign: 'right' }}>{outCost > 0 ? <>${outCost.toFixed(2)}<div style={{ fontSize: '0.7rem', color: '#888' }}>{out.vendorName || '—'}</div></> : '—'}</td>
+                                      <td style={{ padding: 8, textAlign: 'right' }}>{inCost > 0 ? <>${inCost.toFixed(2)}<div style={{ fontSize: '0.7rem', color: '#888' }}>{inb.vendorName || '—'}</div></> : '—'}</td>
+                                      <td style={{ padding: 8, textAlign: 'right', color: '#2e7d32', fontWeight: 600 }}>${profit.toFixed(2)}</td>
                                       <td style={{ padding: 8, textAlign: 'right' }}>${totalCost.toFixed(2)}</td>
                                       <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: '#E65100' }}>${totalBilled.toFixed(2)}</td>
                                     </tr>
@@ -2952,15 +2958,19 @@ function EstimateDetailsPage() {
                         allOps.forEach(op => {
                           const qty = parseInt(op.part.quantity) || 1;
                           const cost = parseFloat(op.costPerPart) || 0;
-                          const transport = parseFloat(op.transportCost) || 0;
                           const expedite = parseFloat(op.expediteCost) || 0;
                           const markup = parseFloat(op.markup) || 0;
-                          const transMarkup = parseFloat(op.transportMarkup) || 0;
-                          const subtotal = cost + transport + expedite;
-                          const profit = (cost * markup / 100) + (transport * transMarkup / 100);
-                          grandCost += subtotal * qty;
-                          grandBilled += (subtotal + profit) * qty;
-                          grandProfit += profit * qty;
+                          const out = op.outboundTransport;
+                          const inb = op.inboundTransport;
+                          const outCost = out ? (parseFloat(out.cost) || 0) : 0;
+                          const outMarkup = out ? (parseFloat(out.markup) || 0) : 0;
+                          const inCost = inb ? (parseFloat(inb.cost) || 0) : 0;
+                          const inMarkup = inb ? (parseFloat(inb.markup) || 0) : 0;
+                          const totalCost = (cost + expedite) * qty + outCost + inCost;
+                          const profit = (cost * markup / 100) * qty + (outCost * outMarkup / 100) + (inCost * inMarkup / 100);
+                          grandCost += totalCost;
+                          grandBilled += totalCost + profit;
+                          grandProfit += profit;
                         });
                         return (
                           <div style={{ padding: 16, background: '#FFF3E0', borderRadius: 8, border: '2px solid #FFB74D' }}>
@@ -3022,16 +3032,19 @@ function EstimateDetailsPage() {
                     const ops = p.outsideProcessing || [];
                     ops.forEach(op => {
                       const opCostPerPart = parseFloat(op.costPerPart) || 0;
-                      const opTransportPerPart = parseFloat(op.transportCost) || 0;
                       const opExpedite = parseFloat(op.expediteCost) || 0;
                       const opMarkup = parseFloat(op.markup) || 0;
-                      const opTransMarkup = parseFloat(op.transportMarkup) || 0;
+                      const out = op.outboundTransport;
+                      const inb = op.inboundTransport;
+                      const outCost = out ? (parseFloat(out.cost) || 0) : 0;
+                      const outMarkup = out ? (parseFloat(out.markup) || 0) : 0;
+                      const inCost = inb ? (parseFloat(inb.cost) || 0) : 0;
+                      const inMarkup = inb ? (parseFloat(inb.markup) || 0) : 0;
                       const opCostBilled = opCostPerPart * (1 + opMarkup / 100);
-                      const opTransBilled = opTransportPerPart * (1 + opTransMarkup / 100);
                       totalOutsideCost += (opCostPerPart + opExpedite) * qty;
                       totalOutsideBilled += (opCostBilled + opExpedite) * qty;
-                      totalTransportCost += opTransportPerPart * qty;
-                      totalTransportBilled += opTransBilled * qty;
+                      totalTransportCost += outCost + inCost;
+                      totalTransportBilled += outCost * (1 + outMarkup / 100) + inCost * (1 + inMarkup / 100);
                     });
                   });
 
