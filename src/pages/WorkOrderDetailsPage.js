@@ -2840,15 +2840,24 @@ function WorkOrderDetailsPage() {
               const partQty = parseInt(part.quantity) || 1;
               const transportMatPerPart = partQty > 0 ? transportAlloc.materialBilled / partQty : 0;
               const transportLabPerPart = partQty > 0 ? transportAlloc.laborBilled / partQty : 0;
-              // Compute display values that include transport allocation
+              // Compute display values that include transport allocation AND outside processing cost
               const baseLaborPerPart = parseFloat(part.laborTotal) || 0;
               const baseMaterialPerPart = (() => {
                 const matCost = parseFloat(part.materialTotal) || 0;
                 const matMarkup = parseFloat(part.materialMarkupPercent) || 0;
                 return matCost * (1 + matMarkup / 100);
               })();
-              const displayLabor = baseLaborPerPart + transportLabPerPart;
-              const displayMaterial = baseMaterialPerPart + transportMatPerPart;
+              // Bundle OP cost into the labor line (matches estimate page behavior)
+              // part.laborTotal already contains OP markup (saved that way by form); we need to add the vendor cost
+              const opCostPerPart = (part.outsideProcessing || []).reduce((sum, op) => {
+                const cost = parseFloat(op.costPerPart) || 0;
+                const expedite = parseFloat(op.expediteCost) || 0;
+                return sum + cost + expedite;
+              }, 0);
+              const hiddenFromCustomer = !!((part.formData || {})._fsHiddenFromCustomer || part._fsHiddenFromCustomer);
+              // Hidden-from-customer parts don't contribute to the customer-facing total
+              const displayLabor = hiddenFromCustomer ? 0 : (baseLaborPerPart + opCostPerPart + transportLabPerPart);
+              const displayMaterial = hiddenFromCustomer ? 0 : (baseMaterialPerPart + transportMatPerPart);
               const displayTotal = (displayLabor + displayMaterial) * partQty;
               return (
               <div key={part.id} style={{
@@ -4262,24 +4271,6 @@ function WorkOrderDetailsPage() {
             const grossProfit = totalRevenue - totalExpenses;
             const margin = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 100) : 0;
             const totalMarkupProfit = (totalMaterialBilled - totalMaterialCost) + (totalOutsideBilled - totalOutsideCost) + (totalTransportBilled - totalTransportCost);
-
-            // TEMP DIAGNOSTIC — remove after bug is fixed
-            console.log('[Summary Debug]', {
-              totalMaterialCost, totalMaterialBilled,
-              totalLaborInHouse,
-              totalOutsideCost, totalOutsideBilled,
-              totalTransportCost, totalTransportBilled,
-              totalServicesCost,
-              trucking,
-              totalExpenses,
-              totalRevenue,
-              'totals.grandTotal': totals.grandTotal,
-              'totals.partsSubtotal': totals.partsSubtotal,
-              'totals.taxAmount': totals.taxAmount,
-              grossProfit,
-              margin,
-              totalMarkupProfit
-            });
 
             const row = (label, amount, opts = {}) => (
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: opts.size || '0.9rem', color: opts.color || '#333', fontWeight: opts.bold ? 700 : 400, borderTop: opts.border ? '2px solid #e0e0e0' : 'none', marginTop: opts.border ? 8 : 0, paddingTop: opts.border ? 12 : 6 }}>

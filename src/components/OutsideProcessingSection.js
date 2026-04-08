@@ -324,57 +324,6 @@ export default function OutsideProcessingSection({ partData, setPartData, allowH
         </button>
       )}
 
-      {/* Trucking (lot-level, only when showTrucking prop true) */}
-      {enabled && showTrucking && (
-        <div style={{ marginTop: 10, padding: 10, background: 'white', borderRadius: 6, border: '1px solid #FFE0B2' }}>
-          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#E65100', marginBottom: 8 }}>
-            🚛 Trucking (lot total — not per part)
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>Outbound (to vendor)</label>
-              <input type="number" step="any" className="form-input"
-                value={partData._fsOutboundTrucking || ''}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setPartData(prev => ({ ...prev, _fsOutboundTrucking: e.target.value }))}
-                placeholder="0.00" style={{ fontSize: '0.85rem' }} />
-            </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>Inbound (return)</label>
-              <input type="number" step="any" className="form-input"
-                value={partData._fsInboundTrucking || ''}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setPartData(prev => ({ ...prev, _fsInboundTrucking: e.target.value }))}
-                placeholder="0.00" style={{ fontSize: '0.85rem' }} />
-            </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>Markup %</label>
-              <input type="number" step="1" className="form-input"
-                value={partData._fsTruckingMarkup ?? 30}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setPartData(prev => ({ ...prev, _fsTruckingMarkup: e.target.value }))}
-                placeholder="30" style={{ fontSize: '0.85rem' }} />
-            </div>
-          </div>
-          {truckingCostLot > 0 && (
-            <div style={{ marginTop: 8, padding: 6, background: '#FFF8E1', borderRadius: 4, fontSize: '0.75rem', color: '#666' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Trucking cost (lot):</span>
-                <strong>${truckingCostLot.toFixed(2)}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#2e7d32' }}>
-                <span>+ Markup ({truckingMarkup}%):</span>
-                <strong>+${truckingProfitLot.toFixed(2)}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #FFE082', paddingTop: 4, marginTop: 4, fontWeight: 700, color: '#E65100' }}>
-                <span>Billed (lot):</span>
-                <span>${(truckingCostLot + truckingProfitLot).toFixed(2)}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {enabled && ops.length > 1 && (
         <div style={{ marginTop: 10, padding: 8, background: '#FFE0B2', borderRadius: 4, fontSize: '0.8rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
