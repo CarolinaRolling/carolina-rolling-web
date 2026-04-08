@@ -4,8 +4,6 @@ import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import { useSectionSizes } from '../hooks/useSectionSizes';
 import HeatNumberInput from './HeatNumberInput';
-import OutsideProcessingSection, { calculateOpTotals } from './OutsideProcessingSection';
-
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
   '1/8"', '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '7/8"',
@@ -334,12 +332,8 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     if (!isNaN(stored)) return stored;
     return parseFloat(partData.laborTotal) || 0;
   })();
-  const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
-  const opEnabled = (partData.outsideProcessing || []).length > 0;
-  const vendorSuppliesMaterial = partData.materialSource === 'op_vendor_mat_supplied';
-  const laborEach = (opEnabled ? 0 : baseLaborEach) + opTotals.totalProfit;
-  const opCostEach = opTotals.totalCost;
-  const unitPrice = materialEach + laborEach + opCostEach;
+  const laborEach = baseLaborEach;
+  const unitPrice = materialEach + laborEach;
   const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
   // Auto-update part total
@@ -1045,8 +1039,8 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
         {sectionTitle('💰', 'Pricing', '#1976d2')}
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
           <div className="form-group">
-            <label className="form-label" style={{ color: vendorSuppliesMaterial ? '#999' : undefined }}>Material Cost (each){vendorSuppliesMaterial && <span style={{ marginLeft: 4, fontSize: '0.7rem', color: '#2e7d32' }}>(supplied by OP vendor)</span>}</label>
-            <input type="number" step="any" className="form-input" disabled={vendorSuppliesMaterial} style={{ background: vendorSuppliesMaterial ? '#f5f5f5' : undefined, color: vendorSuppliesMaterial ? '#999' : undefined }} value={vendorSuppliesMaterial ? '' : (partData.materialTotal || '')} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
+            <label className="form-label">Material Cost (each)</label>
+            <input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" />
           </div>
           <div className="form-group">
             <label className="form-label">Markup %</label>
@@ -1058,9 +1052,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
               value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')}
               onFocus={(e) => e.target.select()}
               onChange={(e) => setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value })}
-              placeholder="0.00"
-              disabled={opEnabled}
-              style={{ background: opEnabled ? '#f5f5f5' : undefined, color: opEnabled ? '#999' : undefined }} />
+              placeholder="0.00" />
           </div>
         </div>
 
@@ -1093,20 +1085,6 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
             <span>Labor (ea)</span>
             <span>${baseLaborEach.toFixed(2)}</span>
           </div>
-          {opTotals.totalCost > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#E65100' }}>
-              <span>🏭 Outside Processing (vendor cost)</span>
-              <span>${opTotals.totalCost.toFixed(2)}</span>
-            </div>
-          )}
-          {opTotals.totalProfit > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#2e7d32' }}>
-              <span>+ OP Markup (rolled into labor)</span>
-              <span>${opTotals.totalProfit.toFixed(2)}</span>
-            </div>
-          )}
-          <div style={{ display: 'none' }}>
-          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9', marginTop: 4 }}>
             <strong>Unit Price</strong>
             <strong style={{ color: '#1976d2' }}>${unitPrice.toFixed(2)}</strong>
@@ -1117,9 +1095,6 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
           </div>
         </div>
       </div>
-
-      <OutsideProcessingSection partData={partData} setPartData={setPartData} />
-
       {/* === TRACKING === */}
       <div style={sectionStyle}>
         {sectionTitle('🏷️', 'Tracking', '#616161')}

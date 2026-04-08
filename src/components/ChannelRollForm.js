@@ -5,8 +5,6 @@ import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import { useSectionSizes } from '../hooks/useSectionSizes';
 import HeatNumberInput from './HeatNumberInput';
-import OutsideProcessingSection, { calculateOpTotals } from './OutsideProcessingSection';
-
 const DEFAULT_CHANNEL_SIZES = [
   'C3x4.1', 'C3x5', 'C3x6',
   'C4x5.4', 'C4x7.25',
@@ -229,12 +227,8 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
     if (!isNaN(stored)) return stored;
     return parseFloat(partData.laborTotal) || 0;
   })();
-  const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
-  const opEnabled = (partData.outsideProcessing || []).length > 0;
-  const vendorSuppliesMaterial = partData.materialSource === 'op_vendor_mat_supplied';
-  const laborEach = (opEnabled ? 0 : baseLaborEach) + opTotals.totalProfit;
-  const opCostEach = opTotals.totalCost;
-  const unitPrice = materialEach + laborEach + opCostEach;
+  const laborEach = baseLaborEach;
+  const unitPrice = materialEach + laborEach;
   const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
   useEffect(() => { setPartData(prev => ({ ...prev, partTotal: lineTotal.toFixed(2) })); }, [lineTotal]);
@@ -562,16 +556,14 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
       <div style={sectionStyle}>
         {sectionTitle('💰', 'Pricing', '#1976d2')}
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
-          <div className="form-group"><label className="form-label" style={{ color: vendorSuppliesMaterial ? '#999' : undefined }}>Material Cost (each){vendorSuppliesMaterial && <span style={{ marginLeft: 4, fontSize: '0.7rem', color: '#2e7d32' }}>(supplied by OP vendor)</span>}</label>
-            <input type="number" step="any" className="form-input" disabled={vendorSuppliesMaterial} style={{ background: vendorSuppliesMaterial ? '#f5f5f5' : undefined, color: vendorSuppliesMaterial ? '#999' : undefined }} value={vendorSuppliesMaterial ? '' : (partData.materialTotal || '')} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" /></div>
+          <div className="form-group"><label className="form-label">Material Cost (each)</label>
+            <input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" /></div>
           <div className="form-group"><label className="form-label">Markup %</label><input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" /></div>
           <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input"
               value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')}
               onFocus={(e) => e.target.select()}
               onChange={(e) => setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value })}
-              placeholder="0.00"
-              disabled={opEnabled}
-              style={{ background: opEnabled ? '#f5f5f5' : undefined, color: opEnabled ? '#999' : undefined }} /></div>
+              placeholder="0.00" /></div>
         </div>
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material Cost (ea)</span><span>${materialCost.toFixed(2)}</span></div>
@@ -588,13 +580,11 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
                   fontWeight: (partData._materialRounding || 'none') === o.k ? 700 : 400 }}>{o.l}</button>
             ))}
           </div>}
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Labor (ea)</span><span>${baseLaborEach.toFixed(2)}</span></div>{opTotals.totalCost > 0 && (<div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#E65100' }}><span>🏭 Outside Processing (vendor cost)</span><span>${opTotals.totalCost.toFixed(2)}</span></div>)}{opTotals.totalProfit > 0 && (<div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#2e7d32' }}><span>+ OP Markup (rolled into labor)</span><span>${opTotals.totalProfit.toFixed(2)}</span></div>)}<div style={{ display: 'none' }}></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Labor (ea)</span><span>${baseLaborEach.toFixed(2)}</span></div><div style={{ display: 'none' }}></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9', marginTop: 4 }}><strong>Unit Price</strong><strong style={{ color: '#1976d2' }}>${unitPrice.toFixed(2)}</strong></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9' }}><strong>Line Total ({qty} × ${unitPrice.toFixed(2)})</strong><strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong></div>
         </div>
       </div>
-
-      <OutsideProcessingSection partData={partData} setPartData={setPartData} />
       <div style={sectionStyle}>{sectionTitle('🏷️', 'Tracking', '#616161')}<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div className="form-group"><label className="form-label">Client Part Number</label><input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" /></div><HeatNumberInput partData={partData} setPartData={setPartData} /></div></div>
     </>
   );

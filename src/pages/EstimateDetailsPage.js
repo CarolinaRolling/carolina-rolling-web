@@ -12,8 +12,6 @@ import {
   sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument
 } from '../services/api';
 import PlateRollForm from '../components/PlateRollForm';
-import OutsideProcessingSection from '../components/OutsideProcessingSection';
-import OpTransportsSection, { calculateTransportAllocations } from '../components/OpTransportsSection';
 import AngleRollForm from '../components/AngleRollForm';
 import FlatStockForm from '../components/FlatStockForm';
 import FabServiceForm from '../components/FabServiceForm';
@@ -582,15 +580,6 @@ function EstimateDetailsPage() {
       partsSubtotal += eaPricedTotal;
     }
 
-    // Order-level outside processing transport (billed amount, hidden in customer total)
-    let opTransportBilled = 0;
-    (formData.opTransports || []).forEach(trip => {
-      const cost = parseFloat(trip.cost) || 0;
-      const markup = parseFloat(trip.markup) || 0;
-      opTransportBilled += cost * (1 + markup / 100);
-    });
-    partsSubtotal += opTransportBilled;
-    
     // Rush service: calculate expedite and emergency
     let expediteAmount = 0, emergencyAmount = 0, expediteLabel = '', emergencyLabel = '';
     const rushPart = parts.find(p => p.partType === 'rush_service');
@@ -636,13 +625,7 @@ function EstimateDetailsPage() {
       } else {
         const qty = parseInt(part.quantity) || 1;
         const labEach = parseFloat(part.laborTotal) || 0;
-        const opCost = parseFloat(part.outsideProcessingCost) || 0;
-        const opMarkup = parseFloat(part.outsideProcessingMarkupPercent) || 0;
-        const opEach = Math.round(opCost * (1 + opMarkup / 100) * 100) / 100;
-        const opTransport = parseFloat(part.outsideProcessingTransportCost) || 0;
-        const opTransportMarkup = parseFloat(part.outsideProcessingTransportMarkupPercent) || 0;
-        const opTransportEach = Math.round(opTransport * (1 + opTransportMarkup / 100) * 100) / 100;
-        laborOnlySubtotal += (labEach + opEach + opTransportEach) * qty;
+        laborOnlySubtotal += labEach * qty;
       }
     }
     laborOnlySubtotal += expediteAmount + emergencyAmount;
@@ -2121,7 +2104,6 @@ function EstimateDetailsPage() {
               {[
                 { key: 'parts', label: '📦 Parts', count: parts.length },
                 { key: 'materials', label: '📋 Materials' },
-                ...(parts.some(p => (p.outsideProcessing || []).length > 0) ? [{ key: 'outside_processing', label: '🏭 Outside Processing', count: parts.filter(p => (p.outsideProcessing || []).length > 0).length }] : []),
                 { key: 'summary', label: '📊 Summary' }
               ].map(tab => (
                 <button key={tab.key} onClick={(e) => { e.preventDefault(); setEstimateTab(tab.key); setTimeout(() => document.getElementById('estimate-tabs')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}
@@ -2242,24 +2224,21 @@ function EstimateDetailsPage() {
               serviceParts.forEach(sp => { if (!usedServiceIds.has(sp.id)) grouped.push(sp); });
               return grouped;
             })().map(part => {
-              // Compute transport allocations for all parts (memoized via closure on each render)
-              const { partTransports: transportAllocations } = calculateTransportAllocations(formData.opTransports || [], parts);
+              // Transport allocations removed in Commit 4 — order-level OP transports no longer exist
               const calc = calculatePartTotal(part);
               const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
               const linkedParent = isLinkedService ? parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
               // Adjust labor proportionally when minimum charge applies
               const isEa = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
               const laborRatio = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEa) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
-              // Get this part's allocated transport (split into material and labor portions)
-              const transportAlloc = transportAllocations[part.id] || { materialBilled: 0, laborBilled: 0, billed: 0 };
               const partQty = parseInt(part.quantity) || 1;
-              const transportMatPerPart = partQty > 0 ? transportAlloc.materialBilled / partQty : 0;
-              const transportLabPerPart = partQty > 0 ? transportAlloc.laborBilled / partQty : 0;
-              // Bundle OP cost + OP markup + labor-portion of transport into the rolling line
+              const transportMatPerPart = 0;
+              const transportLabPerPart = 0;
+              // Bundle OP cost + OP markup into the rolling line
               const opEnabled = (part.outsideProcessing || []).length > 0;
               const bundledRolling = opEnabled
-                ? (calc.opCostPerPart || 0) + (calc.laborEach || 0) + transportLabPerPart
-                : ((calc.laborEach || 0) * laborRatio + transportLabPerPart);
+                ? (calc.opCostPerPart || 0) + (calc.laborEach || 0)
+                : ((calc.laborEach || 0) * laborRatio);
               const adjLabor = bundledRolling;
               // Material side gets the material-portion of transport (hidden in material line)
               const adjMaterial = (calc.materialEach || 0) + transportMatPerPart;
@@ -2309,49 +2288,6 @@ function EstimateDetailsPage() {
                     </div>
                   </div>
 
-                  {/* Outside Processing indicator */}
-                  {part.outsideProcessingVendorName && (
-                    <div style={{ padding: '8px 12px', background: '#FFF3E0', borderRadius: 6, marginBottom: 8, border: '1px solid #FFE0B2', fontSize: '0.85rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <span style={{ fontWeight: 600, color: '#E65100' }}>🏭 Outside Processing: </span>
-                          <span>{part.outsideProcessingVendorName}</span>
-                          {part.outsideProcessingDescription && <span style={{ color: '#888' }}> — {part.outsideProcessingDescription}</span>}
-                          <span style={{ marginLeft: 8, fontWeight: 600 }}>
-                            ${((parseFloat(part.outsideProcessingCost) || 0) * (1 + (parseFloat(part.outsideProcessingMarkupPercent) || 0) / 100)).toFixed(2)}/ea
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                          {part.outsideProcessingPONumber ? (
-                            <span style={{ background: '#E8F5E9', padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>
-                              ✅ {part.outsideProcessingPONumber}
-                            </span>
-                          ) : (
-                            <button className="btn btn-sm" onClick={async () => {
-                              try {
-                                const { generateOutsideProcessingPO, emailOutsideProcessingPO } = await import('../services/api');
-                                const res = await generateOutsideProcessingPO(id, part.id);
-                                const poData = res.data.data;
-                                showMessage(`PO ${poData.poNumber} generated`);
-                                // Auto-email if vendor has email
-                                if (poData.vendorEmail) {
-                                  const emailRes = await emailOutsideProcessingPO(id, part.id);
-                                  const draftUrl = emailRes.data.data?.draftUrl;
-                                  if (draftUrl) window.open(draftUrl, '_blank');
-                                  showMessage(`PO ${poData.poNumber} draft created in Gmail`);
-                                }
-                                await loadEstimate();
-                              } catch (err) {
-                                setError(err.response?.data?.error?.message || 'Failed to generate PO');
-                              }
-                            }} style={{ background: '#E65100', color: 'white', fontSize: '0.75rem', padding: '3px 8px' }}>
-                              📄 Generate & Email PO
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   <div style={{ fontSize: '0.875rem', marginBottom: 12 }}>
                     {/* Rush Service Display */}
@@ -2491,9 +2427,7 @@ function EstimateDetailsPage() {
                           📦 {part.materialDescription}
                           {!['fab_service', 'shop_rate'].includes(part.partType) && (
                             <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>
-                              {part.materialSource === 'op_vendor_mat_supplied'
-                                ? `Material supplied by: ${(part.outsideProcessing || []).find(o => o.vendorSuppliesMaterial)?.vendorName || 'Outside Vendor'}`
-                                : part.materialSource === 'we_order' ? 'Material supplied by: Carolina Rolling Company'
+                              {part.materialSource === 'we_order' ? 'Material supplied by: Carolina Rolling Company'
                                 : part.materialSource === 'in_stock' ? 'Material supplied by: Carolina Rolling Company'
                                 : `Material supplied by: ${formData.clientName || 'Customer'}`}
                             </div>
@@ -2909,29 +2843,6 @@ function EstimateDetailsPage() {
                         </div>
                       ))}
 
-                      {/* Outside Processing summary */}
-                      {parts.some(p => p.outsideProcessingVendorName) && (
-                        <div style={{ border: '1px solid #FFE0B2', borderRadius: 8, overflow: 'hidden' }}>
-                          <div style={{ padding: '10px 16px', background: '#FFF3E0', fontWeight: 700, fontSize: '0.95rem', borderBottom: '1px solid #FFE0B2' }}>
-                            🏭 Outside Processing
-                          </div>
-                          {parts.filter(p => p.outsideProcessingVendorName).map(p => {
-                            const opCost = parseFloat(p.outsideProcessingCost) || 0;
-                            const opTransport = parseFloat(p.outsideProcessingTransportCost) || 0;
-                            return (
-                              <div key={p.id} style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div>
-                                  <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Part #{p.partNumber}</span>
-                                  <span style={{ color: '#E65100', marginLeft: 8, fontSize: '0.85rem' }}>{p.outsideProcessingVendorName}</span>
-                                  <span style={{ color: '#888', marginLeft: 8, fontSize: '0.8rem' }}>{p.outsideProcessingDescription}</span>
-                                  {p.outsideProcessingPONumber && <span style={{ marginLeft: 8, color: '#2e7d32', fontSize: '0.8rem' }}>✅ {p.outsideProcessingPONumber}</span>}
-                                </div>
-                                <span style={{ fontWeight: 600, color: '#E65100' }}>${(opCost + opTransport).toFixed(2)}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
                   );
                 })()}
@@ -2939,161 +2850,6 @@ function EstimateDetailsPage() {
             </div>
           )}
 
-          {/* ===== OUTSIDE PROCESSING TAB ===== */}
-          {!isNew && estimateTab === 'outside_processing' && (
-            <div style={{ minHeight: '70vh' }}>
-              <div className="card">
-                <h3 className="card-title" style={{ marginBottom: 16 }}>🏭 Outside Processing Operations</h3>
-                <p style={{ color: '#666', fontSize: '0.85rem', marginBottom: 16 }}>
-                  Operations across all parts. Edit individual operations on each part's form.
-                </p>
-
-                {/* Transport Trips */}
-                <OpTransportsSection
-                  trips={formData.opTransports || []}
-                  parts={parts}
-                  onChange={async (newTrips) => {
-                    setFormData({ ...formData, opTransports: newTrips });
-                    try {
-                      await updateEstimate(id, { opTransports: newTrips });
-                      showMessage('Transport trips saved');
-                    } catch (err) {
-                      setError('Failed to save transport: ' + (err.response?.data?.error?.message || err.message));
-                    }
-                  }}
-                  isWorkOrder={false}
-                />
-                {(() => {
-                  // Build flat list of all operations across all parts
-                  const allOps = [];
-                  parts.forEach(p => {
-                    (p.outsideProcessing || []).forEach(op => {
-                      allOps.push({ ...op, part: p });
-                    });
-                  });
-
-                  if (allOps.length === 0) {
-                    return <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No outside processing operations yet. Enable Outside Processing on a part form to add one.</div>;
-                  }
-
-                  // Group by vendor
-                  const byVendor = {};
-                  allOps.forEach(o => {
-                    const key = o.vendorId || 'no_vendor';
-                    if (!byVendor[key]) byVendor[key] = { vendorName: o.vendorName || '(no vendor)', ops: [] };
-                    byVendor[key].ops.push(o);
-                  });
-
-                  let grandCost = 0, grandBilled = 0, grandProfit = 0;
-
-                  return (
-                    <>
-                      {Object.entries(byVendor).map(([vendorKey, group]) => {
-                        let vendorCost = 0, vendorBilled = 0;
-                        return (
-                          <div key={vendorKey} style={{ marginBottom: 20, border: '1px solid #FFE0B2', borderRadius: 8, overflow: 'hidden' }}>
-                            <div style={{ background: '#FFF3E0', padding: 12, borderBottom: '1px solid #FFE0B2' }}>
-                              <strong style={{ color: '#E65100' }}>🏭 {group.vendorName}</strong>
-                              <span style={{ marginLeft: 8, fontSize: '0.85rem', color: '#666' }}>{group.ops.length} operation{group.ops.length !== 1 ? 's' : ''}</span>
-                            </div>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                              <thead>
-                                <tr style={{ background: '#FFF8E1' }}>
-                                  <th style={{ padding: 8, textAlign: 'left' }}>Part</th>
-                                  <th style={{ padding: 8, textAlign: 'left' }}>Service</th>
-                                  <th style={{ padding: 8, textAlign: 'right' }}>Qty</th>
-                                  <th style={{ padding: 8, textAlign: 'right' }}>Cost/Part</th>
-                                  <th style={{ padding: 8, textAlign: 'right' }}>Markup</th>
-                                  <th style={{ padding: 8, textAlign: 'right' }}>Profit</th>
-                                  <th style={{ padding: 8, textAlign: 'right' }}>Vendor Cost</th>
-                                  <th style={{ padding: 8, textAlign: 'right' }}>Billed</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {group.ops.map((op, idx) => {
-                                  const qty = parseInt(op.part.quantity) || 1;
-                                  const cost = parseFloat(op.costPerPart) || 0;
-                                  const expedite = parseFloat(op.expediteCost) || 0;
-                                  const markup = parseFloat(op.markup) || 0;
-                                  const totalCost = (cost + expedite) * qty;
-                                  const profit = cost * (markup / 100) * qty;
-                                  const totalBilled = totalCost + profit;
-                                  vendorCost += totalCost;
-                                  vendorBilled += totalBilled;
-                                  return (
-                                    <tr key={idx} style={{ borderBottom: '1px solid #f5f5f5' }}>
-                                      <td style={{ padding: 8 }}>
-                                        <strong>#{op.part.partNumber}</strong>
-                                        {op.part.clientPartNumber && <span style={{ color: '#1976d2', marginLeft: 4 }}>{op.part.clientPartNumber}</span>}
-                                      </td>
-                                      <td style={{ padding: 8 }}>{op.serviceType || '—'}</td>
-                                      <td style={{ padding: 8, textAlign: 'right' }}>{qty}</td>
-                                      <td style={{ padding: 8, textAlign: 'right' }}>${cost.toFixed(2)}</td>
-                                      <td style={{ padding: 8, textAlign: 'right' }}>{markup}%</td>
-                                      <td style={{ padding: 8, textAlign: 'right', color: '#2e7d32', fontWeight: 600 }}>${profit.toFixed(2)}</td>
-                                      <td style={{ padding: 8, textAlign: 'right' }}>${totalCost.toFixed(2)}</td>
-                                      <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: '#E65100' }}>${totalBilled.toFixed(2)}</td>
-                                    </tr>
-                                  );
-                                })}
-                                <tr style={{ background: '#FFF8E1', fontWeight: 700 }}>
-                                  <td colSpan={6} style={{ padding: 8, textAlign: 'right' }}>Vendor Total:</td>
-                                  <td style={{ padding: 8, textAlign: 'right' }}>${vendorCost.toFixed(2)}</td>
-                                  <td style={{ padding: 8, textAlign: 'right', color: '#E65100' }}>${vendorBilled.toFixed(2)}</td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        );
-                      })}
-
-                      {(() => {
-                        allOps.forEach(op => {
-                          const qty = parseInt(op.part.quantity) || 1;
-                          const cost = parseFloat(op.costPerPart) || 0;
-                          const expedite = parseFloat(op.expediteCost) || 0;
-                          const markup = parseFloat(op.markup) || 0;
-                          const totalCost = (cost + expedite) * qty;
-                          const profit = (cost * markup / 100) * qty;
-                          grandCost += totalCost;
-                          grandBilled += totalCost + profit;
-                          grandProfit += profit;
-                        });
-                        // Add order-level transport totals
-                        (formData.opTransports || []).forEach(trip => {
-                          const tCost = parseFloat(trip.cost) || 0;
-                          const tMarkup = parseFloat(trip.markup) || 0;
-                          const tBilled = tCost * (1 + tMarkup / 100);
-                          grandCost += tCost;
-                          grandBilled += tBilled;
-                          grandProfit += (tBilled - tCost);
-                        });
-                        return (
-                          <div style={{ padding: 16, background: '#FFF3E0', borderRadius: 8, border: '2px solid #FFB74D' }}>
-                            <h4 style={{ margin: '0 0 12px', color: '#E65100' }}>📊 Grand Totals</h4>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                              <div style={{ textAlign: 'center', padding: 12, background: 'white', borderRadius: 6 }}>
-                                <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 4 }}>Total Vendor Cost</div>
-                                <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#c62828' }}>${grandCost.toFixed(2)}</div>
-                              </div>
-                              <div style={{ textAlign: 'center', padding: 12, background: 'white', borderRadius: 6 }}>
-                                <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 4 }}>Profit (Markup)</div>
-                                <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#2e7d32' }}>${grandProfit.toFixed(2)}</div>
-                              </div>
-                              <div style={{ textAlign: 'center', padding: 12, background: 'white', borderRadius: 6 }}>
-                                <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 4 }}>Billed to Customer</div>
-                                <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#E65100' }}>${grandBilled.toFixed(2)}</div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
 
           {/* ===== SUMMARY TAB ===== */}
           {!isNew && estimateTab === 'summary' && (
@@ -3146,14 +2902,6 @@ function EstimateDetailsPage() {
                       totalOutsideCost += (opCostPerPart + opExpedite) * qty;
                       totalOutsideBilled += (opCostBilled + opExpedite) * qty;
                     });
-                  });
-
-                  // Order-level transport trips
-                  (formData.opTransports || []).forEach(trip => {
-                    const cost = parseFloat(trip.cost) || 0;
-                    const markup = parseFloat(trip.markup) || 0;
-                    totalTransportCost += cost;
-                    totalTransportBilled += cost * (1 + markup / 100);
                   });
 
                   // Services (fab, shop rate)
@@ -3253,9 +3001,15 @@ function EstimateDetailsPage() {
                                   const matMk = parseFloat(p.materialMarkupPercent) || 0;
                                   const matBilled = Math.round(mat * (1 + matMk / 100) * 100) / 100;
                                   const labor = parseFloat(p.laborTotal) || 0;
-                                  const opCost = parseFloat(p.outsideProcessingCost) || 0;
-                                  const opMk = parseFloat(p.outsideProcessingMarkupPercent) || 0;
-                                  const opBilled = Math.round(opCost * (1 + opMk / 100) * 100) / 100;
+                                  // Read OP from JSONB (Fab Service parts only — rolling parts no longer have OP)
+                                  const ops = p.outsideProcessing || [];
+                                  let opBilledLot = 0;
+                                  ops.forEach(op => {
+                                    const c = parseFloat(op.costPerPart) || 0;
+                                    const e = parseFloat(op.expediteCost) || 0;
+                                    const m = parseFloat(op.markup) || 0;
+                                    opBilledLot += ((c * (1 + m / 100)) + e) * qty;
+                                  });
                                   const total = parseFloat(p.partTotal) || 0;
                                   const desc = fd._materialDescription || p.materialDescription || PART_TYPES[p.partType]?.label || p.partType;
                                   return (
@@ -3265,7 +3019,7 @@ function EstimateDetailsPage() {
                                       <td style={{ padding: '8px 12px', textAlign: 'right' }}>{qty}</td>
                                       <td style={{ padding: '8px 12px', textAlign: 'right' }}>{matBilled > 0 ? `$${(matBilled * qty).toFixed(2)}` : '—'}</td>
                                       <td style={{ padding: '8px 12px', textAlign: 'right' }}>{labor > 0 ? `$${(labor * qty).toFixed(2)}` : '—'}</td>
-                                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>{opBilled > 0 ? `$${(opBilled * qty).toFixed(2)}` : '—'}</td>
+                                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>{opBilledLot > 0 ? `$${opBilledLot.toFixed(2)}` : '—'}</td>
                                       <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>${total.toFixed(2)}</td>
                                     </tr>
                                   );
@@ -3993,18 +3747,6 @@ function EstimateDetailsPage() {
                 </div>
               )}
             </div>
-
-            {/* Outside Processing — available on all part types except fab_service/shop_rate/rush_service */}
-            {!['fab_service', 'shop_rate', 'rush_service'].includes(partData.partType) && (
-              <div style={{ margin: '0 20px 12px' }}>
-                <OutsideProcessingSection
-                  partData={partData}
-                  setPartData={setPartData}
-                  showMessage={showMessage}
-                  setError={setError}
-                />
-              </div>
-            )}
 
             <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>🔄 Rolling</h4>
             <div className="grid grid-2">

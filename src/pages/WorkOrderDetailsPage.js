@@ -17,7 +17,6 @@ import TeeBarRollForm from '../components/TeeBarRollForm';
 import RushServiceForm, { EXPEDITE_OPTIONS, EMERGENCY_OPTIONS } from '../components/RushServiceForm';
 import PressBrakeForm from '../components/PressBrakeForm';
 import FlatStockForm from '../components/FlatStockForm';
-import OpTransportsSection, { calculateTransportAllocations } from '../components/OpTransportsSection';
 import FabServiceForm from '../components/FabServiceForm';
 import ShopRateForm from '../components/ShopRateForm';
 import HeatNumberInput from '../components/HeatNumberInput';
@@ -90,18 +89,6 @@ function WorkOrderDetailsPage() {
   const [showPartModal, setShowPartModal] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderParts, setReorderParts] = useState([]);
-  const [showOutsideProcessingModal, setShowOutsideProcessingModal] = useState(false);
-  const [opSelectedPartIds, setOpSelectedPartIds] = useState([]);
-  const [opVendor, setOpVendor] = useState(null);
-  const [opVendorSearch, setOpVendorSearch] = useState('');
-  const [opVendorResults, setOpVendorResults] = useState([]);
-  const [opServiceType, setOpServiceType] = useState('');
-  const [opCostPerPart, setOpCostPerPart] = useState('');
-  const [opTransportCost, setOpTransportCost] = useState('');
-  const [opExpediteCost, setOpExpediteCost] = useState('');
-  const [opExpectedReturn, setOpExpectedReturn] = useState('');
-  const [opNotes, setOpNotes] = useState('');
-  const [opSubmitting, setOpSubmitting] = useState(false);
   const [showPartTypePicker, setShowPartTypePicker] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
   const [partData, setPartData] = useState({});
@@ -1830,15 +1817,6 @@ function WorkOrderDetailsPage() {
     const rushTotal = expediteAmount + emergencyAmount;
     partsSubtotal += rushTotal;
 
-    // Order-level outside processing transport (billed amount, hidden in customer total)
-    let opTransportBilled = 0;
-    (order?.opTransports || []).forEach(trip => {
-      const cost = parseFloat(trip.cost) || 0;
-      const markup = parseFloat(trip.markup) || 0;
-      opTransportBilled += cost * (1 + markup / 100);
-    });
-    partsSubtotal += opTransportBilled;
-    
     const trucking = parseFloat(editData.truckingCost) || parseFloat(order?.truckingCost) || 0;
     const subtotal = partsSubtotal + trucking;
     const taxRate = parseFloat(editData.taxRate) || parseFloat(order?.taxRate) || defaultTaxRate;
@@ -2713,7 +2691,6 @@ function WorkOrderDetailsPage() {
           { key: 'parts', label: '📦 Parts', count: order.parts?.length || 0 },
           { key: 'documents', label: '📄 Documents', count: (order.documents?.filter(d => d.documentType !== 'purchase_order').length || 0) || undefined },
           { key: 'materials', label: '📋 Materials' },
-          ...((order.parts || []).some(p => (p.outsideProcessing || []).length > 0) ? [{ key: 'outside_processing', label: '🏭 Outside Processing', count: (order.parts || []).filter(p => (p.outsideProcessing || []).length > 0).length }] : []),
           ...(((order.vendorIssues || []).filter(i => i.status !== 'resolved').length > 0) ? [{ key: 'vendor_issues', label: '⚠ Vendor Issues', count: (order.vendorIssues || []).filter(i => i.status !== 'resolved').length, urgent: true }] : []),
           { key: 'summary', label: '📊 Summary' },
           { key: 'shipping', label: '🚚 Outbound', count: (order.pickupHistory || []).length || undefined }
@@ -2756,11 +2733,6 @@ function WorkOrderDetailsPage() {
             {getOrderableParts().length > 0 && (
               <button className="btn btn-sm" onClick={openOrderModal} style={{ background: '#ff9800', color: 'white' }}>
                 <ShoppingCart size={16} /> Order Material
-              </button>
-            )}
-            {order.parts?.filter(p => !['fab_service', 'shop_rate', 'rush_service'].includes(p.partType)).length > 0 && (
-              <button className="btn btn-sm" onClick={() => setShowOutsideProcessingModal(true)} style={{ background: '#E65100', color: 'white' }}>
-                🏭 Outside Processing
               </button>
             )}
             <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
@@ -2845,15 +2817,12 @@ function WorkOrderDetailsPage() {
               serviceParts.forEach(sp => { if (!usedServiceIds.has(sp.id)) grouped.push(sp); });
               return grouped;
             })().map(part => {
-              // Compute transport allocations for all parts on this order
-              const { partTransports: transportAllocations } = calculateTransportAllocations(order.opTransports || [], order.parts || []);
+              // Transport allocations removed in Commit 4 — order-level OP transports no longer exist
               const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
               const linkedParent = isLinkedService ? order.parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
-              // Get this part's transport allocation (split between material and labor)
-              const transportAlloc = transportAllocations[part.id] || { materialBilled: 0, laborBilled: 0, billed: 0 };
               const partQty = parseInt(part.quantity) || 1;
-              const transportMatPerPart = partQty > 0 ? transportAlloc.materialBilled / partQty : 0;
-              const transportLabPerPart = partQty > 0 ? transportAlloc.laborBilled / partQty : 0;
+              const transportMatPerPart = 0;
+              const transportLabPerPart = 0;
               // Compute display values that include transport allocation AND outside processing cost
               const baseLaborPerPart = parseFloat(part.laborTotal) || 0;
               const baseMaterialPerPart = (() => {
@@ -3901,242 +3870,6 @@ function WorkOrderDetailsPage() {
         </div>
       )}
 
-      {/* ===== OUTSIDE PROCESSING TAB ===== */}
-      {woTab === 'outside_processing' && (
-        <div className="card" style={{ marginTop: 0, minHeight: '70vh' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 className="card-title" style={{ margin: 0 }}>🏭 Outside Processing Operations</h3>
-            {(() => {
-              // Count groups that don't have a PO yet
-              const pendingGroups = new Set();
-              (order.parts || []).forEach(p => {
-                (p.outsideProcessing || []).forEach(op => {
-                  if (op.vendorId && op.serviceType && !op.poNumber) {
-                    pendingGroups.add(`${op.vendorId}|${op.serviceType}`);
-                  }
-                });
-              });
-              if (pendingGroups.size === 0) return null;
-              return (
-                <button onClick={async () => {
-                  if (!window.confirm(`Generate ${pendingGroups.size} outside processing PO${pendingGroups.size === 1 ? '' : 's'}? Each PO will be sent to the assigned vendor and an inbound order will be created for receiving.`)) return;
-                  try {
-                    const res = await createOutsideProcessingPOsAuto(id);
-                    showMessage(res.data.message || 'POs created');
-                    await loadOrder();
-                  } catch (err) {
-                    setError('Failed to create POs: ' + (err.response?.data?.error?.message || err.message));
-                  }
-                }} style={{ background: '#E65100', color: 'white', border: 'none', padding: '10px 20px', borderRadius: 4, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}>
-                  🖨 Create {pendingGroups.size} PO{pendingGroups.size === 1 ? '' : 's'}
-                </button>
-              );
-            })()}
-          </div>
-
-          {/* Transport Trips */}
-          <OpTransportsSection
-            trips={order.opTransports || []}
-            parts={order.parts || []}
-            onChange={async (newTrips) => {
-              try {
-                await updateWorkOrder(id, { opTransports: newTrips });
-                showMessage('Transport trips saved');
-                await loadOrder();
-              } catch (err) {
-                setError('Failed to save transport: ' + (err.response?.data?.error?.message || err.message));
-              }
-            }}
-            isWorkOrder={true}
-            onGeneratePO={async (trip) => {
-              try {
-                const res = await createTransportPO(id, trip.id);
-                showMessage(res.data.message || 'Trucking PO created');
-                await loadOrder();
-              } catch (err) {
-                setError('Failed to create trucking PO: ' + (err.response?.data?.error?.message || err.message));
-              }
-            }}
-          />
-
-          {(() => {
-            const allOps = [];
-            (order.parts || []).forEach(p => {
-              (p.outsideProcessing || []).forEach((op, opIdx) => {
-                allOps.push({ ...op, opIdx, part: p });
-              });
-            });
-
-            if (allOps.length === 0) {
-              return <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No outside processing operations on this order.</div>;
-            }
-
-            // Group by vendor + service (since one PO is for a specific vendor doing a specific service)
-            const groups = {};
-            allOps.forEach(o => {
-              const key = `${o.vendorId || 'no_vendor'}_${o.serviceType || 'unknown'}`;
-              if (!groups[key]) {
-                groups[key] = {
-                  vendorId: o.vendorId,
-                  vendorName: o.vendorName || '(no vendor)',
-                  serviceType: o.serviceType || 'Unknown',
-                  ops: [],
-                  hasPO: false,
-                  poNumber: null
-                };
-              }
-              groups[key].ops.push(o);
-              // If any op in this group has a poNumber stored, mark as having PO
-              if (o.poNumber) {
-                groups[key].hasPO = true;
-                groups[key].poNumber = o.poNumber;
-              }
-            });
-
-            return (
-              <div>
-                {Object.entries(groups).map(([key, group]) => {
-                  let groupVendorCost = 0, groupVendorBilled = 0, totalUnits = 0;
-                  group.ops.forEach(op => {
-                    const qty = parseInt(op.part.quantity) || 1;
-                    const cost = parseFloat(op.costPerPart) || 0;
-                    const expedite = parseFloat(op.expediteCost) || 0;
-                    const markup = parseFloat(op.markup) || 0;
-                    const costProfit = cost * (markup / 100) * qty;
-                    groupVendorCost += (cost + expedite) * qty;
-                    groupVendorBilled += (cost + expedite) * qty + costProfit;
-                    totalUnits += qty;
-                  });
-
-                  return (
-                    <div key={key} style={{ marginBottom: 20, border: '1px solid #FFE0B2', borderRadius: 8, overflow: 'hidden' }}>
-                      <div style={{ background: '#FFF3E0', padding: 12, borderBottom: '1px solid #FFE0B2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <strong style={{ color: '#E65100' }}>🏭 {group.vendorName}</strong>
-                          <span style={{ marginLeft: 8, color: '#666' }}>— {group.serviceType}</span>
-                          <span style={{ marginLeft: 8, fontSize: '0.85rem', color: '#666' }}>({group.ops.length} part{group.ops.length !== 1 ? 's' : ''}, {totalUnits} units)</span>
-                          {group.hasPO && <span style={{ marginLeft: 8, padding: '2px 8px', background: '#2e7d32', color: 'white', borderRadius: 4, fontSize: '0.7rem', fontWeight: 700 }}>✓ {group.poNumber}</span>}
-                        </div>
-                        {!group.hasPO && group.vendorId && (
-                          <button onClick={async () => {
-                            try {
-                              const partIds = group.ops.map(o => o.part.id);
-                              const res = await createOutsideProcessingPOsAuto(id, partIds);
-                              showMessage(res.data.message || 'PO created');
-                              await loadOrder();
-                            } catch (err) {
-                              setError('Failed to create PO: ' + (err.response?.data?.error?.message || err.message));
-                            }
-                          }} style={{ background: '#E65100', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
-                            🖨 Generate Vendor PO
-                          </button>
-                        )}
-                        {group.hasPO && (
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => {
-                              const firstOp = group.ops[0];
-                              const currentCost = parseFloat(firstOp.costPerPart) || 0;
-                              const newCostStr = window.prompt(`Edit ${group.poNumber}\n\nNew cost per part (current: $${currentCost.toFixed(2)}):`, currentCost.toFixed(2));
-                              if (newCostStr === null) return; // user cancelled
-                              const newCost = parseFloat(newCostStr);
-                              if (isNaN(newCost) || newCost < 0) { alert('Invalid cost'); return; }
-                              (async () => {
-                                try {
-                                  const res = await editOutsideProcessingPO(id, group.poNumber, { costPerPart: newCost });
-                                  showMessage(res.data.message || 'PO updated');
-                                  await loadOrder();
-                                } catch (err) {
-                                  setError('Failed to edit PO: ' + (err.response?.data?.error?.message || err.message));
-                                }
-                              })();
-                            }} style={{ background: '#1976d2', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}
-                              title="Edit cost per part — recalculates customer pricing and regenerates the PDF">
-                              ✏ Edit
-                            </button>
-                            <button onClick={async () => {
-                              try {
-                                const res = await regenOutsideProcessingPO(id, group.poNumber);
-                                showMessage(res.data.message || 'PDF regenerated');
-                                await loadOrder();
-                              } catch (err) {
-                                setError('Failed to regen PO: ' + (err.response?.data?.error?.message || err.message));
-                              }
-                            }} style={{ background: '#7b1fa2', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}
-                              title="Regenerate the PDF without changing any data">
-                              🔄 Regen
-                            </button>
-                            <button onClick={() => {
-                              const reason = window.prompt(`Cancel ${group.poNumber}?\n\nThis will mark the PO cancelled, cancel the matching inbound order, and clear the PO from the parts so you can re-issue.\n\nCancellation reason (required):`);
-                              if (reason === null) return;
-                              if (!reason.trim()) { alert('Reason is required'); return; }
-                              (async () => {
-                                try {
-                                  const res = await cancelOutsideProcessingPO(id, group.poNumber, reason.trim());
-                                  showMessage(res.data.message || 'PO cancelled');
-                                  await loadOrder();
-                                } catch (err) {
-                                  setError('Failed to cancel PO: ' + (err.response?.data?.error?.message || err.message));
-                                }
-                              })();
-                            }} style={{ background: '#c62828', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}
-                              title="Cancel this PO. The parts will become available to re-issue.">
-                              ✕ Cancel
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                        <thead>
-                          <tr style={{ background: '#FFF8E1' }}>
-                            <th style={{ padding: 8, textAlign: 'left' }}>Part</th>
-                            <th style={{ padding: 8, textAlign: 'right' }}>Qty</th>
-                            <th style={{ padding: 8, textAlign: 'right' }}>Cost/Part</th>
-                            <th style={{ padding: 8, textAlign: 'right' }}>Markup</th>
-                            <th style={{ padding: 8, textAlign: 'right' }}>Profit</th>
-                            <th style={{ padding: 8, textAlign: 'right' }}>Vendor Cost</th>
-                            <th style={{ padding: 8, textAlign: 'right' }}>Billed</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {group.ops.map((op, idx) => {
-                            const qty = parseInt(op.part.quantity) || 1;
-                            const cost = parseFloat(op.costPerPart) || 0;
-                            const expedite = parseFloat(op.expediteCost) || 0;
-                            const markup = parseFloat(op.markup) || 0;
-                            const profit = cost * (markup / 100) * qty;
-                            const totalCost = (cost + expedite) * qty;
-                            const totalBilled = totalCost + profit;
-                            return (
-                              <tr key={idx} style={{ borderBottom: '1px solid #f5f5f5' }}>
-                                <td style={{ padding: 8 }}>
-                                  <strong>#{op.part.partNumber}</strong>
-                                  {op.part.clientPartNumber && <span style={{ color: '#1976d2', marginLeft: 4 }}>{op.part.clientPartNumber}</span>}
-                                </td>
-                                <td style={{ padding: 8, textAlign: 'right' }}>{qty}</td>
-                                <td style={{ padding: 8, textAlign: 'right' }}>${cost.toFixed(2)}</td>
-                                <td style={{ padding: 8, textAlign: 'right' }}>{markup}%</td>
-                                <td style={{ padding: 8, textAlign: 'right', color: '#2e7d32' }}>${profit.toFixed(2)}</td>
-                                <td style={{ padding: 8, textAlign: 'right' }}>${totalCost.toFixed(2)}</td>
-                                <td style={{ padding: 8, textAlign: 'right', fontWeight: 600, color: '#E65100' }}>${totalBilled.toFixed(2)}</td>
-                              </tr>
-                            );
-                          })}
-                          <tr style={{ background: '#FFF8E1', fontWeight: 700 }}>
-                            <td colSpan={5} style={{ padding: 8, textAlign: 'right' }}>Vendor Subtotal:</td>
-                            <td style={{ padding: 8, textAlign: 'right' }}>${groupVendorCost.toFixed(2)}</td>
-                            <td style={{ padding: 8, textAlign: 'right', color: '#E65100' }}>${groupVendorBilled.toFixed(2)}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
       {/* ===== VENDOR ISSUES TAB ===== */}
       {woTab === 'vendor_issues' && (
         <div className="card" style={{ marginTop: 0, minHeight: '70vh' }}>
@@ -4282,14 +4015,6 @@ function WorkOrderDetailsPage() {
               });
             });
 
-            // Order-level transport trips
-            (order.opTransports || []).forEach(trip => {
-              const cost = parseFloat(trip.cost) || 0;
-              const markup = parseFloat(trip.markup) || 0;
-              totalTransportCost += cost;
-              totalTransportBilled += cost * (1 + markup / 100);
-            });
-
             // Fab Service / Shop Rate parts: include OP vendor cost in Our Costs
             // (the customer-facing total is already in totalServicesCost via partTotal,
             //  so we ONLY add to the cost side, not the billed side, to avoid double-count)
@@ -4363,44 +4088,6 @@ function WorkOrderDetailsPage() {
                     <div><div style={{ fontSize: '0.75rem', color: '#888' }}>Gross Profit</div><div style={{ fontWeight: 700, color: grossProfit >= 0 ? '#2e7d32' : '#c62828' }}>{formatCurrency(grossProfit)}</div></div>
                   </div>
                 </div>
-
-                {/* Labor Breakdown — separate in-house labor from subcontracted cost */}
-                {(totalOutsideCost > 0 || totalTransportCost > 0 || totalLaborInHouse > 0) && (() => {
-                  const subcontractedCost = totalOutsideCost + totalTransportCost;
-                  const subcontractingMarkup = (totalOutsideBilled - totalOutsideCost) + (totalTransportBilled - totalTransportCost);
-                  const totalLaborBilled = totalLaborInHouse + totalOutsideBilled + totalTransportBilled;
-                  return (
-                    <div style={{ marginTop: 24, padding: 16, background: '#F3E5F5', borderRadius: 10, border: '1px solid #CE93D8' }}>
-                      <h4 style={{ margin: '0 0 12px', color: '#6A1B9A', fontSize: '1rem' }}>🔧 Labor Breakdown</h4>
-                      <p style={{ fontSize: '0.75rem', color: '#666', margin: '0 0 12px' }}>
-                        Separates in-house work from subcontracted cost to give you visibility on what's actually ours vs. marked-up sub work.
-                      </p>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                        <div>
-                          <div style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Where the money goes</div>
-                          {row('In-house labor', totalLaborInHouse)}
-                          {subcontractedCost > 0 && row('Subcontracted cost (paid out)', subcontractedCost, { color: '#c62828' })}
-                          {subcontractingMarkup > 0 && row('Subcontracting markup profit', subcontractingMarkup, { color: '#2e7d32' })}
-                          {row('Total labor billed', totalLaborBilled, { bold: true, border: true })}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Labor profit sources</div>
-                          {row('In-house labor profit', totalLaborInHouse, { color: '#2e7d32' })}
-                          <div style={{ fontSize: '0.7rem', color: '#999', marginTop: -4, marginBottom: 6 }}>100% ours — no cost of goods</div>
-                          {subcontractingMarkup > 0 && (
-                            <>
-                              {row('Sub markup profit', subcontractingMarkup, { color: '#2e7d32' })}
-                              <div style={{ fontSize: '0.7rem', color: '#999', marginTop: -4, marginBottom: 6 }}>
-                                {subcontractedCost > 0 ? Math.round((subcontractingMarkup / subcontractedCost) * 100) : 0}% avg markup on subs
-                              </div>
-                            </>
-                          )}
-                          {row('Combined labor profit', totalLaborInHouse + subcontractingMarkup, { bold: true, border: true, color: '#2e7d32' })}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
 
                 {/* Internal Costs — hidden-from-customer parts (Rolling Assist etc.) */}
                 {(() => {
@@ -4980,221 +4667,6 @@ function WorkOrderDetailsPage() {
         </div>
       )}
 
-      {/* Outside Processing Modal */}
-      {showOutsideProcessingModal && (
-        <div className="modal-overlay" onClick={() => !opSubmitting && setShowOutsideProcessingModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 700, maxHeight: '90vh', overflow: 'auto' }}>
-            <div className="modal-header" style={{ background: '#FFF3E0', borderBottom: '2px solid #E65100' }}>
-              <h3 style={{ color: '#E65100', margin: 0 }}>🏭 Send Parts for Outside Processing</h3>
-              <button className="btn btn-icon" onClick={() => !opSubmitting && setShowOutsideProcessingModal(false)}><X size={20} /></button>
-            </div>
-            <div style={{ padding: 20 }}>
-              {/* Service Type */}
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 700 }}>Service Type *</label>
-                <select className="form-select" value={opServiceType} onChange={(e) => setOpServiceType(e.target.value)}>
-                  <option value="">— Select service —</option>
-                  <option value="Welding">Welding</option>
-                  <option value="Beveling">Beveling</option>
-                  <option value="Plating">Plating</option>
-                  <option value="Painting">Painting</option>
-                  <option value="Galvanizing">Galvanizing</option>
-                  <option value="Heat Treating">Heat Treating</option>
-                  <option value="Hot Rolling">Hot Rolling / Forming</option>
-                  <option value="Machining">Machining</option>
-                  <option value="Cutting">Cutting (laser/plasma/waterjet)</option>
-                  <option value="Sandblasting">Sandblasting</option>
-                  <option value="Pickling & Passivation">Pickling & Passivation</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              {/* Vendor Search */}
-              <div className="form-group" style={{ position: 'relative' }}>
-                <label className="form-label" style={{ fontWeight: 700 }}>Vendor *</label>
-                {opVendor ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 10, background: '#e8f5e9', borderRadius: 6, border: '1px solid #a5d6a7' }}>
-                    <strong>{opVendor.name}</strong>
-                    {opVendor.contactName && <span style={{ color: '#666', fontSize: '0.85rem' }}>• {opVendor.contactName}</span>}
-                    <button onClick={() => { setOpVendor(null); setOpVendorSearch(''); }} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#d32f2f' }}><X size={16} /></button>
-                  </div>
-                ) : (
-                  <>
-                    <input type="text" className="form-input" placeholder="Search vendor by name..."
-                      value={opVendorSearch}
-                      onChange={async (e) => {
-                        setOpVendorSearch(e.target.value);
-                        if (e.target.value.length >= 2) {
-                          try {
-                            const res = await searchVendors(e.target.value);
-                            setOpVendorResults(res.data.data || []);
-                          } catch { setOpVendorResults([]); }
-                        } else {
-                          setOpVendorResults([]);
-                        }
-                      }} />
-                    {opVendorResults.length > 0 && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ddd', borderRadius: 6, maxHeight: 200, overflow: 'auto', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                        {opVendorResults.map(v => (
-                          <div key={v.id} onClick={() => { setOpVendor(v); setOpVendorSearch(''); setOpVendorResults([]); }}
-                            style={{ padding: 10, cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                            onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
-                            onMouseLeave={(e) => e.target.style.background = 'white'}>
-                            <strong>{v.name}</strong>
-                            {v.contactName && <span style={{ color: '#666', marginLeft: 8, fontSize: '0.85rem' }}>{v.contactName}</span>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* Parts Selection */}
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 700 }}>Select Parts ({opSelectedPartIds.length} selected)</label>
-                <div style={{ marginBottom: 6, display: 'flex', gap: 8 }}>
-                  <button type="button" className="btn btn-sm btn-outline" onClick={() => {
-                    const ids = (order.parts || []).filter(p => !['fab_service', 'shop_rate', 'rush_service'].includes(p.partType)).map(p => p.id);
-                    setOpSelectedPartIds(ids);
-                  }}>Select All</button>
-                  <button type="button" className="btn btn-sm btn-outline" onClick={() => setOpSelectedPartIds([])}>Clear</button>
-                </div>
-                <div style={{ maxHeight: 240, overflow: 'auto', border: '1px solid #ddd', borderRadius: 6, padding: 4 }}>
-                  {(order.parts || [])
-                    .filter(p => !['fab_service', 'shop_rate', 'rush_service'].includes(p.partType))
-                    .sort((a, b) => (a.partNumber || 0) - (b.partNumber || 0))
-                    .map(part => {
-                      const checked = opSelectedPartIds.includes(part.id);
-                      const fd = part.formData && typeof part.formData === 'object' ? part.formData : {};
-                      const desc = fd._materialDescription || part.materialDescription || PART_TYPES[part.partType]?.label || part.partType;
-                      const alreadyOut = part.outsideProcessingStatus === 'sent';
-                      return (
-                        <label key={part.id} style={{
-                          display: 'flex', alignItems: 'center', gap: 8, padding: 8, marginBottom: 4,
-                          background: checked ? '#FFF3E0' : '#fafafa', borderRadius: 4, cursor: 'pointer',
-                          border: checked ? '1px solid #E65100' : '1px solid transparent'
-                        }}>
-                          <input type="checkbox" checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) setOpSelectedPartIds([...opSelectedPartIds, part.id]);
-                              else setOpSelectedPartIds(opSelectedPartIds.filter(id => id !== part.id));
-                            }} />
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                              #{part.partNumber} {part.clientPartNumber && <span style={{ color: '#1976d2', fontWeight: 400 }}>{part.clientPartNumber}</span>}
-                              {alreadyOut && <span style={{ marginLeft: 8, fontSize: '0.7rem', background: '#FFF3E0', color: '#E65100', padding: '1px 6px', borderRadius: 3 }}>Already out @ {part.outsideProcessingVendorName}</span>}
-                            </div>
-                            <div style={{ fontSize: '0.8rem', color: '#666' }}>{desc.replace(/^\d+pc:\s*/i, '')} • Qty: {part.quantity}</div>
-                          </div>
-                        </label>
-                      );
-                    })}
-                </div>
-              </div>
-
-              {/* Cost & Dates */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label className="form-label">Cost per Part *</label>
-                  <input type="number" step="0.01" className="form-input" value={opCostPerPart}
-                    onChange={(e) => setOpCostPerPart(e.target.value)} placeholder="0.00" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Transport</label>
-                  <input type="number" step="0.01" className="form-input" value={opTransportCost}
-                    onChange={(e) => setOpTransportCost(e.target.value)} placeholder="0.00" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label" style={{ color: '#c62828' }}>Expedite Fee</label>
-                  <input type="number" step="0.01" className="form-input" value={opExpediteCost}
-                    onChange={(e) => setOpExpediteCost(e.target.value)} placeholder="0.00"
-                    style={{ borderColor: parseFloat(opExpediteCost) > 0 ? '#c62828' : undefined }} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Expected Return</label>
-                  <input type="date" className="form-input" value={opExpectedReturn}
-                    onChange={(e) => setOpExpectedReturn(e.target.value)} />
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div className="form-group">
-                <label className="form-label">Notes for Vendor</label>
-                <textarea className="form-textarea" rows={3} value={opNotes}
-                  onChange={(e) => setOpNotes(e.target.value)}
-                  placeholder="Special instructions, finishing requirements, etc." />
-              </div>
-
-              {/* Total Preview */}
-              {opSelectedPartIds.length > 0 && opCostPerPart && (
-                <div style={{ background: '#FFF3E0', padding: 12, borderRadius: 6, marginBottom: 12, border: '1px solid #FFE0B2' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: 4 }}>
-                    <span>{opSelectedPartIds.length} parts × ${parseFloat(opCostPerPart || 0).toFixed(2)}</span>
-                    <span>${(opSelectedPartIds.length * parseFloat(opCostPerPart || 0)).toFixed(2)}</span>
-                  </div>
-                  {parseFloat(opTransportCost) > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: 4 }}>
-                      <span>Transport</span>
-                      <span>${parseFloat(opTransportCost).toFixed(2)}</span>
-                    </div>
-                  )}
-                  {parseFloat(opExpediteCost) > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: 4, color: '#c62828' }}>
-                      <span>🚨 Expedite Fee</span>
-                      <span>${parseFloat(opExpediteCost).toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #FFE0B2', paddingTop: 6, marginTop: 4 }}>
-                    <strong>Total</strong>
-                    <strong style={{ color: '#E65100' }}>
-                      ${(opSelectedPartIds.length * parseFloat(opCostPerPart || 0) + parseFloat(opTransportCost || 0) + parseFloat(opExpediteCost || 0)).toFixed(2)}
-                    </strong>
-                  </div>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button className="btn btn-secondary" onClick={() => setShowOutsideProcessingModal(false)} disabled={opSubmitting}>Cancel</button>
-                <button className="btn" disabled={opSubmitting || !opVendor || !opServiceType || opSelectedPartIds.length === 0 || !opCostPerPart}
-                  onClick={async () => {
-                    try {
-                      setOpSubmitting(true);
-                      const res = await createOutsideProcessingPO(id, {
-                        partIds: opSelectedPartIds,
-                        vendorId: opVendor.id,
-                        serviceType: opServiceType,
-                        costPerPart: parseFloat(opCostPerPart) || 0,
-                        transportCost: parseFloat(opTransportCost) || 0,
-                        expediteCost: parseFloat(opExpediteCost) || 0,
-                        expectedReturn: opExpectedReturn || null,
-                        notes: opNotes
-                      });
-                      showMessage(res.data.message || 'Outside Processing PO created');
-                      setShowOutsideProcessingModal(false);
-                      setOpSelectedPartIds([]);
-                      setOpVendor(null);
-                      setOpServiceType('');
-                      setOpCostPerPart('');
-                      setOpTransportCost('');
-                      setOpExpediteCost('');
-                      setOpExpectedReturn('');
-                      setOpNotes('');
-                      await loadOrder();
-                    } catch (err) {
-                      setError('Failed to create PO: ' + (err.response?.data?.error?.message || err.message));
-                    } finally {
-                      setOpSubmitting(false);
-                    }
-                  }}
-                  style={{ background: '#E65100', color: 'white' }}>
-                  {opSubmitting ? '⏳ Creating PO...' : '🏭 Create PO & Send'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Order Material Modal */}
       {showOrderModal && (

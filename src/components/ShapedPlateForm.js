@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import HeatNumberInput from './HeatNumberInput';
-import OutsideProcessingSection, { calculateOpTotals } from './OutsideProcessingSection';
-
 const THICKNESS_OPTIONS = [
   '16 ga', '14 ga', '12 ga', '11 ga', '10 ga', '7 ga',
   '1/8"', '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '1"',
@@ -114,12 +112,8 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
     if (!isNaN(stored)) return stored;
     return parseFloat(partData.laborTotal) || 0;
   })();
-  const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
-  const opEnabled = (partData.outsideProcessing || []).length > 0;
-  const vendorSuppliesMaterial = partData.materialSource === 'op_vendor_mat_supplied';
-  const laborEach = (opEnabled ? 0 : baseLaborEach) + opTotals.totalProfit;
-  const opCostEach = opTotals.totalCost;
-  const unitPrice = materialEach + laborEach + opCostEach;
+  const laborEach = baseLaborEach;
+  const unitPrice = materialEach + laborEach;
   const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
   useEffect(() => {
@@ -396,8 +390,8 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
       <div style={sectionStyle}>
         {sectionTitle('💰', 'Pricing', '#1976d2')}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <div className="form-group"><label className="form-label" style={{ color: vendorSuppliesMaterial ? '#999' : undefined }}>Material Cost (each){vendorSuppliesMaterial && <span style={{ marginLeft: 4, fontSize: '0.7rem', color: '#2e7d32' }}>(supplied by OP vendor)</span>}</label>
-            <input type="number" step="any" className="form-input" disabled={vendorSuppliesMaterial} style={{ background: vendorSuppliesMaterial ? '#f5f5f5' : undefined, color: vendorSuppliesMaterial ? '#999' : undefined }} value={vendorSuppliesMaterial ? '' : (partData.materialTotal || '')}
+          <div className="form-group"><label className="form-label">Material Cost (each)</label>
+            <input type="number" step="any" className="form-input" value={partData.materialTotal || ''}
               onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" /></div>
           <div className="form-group"><label className="form-label">Markup %</label>
             <input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20}
@@ -421,14 +415,11 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
                   fontWeight: (partData._materialRounding || 'none') === o.k ? 700 : 400 }}>{o.l}</button>
             ))}
           </div>}
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Labor (ea)</span><span>${baseLaborEach.toFixed(2)}</span></div>{opTotals.totalCost > 0 && (<div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#E65100' }}><span>🏭 Outside Processing (vendor cost)</span><span>${opTotals.totalCost.toFixed(2)}</span></div>)}{opTotals.totalProfit > 0 && (<div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#2e7d32' }}><span>+ OP Markup (rolled into labor)</span><span>${opTotals.totalProfit.toFixed(2)}</span></div>)}<div style={{ display: 'none' }}></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Labor (ea)</span><span>${baseLaborEach.toFixed(2)}</span></div><div style={{ display: 'none' }}></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9', marginTop: 4 }}><strong>Unit Price</strong><strong style={{ color: '#1976d2' }}>${unitPrice.toFixed(2)}</strong></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9' }}><strong>Line Total ({qty} × ${unitPrice.toFixed(2)})</strong><strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong></div>
         </div>
       </div>
-
-      <OutsideProcessingSection partData={partData} setPartData={setPartData} />
-
       {/* === TRACKING === */}
       <div style={sectionStyle}>
         {sectionTitle('🏷️', 'Tracking', '#616161')}
