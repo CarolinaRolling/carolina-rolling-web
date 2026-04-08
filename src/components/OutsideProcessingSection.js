@@ -21,13 +21,19 @@ const emptyOp = () => ({
   notes: ''
 });
 
-export default function OutsideProcessingSection({ partData, setPartData }) {
+export default function OutsideProcessingSection({ partData, setPartData, allowHideFromCustomer = false, showTrucking = false }) {
   const [enabled, setEnabled] = useState((partData.outsideProcessing || []).length > 0);
   const [vendorSearches, setVendorSearches] = useState({});
   const [vendorResults, setVendorResults] = useState({});
 
   const ops = partData.outsideProcessing || [];
   const partQty = parseInt(partData.quantity) || 1;
+  const hiddenFromCustomer = !!partData._fsHiddenFromCustomer;
+  const outboundTrucking = parseFloat(partData._fsOutboundTrucking) || 0;
+  const inboundTrucking = parseFloat(partData._fsInboundTrucking) || 0;
+  const truckingMarkup = partData._fsTruckingMarkup !== undefined && partData._fsTruckingMarkup !== '' ? parseFloat(partData._fsTruckingMarkup) : 30;
+  const truckingCostLot = outboundTrucking + inboundTrucking;
+  const truckingProfitLot = truckingCostLot * (truckingMarkup / 100);
 
   const updateOps = (newOps) => {
     setPartData(prev => ({ ...prev, outsideProcessing: newOps }));
@@ -150,8 +156,8 @@ export default function OutsideProcessingSection({ partData, setPartData }) {
   };
 
   return (
-    <div style={{ marginTop: 12, padding: 10, background: enabled ? '#FFF3E0' : '#fafafa', borderRadius: 8, border: enabled ? '1.5px solid #FFB74D' : '1px solid #e0e0e0' }}>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 700, color: '#E65100' }}>
+    <div style={{ marginTop: 12, padding: 10, background: hiddenFromCustomer ? '#FFEBEE' : (enabled ? '#FFF3E0' : '#fafafa'), borderRadius: 8, border: hiddenFromCustomer ? '2px solid #EF5350' : (enabled ? '1.5px solid #FFB74D' : '1px solid #e0e0e0'), gridColumn: 'span 2' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 700, color: hiddenFromCustomer ? '#c62828' : '#E65100' }}>
         <input type="checkbox" checked={enabled} onChange={handleEnable} />
         🏭 Outside Processing Required <span style={{ fontSize: '0.7rem', fontWeight: 400, color: '#888' }}>(internal only — not shown to customer)</span>
         {ops.length > 0 && <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: '#666', fontWeight: 500 }}>
@@ -159,7 +165,31 @@ export default function OutsideProcessingSection({ partData, setPartData }) {
         </span>}
       </label>
 
-      {enabled && (
+      {/* Hide from customer checkbox (Fab Service only, when allowed) */}
+      {enabled && allowHideFromCustomer && (
+        <div style={{ marginTop: 8, padding: 8, background: hiddenFromCustomer ? '#FFCDD2' : '#FFF8E1', borderRadius: 4, border: hiddenFromCustomer ? '1px solid #EF5350' : '1px dashed #FFB74D' }}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: '0.85rem' }}>
+            <input
+              type="checkbox"
+              checked={hiddenFromCustomer}
+              style={{ marginTop: 2 }}
+              onChange={(e) => setPartData(prev => ({ ...prev, _fsHiddenFromCustomer: e.target.checked }))}
+            />
+            <div style={{ flex: 1 }}>
+              <strong style={{ color: hiddenFromCustomer ? '#c62828' : '#E65100' }}>
+                🔒 Hide from customer (internal cost only — Rolling Assist mode)
+              </strong>
+              <div style={{ fontSize: '0.7rem', color: '#666', marginTop: 2 }}>
+                Check this when you need to sub out the work but don't want the customer to see it.
+                This line will show as a cost on the internal summary but be excluded from the customer-facing estimate and PDF.
+                Use for rolling assist or similar hidden subcontracted work.
+              </div>
+            </div>
+          </label>
+        </div>
+      )}
+
+      {enabled && !showTrucking && (
         <div style={{ marginTop: 6, fontSize: '0.7rem', color: '#888', fontStyle: 'italic' }}>
           Note: Transport (trucking) is configured at the order level under "🚛 Outside Processing Transport".
         </div>
@@ -294,6 +324,57 @@ export default function OutsideProcessingSection({ partData, setPartData }) {
         </button>
       )}
 
+      {/* Trucking (lot-level, only when showTrucking prop true) */}
+      {enabled && showTrucking && (
+        <div style={{ marginTop: 10, padding: 10, background: 'white', borderRadius: 6, border: '1px solid #FFE0B2' }}>
+          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#E65100', marginBottom: 8 }}>
+            🚛 Trucking (lot total — not per part)
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>Outbound (to vendor)</label>
+              <input type="number" step="any" className="form-input"
+                value={partData._fsOutboundTrucking || ''}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setPartData(prev => ({ ...prev, _fsOutboundTrucking: e.target.value }))}
+                placeholder="0.00" style={{ fontSize: '0.85rem' }} />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>Inbound (return)</label>
+              <input type="number" step="any" className="form-input"
+                value={partData._fsInboundTrucking || ''}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setPartData(prev => ({ ...prev, _fsInboundTrucking: e.target.value }))}
+                placeholder="0.00" style={{ fontSize: '0.85rem' }} />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>Markup %</label>
+              <input type="number" step="1" className="form-input"
+                value={partData._fsTruckingMarkup ?? 30}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setPartData(prev => ({ ...prev, _fsTruckingMarkup: e.target.value }))}
+                placeholder="30" style={{ fontSize: '0.85rem' }} />
+            </div>
+          </div>
+          {truckingCostLot > 0 && (
+            <div style={{ marginTop: 8, padding: 6, background: '#FFF8E1', borderRadius: 4, fontSize: '0.75rem', color: '#666' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Trucking cost (lot):</span>
+                <strong>${truckingCostLot.toFixed(2)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#2e7d32' }}>
+                <span>+ Markup ({truckingMarkup}%):</span>
+                <strong>+${truckingProfitLot.toFixed(2)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #FFE082', paddingTop: 4, marginTop: 4, fontWeight: 700, color: '#E65100' }}>
+                <span>Billed (lot):</span>
+                <span>${(truckingCostLot + truckingProfitLot).toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {enabled && ops.length > 1 && (
         <div style={{ marginTop: 10, padding: 8, background: '#FFE0B2', borderRadius: 4, fontSize: '0.8rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -315,7 +396,8 @@ export default function OutsideProcessingSection({ partData, setPartData }) {
 }
 
 // Returns PER-PART totals. All OP costs and markups are rolled into the per-part price.
-export function calculateOpTotals(operations, qty = 1) {
+// Optionally accepts a partData object to include lot-level trucking.
+export function calculateOpTotals(operations, qty = 1, partData = null) {
   const ops = operations || [];
   const partQty = parseInt(qty) || 1;
   let totalCostLot = 0;
@@ -328,6 +410,17 @@ export function calculateOpTotals(operations, qty = 1) {
     totalCostLot += (cost + expedite) * partQty;
     totalProfitLot += cost * (markup / 100) * partQty;
   });
+
+  // Include trucking if partData provided
+  if (partData) {
+    const outbound = parseFloat(partData._fsOutboundTrucking) || 0;
+    const inbound = parseFloat(partData._fsInboundTrucking) || 0;
+    const truckMarkup = partData._fsTruckingMarkup !== undefined && partData._fsTruckingMarkup !== '' ? parseFloat(partData._fsTruckingMarkup) : 30;
+    const truckCostLot = outbound + inbound;
+    const truckProfitLot = truckCostLot * (truckMarkup / 100);
+    totalCostLot += truckCostLot;
+    totalProfitLot += truckProfitLot;
+  }
 
   const totalCost = partQty > 0 ? totalCostLot / partQty : totalCostLot;
   const totalProfit = partQty > 0 ? totalProfitLot / partQty : totalProfitLot;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { getSettings, searchVendors, createVendor } from '../services/api';
+import { getSettings } from '../services/api';
 import OutsideProcessingSection, { calculateOpTotals } from './OutsideProcessingSection';
 
 const SERVICE_TYPES = [
@@ -235,61 +235,22 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
   // Pricing
   const qty = parseInt(partData.quantity) || 1;
   const baseLaborEach = weldCalc ? weldCalc.total : (parseFloat(partData._baseLaborTotal) || parseFloat(partData.laborTotal) || 0);
-  const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
+  // calculateOpTotals now includes trucking when partData is passed
+  const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity, partData);
   const opEnabled = (partData.outsideProcessing || []).length > 0;
+  const hiddenFromCustomer = !!partData._fsHiddenFromCustomer;
   // When OP enabled, in-house labor is $0 (vendor does the work). OP markup IS the profit.
   const effectiveBaseLabor = opEnabled ? 0 : baseLaborEach;
   const laborEach = effectiveBaseLabor + opTotals.totalProfit;
   const opCostEach = opTotals.totalCost;
 
-  // Outside vendor cost fields (Commit 1 additions)
-  // These are used when the Fab Service is subbed out to a vendor (welding shop, waterjet, etc.)
-  const vendorMaterialCostPerPart = parseFloat(partData._fsVendorMaterialCost) || 0; // material portion of vendor bill, per part
-  const vendorLaborCostPerPart = parseFloat(partData._fsVendorLaborCost) || 0; // labor portion of vendor bill, per part (if they break it down)
-  const vendorMarkupPercent = parseFloat(partData._fsVendorMarkup) || 0; // markup applied to vendor's total (material+labor)
-  const outboundTruckingLot = parseFloat(partData._fsOutboundTrucking) || 0; // per-order, not per-part
-  const inboundTruckingLot = parseFloat(partData._fsInboundTrucking) || 0; // per-order, not per-part
-  const truckingMarkupPercent = parseFloat(partData._fsTruckingMarkup) || 0;
-  const hiddenFromCustomer = !!partData._fsHiddenFromCustomer;
-
-  // Vendor total cost (what we pay the OP vendor, per part)
-  const vendorTotalCostPerPart = vendorMaterialCostPerPart + vendorLaborCostPerPart;
-  // Vendor billed to customer (cost + markup), per part
-  const vendorBilledPerPart = vendorTotalCostPerPart * (1 + vendorMarkupPercent / 100);
-  // Vendor lot totals
-  const vendorTotalCostLot = vendorTotalCostPerPart * qty;
-  const vendorBilledLot = vendorBilledPerPart * qty;
-
-  // Trucking (lot-level cost, spread evenly across parts for per-part display)
-  const truckingCostLot = outboundTruckingLot + inboundTruckingLot;
-  const truckingBilledLot = truckingCostLot * (1 + truckingMarkupPercent / 100);
-  const truckingCostPerPart = qty > 0 ? truckingCostLot / qty : 0;
-  const truckingBilledPerPart = qty > 0 ? truckingBilledLot / qty : 0;
-
-  // Line total (what gets billed to customer, per lot, not hidden)
-  // = base labor + vendor billed + trucking billed, all × qty and + op stuff
-  const lineTotal = hiddenFromCustomer
-    ? 0 // hidden parts don't contribute to customer total
-    : ((laborEach + opCostEach) * qty) + vendorBilledLot + truckingBilledLot;
-  // Actual cost for internal reporting (what we paid out)
-  const lineCost = (effectiveBaseLabor * qty) + (opCostEach * qty) + vendorTotalCostLot + truckingCostLot;
-  // Profit (revenue - cost)
+  // Line total (what gets billed to customer)
+  // When hidden, it's $0 (customer pays nothing for this part)
+  const lineTotal = hiddenFromCustomer ? 0 : ((laborEach + opCostEach) * qty);
+  // Internal cost (what we actually paid out) — used for the hidden-part display
+  const lineCost = (effectiveBaseLabor * qty) + (opCostEach * qty);
+  // Profit for this line (difference between what customer pays and what we spent)
   const lineProfit = lineTotal - lineCost;
-
-  // Vendor search state (Commit 1)
-  const [vendorSearch, setVendorSearch] = useState('');
-  const [vendorResults, setVendorResults] = useState([]);
-  const handleVendorSearch = async (query) => {
-    setVendorSearch(query);
-    if (query.length >= 2) {
-      try {
-        const res = await searchVendors(query);
-        setVendorResults(res.data.data || []);
-      } catch { setVendorResults([]); }
-    } else {
-      setVendorResults([]);
-    }
-  };
 
   // Auto-set weld rate on part link
   useEffect(() => {
@@ -301,7 +262,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
   // Sync computed values — use ref to prevent infinite loops
   useEffect(() => {
     if (isEditingPriceRef.current) return;
-    const syncKey = lineTotal.toFixed(2) + '|' + serviceDescription + '|' + (serviceConfig ? serviceConfig.label : '') + '|' + (opEnabled ? '1' : '0') + '|' + vendorTotalCostLot.toFixed(2) + '|' + truckingCostLot.toFixed(2) + '|' + (hiddenFromCustomer ? '1' : '0');
+    const syncKey = lineTotal.toFixed(2) + '|' + serviceDescription + '|' + (serviceConfig ? serviceConfig.label : '') + '|' + (opEnabled ? '1' : '0') + '|' + (hiddenFromCustomer ? '1' : '0');
     if (syncKey !== prevSyncRef.current) {
       prevSyncRef.current = syncKey;
       const updates = {
@@ -310,9 +271,6 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
         laborTotal: laborEach.toFixed(2),
         // _baseLaborTotal is the in-house base labor before OP markup
         _baseLaborTotal: baseLaborEach.toFixed(2),
-        // Material cost (vendor-supplied material portion, if any)
-        materialTotal: vendorMaterialCostPerPart.toFixed(2),
-        materialMarkupPercent: vendorMarkupPercent,
         materialDescription: serviceDescription,
         _materialDescription: serviceDescription,
         _rollingDescription: serviceConfig ? serviceConfig.label : '',
@@ -325,7 +283,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
       }
       setPartData(prev => ({ ...prev, ...updates }));
     }
-  }, [lineTotal, laborEach, baseLaborEach, serviceDescription, serviceConfig, weldCalc, opEnabled, vendorTotalCostLot, truckingCostLot, hiddenFromCustomer, vendorMaterialCostPerPart, vendorMarkupPercent]);
+  }, [lineTotal, laborEach, baseLaborEach, serviceDescription, serviceConfig, weldCalc, opEnabled, hiddenFromCustomer]);
 
   const update = (fields) => {
     setPartData(prev => ({ ...prev, ...fields }));
@@ -693,176 +651,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
 
       {/* Outside Processing */}
       {serviceType && linkedPart && (
-        <OutsideProcessingSection partData={partData} setPartData={setPartData} />
-      )}
-
-      {/* Outside Vendor (Commit 1 — new) */}
-      {serviceType && linkedPart && (
-        <div style={{ ...sectionStyle }}>
-          <div style={{ padding: 12, background: hiddenFromCustomer ? '#FFEBEE' : '#FFF3E0', borderRadius: 8, border: '2px solid ' + (hiddenFromCustomer ? '#EF5350' : '#FFB74D') }}>
-            <h4 style={{ marginBottom: 10, color: hiddenFromCustomer ? '#c62828' : '#E65100', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>🏭 Outside Vendor (optional)</span>
-              <label style={{ fontSize: '0.8rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: hiddenFromCustomer ? '#c62828' : '#666' }}>
-                <input type="checkbox" checked={hiddenFromCustomer}
-                  onChange={(e) => update({ _fsHiddenFromCustomer: e.target.checked })} />
-                <strong>Hide from customer (internal cost only)</strong>
-              </label>
-            </h4>
-            {hiddenFromCustomer && (
-              <div style={{ fontSize: '0.75rem', color: '#c62828', marginBottom: 10, padding: 6, background: 'white', borderRadius: 4, border: '1px dashed #EF5350' }}>
-                ⚠ This part will be excluded from the customer-facing estimate and PDF. It will show as an internal cost on the summary tab only.
-                Use for rolling assist or other subbed work you don't want the customer to see.
-              </div>
-            )}
-            <p style={{ fontSize: '0.75rem', color: '#666', margin: '0 0 10px' }}>
-              Fill this in if this service is being subcontracted. Leave blank if you're doing the work in-house.
-            </p>
-
-            {/* Vendor search */}
-            <div className="form-group" style={{ position: 'relative' }}>
-              <label className="form-label" style={{ fontSize: '0.85rem' }}>Vendor</label>
-              {partData.supplierName ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, background: '#E8F5E9', borderRadius: 4, border: '1px solid #A5D6A7' }}>
-                  <strong>{partData.supplierName}</strong>
-                  <button type="button" onClick={() => update({ vendorId: null, supplierName: '' })}
-                    style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#d32f2f', fontSize: '0.8rem' }}>Clear</button>
-                </div>
-              ) : (
-                <>
-                  <input type="text" className="form-input" placeholder="Search vendor..."
-                    value={vendorSearch}
-                    onChange={(e) => handleVendorSearch(e.target.value)}
-                    style={{ fontSize: '0.85rem' }} />
-                  {vendorResults.length > 0 && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ddd', borderRadius: 4, maxHeight: 200, overflow: 'auto', zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
-                      {vendorResults.map(v => (
-                        <div key={v.id}
-                          onClick={() => {
-                            update({ vendorId: v.id, supplierName: v.name });
-                            setVendorSearch('');
-                            setVendorResults([]);
-                          }}
-                          style={{ padding: 8, cursor: 'pointer', borderBottom: '1px solid #eee', fontSize: '0.85rem' }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = 'white'}>
-                          <strong>{v.name}</strong>
-                          {v.contactName && <span style={{ color: '#666', marginLeft: 6, fontSize: '0.75rem' }}>{v.contactName}</span>}
-                        </div>
-                      ))}
-                      {vendorSearch.length >= 2 && (
-                        <div onClick={async () => {
-                          try {
-                            const res = await createVendor({ name: vendorSearch });
-                            if (res.data.data) {
-                              update({ vendorId: res.data.data.id, supplierName: res.data.data.name });
-                              setVendorSearch('');
-                              setVendorResults([]);
-                            }
-                          } catch {}
-                        }} style={{ padding: 8, cursor: 'pointer', background: '#E8F5E9', color: '#2e7d32', fontWeight: 600, fontSize: '0.85rem' }}>
-                          + Add "{vendorSearch}" as new vendor
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Vendor cost inputs */}
-            {partData.supplierName && (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginTop: 8 }}>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Vendor Material Cost (per part)</label>
-                    <input type="number" step="any" className="form-input"
-                      value={partData._fsVendorMaterialCost || ''}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => update({ _fsVendorMaterialCost: e.target.value })}
-                      placeholder="0.00" style={{ fontSize: '0.85rem' }} />
-                    <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 2 }}>If the vendor supplies material</div>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Vendor Labor Cost (per part)</label>
-                    <input type="number" step="any" className="form-input"
-                      value={partData._fsVendorLaborCost || ''}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => update({ _fsVendorLaborCost: e.target.value })}
-                      placeholder="0.00" style={{ fontSize: '0.85rem' }} />
-                    <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 2 }}>Vendor's labor charge</div>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Markup %</label>
-                    <input type="number" step="1" className="form-input"
-                      value={partData._fsVendorMarkup ?? 20}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => update({ _fsVendorMarkup: e.target.value })}
-                      placeholder="20" style={{ fontSize: '0.85rem' }} />
-                  </div>
-                </div>
-
-                {/* Trucking */}
-                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #FFB74D' }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#E65100', marginBottom: 6 }}>🚛 Trucking (optional)</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Outbound (to vendor)</label>
-                      <input type="number" step="any" className="form-input"
-                        value={partData._fsOutboundTrucking || ''}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => update({ _fsOutboundTrucking: e.target.value })}
-                        placeholder="0.00" style={{ fontSize: '0.85rem' }} />
-                      <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 2 }}>Lot cost</div>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Inbound (return)</label>
-                      <input type="number" step="any" className="form-input"
-                        value={partData._fsInboundTrucking || ''}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => update({ _fsInboundTrucking: e.target.value })}
-                        placeholder="0.00" style={{ fontSize: '0.85rem' }} />
-                      <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 2 }}>Lot cost</div>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Trucking Markup %</label>
-                      <input type="number" step="1" className="form-input"
-                        value={partData._fsTruckingMarkup ?? 30}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => update({ _fsTruckingMarkup: e.target.value })}
-                        placeholder="30" style={{ fontSize: '0.85rem' }} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vendor summary */}
-                <div style={{ marginTop: 10, padding: 8, background: 'white', borderRadius: 4, fontSize: '0.8rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Vendor cost (per part):</span>
-                    <strong>${vendorTotalCostPerPart.toFixed(2)}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Vendor cost (lot):</span>
-                    <strong>${vendorTotalCostLot.toFixed(2)}</strong>
-                  </div>
-                  {truckingCostLot > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Trucking cost (lot):</span>
-                      <strong>${truckingCostLot.toFixed(2)}</strong>
-                    </div>
-                  )}
-                  {!hiddenFromCustomer && (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#2e7d32' }}>
-                        <span>+ Markup profit:</span>
-                        <strong>+${(lineTotal - (effectiveBaseLabor * qty) - (opCostEach * qty) - vendorTotalCostLot - truckingCostLot).toFixed(2)}</strong>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <OutsideProcessingSection partData={partData} setPartData={setPartData} allowHideFromCustomer={true} showTrucking={true} />
       )}
 
       {/* Pricing Summary */}
@@ -881,7 +670,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
             {opCostEach > 0 && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#E65100' }}>
-                  <span>🏭 Outside Processing (vendor cost)</span>
+                  <span>🏭 Outside Processing (vendor cost + trucking)</span>
                   <span>${opCostEach.toFixed(2)}</span>
                 </div>
                 {opTotals.totalProfit > 0 && (
@@ -891,18 +680,6 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
                   </div>
                 )}
               </>
-            )}
-            {vendorTotalCostLot > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#E65100' }}>
-                <span>🏭 {partData.supplierName} (vendor lot cost)</span>
-                <span>${vendorTotalCostLot.toFixed(2)}</span>
-              </div>
-            )}
-            {truckingCostLot > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#616161' }}>
-                <span>🚛 Trucking (lot cost)</span>
-                <span>${truckingCostLot.toFixed(2)}</span>
-              </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid ' + (hiddenFromCustomer ? '#EF9A9A' : '#90caf9'), marginTop: 4 }}>
               <strong>{hiddenFromCustomer ? 'Internal Cost' : 'Line Total'}</strong>
