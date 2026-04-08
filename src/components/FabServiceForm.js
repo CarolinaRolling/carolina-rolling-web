@@ -651,7 +651,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
 
       {/* Outside Processing */}
       {serviceType && linkedPart && (
-        <OutsideProcessingSection partData={partData} setPartData={setPartData} allowHideFromCustomer={true} showTrucking={true} />
+        <OutsideProcessingSection partData={partData} setPartData={setPartData} allowHideFromCustomer={true} showTrucking={true} hideServiceType={true} />
       )}
 
       {/* Pricing Summary */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { searchVendors, createVendor } from '../services/api';
 
@@ -21,7 +21,7 @@ const emptyOp = () => ({
   notes: ''
 });
 
-export default function OutsideProcessingSection({ partData, setPartData, allowHideFromCustomer = false, showTrucking = false }) {
+export default function OutsideProcessingSection({ partData, setPartData, allowHideFromCustomer = false, showTrucking = false, hideServiceType = false }) {
   const [enabled, setEnabled] = useState((partData.outsideProcessing || []).length > 0);
   const [vendorSearches, setVendorSearches] = useState({});
   const [vendorResults, setVendorResults] = useState({});
@@ -53,6 +53,17 @@ export default function OutsideProcessingSection({ partData, setPartData, allowH
     updateOps(newOps);
     if (newOps.length === 0) setEnabled(false);
   };
+
+  // When service type is hidden (Fab Service mode), auto-fill it with "Subcontracted"
+  // so downstream code that requires serviceType has a value
+  useEffect(() => {
+    if (!hideServiceType || ops.length === 0) return;
+    const needsBackfill = ops.some(o => !o.serviceType);
+    if (needsBackfill) {
+      updateOps(ops.map(o => o.serviceType ? o : { ...o, serviceType: 'Subcontracted' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hideServiceType, ops.length]);
 
   const updateOperation = (opId, field, value) => {
     updateOps(ops.map(o => o.id === opId ? { ...o, [field]: value } : o));
@@ -207,14 +218,16 @@ export default function OutsideProcessingSection({ partData, setPartData, allowH
               </button>
             </div>
 
-            <div className="form-group" style={{ marginBottom: 8 }}>
-              <label className="form-label" style={{ fontSize: '0.8rem' }}>Service Type *</label>
-              <select className="form-select" value={op.serviceType}
-                onChange={(e) => updateOperation(op.id, 'serviceType', e.target.value)}>
-                <option value="">— Select —</option>
-                {SERVICE_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
+            {!hideServiceType && (
+              <div className="form-group" style={{ marginBottom: 8 }}>
+                <label className="form-label" style={{ fontSize: '0.8rem' }}>Service Type *</label>
+                <select className="form-select" value={op.serviceType}
+                  onChange={(e) => updateOperation(op.id, 'serviceType', e.target.value)}>
+                  <option value="">— Select —</option>
+                  {SERVICE_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
 
             <div className="form-group" style={{ marginBottom: 8 }}>
               <label className="form-label" style={{ fontSize: '0.8rem' }}>Outside Vendor *</label>

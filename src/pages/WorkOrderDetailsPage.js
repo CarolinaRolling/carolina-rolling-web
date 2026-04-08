@@ -4259,9 +4259,28 @@ function WorkOrderDetailsPage() {
               totalTransportBilled += cost * (1 + markup / 100);
             });
 
+            // Fab Service / Shop Rate parts: include OP vendor cost in Our Costs
+            // (the customer-facing total is already in totalServicesCost via partTotal,
+            //  so we ONLY add to the cost side, not the billed side, to avoid double-count)
             let totalServicesCost = 0;
             allParts.filter(p => ['fab_service', 'shop_rate'].includes(p.partType)).forEach(p => {
-              totalServicesCost += parseFloat(p.partTotal) || 0;
+              const qty = parseInt(p.quantity) || 1;
+              const fd = p.formData || {};
+              const isHidden = !!(fd._fsHiddenFromCustomer || p._fsHiddenFromCustomer);
+              // Customer-facing part total — visible parts only
+              if (!isHidden) {
+                totalServicesCost += parseFloat(p.partTotal) || 0;
+              }
+              // OP vendor cost (we pay this regardless of whether customer sees the line)
+              const fsOps = p.outsideProcessing || [];
+              fsOps.forEach(op => {
+                const opCostPerPart = parseFloat(op.costPerPart) || 0;
+                const opExpedite = parseFloat(op.expediteCost) || 0;
+                totalOutsideCost += (opCostPerPart + opExpedite) * qty;
+                // NOTE: not adding to totalOutsideBilled because that would double-count
+                // with totalServicesCost (which already includes OP billed amount via partTotal).
+                // For hidden parts, the billed amount is $0 — vendor cost comes out of profit.
+              });
             });
 
             const trucking = parseFloat(order.truckingCost) || 0;
