@@ -24,7 +24,8 @@ import HeatNumberInput from '../components/HeatNumberInput';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart, reorderWorkOrderParts,
-  createOutsideProcessingPO, updateOutsideProcessingStatus, createTransportPO,
+  createOutsideProcessingPO, createOutsideProcessingPOsAuto, updateOutsideProcessingStatus, createTransportPO,
+  editOutsideProcessingPO, regenOutsideProcessingPO, cancelOutsideProcessingPO,
   toggleVendorShare, resolveVendorIssue,
   uploadPartFiles, getPartFileSignedUrl, downloadPartFile, deletePartFile,
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, downloadWorkOrderDocument, deleteWorkOrderDocument, regeneratePODocument, createPODocument, toggleDocumentPortal,
@@ -3863,7 +3864,35 @@ function WorkOrderDetailsPage() {
       {/* ===== OUTSIDE PROCESSING TAB ===== */}
       {woTab === 'outside_processing' && (
         <div className="card" style={{ marginTop: 0, minHeight: '70vh' }}>
-          <h3 className="card-title" style={{ marginBottom: 16 }}>🏭 Outside Processing Operations</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 className="card-title" style={{ margin: 0 }}>🏭 Outside Processing Operations</h3>
+            {(() => {
+              // Count groups that don't have a PO yet
+              const pendingGroups = new Set();
+              (order.parts || []).forEach(p => {
+                (p.outsideProcessing || []).forEach(op => {
+                  if (op.vendorId && op.serviceType && !op.poNumber) {
+                    pendingGroups.add(`${op.vendorId}|${op.serviceType}`);
+                  }
+                });
+              });
+              if (pendingGroups.size === 0) return null;
+              return (
+                <button onClick={async () => {
+                  if (!window.confirm(`Generate ${pendingGroups.size} outside processing PO${pendingGroups.size === 1 ? '' : 's'}? Each PO will be sent to the assigned vendor and an inbound order will be created for receiving.`)) return;
+                  try {
+                    const res = await createOutsideProcessingPOsAuto(id);
+                    showMessage(res.data.message || 'POs created');
+                    await loadOrder();
+                  } catch (err) {
+                    setError('Failed to create POs: ' + (err.response?.data?.error?.message || err.message));
+                  }
+                }} style={{ background: '#E65100', color: 'white', border: 'none', padding: '10px 20px', borderRadius: 4, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}>
+                  🖨 Create {pendingGroups.size} PO{pendingGroups.size === 1 ? '' : 's'}
+                </button>
+              );
+            })()}
+          </div>
 
           {/* Transport Trips */}
           <OpTransportsSection
@@ -3952,15 +3981,7 @@ function WorkOrderDetailsPage() {
                           <button onClick={async () => {
                             try {
                               const partIds = group.ops.map(o => o.part.id);
-                              const firstOp = group.ops[0];
-                              const res = await createOutsideProcessingPO(id, {
-                                partIds,
-                                vendorId: group.vendorId,
-                                serviceType: group.serviceType,
-                                costPerPart: parseFloat(firstOp.costPerPart) || 0,
-                                expediteCost: parseFloat(firstOp.expediteCost) || 0,
-                                notes: firstOp.notes || ''
-                              });
+                              const res = await createOutsideProcessingPOsAuto(id, partIds);
                               showMessage(res.data.message || 'PO created');
                               await loadOrder();
                             } catch (err) {
@@ -3969,6 +3990,59 @@ function WorkOrderDetailsPage() {
                           }} style={{ background: '#E65100', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
                             🖨 Generate Vendor PO
                           </button>
+                        )}
+                        {group.hasPO && (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => {
+                              const firstOp = group.ops[0];
+                              const currentCost = parseFloat(firstOp.costPerPart) || 0;
+                              const newCostStr = window.prompt(`Edit ${group.poNumber}\n\nNew cost per part (current: $${currentCost.toFixed(2)}):`, currentCost.toFixed(2));
+                              if (newCostStr === null) return; // user cancelled
+                              const newCost = parseFloat(newCostStr);
+                              if (isNaN(newCost) || newCost < 0) { alert('Invalid cost'); return; }
+                              (async () => {
+                                try {
+                                  const res = await editOutsideProcessingPO(id, group.poNumber, { costPerPart: newCost });
+                                  showMessage(res.data.message || 'PO updated');
+                                  await loadOrder();
+                                } catch (err) {
+                                  setError('Failed to edit PO: ' + (err.response?.data?.error?.message || err.message));
+                                }
+                              })();
+                            }} style={{ background: '#1976d2', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}
+                              title="Edit cost per part — recalculates customer pricing and regenerates the PDF">
+                              ✏ Edit
+                            </button>
+                            <button onClick={async () => {
+                              try {
+                                const res = await regenOutsideProcessingPO(id, group.poNumber);
+                                showMessage(res.data.message || 'PDF regenerated');
+                                await loadOrder();
+                              } catch (err) {
+                                setError('Failed to regen PO: ' + (err.response?.data?.error?.message || err.message));
+                              }
+                            }} style={{ background: '#7b1fa2', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}
+                              title="Regenerate the PDF without changing any data">
+                              🔄 Regen
+                            </button>
+                            <button onClick={() => {
+                              const reason = window.prompt(`Cancel ${group.poNumber}?\n\nThis will mark the PO cancelled, cancel the matching inbound order, and clear the PO from the parts so you can re-issue.\n\nCancellation reason (required):`);
+                              if (reason === null) return;
+                              if (!reason.trim()) { alert('Reason is required'); return; }
+                              (async () => {
+                                try {
+                                  const res = await cancelOutsideProcessingPO(id, group.poNumber, reason.trim());
+                                  showMessage(res.data.message || 'PO cancelled');
+                                  await loadOrder();
+                                } catch (err) {
+                                  setError('Failed to cancel PO: ' + (err.response?.data?.error?.message || err.message));
+                                }
+                              })();
+                            }} style={{ background: '#c62828', color: 'white', border: 'none', padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}
+                              title="Cancel this PO. The parts will become available to re-issue.">
+                              ✕ Cancel
+                            </button>
+                          </div>
                         )}
                       </div>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>

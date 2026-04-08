@@ -142,6 +142,10 @@ export const updateWorkOrderPart = (workOrderId, partId, data) => api.put(`/work
 export const deleteWorkOrderPart = (workOrderId, partId) => api.delete(`/workorders/${workOrderId}/parts/${partId}`);
 export const reorderWorkOrderParts = (workOrderId, partIds) => api.put(`/workorders/${workOrderId}/parts/reorder`, { partIds });
 export const createOutsideProcessingPO = (workOrderId, data) => api.post(`/workorders/${workOrderId}/outside-processing`, data);
+export const createOutsideProcessingPOsAuto = (workOrderId, partIds = null) => api.post(`/workorders/${workOrderId}/outside-processing/auto-bulk`, partIds ? { partIds } : {});
+export const editOutsideProcessingPO = (workOrderId, poNumber, data) => api.put(`/workorders/${workOrderId}/outside-processing/${poNumber}`, data);
+export const regenOutsideProcessingPO = (workOrderId, poNumber) => api.post(`/workorders/${workOrderId}/outside-processing/${poNumber}/regen`);
+export const cancelOutsideProcessingPO = (workOrderId, poNumber, reason) => api.delete(`/workorders/${workOrderId}/outside-processing/${poNumber}`, { data: { reason } });
 export const updateOutsideProcessingStatus = (workOrderId, partId, status) => api.put(`/workorders/${workOrderId}/parts/${partId}/outside-processing-status`, { status });
 
 // Work Order Part Files
