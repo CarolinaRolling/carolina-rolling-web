@@ -4305,6 +4305,44 @@ function WorkOrderDetailsPage() {
                   </div>
                 </div>
 
+                {/* Labor Breakdown — separate in-house labor from subcontracted cost */}
+                {(totalOutsideCost > 0 || totalTransportCost > 0 || totalLaborInHouse > 0) && (() => {
+                  const subcontractedCost = totalOutsideCost + totalTransportCost;
+                  const subcontractingMarkup = (totalOutsideBilled - totalOutsideCost) + (totalTransportBilled - totalTransportCost);
+                  const totalLaborBilled = totalLaborInHouse + totalOutsideBilled + totalTransportBilled;
+                  return (
+                    <div style={{ marginTop: 24, padding: 16, background: '#F3E5F5', borderRadius: 10, border: '1px solid #CE93D8' }}>
+                      <h4 style={{ margin: '0 0 12px', color: '#6A1B9A', fontSize: '1rem' }}>🔧 Labor Breakdown</h4>
+                      <p style={{ fontSize: '0.75rem', color: '#666', margin: '0 0 12px' }}>
+                        Separates in-house work from subcontracted cost to give you visibility on what's actually ours vs. marked-up sub work.
+                      </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Where the money goes</div>
+                          {row('In-house labor', totalLaborInHouse)}
+                          {subcontractedCost > 0 && row('Subcontracted cost (paid out)', subcontractedCost, { color: '#c62828' })}
+                          {subcontractingMarkup > 0 && row('Subcontracting markup profit', subcontractingMarkup, { color: '#2e7d32' })}
+                          {row('Total labor billed', totalLaborBilled, { bold: true, border: true })}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Labor profit sources</div>
+                          {row('In-house labor profit', totalLaborInHouse, { color: '#2e7d32' })}
+                          <div style={{ fontSize: '0.7rem', color: '#999', marginTop: -4, marginBottom: 6 }}>100% ours — no cost of goods</div>
+                          {subcontractingMarkup > 0 && (
+                            <>
+                              {row('Sub markup profit', subcontractingMarkup, { color: '#2e7d32' })}
+                              <div style={{ fontSize: '0.7rem', color: '#999', marginTop: -4, marginBottom: 6 }}>
+                                {subcontractedCost > 0 ? Math.round((subcontractingMarkup / subcontractedCost) * 100) : 0}% avg markup on subs
+                              </div>
+                            </>
+                          )}
+                          {row('Combined labor profit', totalLaborInHouse + subcontractingMarkup, { bold: true, border: true, color: '#2e7d32' })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {allParts.length > 0 && (
                   <div style={{ marginTop: 24 }}>
                     <h4 style={{ marginBottom: 12, fontSize: '0.95rem' }}>Per-Part Breakdown</h4>
@@ -4329,9 +4367,15 @@ function WorkOrderDetailsPage() {
                             const matMk = parseFloat(p.materialMarkupPercent) || 0;
                             const matBilled = Math.round(mat * (1 + matMk / 100) * 100) / 100;
                             const labor = parseFloat(p.laborTotal) || 0;
-                            const opCost = parseFloat(p.outsideProcessingCost) || 0;
-                            const opMk = parseFloat(p.outsideProcessingMarkupPercent) || 0;
-                            const opBilled = Math.round(opCost * (1 + opMk / 100) * 100) / 100;
+                            // Read outside processing from JSONB array (new architecture)
+                            const ops = p.outsideProcessing || [];
+                            let opBilledLot = 0;
+                            ops.forEach(op => {
+                              const c = parseFloat(op.costPerPart) || 0;
+                              const e = parseFloat(op.expediteCost) || 0;
+                              const m = parseFloat(op.markup) || 0;
+                              opBilledLot += ((c * (1 + m / 100)) + e) * qty;
+                            });
                             const total = parseFloat(p.partTotal) || 0;
                             const desc = fd._materialDescription || p.materialDescription || PART_TYPES[p.partType]?.label || p.partType;
                             return (
@@ -4341,7 +4385,7 @@ function WorkOrderDetailsPage() {
                                 <td style={{ padding: '8px 12px', textAlign: 'right' }}>{qty}</td>
                                 <td style={{ padding: '8px 12px', textAlign: 'right' }}>{matBilled > 0 ? formatCurrency(matBilled * qty) : '—'}</td>
                                 <td style={{ padding: '8px 12px', textAlign: 'right' }}>{labor > 0 ? formatCurrency(labor * qty) : '—'}</td>
-                                <td style={{ padding: '8px 12px', textAlign: 'right' }}>{opBilled > 0 ? formatCurrency(opBilled * qty) : '—'}</td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right' }}>{opBilledLot > 0 ? formatCurrency(opBilledLot) : '—'}</td>
                                 <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{formatCurrency(total)}</td>
                               </tr>
                             );

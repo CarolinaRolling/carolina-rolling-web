@@ -196,6 +196,41 @@ export default function OutsideProcessingSection({ partData, setPartData }) {
               )}
             </div>
 
+            {/* Vendor-supplies-material checkbox */}
+            {op.vendorName && (
+              <div style={{ marginBottom: 8, padding: 8, background: op.vendorSuppliesMaterial ? '#E8F5E9' : '#FAFAFA', borderRadius: 4, border: op.vendorSuppliesMaterial ? '1.5px solid #66BB6A' : '1px dashed #ccc' }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: '0.8rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!op.vendorSuppliesMaterial}
+                    style={{ marginTop: 2 }}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      // Update this op AND set/unset materialSource on the part
+                      const newOps = ops.map(o => o.id === op.id ? { ...o, vendorSuppliesMaterial: checked } : o);
+                      setPartData(prev => ({
+                        ...prev,
+                        outsideProcessing: newOps,
+                        materialSource: checked ? 'op_vendor_mat_supplied' : 'we_order',
+                        // Zero out material cost when vendor supplies it (everything is in OP cost)
+                        ...(checked ? { materialUnitCost: 0, materialTotal: 0, materialMarkupPercent: 0 } : {})
+                      }));
+                    }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <strong style={{ color: op.vendorSuppliesMaterial ? '#2e7d32' : '#444' }}>
+                      ☑ {op.vendorName} will supply the material
+                    </strong>
+                    <div style={{ fontSize: '0.7rem', color: '#666', marginTop: 2 }}>
+                      Check this if the outside processing vendor will source the material themselves.
+                      The material order button will skip this part, and the OP cost should include both material and labor.
+                      MTRs will be requested with shipment.
+                    </div>
+                  </div>
+                </label>
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8 }}>
               <div className="form-group" style={{ marginBottom: 8 }}>
                 <label className="form-label" style={{ fontSize: '0.75rem' }}>Cost/Part *</label>

@@ -2474,7 +2474,11 @@ function EstimateDetailsPage() {
                           📦 {part.materialDescription}
                           {!['fab_service', 'shop_rate'].includes(part.partType) && (
                             <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>
-                              {part.materialSource === 'we_order' ? 'Material supplied by: Carolina Rolling Company' : part.materialSource === 'in_stock' ? 'Material supplied by: Carolina Rolling Company' : `Material supplied by: ${formData.clientName || 'Customer'}`}
+                              {part.materialSource === 'op_vendor_mat_supplied'
+                                ? `Material supplied by: ${(part.outsideProcessing || []).find(o => o.vendorSuppliesMaterial)?.vendorName || 'Outside Vendor'}`
+                                : part.materialSource === 'we_order' ? 'Material supplied by: Carolina Rolling Company'
+                                : part.materialSource === 'in_stock' ? 'Material supplied by: Carolina Rolling Company'
+                                : `Material supplied by: ${formData.clientName || 'Customer'}`}
                             </div>
                           )}
                         </div>

@@ -116,6 +116,7 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
   })();
   const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
   const opEnabled = (partData.outsideProcessing || []).length > 0;
+  const vendorSuppliesMaterial = partData.materialSource === 'op_vendor_mat_supplied';
   const laborEach = (opEnabled ? 0 : baseLaborEach) + opTotals.totalProfit;
   const opCostEach = opTotals.totalCost;
   const unitPrice = materialEach + laborEach + opCostEach;
@@ -395,8 +396,8 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
       <div style={sectionStyle}>
         {sectionTitle('💰', 'Pricing', '#1976d2')}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <div className="form-group"><label className="form-label">Material Cost (each)</label>
-            <input type="number" step="any" className="form-input" value={partData.materialTotal || ''}
+          <div className="form-group"><label className="form-label" style={{ color: vendorSuppliesMaterial ? '#999' : undefined }}>Material Cost (each){vendorSuppliesMaterial && <span style={{ marginLeft: 4, fontSize: '0.7rem', color: '#2e7d32' }}>(supplied by OP vendor)</span>}</label>
+            <input type="number" step="any" className="form-input" disabled={vendorSuppliesMaterial} style={{ background: vendorSuppliesMaterial ? '#f5f5f5' : undefined, color: vendorSuppliesMaterial ? '#999' : undefined }} value={vendorSuppliesMaterial ? '' : (partData.materialTotal || '')}
               onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" /></div>
           <div className="form-group"><label className="form-label">Markup %</label>
             <input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20}

@@ -269,6 +269,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   // Calculate outside processing totals
   const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity);
   const opEnabled = (partData.outsideProcessing || []).length > 0;
+  const vendorSuppliesMaterial = partData.materialSource === 'op_vendor_mat_supplied';
   // When OP is enabled, rolling labor is disabled (vendor does the work).
   // Customer pays: material + markup + OP cost + OP markup (markup IS the labor profit)
   const effectiveBaseLabor = opEnabled ? 0 : baseLaborEach;
@@ -751,8 +752,8 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
 
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
           <div className="form-group">
-            <label className="form-label">Material Cost (each){nestingCalc ? ' — per ring' : ''}</label>
-            <input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value, _stockLengthCost: '' })} placeholder="0.00" />
+            <label className="form-label" style={{ color: vendorSuppliesMaterial ? '#999' : undefined }}>Material Cost (each){nestingCalc ? ' — per ring' : ''}{vendorSuppliesMaterial && <span style={{ marginLeft: 4, fontSize: '0.7rem', color: '#2e7d32' }}>(supplied by OP vendor)</span>}</label>
+            <input type="number" step="any" className="form-input" disabled={vendorSuppliesMaterial} style={{ background: vendorSuppliesMaterial ? '#f5f5f5' : undefined, color: vendorSuppliesMaterial ? '#999' : undefined }} value={vendorSuppliesMaterial ? '' : (partData.materialTotal || '')} onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value, _stockLengthCost: '' })} placeholder="0.00" />
             {nestingCalc && partData._stockLengthCost > 0 && (
               <div style={{ fontSize: '0.7rem', color: '#2e7d32', marginTop: 2 }}>Auto-calculated from stock length cost</div>
             )}
