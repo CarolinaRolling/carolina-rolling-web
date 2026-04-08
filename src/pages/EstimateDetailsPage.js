@@ -56,6 +56,16 @@ const formatPhone = (val) => {
   return `(${digits.slice(0,3)})${digits.slice(3,6)}-${digits.slice(6)}`;
 };
 
+// Returns true if a part is flagged as hidden-from-customer (Rolling Assist mode).
+// Hidden parts are excluded from customer-facing displays (estimate card, PDF) but
+// remain visible to internal users (WO page, summary) as costs.
+const isHiddenFromCustomer = (part) => {
+  if (!part) return false;
+  if (part._fsHiddenFromCustomer) return true;
+  if (part.formData && part.formData._fsHiddenFromCustomer) return true;
+  return false;
+};
+
 function EstimateDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -1422,7 +1432,8 @@ function EstimateDetailsPage() {
   const printEstimate = () => {
     const totals = calculateTotals();
     const partsHtml = (() => {
-      const sorted = parts.filter(p => p.partType !== 'rush_service').sort((a, b) => a.partNumber - b.partNumber);
+      // Hidden-from-customer parts (Rolling Assist) are excluded from the customer PDF
+      const sorted = parts.filter(p => p.partType !== 'rush_service' && !isHiddenFromCustomer(p)).sort((a, b) => a.partNumber - b.partNumber);
       const regular = sorted.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !(p._linkedPartId || (p.formData || {})._linkedPartId));
       const services = sorted.filter(p => ['fab_service', 'shop_rate'].includes(p.partType) && (p._linkedPartId || (p.formData || {})._linkedPartId));
       const grouped = [];
@@ -2254,15 +2265,21 @@ function EstimateDetailsPage() {
               const adjMaterial = (calc.materialEach || 0) + transportMatPerPart;
               const adjUnitPrice = adjMaterial + adjLabor;
               const adjPartTotal = adjUnitPrice * partQty;
+              // Hidden-from-customer (Rolling Assist) — visible to operator only
+              const isHidden = isHiddenFromCustomer(part);
               return (
                 <div key={part.id} style={{
-                  border: isLinkedService ? '2px solid #9e9e9e' : '2px solid #e0e0e0',
+                  border: isHidden ? '2px solid #EF5350' : (isLinkedService ? '2px solid #9e9e9e' : '2px solid #e0e0e0'),
                   borderRadius: 12, padding: isLinkedService ? '12px 16px' : 16, marginBottom: isLinkedService ? 4 : 12,
                   marginLeft: isLinkedService ? 32 : 0, marginTop: isLinkedService ? -4 : 0,
-                  background: isLinkedService ? '#eeeeee' : 'white',
+                  background: isHidden ? '#FFEBEE' : (isLinkedService ? '#eeeeee' : 'white'),
                   borderTopLeftRadius: isLinkedService ? 4 : 12, borderTopRightRadius: isLinkedService ? 4 : 12,
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 8, borderBottom: isLinkedService ? '1px solid #bdbdbd' : '1px solid #eee' }}>
+                  {isHidden && (
+                    <div style={{ marginBottom: 10, padding: '6px 10px', background: '#C62828', color: 'white', borderRadius: 6, fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      🔒 INTERNAL ONLY — HIDDEN FROM CUSTOMER (Rolling Assist / hidden cost)
+                    </div>
+                  )}                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 8, borderBottom: isLinkedService ? '1px solid #bdbdbd' : '1px solid #eee' }}>
                     <div>
                       <div style={{ fontSize: isLinkedService ? '0.95rem' : '1.1rem', fontWeight: 700, color: isLinkedService ? '#424242' : '#1976d2' }}>
                         {isLinkedService && <span style={{ marginRight: 6 }}>+</span>}

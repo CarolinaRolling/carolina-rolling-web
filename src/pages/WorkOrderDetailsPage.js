@@ -63,6 +63,14 @@ const formatPhone = (val) => {
   return `(${digits.slice(0,3)})${digits.slice(3,6)}-${digits.slice(6)}`;
 };
 
+// Returns true if a part is flagged as hidden-from-customer (Rolling Assist mode).
+const isHiddenFromCustomer = (part) => {
+  if (!part) return false;
+  if (part._fsHiddenFromCustomer) return true;
+  if (part.formData && part.formData._fsHiddenFromCustomer) return true;
+  return false;
+};
+
 function WorkOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -1036,7 +1044,13 @@ function WorkOrderDetailsPage() {
     }
 
     const partsHtml = (() => {
-      const sorted = (order.parts || []).sort((a, b) => a.partNumber - b.partNumber).filter(p => p.partType !== 'rush_service').map(p => {
+      const sorted = (order.parts || []).sort((a, b) => a.partNumber - b.partNumber).filter(p => {
+        if (p.partType === 'rush_service') return false;
+        // Customer-facing (full/pricing) PDFs must hide internal-only parts.
+        // Production-mode PDFs include them so the shop knows what's subbed.
+        if (includePricing && isHiddenFromCustomer(p)) return false;
+        return true;
+      }).map(p => {
         const part = { ...p };
         if (part.formData && typeof part.formData === 'object') Object.assign(part, part.formData);
         return part;
@@ -2861,12 +2875,16 @@ function WorkOrderDetailsPage() {
               const displayTotal = (displayLabor + displayMaterial) * partQty;
               return (
               <div key={part.id} style={{
-                border: isLinkedService ? '2px solid #ce93d8' : '1px solid #e0e0e0',
+                border: hiddenFromCustomer ? '2px solid #EF5350' : (isLinkedService ? '2px solid #ce93d8' : '1px solid #e0e0e0'),
                 borderRadius: isLinkedService ? 4 : 8, padding: isLinkedService ? '12px 16px' : 16, marginBottom: isLinkedService ? 4 : 12,
                 marginLeft: isLinkedService ? 32 : 0, marginTop: isLinkedService ? -4 : 0,
-                background: isLinkedService ? '#fce4ec' : (part.status === 'completed' ? '#f9fff9' : 'white'),
+                background: hiddenFromCustomer ? '#FFEBEE' : (isLinkedService ? '#fce4ec' : (part.status === 'completed' ? '#f9fff9' : 'white')),
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                {hiddenFromCustomer && (
+                  <div style={{ marginBottom: 10, padding: '6px 10px', background: '#C62828', color: 'white', borderRadius: 6, fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    🔒 INTERNAL ONLY — HIDDEN FROM CUSTOMER (Rolling Assist / hidden cost)
+                  </div>
+                )}                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {isLinkedService && <span style={{ color: '#7b1fa2', fontWeight: 700 }}>↳</span>}
@@ -3101,7 +3119,20 @@ function WorkOrderDetailsPage() {
                 {part.specialInstructions && <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: '0.875rem' }}><strong>Instructions:</strong> {part.specialInstructions}</div>}
                 
                 {/* Pricing Summary — Material and Labor lines include allocated transport (bundled, hidden from customer view) */}
-                {(part.partTotal || part.laborTotal || part.materialTotal) && (
+                {hiddenFromCustomer ? (
+                  // Hidden part — show internal cost only, customer-facing total is $0
+                  (() => {
+                    const internalLabor = baseLaborPerPart + opCostPerPart;
+                    const internalMaterial = baseMaterialPerPart;
+                    const internalTotal = (internalLabor + internalMaterial) * partQty;
+                    return internalTotal > 0 ? (
+                      <div style={{ marginTop: 8, padding: 8, background: '#FFCDD2', borderRadius: 4, fontSize: '0.85rem', display: 'flex', gap: 16, flexWrap: 'wrap', border: '1px dashed #C62828' }}>
+                        <span style={{ color: '#C62828' }}>🔒 <strong>Internal cost:</strong> ${internalTotal.toFixed(2)} ({partQty} × ${(internalLabor + internalMaterial).toFixed(2)})</span>
+                        <span style={{ color: '#666' }}>Customer pays: <strong>$0.00</strong></span>
+                      </div>
+                    ) : null;
+                  })()
+                ) : (part.partTotal || part.laborTotal || part.materialTotal) && (
                   <div style={{ marginTop: 8, padding: 8, background: '#e3f2fd', borderRadius: 4, fontSize: '0.85rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                     {displayLabor > 0 && <span><strong>{part.partType === 'fab_service' ? 'Service' : 'Labor'}:</strong> ${displayLabor.toFixed(2)}/ea</span>}
                     {displayMaterial > 0 && <span><strong>Material:</strong> ${displayMaterial.toFixed(2)}/ea</span>}
@@ -4367,6 +4398,64 @@ function WorkOrderDetailsPage() {
                           {row('Combined labor profit', totalLaborInHouse + subcontractingMarkup, { bold: true, border: true, color: '#2e7d32' })}
                         </div>
                       </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Internal Costs — hidden-from-customer parts (Rolling Assist etc.) */}
+                {(() => {
+                  const hiddenParts = allParts.filter(p => isHiddenFromCustomer(p));
+                  if (hiddenParts.length === 0) return null;
+                  let totalHiddenCost = 0;
+                  const rows = hiddenParts.map(p => {
+                    const fd = p.formData || {};
+                    const qty = parseInt(p.quantity) || 1;
+                    const baseLabor = parseFloat(p._baseLaborTotal) || parseFloat(fd._baseLaborTotal) || 0;
+                    const matCost = parseFloat(p.materialTotal) || 0;
+                    let opCostLot = 0;
+                    (p.outsideProcessing || []).forEach(op => {
+                      const c = parseFloat(op.costPerPart) || 0;
+                      const e = parseFloat(op.expediteCost) || 0;
+                      opCostLot += (c + e) * qty;
+                    });
+                    const partInternalCost = (baseLabor + matCost) * qty + opCostLot;
+                    totalHiddenCost += partInternalCost;
+                    const vendor = (p.outsideProcessing || []).map(op => op.vendorName).filter(Boolean).join(', ');
+                    const desc = fd._materialDescription || p.materialDescription || PART_TYPES[p.partType]?.label || p.partType;
+                    return { p, qty, vendor, desc, partInternalCost };
+                  });
+                  return (
+                    <div style={{ marginTop: 24, padding: 16, background: '#FFEBEE', borderRadius: 10, border: '2px solid #EF5350' }}>
+                      <h4 style={{ margin: '0 0 4px', color: '#c62828', fontSize: '1rem' }}>🔒 Internal Costs (Hidden from Customer)</h4>
+                      <p style={{ fontSize: '0.75rem', color: '#666', margin: '0 0 12px' }}>
+                        Parts marked as hidden don't appear on the customer-facing estimate or PDF. Their cost reduces your profit margin.
+                      </p>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: '#FFCDD2' }}>
+                            <th style={{ padding: '6px 10px', textAlign: 'left' }}>#</th>
+                            <th style={{ padding: '6px 10px', textAlign: 'left' }}>Part</th>
+                            <th style={{ padding: '6px 10px', textAlign: 'left' }}>Vendor</th>
+                            <th style={{ padding: '6px 10px', textAlign: 'right' }}>Qty</th>
+                            <th style={{ padding: '6px 10px', textAlign: 'right' }}>Internal Cost</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map(r => (
+                            <tr key={r.p.id} style={{ borderBottom: '1px solid #FFCDD2' }}>
+                              <td style={{ padding: '6px 10px', fontWeight: 600 }}>{r.p.partNumber}</td>
+                              <td style={{ padding: '6px 10px', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.desc}</td>
+                              <td style={{ padding: '6px 10px', color: '#c62828' }}>{r.vendor || '—'}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right' }}>{r.qty}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: '#c62828' }}>{formatCurrency(r.partInternalCost)}</td>
+                            </tr>
+                          ))}
+                          <tr style={{ background: '#FFCDD2', fontWeight: 700 }}>
+                            <td colSpan={4} style={{ padding: '8px 10px', color: '#c62828' }}>Total Internal Cost (reduces your profit)</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', color: '#c62828' }}>{formatCurrency(totalHiddenCost)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   );
                 })()}
