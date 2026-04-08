@@ -4263,6 +4263,24 @@ function WorkOrderDetailsPage() {
             const margin = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 100) : 0;
             const totalMarkupProfit = (totalMaterialBilled - totalMaterialCost) + (totalOutsideBilled - totalOutsideCost) + (totalTransportBilled - totalTransportCost);
 
+            // TEMP DIAGNOSTIC — remove after bug is fixed
+            console.log('[Summary Debug]', {
+              totalMaterialCost, totalMaterialBilled,
+              totalLaborInHouse,
+              totalOutsideCost, totalOutsideBilled,
+              totalTransportCost, totalTransportBilled,
+              totalServicesCost,
+              trucking,
+              totalExpenses,
+              totalRevenue,
+              'totals.grandTotal': totals.grandTotal,
+              'totals.partsSubtotal': totals.partsSubtotal,
+              'totals.taxAmount': totals.taxAmount,
+              grossProfit,
+              margin,
+              totalMarkupProfit
+            });
+
             const row = (label, amount, opts = {}) => (
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: opts.size || '0.9rem', color: opts.color || '#333', fontWeight: opts.bold ? 700 : 400, borderTop: opts.border ? '2px solid #e0e0e0' : 'none', marginTop: opts.border ? 8 : 0, paddingTop: opts.border ? 12 : 6 }}>
                 <span>{label}</span>
