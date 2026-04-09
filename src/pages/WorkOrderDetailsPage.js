@@ -23,7 +23,7 @@ import HeatNumberInput from '../components/HeatNumberInput';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart, reorderWorkOrderParts,
-  createOutsideProcessingPO, createOutsideProcessingPOsAuto, createServicePOsAuto, updateOutsideProcessingStatus, createTransportPO,
+  createOutsideProcessingPO, createOutsideProcessingPOsAuto, createServicePOsAuto, regenServicePO, deleteServicePO, updateOutsideProcessingStatus, createTransportPO,
   editOutsideProcessingPO, regenOutsideProcessingPO, cancelOutsideProcessingPO,
   toggleVendorShare, resolveVendorIssue,
   uploadPartFiles, getPartFileSignedUrl, downloadPartFile, deletePartFile,
@@ -92,6 +92,7 @@ function WorkOrderDetailsPage() {
   const [showServicesModal, setShowServicesModal] = useState(false);
   const [serviceModalSelected, setServiceModalSelected] = useState(new Set()); // vendor IDs to PO
   const [serviceModalSubmitting, setServiceModalSubmitting] = useState(false);
+  const [servicesStartingPONumber, setServicesStartingPONumber] = useState('');
   const [showPartTypePicker, setShowPartTypePicker] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
   const [partData, setPartData] = useState({});
@@ -2565,20 +2566,47 @@ function WorkOrderDetailsPage() {
         )}
 
         {/* Purchase Orders Section */}
-        {order.documents?.filter(d => d.documentType === 'purchase_order').length > 0 && (
+        {order.documents?.filter(d => d.documentType === 'purchase_order' || d.documentType === 'outside_processing_po').length > 0 && (
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #eee' }}>
             <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: '#e65100' }}>
               <ShoppingCart size={18} /> Purchase Orders
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {order.documents.filter(d => d.documentType === 'purchase_order').map(doc => (
+              {order.documents.filter(d => d.documentType === 'purchase_order' || d.documentType === 'outside_processing_po').map(doc => {
+                const isServicePO = doc.documentType === 'outside_processing_po';
+                const bg = isServicePO ? '#E0F2F1' : '#fff3e0';
+                const border = isServicePO ? '1px solid #80CBC4' : '1px solid #ffcc80';
+                const iconColor = isServicePO ? '#00695C' : '#e65100';
+                // Look up the service PO's vendor info for the mailto link
+                let servicePOVendorEmail = null;
+                let servicePOVendorName = null;
+                let servicePOPONumber = null;
+                if (isServicePO) {
+                  const poMatch = (doc.originalName || '').match(/^(PO\d+)/);
+                  servicePOPONumber = poMatch ? poMatch[1] : null;
+                  if (servicePOPONumber) {
+                    // Find the vendor from any part's outsideProcessing op with this PO stamp
+                    for (const part of (order.parts || [])) {
+                      const ops = part.outsideProcessing || [];
+                      const matchOp = ops.find(op => op.poNumber === servicePOPONumber);
+                      if (matchOp) {
+                        servicePOVendorName = matchOp.vendorName || null;
+                        // vendorEmail not stored on the op — look up the vendor record
+                        // The frontend doesn't have vendors loaded here, so we'll rely on a mailto: with blank to:
+                        break;
+                      }
+                    }
+                  }
+                }
+                return (
                 <div key={doc.id} style={{ 
                   display: 'flex', alignItems: 'center', gap: 8, 
-                  background: '#fff3e0', padding: '10px 14px', borderRadius: 8, 
-                  fontSize: '0.9rem', border: '1px solid #ffcc80'
+                  background: bg, padding: '10px 14px', borderRadius: 8, 
+                  fontSize: '0.9rem', border: border
                 }}>
-                  <File size={18} color="#e65100" />
+                  {isServicePO ? <span style={{ fontSize: '1.1rem' }}>🏭</span> : <File size={18} color={iconColor} />}
                   <span style={{ fontWeight: 500 }}>{doc.originalName}</span>
+                  {isServicePO && <span style={{ fontSize: '0.7rem', background: '#00897B', color: 'white', padding: '2px 6px', borderRadius: 3, fontWeight: 700 }}>SERVICE</span>}
                   <button 
                     onClick={() => handleViewDocument(doc.id)} 
                     className="btn btn-sm"
@@ -2600,7 +2628,7 @@ function WorkOrderDetailsPage() {
                       }
                     }} 
                     className="btn btn-sm"
-                    style={{ background: '#e65100', color: 'white', padding: '4px 10px' }}
+                    style={{ background: iconColor, color: 'white', padding: '4px 10px' }}
                     title="Download"
                   >
                     <Download size={14} />
@@ -2608,11 +2636,16 @@ function WorkOrderDetailsPage() {
                   <button 
                     onClick={async () => {
                       try {
-                        await regeneratePODocument(id, doc.id);
-                        showMessage('PO PDF regenerated');
+                        if (isServicePO) {
+                          await regenServicePO(id, doc.id);
+                          showMessage('Service PO PDF regenerated');
+                        } else {
+                          await regeneratePODocument(id, doc.id);
+                          showMessage('PO PDF regenerated');
+                        }
                         await loadOrder();
                       } catch (err) {
-                        setError('Failed to regenerate PO PDF');
+                        setError('Failed to regenerate PO PDF: ' + (err.response?.data?.error?.message || err.message));
                       }
                     }} 
                     style={{ background: 'none', border: '1px solid #1976d2', borderRadius: 4, cursor: 'pointer', padding: '4px 8px', color: '#1976d2' }}
@@ -2621,13 +2654,45 @@ function WorkOrderDetailsPage() {
                     <RefreshCw size={14} />
                   </button>
                   <button 
-                    onClick={() => handleDeleteDocument(doc.id)} 
+                    onClick={async () => {
+                      if (isServicePO) {
+                        const confirmMsg = `Delete ${servicePOPONumber || 'this service PO'}?\n\nThis will:\n• Delete the PDF\n• Remove the PO number from the tracker\n• Delete the pending inbound order\n• Clear the PO stamp from the affected parts (they'll become orderable again)\n\nContinue?`;
+                        if (!window.confirm(confirmMsg)) return;
+                        try {
+                          const res = await deleteServicePO(id, doc.id);
+                          showMessage(res.data?.message || 'Service PO deleted');
+                          await loadOrder();
+                        } catch (err) {
+                          setError('Failed to delete service PO: ' + (err.response?.data?.error?.message || err.message));
+                        }
+                      } else {
+                        handleDeleteDocument(doc.id);
+                      }
+                    }} 
                     style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}
                     title="Delete"
                   >
                     <X size={14} />
                   </button>
-                  {order.estimateId && (
+                  {isServicePO ? (
+                    <button
+                      onClick={() => {
+                        const subject = encodeURIComponent(`${servicePOPONumber || 'Purchase Order'} from Carolina Rolling`);
+                        const body = encodeURIComponent(
+                          `Hi${servicePOVendorName ? ' ' + servicePOVendorName : ''},\n\n` +
+                          `Please find the attached purchase order ${servicePOPONumber || ''} for DR-${order.drNumber}.\n\n` +
+                          `Please download the PO from the attached file or reply with any questions.\n\n` +
+                          `Thank you,\n` +
+                          `Carolina Rolling Co.`
+                        );
+                        window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                      }}
+                      style={{ background: '#00897B', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', fontWeight: 600 }}
+                      title="Open email draft (attach downloaded PDF manually)"
+                    >
+                      📤 Email
+                    </button>
+                  ) : (order.estimateId && (
                     <button
                       onClick={async () => {
                         try {
@@ -2652,9 +2717,10 @@ function WorkOrderDetailsPage() {
                     >
                       📤 Email
                     </button>
-                  )}
+                  ))}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -2728,7 +2794,7 @@ function WorkOrderDetailsPage() {
       <div id="wo-tabs" style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginTop: 20, marginBottom: 0 }}>
         {[
           { key: 'parts', label: '📦 Parts', count: order.parts?.length || 0 },
-          { key: 'documents', label: '📄 Documents', count: (order.documents?.filter(d => d.documentType !== 'purchase_order').length || 0) || undefined },
+          { key: 'documents', label: '📄 Documents', count: (order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po').length || 0) || undefined },
           { key: 'materials', label: '📋 Materials' },
           ...(((order.vendorIssues || []).filter(i => i.status !== 'resolved').length > 0) ? [{ key: 'vendor_issues', label: '⚠ Vendor Issues', count: (order.vendorIssues || []).filter(i => i.status !== 'resolved').length, urgent: true }] : []),
           { key: 'summary', label: '📊 Summary' },
@@ -2775,9 +2841,15 @@ function WorkOrderDetailsPage() {
               </button>
             )}
             {hasOrderableServices() && (
-              <button className="btn btn-sm" onClick={() => {
+              <button className="btn btn-sm" onClick={async () => {
                 const groups = getServiceOrderableGroups();
                 setServiceModalSelected(new Set(Object.keys(groups)));
+                try {
+                  const poRes = await getNextPONumber();
+                  setServicesStartingPONumber(poRes.data.data.nextNumber.toString());
+                } catch {
+                  setServicesStartingPONumber('');
+                }
                 setShowServicesModal(true);
               }} style={{ background: '#00897B', color: 'white' }}>
                 🏭 Order Services
@@ -3244,22 +3316,41 @@ function WorkOrderDetailsPage() {
                   const isEa = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
                   const woTotals = calculateTotals();
                   const lr = (woTotals.minInfo.minimumApplies && woTotals.minInfo.totalLabor > 0 && isEa) ? woTotals.minInfo.adjustedLabor / woTotals.minInfo.totalLabor : 1;
-                  const adjLabor = (parseFloat(part.laborTotal) || 0) * lr;
-                  const laborDelta = (adjLabor - (parseFloat(part.laborTotal) || 0)) * (parseInt(part.quantity) || 1);
-                  const adjPartTotal = isEa ? (parseFloat(part.partTotal) || 0) + laborDelta : (parseFloat(part.partTotal) || 0);
+                  const partQty = parseInt(part.quantity) || 1;
+                  // OP vendor cost from JSONB (Fab Service parts that are subbed)
+                  // part.laborTotal already contains the OP markup (profit); the vendor cost is tracked
+                  // separately in outsideProcessing[].costPerPart. Include it in the Labor column so
+                  // Labor + Material + Setup + Other = Total actually reconciles.
+                  const opCostPerPart = (part.outsideProcessing || []).reduce((sum, op) => {
+                    const c = parseFloat(op.costPerPart) || 0;
+                    const e = parseFloat(op.expediteCost) || 0;
+                    return sum + c + e;
+                  }, 0);
+                  const hiddenFromCustomer = isHiddenFromCustomer(part);
+                  // Base labor per piece (markup already baked in when OP enabled)
+                  const rawLaborEach = parseFloat(part.laborTotal) || 0;
+                  // Hidden parts contribute $0 to the customer-facing table
+                  const adjLabor = hiddenFromCustomer
+                    ? 0
+                    : (rawLaborEach * lr + opCostPerPart);
+                  const adjMaterial = hiddenFromCustomer ? 0 : (parseFloat(part.materialTotal) || 0);
+                  const laborDelta = hiddenFromCustomer ? 0 : ((rawLaborEach * lr - rawLaborEach) * partQty);
+                  const adjPartTotal = hiddenFromCustomer ? 0 : (isEa ? (parseFloat(part.partTotal) || 0) + laborDelta : (parseFloat(part.partTotal) || 0));
                   return (
-                  <tr key={part.id} style={{ borderBottom: '1px solid #eee', background: isLinkedService ? '#fce4ec' : 'transparent' }}>
+                  <tr key={part.id} style={{ borderBottom: '1px solid #eee', background: hiddenFromCustomer ? '#FFEBEE' : (isLinkedService ? '#fce4ec' : 'transparent') }}>
                     <td style={{ padding: 8 }}>{isLinkedService ? '' : part.partNumber}</td>
                     <td style={{ padding: 8, paddingLeft: isLinkedService ? 24 : 8 }}>
                       {isLinkedService && <span style={{ color: '#7b1fa2', marginRight: 4 }}>↳</span>}
-                      <span style={{ color: isLinkedService ? '#7b1fa2' : 'inherit' }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
+                      {hiddenFromCustomer && <span style={{ color: '#C62828', marginRight: 4, fontSize: '0.75rem', fontWeight: 700 }}>🔒</span>}
+                      <span style={{ color: hiddenFromCustomer ? '#C62828' : (isLinkedService ? '#7b1fa2' : 'inherit') }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
+                      {hiddenFromCustomer && <span style={{ marginLeft: 6, fontSize: '0.7rem', color: '#C62828', fontStyle: 'italic' }}>(hidden — internal cost only)</span>}
                       {part.materialDescription && <div style={{ fontSize: '0.8rem', color: '#666' }}>{part.materialDescription}</div>}
                     </td>
                     <td style={{ padding: 8, textAlign: 'right' }}>{part.quantity}</td>
                     <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(adjLabor)}</td>
-                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.materialTotal)}</td>
-                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.setupCharge)}</td>
-                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(part.otherCharges)}</td>
+                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(adjMaterial)}</td>
+                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(hiddenFromCustomer ? 0 : part.setupCharge)}</td>
+                    <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(hiddenFromCustomer ? 0 : part.otherCharges)}</td>
                     <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{formatCurrency(adjPartTotal)}</td>
                   </tr>
                   );
@@ -3479,7 +3570,7 @@ function WorkOrderDetailsPage() {
           {/* Order Documents */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header">
-              <h3 className="card-title"><File size={20} style={{ marginRight: 8 }} />Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').length || 0})</h3>
+              <h3 className="card-title"><File size={20} style={{ marginRight: 8 }} />Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr').length || 0})</h3>
               <div>
                 <button className="btn btn-sm btn-outline" onClick={() => docInputRef.current?.click()} disabled={uploadingDocs}>
                   <Upload size={14} />{uploadingDocs ? 'Uploading...' : 'Upload'}
@@ -3489,9 +3580,9 @@ function WorkOrderDetailsPage() {
               </div>
             </div>
             <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Customer POs, supplier quotes, drawings, COCs, etc.</p>
-            {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').length > 0 ? (
+            {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr').length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'mtr').map(doc => (
+                {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr').map(doc => (
                   <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: doc.portalVisible ? '#e8f5e9' : '#f5f5f5', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', border: doc.portalVisible ? '1px solid #a5d6a7' : '1px solid #eee' }}>
                     <File size={16} color="#1976d2" />
                     <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
@@ -4746,6 +4837,26 @@ function WorkOrderDetailsPage() {
                   Hidden parts (Rolling Assist) are marked with 🔒 and won't appear on customer-facing documents.
                 </p>
 
+                <div className="form-group" style={{ marginBottom: 16 }}>
+                  <label className="form-label">Starting PO Number *</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontWeight: 600, color: '#00695C' }}>PO</span>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={servicesStartingPONumber}
+                      onChange={(e) => setServicesStartingPONumber(e.target.value)}
+                      placeholder="7765"
+                      style={{ maxWidth: 150 }}
+                    />
+                  </div>
+                  {serviceModalSelected.size > 1 && servicesStartingPONumber && (
+                    <p style={{ fontSize: '0.8rem', color: '#666', marginTop: 4 }}>
+                      Will create: {Array.from(serviceModalSelected).map((_, i) => `PO${parseInt(servicesStartingPONumber) + i}`).join(', ')}
+                    </p>
+                  )}
+                </div>
+
                 {groupKeys.length === 0 ? (
                   <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
                     No service operations available to PO. Make sure Fab Service parts have a vendor and cost set.
@@ -4822,10 +4933,14 @@ function WorkOrderDetailsPage() {
                     disabled={serviceModalSubmitting || selectedCount === 0}
                     onClick={async () => {
                       if (selectedCount === 0) return;
+                      if (!servicesStartingPONumber || parseInt(servicesStartingPONumber) <= 0) {
+                        setError('Please enter a valid starting PO number');
+                        return;
+                      }
                       setServiceModalSubmitting(true);
                       try {
                         const vendorIds = Array.from(serviceModalSelected);
-                        const res = await createServicePOsAuto(id, vendorIds);
+                        const res = await createServicePOsAuto(id, vendorIds, servicesStartingPONumber);
                         const data = res.data?.data || {};
                         const created = data.created || [];
                         const errors = data.errors || [];
@@ -4836,6 +4951,7 @@ function WorkOrderDetailsPage() {
                         }
                         setShowServicesModal(false);
                         setServiceModalSelected(new Set());
+                        setServicesStartingPONumber('');
                         await loadOrder();
                       } catch (err) {
                         setError('Failed to create service POs: ' + (err.response?.data?.error?.message || err.message));

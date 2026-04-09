@@ -143,7 +143,14 @@ export const deleteWorkOrderPart = (workOrderId, partId) => api.delete(`/workord
 export const reorderWorkOrderParts = (workOrderId, partIds) => api.put(`/workorders/${workOrderId}/parts/reorder`, { partIds });
 export const createOutsideProcessingPO = (workOrderId, data) => api.post(`/workorders/${workOrderId}/outside-processing`, data);
 export const createOutsideProcessingPOsAuto = (workOrderId, partIds = null) => api.post(`/workorders/${workOrderId}/outside-processing/auto-bulk`, partIds ? { partIds } : {});
-export const createServicePOsAuto = (workOrderId, vendorIds = null) => api.post(`/workorders/${workOrderId}/services/auto-bulk`, vendorIds ? { vendorIds } : {});
+export const createServicePOsAuto = (workOrderId, vendorIds = null, startingPONumber = null) => {
+  const body = {};
+  if (vendorIds) body.vendorIds = vendorIds;
+  if (startingPONumber) body.startingPONumber = startingPONumber;
+  return api.post(`/workorders/${workOrderId}/services/auto-bulk`, body);
+};
+export const regenServicePO = (workOrderId, documentId) => api.post(`/workorders/${workOrderId}/services/${documentId}/regen`);
+export const deleteServicePO = (workOrderId, documentId) => api.delete(`/workorders/${workOrderId}/services/${documentId}`);
 export const editOutsideProcessingPO = (workOrderId, poNumber, data) => api.put(`/workorders/${workOrderId}/outside-processing/${poNumber}`, data);
 export const regenOutsideProcessingPO = (workOrderId, poNumber) => api.post(`/workorders/${workOrderId}/outside-processing/${poNumber}/regen`);
 export const cancelOutsideProcessingPO = (workOrderId, poNumber, reason) => api.delete(`/workorders/${workOrderId}/outside-processing/${poNumber}`, { data: { reason } });
