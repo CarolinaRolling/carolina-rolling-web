@@ -23,7 +23,7 @@ import HeatNumberInput from '../components/HeatNumberInput';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart, reorderWorkOrderParts,
-  createOutsideProcessingPO, createOutsideProcessingPOsAuto, updateOutsideProcessingStatus, createTransportPO,
+  createOutsideProcessingPO, createOutsideProcessingPOsAuto, createServicePOsAuto, updateOutsideProcessingStatus, createTransportPO,
   editOutsideProcessingPO, regenOutsideProcessingPO, cancelOutsideProcessingPO,
   toggleVendorShare, resolveVendorIssue,
   uploadPartFiles, getPartFileSignedUrl, downloadPartFile, deletePartFile,
@@ -89,6 +89,9 @@ function WorkOrderDetailsPage() {
   const [showPartModal, setShowPartModal] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderParts, setReorderParts] = useState([]);
+  const [showServicesModal, setShowServicesModal] = useState(false);
+  const [serviceModalSelected, setServiceModalSelected] = useState(new Set()); // vendor IDs to PO
+  const [serviceModalSubmitting, setServiceModalSubmitting] = useState(false);
   const [showPartTypePicker, setShowPartTypePicker] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
   const [partData, setPartData] = useState({});
@@ -1836,6 +1839,42 @@ function WorkOrderDetailsPage() {
     );
   };
 
+  // Order Services functions — Fab Service / Shop Rate parts that have a vendor + cost set
+  // but no PO yet on at least one of their OP entries.
+  // Returns the groups object: { vendorId: { vendorId, vendorName, parts: [{part, op}], totalCost, hasHidden } }
+  const getServiceOrderableGroups = () => {
+    if (!order?.parts) return {};
+    const groups = {};
+    for (const part of order.parts) {
+      if (!['fab_service', 'shop_rate'].includes(part.partType)) continue;
+      const ops = part.outsideProcessing || [];
+      const isHidden = isHiddenFromCustomer(part);
+      for (const op of ops) {
+        if (!op.vendorId) continue;
+        if (op.poNumber) continue;
+        const cost = parseFloat(op.costPerPart) || 0;
+        if (cost <= 0) continue;
+        if (!groups[op.vendorId]) {
+          groups[op.vendorId] = {
+            vendorId: op.vendorId,
+            vendorName: op.vendorName || 'Unknown Vendor',
+            parts: [],
+            totalCost: 0,
+            hasHidden: false
+          };
+        }
+        const qty = parseInt(part.quantity) || 1;
+        const expedite = parseFloat(op.expediteCost) || 0;
+        groups[op.vendorId].parts.push({ part, op, qty, lineCost: (cost * qty) + expedite });
+        groups[op.vendorId].totalCost += (cost * qty) + expedite;
+        if (isHidden) groups[op.vendorId].hasHidden = true;
+      }
+    }
+    return groups;
+  };
+
+  const hasOrderableServices = () => Object.keys(getServiceOrderableGroups()).length > 0;
+
   const getSupplierGroups = () => {
     const groups = {};
     order.parts?.filter(p => selectedPartIds.includes(p.id)).forEach(part => {
@@ -2735,6 +2774,15 @@ function WorkOrderDetailsPage() {
                 <ShoppingCart size={16} /> Order Material
               </button>
             )}
+            {hasOrderableServices() && (
+              <button className="btn btn-sm" onClick={() => {
+                const groups = getServiceOrderableGroups();
+                setServiceModalSelected(new Set(Object.keys(groups)));
+                setShowServicesModal(true);
+              }} style={{ background: '#00897B', color: 'white' }}>
+                🏭 Order Services
+              </button>
+            )}
             <button className="btn btn-primary btn-sm" onClick={openAddPartModal}><Plus size={16} />Add Part</button>
             {order.parts?.length > 1 && (
               <button className="btn btn-sm" onClick={() => {
@@ -2883,6 +2931,13 @@ function WorkOrderDetailsPage() {
                           ✓ {part.materialPurchaseOrderNumber}
                         </span>
                       )}
+                      {/* Service PO badges — one per OP entry that has a poNumber stamped */}
+                      {(part.outsideProcessing || []).filter(op => op.poNumber).map((op, opIdx) => (
+                        <span key={`servpo-${opIdx}`} style={{ background: '#E0F2F1', color: '#00695C', padding: '2px 8px', borderRadius: 4, fontSize: '0.7rem', border: '1px solid #80CBC4' }}
+                          title={`Service PO sent to ${op.vendorName || 'vendor'}`}>
+                          🏭 {op.poNumber}
+                        </span>
+                      ))}
                     </div>
                     {part.clientPartNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Client Part#: {part.clientPartNumber}</div>}
                     {part.heatBreakdown && part.heatBreakdown.length > 0 ? (
@@ -4667,6 +4722,136 @@ function WorkOrderDetailsPage() {
         </div>
       )}
 
+
+      {/* Order Services Modal */}
+      {showServicesModal && (() => {
+        const groups = getServiceOrderableGroups();
+        const groupKeys = Object.keys(groups);
+        const selectedTotal = groupKeys
+          .filter(k => serviceModalSelected.has(k))
+          .reduce((sum, k) => sum + groups[k].totalCost, 0);
+        const selectedCount = serviceModalSelected.size;
+        return (
+          <div className="modal-overlay" onClick={() => !serviceModalSubmitting && setShowServicesModal(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 720, maxHeight: '90vh', overflow: 'auto' }}>
+              <div className="modal-header" style={{ background: '#E0F2F1', borderBottom: '2px solid #00897B' }}>
+                <h3 style={{ color: '#00695C', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  🏭 Order Services from Outside Vendors
+                </h3>
+                <button className="btn btn-icon" onClick={() => !serviceModalSubmitting && setShowServicesModal(false)}><X size={20} /></button>
+              </div>
+              <div style={{ padding: 20 }}>
+                <p style={{ fontSize: '0.85rem', color: '#666', marginTop: 0, marginBottom: 16 }}>
+                  Generates one PO per vendor for Fab Service parts that have a vendor and cost set but no PO yet.
+                  Hidden parts (Rolling Assist) are marked with 🔒 and won't appear on customer-facing documents.
+                </p>
+
+                {groupKeys.length === 0 ? (
+                  <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>
+                    No service operations available to PO. Make sure Fab Service parts have a vendor and cost set.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+                    {groupKeys.map(vendorId => {
+                      const group = groups[vendorId];
+                      const isSelected = serviceModalSelected.has(vendorId);
+                      return (
+                        <div key={vendorId} style={{
+                          border: '2px solid ' + (isSelected ? '#00897B' : '#e0e0e0'),
+                          borderRadius: 8,
+                          background: isSelected ? '#E0F2F1' : '#fafafa',
+                          padding: 12
+                        }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 8 }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const next = new Set(serviceModalSelected);
+                                if (e.target.checked) next.add(vendorId);
+                                else next.delete(vendorId);
+                                setServiceModalSelected(next);
+                              }}
+                              style={{ width: 18, height: 18 }}
+                            />
+                            <strong style={{ flex: 1, fontSize: '1rem', color: '#00695C' }}>
+                              {group.vendorName}
+                              {group.hasHidden && (
+                                <span style={{ marginLeft: 8, fontSize: '0.7rem', color: '#C62828', fontWeight: 700, padding: '2px 6px', background: '#FFEBEE', borderRadius: 3, border: '1px solid #EF5350' }}>
+                                  🔒 HIDDEN
+                                </span>
+                              )}
+                            </strong>
+                            <span style={{ fontSize: '1rem', fontWeight: 700, color: '#00695C' }}>
+                              ${group.totalCost.toFixed(2)}
+                            </span>
+                          </label>
+                          <div style={{ paddingLeft: 28, fontSize: '0.8rem', color: '#555' }}>
+                            {group.parts.map((gp, idx) => {
+                              const cost = parseFloat(gp.op.costPerPart) || 0;
+                              const desc = (gp.part.formData && gp.part.formData._materialDescription) || gp.part.materialDescription || gp.op.serviceType || 'Service';
+                              return (
+                                <div key={idx} style={{ padding: '2px 0' }}>
+                                  • Part #{gp.part.partNumber} — {desc} × {gp.qty} @ ${cost.toFixed(2)}/ea = ${gp.lineCost.toFixed(2)}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {selectedCount > 0 && (
+                  <div style={{ padding: 12, background: '#E0F2F1', borderRadius: 6, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 600, color: '#00695C' }}>
+                      {selectedCount} vendor{selectedCount === 1 ? '' : 's'} selected
+                    </span>
+                    <strong style={{ fontSize: '1.1rem', color: '#00695C' }}>${selectedTotal.toFixed(2)}</strong>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn btn-outline" onClick={() => setShowServicesModal(false)} disabled={serviceModalSubmitting}>
+                    Cancel
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ background: '#00897B', color: 'white' }}
+                    disabled={serviceModalSubmitting || selectedCount === 0}
+                    onClick={async () => {
+                      if (selectedCount === 0) return;
+                      setServiceModalSubmitting(true);
+                      try {
+                        const vendorIds = Array.from(serviceModalSelected);
+                        const res = await createServicePOsAuto(id, vendorIds);
+                        const data = res.data?.data || {};
+                        const created = data.created || [];
+                        const errors = data.errors || [];
+                        if (errors.length > 0) {
+                          setError(`Created ${created.length} PO(s), ${errors.length} failed: ${errors.map(e => e.vendorName + ': ' + e.error).join('; ')}`);
+                        } else {
+                          showMessage(res.data?.message || `Created ${created.length} service PO(s)`);
+                        }
+                        setShowServicesModal(false);
+                        setServiceModalSelected(new Set());
+                        await loadOrder();
+                      } catch (err) {
+                        setError('Failed to create service POs: ' + (err.response?.data?.error?.message || err.message));
+                      } finally {
+                        setServiceModalSubmitting(false);
+                      }
+                    }}
+                  >
+                    {serviceModalSubmitting ? '⏳ Creating POs...' : `🏭 Create ${selectedCount} PO${selectedCount === 1 ? '' : 's'}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Order Material Modal */}
       {showOrderModal && (
