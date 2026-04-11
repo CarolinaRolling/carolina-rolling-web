@@ -107,13 +107,15 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
   }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, profileSize]);
 
   const riseCalc = useMemo(() => {
-    const r = clDiameter > 0 ? clDiameter / 2 : 0;
+    // Use INSIDE diameter — operators measure on inside surface.
+    const insideDia = clDiameter - (profileSize || 0);
+    const r = insideDia > 0 ? insideDia / 2 : 0;
     if (r <= 0 || clDiameter <= 100) return null;
     const chord = r >= 60 ? 60 : r >= 24 ? 24 : r >= 12 ? 12 : r >= 6 ? 6 : 3;
     const rise = calculateRise(r, chord);
     if (rise !== null && rise > 0) return { rise, chord };
     return null;
-  }, [clDiameter]);
+  }, [clDiameter, profileSize]);
 
   const lengthInches = useMemo(() => {
     const raw = partData.length || '';
@@ -195,14 +197,9 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
     let rollLine = `Roll to ${rv}" ${spec}`;
     if (dirCode) rollLine += ` ${dirCode} (${partData.rollType === 'easy_way' ? 'stem out' : partData.rollType === 'hard_way' ? 'stem in' : 'stem up'})`;
     lines.push(rollLine);
-    if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
+    if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}" (From ID)`);
     if (completeRings && ringCalc && !ringCalc.error) {
-      if (!ringCalc.multiSegment) {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), cut ${ringCalc.cutLengthPerRing.toFixed(2)}"/ring, ${ringCalc.ringsPerStick}/stick, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
-      } else {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.segmentsPerRing} segments/ring, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
-      }
-      lines.push(`Tangents: ${ringCalc.tangent}" each end, Kerf: ${ringCalc.kerf}"`);
+      lines.push(`${ringsNeeded} complete ring(s) required`);
     }
     return lines.join('\n');
   }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded]);
@@ -326,7 +323,7 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
         {riseCalc && (
           <div style={{ background: '#e8f5e9', padding: 12, borderRadius: 8, marginBottom: 12 }}>
             <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#2e7d32', marginBottom: 4 }}>📐 Chord & Rise</div>
-            <div style={{ fontSize: '0.9rem' }}><span style={{ color: '#666' }}>Over {riseCalc.chord}" chord: </span><span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{riseCalc.rise.toFixed(4)}"</span><span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm)</span></div>
+            <div style={{ fontSize: '0.9rem' }}><span style={{ color: '#666' }}>Over {riseCalc.chord}" chord: </span><span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{riseCalc.rise.toFixed(4)}"</span><span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm) <span style={{ color: '#888', fontSize: '0.8rem' }}>(From ID)</span></span></div>
           </div>
         )}
 

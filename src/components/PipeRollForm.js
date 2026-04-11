@@ -3,6 +3,7 @@ import RollToOverride from './RollToOverride';
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import { useSectionSizes } from '../hooks/useSectionSizes';
+import { getInsideRadiusForChord } from './PitchSection';
 import HeatNumberInput from './HeatNumberInput';
 // Sagitta formula: h = R - sqrt(R² - (c/2)²)
 function calculateRise(radiusInches, chordInches) {
@@ -399,15 +400,27 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   }, [pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, rollCalc, selectedSize, partData.outerDiameter, rollValue, rollMeasureType]);
 
   // Calculate chord and rise (check dimension for verifying bend radius)
+  // Uses inside diameter (CL - OD) and accounts for pitch via the developed-diameter formula.
   const riseCalc = useMemo(() => {
     if (!rollCalc) return null;
-    const radiusValue = rollCalc.centerlineDia / 2;
-    if (radiusValue <= 0 || rollCalc.centerlineDia <= 100) return null;
+    if (rollCalc.centerlineDia <= 100) return null;
+    // Build a synthetic partData with the live pitch state (form's local state may be ahead of partData)
+    const livePitchData = {
+      _pitchEnabled: pitchEnabled,
+      _pitchMethod: pitchMethod,
+      _pitchRun: pitchRun,
+      _pitchRise: pitchRise,
+      _pitchAngle: pitchAngle,
+      _pitchSpaceType: pitchSpaceType,
+      _pitchSpaceValue: pitchSpaceValue
+    };
+    const radiusValue = getInsideRadiusForChord(rollCalc.centerlineDia, rollCalc.od, livePitchData);
+    if (!radiusValue || radiusValue <= 0) return null;
     const chord = radiusValue >= 60 ? 60 : radiusValue >= 24 ? 24 : radiusValue >= 12 ? 12 : radiusValue >= 6 ? 6 : 3;
     const rise = calculateRise(radiusValue, chord);
     if (rise !== null && rise > 0) return { rise, chord };
     return null;
-  }, [rollCalc]);
+  }, [rollCalc, pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue]);
   // Auto-update quantity when complete rings changes
   useEffect(() => {
     if (completeRings && ringCalc && !ringCalc.error) {
@@ -446,7 +459,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     const spec = rollMeasurePoint === 'inside' ? (rollMeasureType === 'radius' ? 'ISR' : 'ID') : rollMeasurePoint === 'outside' ? (rollMeasureType === 'radius' ? 'OSR' : 'OD') : (rollMeasureType === 'radius' ? 'CLR' : 'CLD');
     lines.push(`Roll to ${rv}" ${spec}`);
     if (riseCalc) {
-      lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
+      lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}" (From ID)`);
     }
     if (partData.arcDegrees) lines.push(`Arc: ${partData.arcDegrees}°`);
     if (pitchEnabled) {
@@ -471,12 +484,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
       lines.push(`Direction: ${pitchDirection === 'clockwise' ? 'Clockwise' : 'Counter-Clockwise'} (going up)`);
     }
     if (completeRings && ringCalc && !ringCalc.error) {
-      if (!ringCalc.multiSegment) {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), cut ${ringCalc.cutLengthPerRing.toFixed(2)}"/ring, ${ringCalc.ringsPerStick}/stick, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
-      } else {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.segmentsPerRing} segments/ring, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
-      }
-      lines.push(`Tangents: ${ringCalc.tangent}" each end, Kerf: ${ringCalc.kerf}"`);
+      lines.push(`${ringsNeeded} complete ring(s) required`);
     }
     return lines.join('\n');
   }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, rollCalc, riseCalc, partData.arcDegrees, pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, pitchDirection, pitchCalc, completeRings, ringCalc, ringsNeeded]);
@@ -829,7 +837,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
               📐 Chord & Rise (check dimension)
             </div>
             <div style={{ fontSize: '0.82rem', color: '#4a148c' }}>
-              Over a {riseCalc.chord}" chord: <strong>{riseCalc.rise.toFixed(4)}" rise</strong>
+              Over a {riseCalc.chord}" chord: <strong>{riseCalc.rise.toFixed(4)}" rise</strong> <span style={{ color: '#888', fontSize: '0.75rem' }}>(From ID)</span>
             </div>
           </div>
         )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
-import PitchSection, { getPitchDescriptionLines } from './PitchSection';
+import PitchSection, { getPitchDescriptionLines, getInsideRadiusForChord } from './PitchSection';
 import HeatNumberInput from './HeatNumberInput';
 const FLAT_BAR_SIZES = [
   '1/2x1/4', '3/4x1/4', '3/4x3/8',
@@ -150,13 +150,14 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
   }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, profileSize]);
 
   const riseCalc = useMemo(() => {
-    const r = clDiameter > 0 ? clDiameter / 2 : 0;
-    if (r <= 0 || clDiameter <= 100) return null;
+    if (clDiameter <= 100) return null;
+    const r = getInsideRadiusForChord(clDiameter, profileSize, partData);
+    if (!r || r <= 0) return null;
     const chord = r >= 60 ? 60 : r >= 24 ? 24 : r >= 12 ? 12 : r >= 6 ? 6 : 3;
     const rise = calculateRise(r, chord);
     if (rise !== null && rise > 0) return { rise, chord };
     return null;
-  }, [clDiameter]);
+  }, [clDiameter, profileSize, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue]);
 
   const lengthInches = useMemo(() => {
     const raw = partData.length || '';
@@ -259,15 +260,10 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     let rollLine = `Roll to ${rv}" ${spec}`;
     if (ewHw) rollLine += ` ${ewHw}`;
     lines.push(rollLine);
-    if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
+    if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}" (From ID)`);
     lines.push(...getPitchDescriptionLines(partData, clDiameter));
     if (completeRings && ringCalc && !ringCalc.error) {
-      if (!ringCalc.multiSegment) {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), cut ${ringCalc.cutLengthPerRing.toFixed(2)}"/ring, ${ringCalc.ringsPerStick}/stick, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
-      } else {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.segmentsPerRing} segments/ring, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
-      }
-      lines.push(`Tangents: ${ringCalc.tangent}" each end, Kerf: ${ringCalc.kerf}"`);
+      lines.push(`${ringsNeeded} complete ring(s) required`);
     }
     return lines.join('\n');
   }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded, barShape, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
@@ -472,7 +468,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
             <div style={{ fontSize: '0.9rem' }}>
               <span style={{ color: '#666' }}>Over {riseCalc.chord}" chord: </span>
               <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{riseCalc.rise.toFixed(4)}"</span>
-              <span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm)</span>
+              <span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm) <span style={{ color: '#888', fontSize: '0.8rem' }}>(From ID)</span></span>
             </div>
           </div>
         )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
-import PitchSection, { getPitchDescriptionLines } from './PitchSection';
+import PitchSection, { getPitchDescriptionLines, getInsideRadiusForChord } from './PitchSection';
 import { useSectionSizes } from '../hooks/useSectionSizes';
 import HeatNumberInput from './HeatNumberInput';
 const THICKNESS_OPTIONS = [
@@ -134,14 +134,19 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, profileSize]);
 
   // Calculate chord and rise using CL radius
+  // Calculate chord and rise using inside diameter (CL - profile)
+  // TODO: for rectangular tubes rolled easy_way, profileSize uses Math.max which is the
+  // larger dimension. This gives a slightly conservative inside radius. Could be refined
+  // later by reading rollType + _sideOrientation to pick the bend-perpendicular side.
   const riseCalc = useMemo(() => {
-    const radiusValue = clDiameter > 0 ? clDiameter / 2 : 0;
-    if (radiusValue <= 0 || clDiameter <= 100) return null;
+    if (clDiameter <= 100) return null;
+    const radiusValue = getInsideRadiusForChord(clDiameter, profileSize, partData);
+    if (!radiusValue || radiusValue <= 0) return null;
     const chord = radiusValue >= 60 ? 60 : radiusValue >= 24 ? 24 : radiusValue >= 12 ? 12 : radiusValue >= 6 ? 6 : 3;
     const rise = calculateRise(radiusValue, chord);
     if (rise !== null && rise > 0) return { rise, chord };
     return null;
-  }, [clDiameter]);
+  }, [clDiameter, profileSize, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue]);
 
   // Parse length to inches
   const lengthInches = useMemo(() => {
@@ -259,16 +264,11 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     lines.push(rollLine);
 
     if (riseCalc) {
-      lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
+      lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}" (From ID)`);
     }
 
     if (completeRings && ringCalc && !ringCalc.error) {
-      if (!ringCalc.multiSegment) {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), cut ${ringCalc.cutLengthPerRing.toFixed(2)}"/ring, ${ringCalc.ringsPerStick}/stick, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
-      } else {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.segmentsPerRing} segments/ring, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
-      }
-      lines.push(`Tangents: ${ringCalc.tangent}" each end, Kerf: ${ringCalc.kerf}"`);
+      lines.push(`${ringsNeeded} complete ring(s) required`);
     }
 
     lines.push(...getPitchDescriptionLines(partData, clDiameter));
@@ -555,7 +555,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
               📐 Rise Calculation (check dimension)
             </div>
             <div style={{ fontSize: '0.82rem', color: '#4a148c' }}>
-              Over a {riseCalc.chord}" chord: <strong>{riseCalc.rise.toFixed(4)}" rise</strong>
+              Over a {riseCalc.chord}" chord: <strong>{riseCalc.rise.toFixed(4)}" rise</strong> <span style={{ color: '#888', fontSize: '0.75rem' }}>(From ID)</span>
             </div>
           </div>
         )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
-import PitchSection, { getPitchDescriptionLines } from './PitchSection';
+import PitchSection, { getPitchDescriptionLines, getInsideRadiusForChord } from './PitchSection';
 import HeatNumberInput from './HeatNumberInput';
 
 const THICKNESS_OPTIONS = [
@@ -226,6 +226,23 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     return diameter;
   }, [partData.thickness, rollValue, rollMeasureType, rollMeasurePoint]);
 
+  // Chord & rise verification dimension (for large diameters >100")
+  // Uses INSIDE diameter (CL - thickness) since operators measure on the inside surface.
+  // Honors pitch via the developed-diameter formula in the helper.
+  const riseCalc = useMemo(() => {
+    if (clDiameter <= 100) return null;
+    const profileSize = thicknessToDecimal(partData.thickness);
+    const r = getInsideRadiusForChord(clDiameter, profileSize, partData);
+    if (!r || r <= 0) return null;
+    const chord = r >= 60 ? 60 : r >= 24 ? 24 : r >= 12 ? 12 : r >= 6 ? 6 : 3;
+    // Rise = R - sqrt(R^2 - (chord/2)^2)
+    const halfChord = chord / 2;
+    if (r * r - halfChord * halfChord < 0) return null;
+    const rise = r - Math.sqrt(r * r - halfChord * halfChord);
+    if (rise > 0) return { rise, chord };
+    return null;
+  }, [clDiameter, partData.thickness, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue]);
+
   // Rolling description (includes pitch info)
   const rollingDescription = useMemo(() => {
     if (rollToMethod === 'template') return 'Roll Per Template / Sample';
@@ -245,9 +262,10 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     if (nestingCalc) {
       lines.push(`Complete Rings: ${nestingCalc.ringsPerLength}/pc from ${nestingCalc.stock}" stock, ${nestingCalc.stockLengthsNeeded} lengths`);
     }
+    if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}" (From ID)`);
     lines.push(...getPitchDescriptionLines(partData, clDiameter));
     return lines.join('\n');
-  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, clDiameter, showAngle, angleValue, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia, partData._protectivePaper, partData._protectivePaperSide, nestingCalc]);
+  }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, clDiameter, showAngle, angleValue, riseCalc, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia, partData._protectivePaper, partData._protectivePaperSide, nestingCalc]);
 
   useEffect(() => {
     setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
@@ -551,6 +569,16 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
 
       {/* === PITCH / HELIX === */}
       <div style={sectionStyle}>
+        {riseCalc && (
+          <div style={{ background: '#e8f5e9', padding: 10, borderRadius: 8, marginBottom: 10, border: '1px solid #c8e6c9' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#2e7d32', marginBottom: 4 }}>📐 Chord & Rise (check dimension)</div>
+            <div style={{ fontSize: '0.9rem' }}>
+              <span style={{ color: '#666' }}>Over {riseCalc.chord}" chord: </span>
+              <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{riseCalc.rise.toFixed(4)}"</span>
+              <span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm) <span style={{ color: '#888', fontSize: '0.8rem' }}>(From ID)</span></span>
+            </div>
+          </div>
+        )}
         <PitchSection partData={partData} setPartData={setPartData} clDiameter={clDiameter} inputDiameter={rollMeasureType === 'radius' ? (parseFloat(rollValue) || 0) * 2 : (parseFloat(rollValue) || 0)} profileOD={thicknessToDecimal(partData.thickness)} />
       </div>
 

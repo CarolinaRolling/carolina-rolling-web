@@ -136,7 +136,9 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
 
   // Calculate chord and rise (check dimension for verifying bend radius)
   const riseCalc = useMemo(() => {
-    const radiusValue = clDiameter > 0 ? clDiameter / 2 : 0;
+    // Use INSIDE diameter (not centerline) — operators measure chord/rise on the inside surface.
+    const insideDia = clDiameter - (profileSize || 0);
+    const radiusValue = insideDia > 0 ? insideDia / 2 : 0;
     if (radiusValue <= 0 || clDiameter <= 100) return null;
     const chord = radiusValue >= 60 ? 60 : radiusValue >= 24 ? 24 : radiusValue >= 12 ? 12 : radiusValue >= 6 ? 6 : 3;
     const rise = calculateRise(radiusValue, chord);
@@ -144,7 +146,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
       return { rise, chord };
     }
     return null;
-  }, [clDiameter]);
+  }, [clDiameter, profileSize]);
 
   // Parse length to inches
   const lengthInches = useMemo(() => {
@@ -288,16 +290,11 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     }
     
     if (riseCalc) {
-      lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}"`);
+      lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}" (From ID)`);
     }
 
     if (completeRings && ringCalc && !ringCalc.error) {
-      if (!ringCalc.multiSegment) {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), cut ${ringCalc.cutLengthPerRing.toFixed(2)}"/ring, ${ringCalc.ringsPerStick}/stick, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
-      } else {
-        lines.push(`Complete Ring — ${ringsNeeded} ring(s), ${ringCalc.segmentsPerRing} segments/ring, ORDER ${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' lengths`);
-      }
-      lines.push(`Tangents: ${ringCalc.tangent}" each end, Kerf: ${ringCalc.kerf}"`);
+      lines.push(`${ringsNeeded} complete ring(s) required`);
     }
     
     return lines.join('\n');
@@ -731,7 +728,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
             <div style={{ fontSize: '0.9rem' }}>
               <span style={{ color: '#666' }}>Based on {riseCalc.chord}" chord: </span>
               <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{riseCalc.rise.toFixed(4)}"</span>
-              <span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm)</span>
+              <span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm) <span style={{ color: '#888', fontSize: '0.8rem' }}>(From ID)</span></span>
             </div>
             <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 4 }}>
               Check dimension — measure {riseCalc.chord}" chord, verify rise height
