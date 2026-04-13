@@ -1115,7 +1115,8 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                           const devInsideDia = pitchCalc.developedDia - (pitchCalc.od || 0);
                           const devInsideR = devInsideDia > 0 ? devInsideDia / 2 : 0;
                           let chordRiseStr = '';
-                          if (devInsideR > 0) {
+                          // Only show chord/rise when developed diameter is large enough to warrant a verification check
+                          if (devInsideR > 0 && pitchCalc.developedDia > 100) {
                             const chord = devInsideR >= 60 ? 60 : devInsideR >= 24 ? 24 : devInsideR >= 12 ? 12 : devInsideR >= 6 ? 6 : 3;
                             const halfChord = chord / 2;
                             if (devInsideR * devInsideR - halfChord * halfChord >= 0) {
