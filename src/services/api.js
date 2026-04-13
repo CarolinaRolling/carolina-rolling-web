@@ -133,7 +133,7 @@ export const toggleVendorShare = (workOrderId, partId, fileId, visible) => api.p
 export const resolveVendorIssue = (workOrderId, issueId, resolutionNotes) => api.put(`/workorders/${workOrderId}/vendor-issues/${issueId}/resolve`, { resolutionNotes });
 export const acknowledgeVendorIssue = (workOrderId, issueId) => api.put(`/workorders/${workOrderId}/vendor-issues/${issueId}/acknowledge`);
 export const updateDRNumber = (id, drNumber) => api.put(`/workorders/${id}/dr-number`, { drNumber });
-export const deleteWorkOrder = (id) => api.delete(`/workorders/${id}`);
+export const deleteWorkOrder = (id, overrideCode) => api.delete(`/workorders/${id}`, overrideCode ? { data: { overrideCode } } : undefined);
 export const getWorkOrderPrintPackage = (id, mode, html) => api.post(`/workorders/${id}/print-package`, { mode, html }, { responseType: 'blob', timeout: 60000 });
 
 // Work Order Parts

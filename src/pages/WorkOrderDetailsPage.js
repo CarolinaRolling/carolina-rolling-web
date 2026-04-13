@@ -104,6 +104,7 @@ function WorkOrderDetailsPage() {
   const [pickupData, setPickupData] = useState({ pickedUpBy: '', type: null, items: {} });
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [showCocModal, setShowCocModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [cocWpsList, setCocWpsList] = useState([]);
   const [cocWpsId, setCocWpsId] = useState('');
   const [cocCertifiedBy, setCocCertifiedBy] = useState('Jason Thornton');
@@ -412,14 +413,28 @@ function WorkOrderDetailsPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm('Delete this work order?')) return;
+  const handleDelete = async (overrideCode) => {
+    if (!overrideCode && !window.confirm('Delete this work order?')) return;
     try {
-      await deleteWorkOrder(id);
-      navigate('/inventory');
+      await deleteWorkOrder(id, overrideCode);
+      navigate('/workorders');
     } catch (err) {
-      setError('Failed to delete');
+      const msg = err?.response?.data?.error?.message || err?.response?.data?.message || 'Failed to delete work order';
+      if (msg.includes('voided instead')) {
+        setShowDeleteModal(true);
+      } else if (err?.response?.status === 403 || msg.toLowerCase().includes('incorrect') || msg.toLowerCase().includes('invalid')) {
+        setError('Incorrect override passcode — access denied');
+      } else {
+        setError(msg);
+      }
     }
+  };
+
+  const handleDeleteOverride = async () => {
+    const code = window.prompt('Enter override passcode:');
+    if (!code) return;
+    setShowDeleteModal(false);
+    await handleDelete(code);
   };
 
   const handleStatusChange = async (newStatus) => {
@@ -5509,6 +5524,44 @@ function WorkOrderDetailsPage() {
             </button>
           </div>
         </div></div>
+      )}
+
+      {/* Delete Override Modal */}
+      {showDeleteModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 420 }}>
+            <div className="modal-header" style={{ background: '#b71c1c' }}>
+              <h3 className="modal-title" style={{ color: 'white' }}>🔒 Work Order Deletion Restricted</h3>
+            </div>
+            <div style={{ padding: 24 }}>
+              <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: 14, marginBottom: 18, fontSize: '0.9rem' }}>
+                <strong>⚠️ This work order has a DR number.</strong>
+                <div style={{ marginTop: 6, color: '#555' }}>
+                  Deleting or voiding work orders affects financial records.
+                  Contact your admin to void this work order, or enter an
+                  override passcode to permanently delete it.
+                </div>
+              </div>
+              <div style={{ background: '#ffebee', border: '1px solid #ef9a9a', borderRadius: 8, padding: 12, fontSize: '0.85rem', color: '#b71c1c', fontWeight: 600, textAlign: 'center' }}>
+                Contact admin to void this work order
+              </div>
+            </div>
+            <div className="modal-footer" style={{ gap: 10 }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+                style={{ flex: 1 }}>
+                Confirm — Do Not Delete
+              </button>
+              <button
+                className="btn"
+                onClick={handleDeleteOverride}
+                style={{ flex: 1, background: '#b71c1c', color: 'white' }}>
+                🔑 Input Override
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
