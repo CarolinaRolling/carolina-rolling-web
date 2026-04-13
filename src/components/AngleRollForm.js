@@ -718,24 +718,6 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
             </div>
           </div>
         )}
-
-        {/* Rise Calculation Display */}
-        {riseCalc && (
-          <div style={{ background: '#e8f5e9', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-            <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#2e7d32', marginBottom: 4 }}>
-              📐 Height of Rise Calculation
-            </div>
-            <div style={{ fontSize: '0.9rem' }}>
-              <span style={{ color: '#666' }}>Based on {riseCalc.chord}" chord: </span>
-              <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{riseCalc.rise.toFixed(4)}"</span>
-              <span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm) <span style={{ color: '#888', fontSize: '0.8rem' }}>(From ID)</span></span>
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 4 }}>
-              Check dimension — measure {riseCalc.chord}" chord, verify rise height
-            </div>
-          </div>
-        )}
-
         {/* Rolling Description Preview */}
         {rollingDescription && (
           <div style={{ background: '#f3e5f5', padding: 12, borderRadius: 8 }}>

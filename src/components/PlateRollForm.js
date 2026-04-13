@@ -263,7 +263,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
       lines.push(`Complete Rings: ${nestingCalc.ringsPerLength}/pc from ${nestingCalc.stock}" stock, ${nestingCalc.stockLengthsNeeded} lengths`);
     }
     if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}" (From ID)`);
-    lines.push(...getPitchDescriptionLines(partData, clDiameter));
+    lines.push(...getPitchDescriptionLines(partData, clDiameter, thicknessToDecimal(partData.thickness)));
     return lines.join('\n');
   }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, clDiameter, showAngle, angleValue, riseCalc, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia, partData._protectivePaper, partData._protectivePaperSide, nestingCalc]);
 
@@ -569,16 +569,6 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
 
       {/* === PITCH / HELIX === */}
       <div style={sectionStyle}>
-        {riseCalc && (
-          <div style={{ background: '#e8f5e9', padding: 10, borderRadius: 8, marginBottom: 10, border: '1px solid #c8e6c9' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#2e7d32', marginBottom: 4 }}>📐 Chord & Rise (check dimension)</div>
-            <div style={{ fontSize: '0.9rem' }}>
-              <span style={{ color: '#666' }}>Over {riseCalc.chord}" chord: </span>
-              <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{riseCalc.rise.toFixed(4)}"</span>
-              <span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm) <span style={{ color: '#888', fontSize: '0.8rem' }}>(From ID)</span></span>
-            </div>
-          </div>
-        )}
         <PitchSection partData={partData} setPartData={setPartData} clDiameter={clDiameter} inputDiameter={rollMeasureType === 'radius' ? (parseFloat(rollValue) || 0) * 2 : (parseFloat(rollValue) || 0)} profileOD={thicknessToDecimal(partData.thickness)} />
       </div>
 

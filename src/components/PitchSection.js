@@ -310,8 +310,12 @@ export default function PitchSection({ partData, setPartData, clDiameter, inputD
 /**
  * Helper: build pitch description lines for rolling descriptions.
  * Call from the parent form's rollingDescription useMemo.
+ * @param {object} partData - the part data
+ * @param {number} clDiameter - the centerline floor diameter
+ * @param {number} [profileSize=0] - optional profile size (pipe OD, plate thickness, etc.)
+ *   Used to compute the chord/rise verification for the developed radius.
  */
-export function getPitchDescriptionLines(partData, clDiameter) {
+export function getPitchDescriptionLines(partData, clDiameter, profileSize = 0) {
   if (!partData._pitchEnabled) return [];
   const lines = [];
   // Calculate pitch angle from stored values
@@ -345,10 +349,27 @@ export function getPitchDescriptionLines(partData, clDiameter) {
     const devValue = measureType === 'radius' ? (partData._pitchDevelopedDia / 2).toFixed(4) : partData._pitchDevelopedDia.toFixed(4);
     const devLabel = measureType === 'radius' ? 'Developed Radius' : 'Developed Diameter';
     lines.push(`${devLabel}: ${devValue}" ${specLabel}`);
+    // Add chord/rise verification for the developed radius (inside surface, when developed dia > 100")
+    if (partData._pitchDevelopedDia > 100) {
+      const devInsideDia = partData._pitchDevelopedDia - (parseFloat(profileSize) || 0);
+      const devInsideR = devInsideDia > 0 ? devInsideDia / 2 : 0;
+      if (devInsideR > 0) {
+        const chord = devInsideR >= 60 ? 60 : devInsideR >= 24 ? 24 : devInsideR >= 12 ? 12 : devInsideR >= 6 ? 6 : 3;
+        const halfChord = chord / 2;
+        if (devInsideR * devInsideR - halfChord * halfChord >= 0) {
+          const rise = devInsideR - Math.sqrt(devInsideR * devInsideR - halfChord * halfChord);
+          if (rise > 0) {
+            lines.push(`Chord: ${chord}" Rise: ${rise.toFixed(4)}" (From ID)`);
+          }
+        }
+      }
+    }
   }
-  // Direction
+  // Direction with Unicode arrow
   if (partData._pitchDirection) {
-    lines.push(`Direction: ${partData._pitchDirection === 'clockwise' ? 'Clockwise' : 'Counter-Clockwise'} (going up)`);
+    const arrow = partData._pitchDirection === 'clockwise' ? '↻' : '↺';
+    const label = partData._pitchDirection === 'clockwise' ? 'Clockwise' : 'Counter-Clockwise';
+    lines.push(`Direction: ${arrow} ${label} (going up)`);
   }
   return lines;
 }

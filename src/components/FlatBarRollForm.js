@@ -261,7 +261,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     if (ewHw) rollLine += ` ${ewHw}`;
     lines.push(rollLine);
     if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}" (From ID)`);
-    lines.push(...getPitchDescriptionLines(partData, clDiameter));
+    lines.push(...getPitchDescriptionLines(partData, clDiameter, profileSize));
     if (completeRings && ringCalc && !ringCalc.error) {
       lines.push(`${ringsNeeded} complete ring(s) required`);
     }
@@ -460,19 +460,6 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
           )}
         </div>
         )}
-
-        {/* Rise */}
-        {riseCalc && (
-          <div style={{ background: '#e8f5e9', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-            <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#2e7d32', marginBottom: 4 }}>📐 Chord & Rise</div>
-            <div style={{ fontSize: '0.9rem' }}>
-              <span style={{ color: '#666' }}>Over {riseCalc.chord}" chord: </span>
-              <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{riseCalc.rise.toFixed(4)}"</span>
-              <span style={{ color: '#666', marginLeft: 4 }}>({(riseCalc.rise * 25.4).toFixed(2)} mm) <span style={{ color: '#888', fontSize: '0.8rem' }}>(From ID)</span></span>
-            </div>
-          </div>
-        )}
-
         {/* Rolling Description Preview */}
         {rollingDescription && (
           <div style={{ background: '#f3e5f5', padding: 12, borderRadius: 8 }}>

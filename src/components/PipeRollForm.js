@@ -472,8 +472,25 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
         const devValue = rollMeasureType === 'radius' ? (pitchCalc.developedDia / 2).toFixed(4) : pitchCalc.developedDia.toFixed(4);
         const devLabel = rollMeasureType === 'radius' ? 'Developed Radius' : 'Developed Diameter';
         lines.push(`${devLabel}: ${devValue}" ${specLabel}`);
+        // Chord/rise verification for developed radius (inside surface, when dev dia > 100")
+        if (pitchCalc.developedDia > 100) {
+          const devInsideDia = pitchCalc.developedDia - (pitchCalc.od || 0);
+          const devInsideR = devInsideDia > 0 ? devInsideDia / 2 : 0;
+          if (devInsideR > 0) {
+            const devChord = devInsideR >= 60 ? 60 : devInsideR >= 24 ? 24 : devInsideR >= 12 ? 12 : devInsideR >= 6 ? 6 : 3;
+            const halfChord = devChord / 2;
+            if (devInsideR * devInsideR - halfChord * halfChord >= 0) {
+              const devRise = devInsideR - Math.sqrt(devInsideR * devInsideR - halfChord * halfChord);
+              if (devRise > 0) {
+                lines.push(`Chord: ${devChord}" Rise: ${devRise.toFixed(4)}" (From ID)`);
+              }
+            }
+          }
+        }
       }
-      lines.push(`Direction: ${pitchDirection === 'clockwise' ? 'Clockwise' : 'Counter-Clockwise'} (going up)`);
+      const dirArrow = pitchDirection === 'clockwise' ? '↻' : '↺';
+      const dirLabel = pitchDirection === 'clockwise' ? 'Clockwise' : 'Counter-Clockwise';
+      lines.push(`Direction: ${dirArrow} ${dirLabel} (going up)`);
     }
     if (completeRings && ringCalc && !ringCalc.error) {
       lines.push(`${ringsNeeded} complete ring(s) required`);
@@ -821,19 +838,6 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
             )}
           </>
         )}
-
-        {/* Chord & Rise calculation */}
-        {riseCalc && (
-          <div style={{ background: '#f3e5f5', borderRadius: 8, padding: 10, marginTop: 8 }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#6a1b9a', marginBottom: 4 }}>
-              📐 Chord & Rise (check dimension)
-            </div>
-            <div style={{ fontSize: '0.82rem', color: '#4a148c' }}>
-              Over a {riseCalc.chord}" chord: <strong>{riseCalc.rise.toFixed(4)}" rise</strong> <span style={{ color: '#888', fontSize: '0.75rem' }}>(From ID)</span>
-            </div>
-          </div>
-        )}
-
         {/* Arc degrees */}
         <div className="form-group" style={{ marginTop: 12 }}>
           <label className="form-label">Arc (degrees)</label>

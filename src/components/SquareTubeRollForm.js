@@ -271,7 +271,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
       lines.push(`${ringsNeeded} complete ring(s) required`);
     }
 
-    lines.push(...getPitchDescriptionLines(partData, clDiameter));
+    lines.push(...getPitchDescriptionLines(partData, clDiameter, profileSize));
 
     return lines.join('\n');
   }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, isRectangular, partData._sideOrientation, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
@@ -547,19 +547,6 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
           <input type="number" step="0.1" className="form-input" value={partData.arcDegrees || ''}
             onFocus={(e) => e.target.select()} onChange={(e) => setPartData({ ...partData, arcDegrees: e.target.value })} placeholder="e.g. 90, 180, 360" />
         </div>
-
-        {/* Rise Calculation for large radius */}
-        {riseCalc && (
-          <div style={{ background: '#f3e5f5', borderRadius: 8, padding: 10, marginTop: 8 }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#6a1b9a', marginBottom: 4 }}>
-              📐 Rise Calculation (check dimension)
-            </div>
-            <div style={{ fontSize: '0.82rem', color: '#4a148c' }}>
-              Over a {riseCalc.chord}" chord: <strong>{riseCalc.rise.toFixed(4)}" rise</strong> <span style={{ color: '#888', fontSize: '0.75rem' }}>(From ID)</span>
-            </div>
-          </div>
-        )}
-
         {/* Rolling Description */}
         {rollingDescription && (
           <div style={{ background: '#f5f5f5', borderRadius: 6, padding: 8, marginTop: 8, fontSize: '0.8rem', color: '#666', whiteSpace: 'pre-line' }}>
