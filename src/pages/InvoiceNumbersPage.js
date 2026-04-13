@@ -250,13 +250,18 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
         {/* How to export instructions */}
         {!importPairs && !importResults && (
           <div style={{ background: '#f3f8ff', border: '1px solid #bbdefb', borderRadius: 8, padding: 14, marginBottom: 14, fontSize: '0.85rem' }}>
-            <strong>How to export from QuickBooks:</strong>
+            <strong>Option A — Upload an IIF file (easiest):</strong>
+            <ol style={{ margin: '8px 0 8px', paddingLeft: 20, lineHeight: 1.8 }}>
+              <li>Locate any <strong>.iif file</strong> you previously exported from this system when sending invoices to QuickBooks</li>
+              <li>Upload it below — the importer will read the invoice number and DR number directly from it</li>
+            </ol>
+            <strong>Option B — Export from QuickBooks Pro (CSV):</strong>
             <ol style={{ margin: '8px 0 0', paddingLeft: 20, lineHeight: 1.8 }}>
-              <li>In QuickBooks, go to <strong>Reports → Sales → Invoice List</strong></li>
-              <li>Customize the report to include the <strong>"Other 1"</strong> column (this holds the DR number)</li>
-              <li>Set the date range to cover all your orders</li>
+              <li>In QuickBooks, go to <strong>Reports → Customers &amp; Receivables → Transaction List by Customer</strong></li>
+              <li>Click <strong>Customize Report</strong>, go to the <strong>Columns</strong> tab, and check <strong>"Other 1"</strong> (this holds the DR number) and <strong>"Num"</strong> (invoice number)</li>
+              <li>Set the date range to cover all your orders, then click <strong>OK</strong></li>
               <li>Click <strong>Excel → Create New Worksheet</strong> and save as CSV</li>
-              <li>Upload the CSV file below — or upload a <strong>.IIF file</strong> exported directly from QuickBooks</li>
+              <li>Upload the CSV file below</li>
             </ol>
           </div>
         )}
