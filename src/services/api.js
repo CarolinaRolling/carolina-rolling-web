@@ -495,6 +495,7 @@ export const assignInvoiceNumber = (woId) => api.post(`/quickbooks/assign-invoic
 export const getInvoiceNumbers = () => api.get('/quickbooks/invoice-numbers');
 export const voidInvoiceNumber = (id, reason) => api.post(`/quickbooks/invoice-numbers/${id}/void`, { reason });
 export const createManualInvoiceNumber = (data) => api.post('/quickbooks/invoice-numbers/manual', data);
+export const importInvoiceNumbers = (pairs) => api.post('/quickbooks/import-invoice-numbers', { pairs });
 export const emailInvoice = (id, email) => api.post(`/workorders/${id}/email-invoice`, { email });
 export const repairPricing = () => api.post('/workorders/repair-pricing');
 

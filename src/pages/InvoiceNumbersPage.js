@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getInvoiceNumbers, voidInvoiceNumber, getNextInvoiceNumber, setNextInvoiceNumber, createManualInvoiceNumber } from '../services/api';
+import { getInvoiceNumbers, voidInvoiceNumber, getNextInvoiceNumber, setNextInvoiceNumber, createManualInvoiceNumber, importInvoiceNumbers } from '../services/api';
 
 const InvoiceNumbersPage = ({ embedded = false }) => {
   const navigate = useNavigate();
@@ -17,6 +17,12 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
   const [voidReason, setVoidReason] = useState('');
   const [manualOpen, setManualOpen] = useState(false);
   const [manualForm, setManualForm] = useState({ invoiceNumber: '', clientName: '' });
+
+  // QB Import state
+  const [importPairs, setImportPairs] = useState(null);  // parsed rows ready for preview
+  const [importResults, setImportResults] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState('');
 
   useEffect(() => { loadData(); }, []);
 
@@ -75,6 +81,104 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
     } finally { setSaving(false); }
   };
 
+  // Parse a QuickBooks CSV or IIF export and extract DR→invoice pairs
+  const handleImportFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImportError('');
+    setImportPairs(null);
+    setImportResults(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target.result;
+        const pairs = [];
+
+        if (file.name.toLowerCase().endsWith('.iif')) {
+          // IIF format: tab-delimited, TRNS rows have DOCNUM at col 7 and OTHER1 at col 13
+          // Header: TRNS TRNSID TRNSTYPE DATE ACCNT NAME AMOUNT DOCNUM MEMO CLEAR TOPRINT TERMS PONUM OTHER1
+          const lines = text.split(/
+?
+/);
+          for (const line of lines) {
+            if (!line.startsWith('TRNS	')) continue;
+            const cols = line.split('	');
+            // IIF TRNS: [0]TRNS [1]TRNSID [2]TRNSTYPE [3]DATE [4]ACCNT [5]NAME [6]AMOUNT [7]DOCNUM [8]MEMO [9]CLEAR [10]TOPRINT [11]TERMS [12]PONUM [13]OTHER1
+            const docNum = (cols[7] || '').trim();   // invoice number
+            const other1 = (cols[13] || '').trim();  // DR number
+            const qbName = (cols[5] || '').trim();   // QB customer name
+            const terms = (cols[11] || '').trim();  // Payment terms
+            const invNum = parseInt(docNum);
+            const drNum = parseInt(other1);
+            if (invNum && drNum) pairs.push({ invoiceNumber: String(invNum), drNumber: String(drNum) });
+            if (invNum && drNum) pairs.push({ invoiceNumber: String(invNum), drNumber: String(drNum), qbName: qbName || null, terms: terms || null });
+        } else {
+          // CSV format from QB Invoice List report
+          // Try to auto-detect columns: look for headers containing "Num"/"Invoice" and "Other 1"/"DR"
+          const lines = text.split(/
+?
+/).filter(l => l.trim());
+          if (lines.length < 2) throw new Error('File appears empty');
+          // Parse header row — handle quoted CSV
+          const parseRow = (row) => {
+            const cols = []; let cur = ''; let inQ = false;
+            for (let i = 0; i < row.length; i++) {
+              const c = row[i];
+              if (c === '"') { inQ = !inQ; }
+              else if (c === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+              else { cur += c; }
+            }
+            cols.push(cur.trim());
+            return cols;
+          };
+          const headers = parseRow(lines[0]).map(h => h.replace(/"/g, '').toLowerCase().trim());
+          // Find invoice number column — QB uses "Num" or "Invoice No." or "Number"
+          const invCol = headers.findIndex(h => h === 'num' || h === 'number' || h.includes('invoice no') || h.includes('invoice #'));
+          // Find DR number column — QB stores it in "Other 1" or "Delivery Receipt"
+          const drCol = headers.findIndex(h => h.includes('other 1') || h.includes('other1') || h.includes('delivery receipt') || h.includes('dr number') || h === 'dr#');
+          // Find QB customer name column
+          const nameCol = headers.findIndex(h => h === 'name' || h === 'customer' || h === 'client' || h.includes('customer name'));
+          const termsCol = headers.findIndex(h => h === 'terms' || h.includes('payment terms') || h.includes('term'));
+          if (invCol === -1) throw new Error('Could not find invoice number column. Expected a column named "Num", "Number", or "Invoice No."');
+          if (drCol === -1) throw new Error('Could not find DR number column. Expected a column named "Other 1" or "Delivery Receipt". Make sure you exported the Other 1 field from QuickBooks.');
+          for (let i = 1; i < lines.length; i++) {
+            const cols = parseRow(lines[i]);
+            const invNum = parseInt((cols[invCol] || '').replace(/[^0-9]/g, ''));
+            const drNum = parseInt((cols[drCol] || '').replace(/[^0-9]/g, ''));
+            const qbName = nameCol >= 0 ? (cols[nameCol] || '').replace(/"/g, '').trim() : null;
+            if (invNum && drNum) pairs.push({ invoiceNumber: String(invNum), drNumber: String(drNum), qbName: qbName || null, terms: terms || null });
+          }
+        }
+
+        if (pairs.length === 0) {
+          setImportError('No valid DR→invoice pairs found in the file. Make sure the file contains invoice transactions with DR numbers in the "Other 1" field.');
+          return;
+        }
+        setImportPairs(pairs);
+      } catch (err) {
+        setImportError('Failed to parse file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    // Reset file input so same file can be re-uploaded
+    e.target.value = '';
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPairs || importPairs.length === 0) return;
+    try {
+      setImporting(true);
+      setImportError('');
+      const res = await importInvoiceNumbers(importPairs);
+      setImportResults(res.data.data);
+      setImportPairs(null);
+      setSuccess(res.data.message);
+      loadData();
+    } catch (err) {
+      setImportError(err.response?.data?.error?.message || 'Import failed');
+    } finally { setImporting(false); }
+  };
+
   const filtered = search
     ? invoiceNumbers.filter(inv =>
         String(inv.invoiceNumber).includes(search) ||
@@ -127,6 +231,128 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* QuickBooks Invoice Import */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 12 }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: '1rem' }}>📥 Import Invoice Numbers from QuickBooks</h3>
+          <p style={{ color: '#666', fontSize: '0.85rem', margin: 0 }}>
+            Upload a QuickBooks invoice export to bulk-assign invoice numbers to matching work orders by DR number.
+          </p>
+        </div>
+
+        {importError && (
+          <div className="alert alert-error" style={{ marginBottom: 12 }}>
+            {importError} <button onClick={() => setImportError('')} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+          </div>
+        )}
+
+        {/* How to export instructions */}
+        {!importPairs && !importResults && (
+          <div style={{ background: '#f3f8ff', border: '1px solid #bbdefb', borderRadius: 8, padding: 14, marginBottom: 14, fontSize: '0.85rem' }}>
+            <strong>How to export from QuickBooks:</strong>
+            <ol style={{ margin: '8px 0 0', paddingLeft: 20, lineHeight: 1.8 }}>
+              <li>In QuickBooks, go to <strong>Reports → Sales → Invoice List</strong></li>
+              <li>Customize the report to include the <strong>"Other 1"</strong> column (this holds the DR number)</li>
+              <li>Set the date range to cover all your orders</li>
+              <li>Click <strong>Excel → Create New Worksheet</strong> and save as CSV</li>
+              <li>Upload the CSV file below — or upload a <strong>.IIF file</strong> exported directly from QuickBooks</li>
+            </ol>
+          </div>
+        )}
+
+        {/* File upload */}
+        {!importPairs && !importResults && (
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+            background: '#1565C0', color: 'white', padding: '8px 18px', borderRadius: 6,
+            fontWeight: 600, fontSize: '0.9rem' }}>
+            📂 Choose QB Export File (.csv or .iif)
+            <input type="file" accept=".csv,.iif,.txt" onChange={handleImportFile} style={{ display: 'none' }} />
+          </label>
+        )}
+
+        {/* Preview parsed pairs */}
+        {importPairs && (
+          <div>
+            <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: 12, marginBottom: 14 }}>
+              <strong style={{ color: '#2e7d32' }}>✓ Found {importPairs.length} invoice/DR pair{importPairs.length !== 1 ? 's' : ''} ready to import</strong>
+            </div>
+            <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #eee', borderRadius: 6, marginBottom: 14 }}>
+              <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f5f5f5', position: 'sticky', top: 0 }}>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600 }}>DR Number</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600 }}>Invoice Number</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600 }}>QB Customer Name</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600 }}>Terms</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importPairs.map((p, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid #eee' }}>
+                      <td style={{ padding: '6px 12px' }}>DR-{p.drNumber}</td>
+                      <td style={{ padding: '6px 12px' }}>#{p.invoiceNumber}</td>
+                      <td style={{ padding: '6px 12px', color: p.qbName ? '#333' : '#bbb' }}>
+                        {p.qbName || '—'}
+                      </td>
+                      <td style={{ padding: '6px 12px', color: p.terms ? '#333' : '#bbb' }}>
+                        {p.terms || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-primary" disabled={importing} onClick={handleConfirmImport}
+                style={{ background: '#2e7d32' }}>
+                {importing ? '⏳ Importing...' : `✓ Confirm Import (${importPairs.length} pairs)`}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setImportPairs(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* Results summary */}
+        {importResults && (
+          <div style={{ fontSize: '0.875rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 14 }}>
+              <div style={{ background: '#e8f5e9', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#2e7d32' }}>{importResults.matched.length}</div>
+                <div style={{ color: '#555' }}>Successfully imported</div>
+              </div>
+              <div style={{ background: importResults.alreadySet.length > 0 ? '#fff8e1' : '#f5f5f5', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#f57c00' }}>{importResults.alreadySet.length}</div>
+                <div style={{ color: '#555' }}>Already had invoice #</div>
+              </div>
+              <div style={{ background: importResults.notFound.length > 0 ? '#ffebee' : '#f5f5f5', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#c62828' }}>{importResults.notFound.length}</div>
+                <div style={{ color: '#555' }}>DR# not found</div>
+              </div>
+            </div>
+            {importResults.matched.some(r => r.qbNameSet || r.termsSet) && (
+              <div style={{ background: '#e8f5e9', borderRadius: 6, padding: 10, marginBottom: 10 }}>
+                <strong style={{ color: '#2e7d32' }}>✓ Client records updated:</strong>
+                <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: '0.85rem' }}>
+                  {importResults.matched.filter(r => r.qbNameSet).map((r, i) => (
+                    <li key={i}>QB name set for <strong>{r.clientName}</strong>: "{r.qbNameSet}"</li>
+                  ))}
+                  {importResults.matched.filter(r => r.termsSet).map((r, i) => (
+                    <li key={i}>Terms set for <strong>{r.clientName}</strong>: "{r.termsSet}"</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {importResults.notFound.length > 0 && (
+              <div style={{ background: '#ffebee', borderRadius: 6, padding: 10, marginBottom: 10 }}>
+                <strong style={{ color: '#c62828' }}>DR numbers not found:</strong>{' '}
+                {importResults.notFound.map(r => `DR-${r.drNumber}`).join(', ')}
+              </div>
+            )}
+            <button className="btn btn-outline" onClick={() => setImportResults(null)}>Import Another File</button>
+          </div>
+        )}
       </div>
 
       {/* Invoice Number Table */}
