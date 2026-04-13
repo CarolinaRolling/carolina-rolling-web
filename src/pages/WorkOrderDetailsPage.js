@@ -3141,31 +3141,75 @@ function WorkOrderDetailsPage() {
                   </div>
                 )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, fontSize: '0.875rem' }}>
-                  {part.partType !== 'rush_service' && <div><strong>Qty:</strong> {part.quantity}</div>}
-                  {part.material && <div><strong>Material:</strong> {part.material}</div>}
-                  {part.thickness && <div><strong>Thickness:</strong> {part.thickness}</div>}
-                  {part.width && <div><strong>Width:</strong> {part.width}</div>}
-                  {part.length && <div><strong>Length:</strong> {part.length}</div>}
-                  {part.sectionSize && <div><strong>Size:</strong> {part.partType === 'pipe_roll' && (part.formData || {})._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${(part.formData || {})._schedule} Pipe`) : part.sectionSize}</div>}
-                  {part.outerDiameter && <div><strong>OD:</strong> {part.outerDiameter}</div>}
-                  {part.wallThickness && part.wallThickness !== 'SOLID' && <div><strong>Wall:</strong> {part.wallThickness}</div>}
-                  {part.wallThickness === 'SOLID' && <div><strong style={{ color: '#e65100' }}>Solid Round Bar</strong></div>}
-                  {part.rollType && <div><strong>Roll:</strong> {part.rollType === 'easy_way' ? 'Easy Way' : part.rollType === 'on_edge' ? 'On Edge' : 'Hard Way'}</div>}
-                  {part.radius && !(part.formData || {})._rollToMethod && <div><strong>Radius:</strong> {part.radius}</div>}
-                  {part.diameter && !(part.formData || {})._rollToMethod && <div><strong>Diameter:</strong> {part.diameter}</div>}
-                  {(part.formData || {})._rollToMethod === 'template' && <div style={{ color: '#e65100' }}><strong>📐 Per Template/Sample</strong></div>}
+                <div style={{ fontSize: '0.875rem', marginBottom: 8 }}>
+                  {/* Line 1: Qty, Size, Grade — inline flowing format */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                    {part.partType !== 'rush_service' && <span><strong>Qty:</strong> {part.quantity}</span>}
+                    {part.sectionSize && <span style={{ color: '#555' }}>| <strong>Size:</strong> {part.partType === 'pipe_roll' && (part.formData || {})._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${(part.formData || {})._schedule} Pipe`) : part.sectionSize}</span>}
+                    {part.thickness && <span style={{ color: '#555' }}>| <strong>Thk:</strong> {part.thickness}"</span>}
+                    {part.outerDiameter && <span style={{ color: '#555' }}>| <strong>OD:</strong> {part.outerDiameter}"</span>}
+                    {part.wallThickness && part.wallThickness !== 'SOLID' && <span style={{ color: '#555' }}>| <strong>Wall:</strong> {part.wallThickness}</span>}
+                    {part.wallThickness === 'SOLID' && <span style={{ color: '#e65100', fontWeight: 600 }}>| Solid Bar</span>}
+                    {part.width && <span style={{ color: '#555' }}>| <strong>Width:</strong> {part.width}"</span>}
+                    {part.length && <span style={{ color: '#555' }}>| <strong>Length:</strong> {part.length}</span>}
+                    {part.material && <span style={{ color: '#555' }}>| <strong>Grade:</strong> {part.material}</span>}
+                  </div>
+                  {/* Line 2: Roll method — template / print / radius+diameter */}
+                  {(part.formData || {})._rollToMethod === 'template' && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, color: '#e65100', fontSize: '0.82rem', fontWeight: 600, marginBottom: 2 }}>
+                      📐 Per Template / Sample
+                      {part.rollType && <span>({part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')})</span>}
+                      {part.arcDegrees && <span>| Arc: {part.arcDegrees}°</span>}
+                    </div>
+                  )}
                   {(part.formData || {})._rollToMethod === 'print' && (() => {
                     const printFiles = (part.files || []).filter(f => f.mimeType === 'application/pdf' || f.originalName?.toLowerCase().endsWith('.pdf'));
                     const printName = printFiles.length > 0 ? printFiles.map(f => f.originalName).join(', ') : '(see attached)';
-                    return <div style={{ color: '#1565c0' }}><strong>📄 Roll per print: {printName}</strong></div>;
+                    return <>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, color: '#1565c0', fontSize: '0.82rem', fontWeight: 600, marginBottom: 2 }}>
+                        📄 Roll per print: {printName}
+                        {part.rollType && <span>({part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')})</span>}
+                        {part.arcDegrees && <span>| Arc: {part.arcDegrees}°</span>}
+                      </div>
+                      {!(part.files || []).some(f => f.mimeType === 'application/pdf' || f.originalName?.toLowerCase().endsWith('.pdf')) && (
+                        <div style={{ color: '#c62828', fontSize: '0.8rem', fontWeight: 600, marginBottom: 2 }}>⚠️ Roll instruction PDF required — upload below</div>
+                      )}
+                    </>;
                   })()}
-                  {(part.formData || {})._rollToMethod === 'print' && !(part.files || []).some(f => f.mimeType === 'application/pdf' || f.originalName?.toLowerCase().endsWith('.pdf')) && (
-                    <div style={{ color: '#c62828', fontSize: '0.8rem', fontWeight: 600, marginTop: 4 }}>⚠️ Roll instruction PDF required — upload below</div>
+                  {!(part.formData || {})._rollToMethod && (part.diameter || part.radius) && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, color: '#1565c0', fontSize: '0.82rem', marginBottom: 2 }}>
+                      🔄 {part.diameter || part.radius}" {(() => {
+                        const mp = (part.formData || {})._rollMeasurePoint || part._rollMeasurePoint || 'inside';
+                        const isRad = !!part.radius && !part.diameter;
+                        if (mp === 'inside') return isRad ? 'ISR' : 'ID';
+                        if (mp === 'outside') return isRad ? 'OSR' : 'OD';
+                        return isRad ? 'CLR' : 'CLD';
+                      })()}
+                      {part.rollType && <span>({part.partType === 'tee_bar' ? (part.rollType === 'easy_way' ? 'SO' : part.rollType === 'on_edge' ? 'SU' : 'SI') : (part.rollType === 'easy_way' ? 'EW' : part.rollType === 'on_edge' ? 'OE' : 'HW')})</span>}
+                      {part.arcDegrees && <span>| Arc: {part.arcDegrees}°</span>}
+                      {((part.formData || {})._legOrientation || part._legOrientation) && <span>| {(part.formData || {})._legOrientation || part._legOrientation}" leg {part.rollType === 'easy_way' ? 'out' : part.rollType === 'on_edge' ? 'edge' : 'in'}</span>}
+                      {((part.formData || {})._sideOrientation || part._sideOrientation) && <span>| {(part.formData || {})._sideOrientation || part._sideOrientation}" side {part.rollType === 'easy_way' ? 'out' : part.rollType === 'on_edge' ? 'edge' : 'in'}</span>}
+                    </div>
                   )}
-                  {part.arcDegrees && <div><strong>Arc:</strong> {part.arcDegrees}°</div>}
+                  {/* Rolling description (chord, rise, CL info) */}
+                  {(part.formData || {})._rollingDescription && (
+                    <div style={{ color: '#555', fontSize: '0.8rem', marginBottom: 2 }}>
+                      📐 {(part.formData || {})._rollingDescription}
+                    </div>
+                  )}
+                  {/* Complete rings */}
                   {(part.formData || {})._completeRings && (part.formData || {})._ringsNeeded && (
-                    <div style={{ color: '#2e7d32', fontWeight: 600, marginTop: 4 }}>⭕ {(part.formData || {})._ringsNeeded} complete ring(s) required</div>
+                    <div style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.82rem', marginBottom: 2 }}>⭕ {(part.formData || {})._ringsNeeded} complete ring(s) required</div>
+                  )}
+                  {/* Pitch info */}
+                  {((part.formData || {})._pitchEnabled || part._pitchEnabled) && (
+                    <div style={{ fontSize: '0.8rem', color: '#e65100', marginBottom: 2 }}>
+                      🌀 Pitch: {((part.formData || {})._pitchDirection || part._pitchDirection) === 'clockwise' ? 'CW' : 'CCW'}
+                      {((part.formData || {})._pitchMethod || part._pitchMethod) === 'runrise' && ((part.formData || {})._pitchRise || part._pitchRise) && ` | Run: ${(part.formData || {})._pitchRun || part._pitchRun}" / Rise: ${(part.formData || {})._pitchRise || part._pitchRise}"`}
+                      {((part.formData || {})._pitchMethod || part._pitchMethod) === 'degree' && ((part.formData || {})._pitchAngle || part._pitchAngle) && ` | Angle: ${(part.formData || {})._pitchAngle || part._pitchAngle}°`}
+                      {((part.formData || {})._pitchMethod || part._pitchMethod) === 'space' && ((part.formData || {})._pitchSpaceValue || part._pitchSpaceValue) && ` | ${((part.formData || {})._pitchSpaceType || part._pitchSpaceType) === 'center' ? 'C-C' : 'Between'}: ${(part.formData || {})._pitchSpaceValue || part._pitchSpaceValue}"`}
+                      {parseFloat((part.formData || {})._pitchDevelopedDia || part._pitchDevelopedDia) > 0 && <span style={{ color: '#2e7d32', fontWeight: 600 }}> | Dev Ø: {parseFloat((part.formData || {})._pitchDevelopedDia || part._pitchDevelopedDia).toFixed(4)}"</span>}
+                    </div>
                   )}
                   {/* Orientation diagram for angle/channel rolls */}
                   {(part.partType === 'angle_roll' || part.partType === 'channel_roll') && (part.formData || {})._orientationOption && (
@@ -3229,11 +3273,45 @@ function WorkOrderDetailsPage() {
                     ) : null;
                   })()
                 ) : (part.partTotal || part.laborTotal || part.materialTotal) && (
-                  <div style={{ marginTop: 8, padding: 8, background: '#e3f2fd', borderRadius: 4, fontSize: '0.85rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                    {displayLabor > 0 && <span><strong>{part.partType === 'fab_service' ? 'Service' : 'Labor'}:</strong> ${displayLabor.toFixed(2)}/ea</span>}
-                    {displayMaterial > 0 && <span><strong>Material:</strong> ${displayMaterial.toFixed(2)}/ea</span>}
-                    {part.setupCharge && <span><strong>Setup:</strong> ${parseFloat(part.setupCharge).toFixed(2)}</span>}
-                    {displayTotal > 0 && <span style={{ fontWeight: 600, color: '#1565c0' }}><strong>Total:</strong> ${displayTotal.toFixed(2)}</span>}
+                  <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12, marginTop: 8 }}>
+                    {part.materialDescription && !['fab_service', 'shop_rate'].includes(part.partType) && (
+                      <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
+                        📦 {part.materialDescription}
+                        {part.materialSource && (
+                          <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>
+                            {part.materialSource === 'we_order' || part.materialSource === 'in_stock'
+                              ? 'Material supplied by: Carolina Rolling Company'
+                              : `Material supplied by: ${order.clientName || 'Customer'}`}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {displayMaterial > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
+                        <span>Material</span>
+                        <strong>${displayMaterial.toFixed(2)}</strong>
+                      </div>
+                    )}
+                    {displayLabor > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
+                        <span>{part.partType === 'fab_service' ? 'Service' : part.partType === 'shop_rate' ? 'Shop Rate' : part.partType === 'flat_stock' ? 'Handling' : 'Rolling'}</span>
+                        <strong>${displayLabor.toFixed(2)}</strong>
+                      </div>
+                    )}
+                    {part.setupCharge > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
+                        <span>Setup</span>
+                        <strong>${parseFloat(part.setupCharge).toFixed(2)}</strong>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #ddd', marginTop: 4, fontWeight: 600 }}>
+                      <span>Unit Price</span>
+                      <span style={{ color: '#1976d2' }}>${(displayLabor + displayMaterial).toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '1.05rem', borderTop: '1px solid #ddd' }}>
+                      <strong>Line Total ({partQty} × ${(displayLabor + displayMaterial).toFixed(2)})</strong>
+                      <strong style={{ color: '#2e7d32' }}>${displayTotal.toFixed(2)}</strong>
+                    </div>
                   </div>
                 )}
                 
