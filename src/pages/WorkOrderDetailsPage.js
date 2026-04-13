@@ -417,7 +417,7 @@ function WorkOrderDetailsPage() {
     if (!overrideCode && !window.confirm('Delete this work order?')) return;
     try {
       await deleteWorkOrder(id, overrideCode);
-      navigate('/workorders');
+      navigate('/inventory');
     } catch (err) {
       const msg = err?.response?.data?.error?.message || err?.response?.data?.message || 'Failed to delete work order';
       if (msg.includes('voided instead')) {
