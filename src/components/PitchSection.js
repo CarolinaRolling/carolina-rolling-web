@@ -350,8 +350,13 @@ export function getPitchDescriptionLines(partData, clDiameter, profileSize = 0) 
     const devLabel = measureType === 'radius' ? 'Developed Radius' : 'Developed Diameter';
     lines.push(`${devLabel}: ${devValue}" ${specLabel}`);
     // Add chord/rise verification for the developed radius (inside surface, when developed dia > 100")
+    // _pitchDevelopedDia is computed from the raw input diameter (same measure point as the roll spec),
+    // so only subtract profileSize if the user was NOT already measuring from the inside surface.
     if (partData._pitchDevelopedDia > 100) {
-      const devInsideDia = partData._pitchDevelopedDia - (parseFloat(profileSize) || 0);
+      const mp = partData._rollMeasurePoint || 'inside';
+      const devInsideDia = mp === 'inside'
+        ? partData._pitchDevelopedDia
+        : partData._pitchDevelopedDia - (parseFloat(profileSize) || 0);
       const devInsideR = devInsideDia > 0 ? devInsideDia / 2 : 0;
       if (devInsideR > 0) {
         const chord = devInsideR >= 60 ? 60 : devInsideR >= 24 ? 24 : devInsideR >= 12 ? 12 : devInsideR >= 6 ? 6 : 3;
