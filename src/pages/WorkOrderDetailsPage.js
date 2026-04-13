@@ -3191,15 +3191,17 @@ function WorkOrderDetailsPage() {
                       {((part.formData || {})._sideOrientation || part._sideOrientation) && <span>| {(part.formData || {})._sideOrientation || part._sideOrientation}" side {part.rollType === 'easy_way' ? 'out' : part.rollType === 'on_edge' ? 'edge' : 'in'}</span>}
                     </div>
                   )}
-                  {/* Rolling description — split by newline, show only chord/rise/calc lines (roll-to and pitch are already shown above) */}
+                  {/* Chord/rise lines for the roll radius — lines before "Developed" in the description */}
                   {(() => {
                     const desc = (part.formData || {})._rollingDescription || '';
-                    const infoLines = desc.split('\n').filter(l => l.includes('Rise:') || l.includes('Complete Ring') || l.includes('Cone:') || l.includes('Sheet Size:'));
-                    return infoLines.length > 0 && (
+                    const lines = desc.split('\n');
+                    const devIdx = lines.findIndex(l => l.includes('Developed'));
+                    const rollLines = lines
+                      .slice(0, devIdx >= 0 ? devIdx : lines.length)
+                      .filter(l => l.includes('Rise:') || l.includes('Complete Ring') || l.includes('Cone:') || l.includes('Sheet Size:'));
+                    return rollLines.length > 0 && (
                       <div style={{ fontSize: '0.8rem', color: '#6a1b9a', marginTop: 2 }}>
-                        {infoLines.map((line, i) => (
-                          <div key={i}>📐 {line.trim()}</div>
-                        ))}
+                        {rollLines.map((line, i) => <div key={i}>📐 {line.trim()}</div>)}
                       </div>
                     );
                   })()}
@@ -3207,7 +3209,7 @@ function WorkOrderDetailsPage() {
                   {(part.formData || {})._completeRings && (part.formData || {})._ringsNeeded && (
                     <div style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.82rem', marginTop: 2 }}>⭕ {(part.formData || {})._ringsNeeded} complete ring(s) required</div>
                   )}
-                  {/* Pitch info */}
+                  {/* Pitch info (with developed diameter) */}
                   {((part.formData || {})._pitchEnabled || part._pitchEnabled) && (
                     <div style={{ fontSize: '0.8rem', color: '#e65100', marginTop: 2 }}>
                       🌀 Pitch: {((part.formData || {})._pitchDirection || part._pitchDirection) === 'clockwise' ? 'CW' : 'CCW'}
@@ -3217,6 +3219,21 @@ function WorkOrderDetailsPage() {
                       {parseFloat((part.formData || {})._pitchDevelopedDia || part._pitchDevelopedDia) > 0 && <span style={{ color: '#2e7d32', fontWeight: 600 }}> | Dev Ø: {parseFloat((part.formData || {})._pitchDevelopedDia || part._pitchDevelopedDia).toFixed(4)}"</span>}
                     </div>
                   )}
+                  {/* Chord/rise lines for the developed radius — lines from "Developed" onwards in the description */}
+                  {(() => {
+                    const desc = (part.formData || {})._rollingDescription || '';
+                    const lines = desc.split('\n');
+                    const devIdx = lines.findIndex(l => l.includes('Developed'));
+                    if (devIdx < 0) return null;
+                    const devLines = lines
+                      .slice(devIdx)
+                      .filter(l => l.includes('Rise:') || l.includes('Complete Ring') || l.includes('Cone:') || l.includes('Sheet Size:'));
+                    return devLines.length > 0 && (
+                      <div style={{ fontSize: '0.8rem', color: '#6a1b9a', marginTop: 2 }}>
+                        {devLines.map((line, i) => <div key={i}>📐 {line.trim()}</div>)}
+                      </div>
+                    );
+                  })()}
                   {/* Orientation diagram for angle/channel rolls */}
                   {(part.partType === 'angle_roll' || part.partType === 'channel_roll') && (part.formData || {})._orientationOption && (
                     <div style={{ marginTop: 8, maxWidth: 250 }}>
