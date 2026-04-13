@@ -3191,10 +3191,10 @@ function WorkOrderDetailsPage() {
                       {((part.formData || {})._sideOrientation || part._sideOrientation) && <span>| {(part.formData || {})._sideOrientation || part._sideOrientation}" side {part.rollType === 'easy_way' ? 'out' : part.rollType === 'on_edge' ? 'edge' : 'in'}</span>}
                     </div>
                   )}
-                  {/* Rolling description — split by newline, one row per line (chord, rise, CL info, etc.) */}
+                  {/* Rolling description — split by newline, show only chord/rise/calc lines (roll-to and pitch are already shown above) */}
                   {(() => {
                     const desc = (part.formData || {})._rollingDescription || '';
-                    const infoLines = desc.split('\n').filter(l => l.trim());
+                    const infoLines = desc.split('\n').filter(l => l.includes('Rise:') || l.includes('Complete Ring') || l.includes('Cone:') || l.includes('Sheet Size:'));
                     return infoLines.length > 0 && (
                       <div style={{ fontSize: '0.8rem', color: '#6a1b9a', marginTop: 2 }}>
                         {infoLines.map((line, i) => (
