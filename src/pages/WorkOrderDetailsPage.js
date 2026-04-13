@@ -2300,7 +2300,7 @@ function WorkOrderDetailsPage() {
           >
             <Package size={16} />{reordering ? 'Creating...' : 'Reorder'}
           </button>
-          <button className="btn btn-danger" onClick={handleDelete}><Trash2 size={18} /></button>
+          <button className="btn btn-danger" onClick={() => handleDelete()}><Trash2 size={18} /></button>
         </div>
       </div>
 
