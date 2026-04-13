@@ -95,29 +95,25 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
         const pairs = [];
 
         if (file.name.toLowerCase().endsWith('.iif')) {
-          // IIF format: tab-delimited, TRNS rows have DOCNUM at col 7 and OTHER1 at col 13
-          // Header: TRNS TRNSID TRNSTYPE DATE ACCNT NAME AMOUNT DOCNUM MEMO CLEAR TOPRINT TERMS PONUM OTHER1
-          const lines = text.split(/
-?
-/);
+          // IIF format: tab-delimited
+          // TRNS header: [0]TRNS [1]TRNSID [2]TRNSTYPE [3]DATE [4]ACCNT [5]NAME [6]AMOUNT [7]DOCNUM [8]MEMO [9]CLEAR [10]TOPRINT [11]TERMS [12]PONUM [13]OTHER1
+          const lines = text.split(/\r?\n/);
           for (const line of lines) {
-            if (!line.startsWith('TRNS	')) continue;
-            const cols = line.split('	');
-            // IIF TRNS: [0]TRNS [1]TRNSID [2]TRNSTYPE [3]DATE [4]ACCNT [5]NAME [6]AMOUNT [7]DOCNUM [8]MEMO [9]CLEAR [10]TOPRINT [11]TERMS [12]PONUM [13]OTHER1
-            const docNum = (cols[7] || '').trim();   // invoice number
-            const other1 = (cols[13] || '').trim();  // DR number
-            const qbName = (cols[5] || '').trim();   // QB customer name
-            const terms = (cols[11] || '').trim();  // Payment terms
+            if (!line.startsWith('TRNS\t')) continue;
+            const cols = line.split('\t');
+            const docNum = (cols[7] || '').trim();    // invoice number
+            const other1 = (cols[13] || '').trim();   // DR number
+            const qbName = (cols[5] || '').trim();    // QB customer name
+            const terms  = (cols[11] || '').trim();   // payment terms
             const invNum = parseInt(docNum);
-            const drNum = parseInt(other1);
-            if (invNum && drNum) pairs.push({ invoiceNumber: String(invNum), drNumber: String(drNum) });
-            if (invNum && drNum) pairs.push({ invoiceNumber: String(invNum), drNumber: String(drNum), qbName: qbName || null, terms: terms || null });
+            const drNum  = parseInt(other1);
+            if (invNum && drNum) {
+              pairs.push({ invoiceNumber: String(invNum), drNumber: String(drNum), qbName: qbName || null, terms: terms || null });
+            }
+          }
         } else {
           // CSV format from QB Invoice List report
-          // Try to auto-detect columns: look for headers containing "Num"/"Invoice" and "Other 1"/"DR"
-          const lines = text.split(/
-?
-/).filter(l => l.trim());
+          const lines = text.split(/\r?\n/).filter(l => l.trim());
           if (lines.length < 2) throw new Error('File appears empty');
           // Parse header row — handle quoted CSV
           const parseRow = (row) => {
@@ -132,21 +128,24 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
             return cols;
           };
           const headers = parseRow(lines[0]).map(h => h.replace(/"/g, '').toLowerCase().trim());
-          // Find invoice number column — QB uses "Num" or "Invoice No." or "Number"
+          // Find invoice number column
           const invCol = headers.findIndex(h => h === 'num' || h === 'number' || h.includes('invoice no') || h.includes('invoice #'));
-          // Find DR number column — QB stores it in "Other 1" or "Delivery Receipt"
+          // Find DR number column
           const drCol = headers.findIndex(h => h.includes('other 1') || h.includes('other1') || h.includes('delivery receipt') || h.includes('dr number') || h === 'dr#');
           // Find QB customer name column
           const nameCol = headers.findIndex(h => h === 'name' || h === 'customer' || h === 'client' || h.includes('customer name'));
           const termsCol = headers.findIndex(h => h === 'terms' || h.includes('payment terms') || h.includes('term'));
-          if (invCol === -1) throw new Error('Could not find invoice number column. Expected a column named "Num", "Number", or "Invoice No."');
-          if (drCol === -1) throw new Error('Could not find DR number column. Expected a column named "Other 1" or "Delivery Receipt". Make sure you exported the Other 1 field from QuickBooks.');
+          if (invCol === -1) throw new Error('Could not find invoice number column. Expected "Num", "Number", or "Invoice No."');
+          if (drCol === -1) throw new Error('Could not find DR number column. Expected "Other 1" or "Delivery Receipt". Make sure you exported the Other 1 field from QuickBooks.');
           for (let i = 1; i < lines.length; i++) {
             const cols = parseRow(lines[i]);
             const invNum = parseInt((cols[invCol] || '').replace(/[^0-9]/g, ''));
-            const drNum = parseInt((cols[drCol] || '').replace(/[^0-9]/g, ''));
-            const qbName = nameCol >= 0 ? (cols[nameCol] || '').replace(/"/g, '').trim() : null;
-            if (invNum && drNum) pairs.push({ invoiceNumber: String(invNum), drNumber: String(drNum), qbName: qbName || null, terms: terms || null });
+            const drNum  = parseInt((cols[drCol]  || '').replace(/[^0-9]/g, ''));
+            const qbName = nameCol  >= 0 ? (cols[nameCol]  || '').replace(/"/g, '').trim() : null;
+            const terms  = termsCol >= 0 ? (cols[termsCol] || '').replace(/"/g, '').trim() : null;
+            if (invNum && drNum) {
+              pairs.push({ invoiceNumber: String(invNum), drNumber: String(drNum), qbName: qbName || null, terms: terms || null });
+            }
           }
         }
 
