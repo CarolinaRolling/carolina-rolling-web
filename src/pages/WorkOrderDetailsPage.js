@@ -635,6 +635,10 @@ function WorkOrderDetailsPage() {
       Object.assign(editData, part.formData);
       delete editData._vendorSearch; // never restore search state from DB
     }
+    // Normalize null/undefined materialMarkupPercent so form saves the correct default
+    if (editData.materialMarkupPercent === null || editData.materialMarkupPercent === undefined) {
+      editData.materialMarkupPercent = 20;
+    }
     setPartData(editData);
     setShowPartModal(true);
   };
@@ -781,7 +785,8 @@ function WorkOrderDetailsPage() {
       if (EA_PRICED.includes(selectedPartType)) {
         const qty = parseInt(dataToSend.quantity) || 1;
         const matCost = parseFloat(dataToSend.materialTotal) || 0;
-        const matMarkup = parseFloat(dataToSend.materialMarkupPercent) || 0;
+        const matMarkupRaw = parseFloat(dataToSend.materialMarkupPercent);
+        const matMarkup = isNaN(matMarkupRaw) ? 20 : matMarkupRaw;
         const matEach = roundUpMaterial(Math.round(matCost * (1 + matMarkup / 100) * 100) / 100, dataToSend._materialRounding);
         let baseLabEach = parseFloat(dataToSend._baseLaborTotal);
         if (isNaN(baseLabEach)) baseLabEach = parseFloat(dataToSend.laborTotal) || 0;
@@ -2962,8 +2967,11 @@ function WorkOrderDetailsPage() {
               const baseLaborPerPart = parseFloat(part.laborTotal) || 0;
               const baseMaterialPerPart = (() => {
                 const matCost = parseFloat(part.materialTotal) || 0;
-                const matMarkup = parseFloat(part.materialMarkupPercent) || 0;
-                return matCost * (1 + matMarkup / 100);
+                const matMarkupRaw = parseFloat(part.materialMarkupPercent);
+                const matMarkup = isNaN(matMarkupRaw) ? 20 : matMarkupRaw;
+                const matEachRaw = matCost * (1 + matMarkup / 100);
+                const rounding = part._materialRounding || (part.formData || {})._materialRounding;
+                return roundUpMaterial(matEachRaw, rounding);
               })();
               // Bundle OP cost into the labor line (matches estimate page behavior)
               // part.laborTotal already contains OP markup (saved that way by form); we need to add the vendor cost

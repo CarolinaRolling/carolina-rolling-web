@@ -249,20 +249,30 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
 
         {/* How to export instructions */}
         {!importPairs && !importResults && (
-          <div style={{ background: '#f3f8ff', border: '1px solid #bbdefb', borderRadius: 8, padding: 14, marginBottom: 14, fontSize: '0.85rem' }}>
-            <strong>Option A — Upload an IIF file (easiest):</strong>
-            <ol style={{ margin: '8px 0 8px', paddingLeft: 20, lineHeight: 1.8 }}>
-              <li>Locate any <strong>.iif file</strong> you previously exported from this system when sending invoices to QuickBooks</li>
-              <li>Upload it below — the importer will read the invoice number and DR number directly from it</li>
-            </ol>
-            <strong>Option B — Export from QuickBooks Pro (CSV):</strong>
-            <ol style={{ margin: '8px 0 0', paddingLeft: 20, lineHeight: 1.8 }}>
-              <li>In QuickBooks, go to <strong>Reports → Customers &amp; Receivables → Transaction List by Customer</strong></li>
-              <li>Click <strong>Customize Report</strong>, go to the <strong>Columns</strong> tab, and check <strong>"Other 1"</strong> (this holds the DR number) and <strong>"Num"</strong> (invoice number)</li>
-              <li>Set the date range to cover all your orders, then click <strong>OK</strong></li>
-              <li>Click <strong>Excel → Create New Worksheet</strong> and save as CSV</li>
-              <li>Upload the CSV file below</li>
-            </ol>
+          <div style={{ fontSize: '0.85rem' }}>
+            <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: 14, marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, color: '#2e7d32', marginBottom: 6 }}>✅ Recommended — Upload a .IIF file</div>
+              <p style={{ margin: '0 0 8px', color: '#333' }}>
+                The easiest way is to upload a <strong>.iif file</strong> you already exported from this system when you sent invoices to QuickBooks.
+                Those files contain both the invoice number and DR number — no report-building needed.
+              </p>
+              <p style={{ margin: 0, color: '#555' }}>
+                Look for files named like <code style={{ background: '#f1f8e9', padding: '1px 5px', borderRadius: 3 }}>invoice-XXXX-ClientName.iif</code> on your computer — they were saved when you clicked "Export IIF" in the Invoice Center.
+              </p>
+            </div>
+            <div style={{ background: '#f9f9f9', border: '1px solid #e0e0e0', borderRadius: 8, padding: 14 }}>
+              <div style={{ fontWeight: 700, color: '#555', marginBottom: 6 }}>Alternative — QuickBooks CSV export</div>
+              <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.9, color: '#555' }}>
+                <li>Go to <strong>Reports → Customers &amp; Receivables → Transaction List by Customer</strong></li>
+                <li>Click <strong>Customize Report → Filters tab</strong>, set Transaction Type = <strong>Invoice</strong></li>
+                <li>On the <strong>Display tab</strong>, make sure <strong>Num</strong> is checked — also check <strong>Other 1</strong> if available</li>
+                <li>Set date range to cover all orders, click <strong>OK</strong></li>
+                <li>Click <strong>Excel → Create New Worksheet</strong>, save as CSV and upload below</li>
+              </ol>
+              <div style={{ marginTop: 8, color: '#e65100', fontSize: '0.8rem' }}>
+                ⚠️ If "Other 1" doesn't appear as a column option in your version of QuickBooks, use the IIF file method above instead.
+              </div>
+            </div>
           </div>
         )}
 
