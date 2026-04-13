@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
-import PitchSection, { getPitchDescriptionLines, getInsideRadiusForChord } from './PitchSection';
+import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import { useSectionSizes } from '../hooks/useSectionSizes';
 import HeatNumberInput from './HeatNumberInput';
 const THICKNESS_OPTIONS = [
@@ -140,13 +140,13 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   // later by reading rollType + _sideOrientation to pick the bend-perpendicular side.
   const riseCalc = useMemo(() => {
     if (clDiameter <= 100) return null;
-    const radiusValue = getInsideRadiusForChord(clDiameter, profileSize, partData);
+    const radiusValue = (clDiameter - (profileSize || 0)) / 2;
     if (!radiusValue || radiusValue <= 0) return null;
     const chord = radiusValue >= 60 ? 60 : radiusValue >= 24 ? 24 : radiusValue >= 12 ? 12 : radiusValue >= 6 ? 6 : 3;
     const rise = calculateRise(radiusValue, chord);
     if (rise !== null && rise > 0) return { rise, chord };
     return null;
-  }, [clDiameter, profileSize, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue]);
+  }, [clDiameter, profileSize]);
 
   // Parse length to inches
   const lengthInches = useMemo(() => {

@@ -1050,6 +1050,12 @@ function AdminPage({ section = 'users-logs' }) {
                 <h4 style={{ marginBottom: 4 }}>Backup & Restore</h4>
                 <p style={{ color: '#666', fontSize: '0.85rem' }}>Database backups and restore</p>
               </div>
+              <div style={{ padding: 16, borderRadius: 8, border: '1px solid #e0e0e0', cursor: 'pointer' }}
+                onClick={() => navigate('/admin/autocad-tools')}>
+                <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>📐</div>
+                <h4 style={{ marginBottom: 4 }}>AutoCAD Tools</h4>
+                <p style={{ color: '#666', fontSize: '0.85rem' }}>Download CONELAYOUT.lsp and other AutoCAD helpers</p>
+              </div>
             </div>
           </div>
         </div>

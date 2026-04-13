@@ -45,10 +45,12 @@ const CONELAYOUT_LISP = `;;; ===================================================
   (setq cy 0.0)
 
   ;; Draw each radial segment piece
+  ;; Orient the fan with apex at top and bisector pointing DOWN (matches on-screen preview).
+  ;; Bisector at 270° (straight down). Each piece spans devAngle.
   (setq segIdx 0)
   (while (< segIdx numSegs)
-    (setq sa (* segIdx devAngle))
-    (setq ea (* (1+ segIdx) devAngle))
+    (setq sa (- 270.0 (/ devAngle 2.0) (* segIdx devAngle)))
+    (setq ea (+ sa devAngle))
     (setq saRad (* sa (/ pi 180.0)))
     (setq eaRad (* ea (/ pi 180.0)))
 

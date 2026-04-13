@@ -262,8 +262,27 @@ export default function PitchSection({ partData, setPartData, clDiameter, inputD
                     </div>
                   </div>
                   <div style={{ fontSize: '0.7rem', color: '#666', marginTop: 4 }}>
-                    Developed: <strong>{pitchCalc.developedDia.toFixed(4)}" CLD / {(pitchCalc.developedDia / 2).toFixed(4)}" CLR</strong>
-                    {' '} | Floor Ø: {pitchCalc.inputDia.toFixed(2)}" → Pitch Ø: {pitchCalc.developedDia.toFixed(4)}" (+{(pitchCalc.developedDia - pitchCalc.inputDia).toFixed(4)}")
+                    {(() => {
+                      const devInsideDia = pitchCalc.developedDia - (pitchCalc.od || 0);
+                      const devInsideR = devInsideDia > 0 ? devInsideDia / 2 : 0;
+                      let chordRiseStr = '';
+                      if (devInsideR > 0) {
+                        const chord = devInsideR >= 60 ? 60 : devInsideR >= 24 ? 24 : devInsideR >= 12 ? 12 : devInsideR >= 6 ? 6 : 3;
+                        const halfChord = chord / 2;
+                        if (devInsideR * devInsideR - halfChord * halfChord >= 0) {
+                          const rise = devInsideR - Math.sqrt(devInsideR * devInsideR - halfChord * halfChord);
+                          if (rise > 0) {
+                            chordRiseStr = ` (Chord ${chord}" Rise ${rise.toFixed(4)}" From ID)`;
+                          }
+                        }
+                      }
+                      return (
+                        <>
+                          Developed: <strong>{pitchCalc.developedDia.toFixed(4)}" CLD / {(pitchCalc.developedDia / 2).toFixed(4)}" CLR{chordRiseStr}</strong>
+                          {' '} | Floor Ø: {pitchCalc.inputDia.toFixed(2)}" → Pitch Ø: {pitchCalc.developedDia.toFixed(4)}" (+{(pitchCalc.developedDia - pitchCalc.inputDia).toFixed(4)}")
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
@@ -285,64 +304,6 @@ export default function PitchSection({ partData, setPartData, clDiameter, inputD
       )}
     </div>
   );
-}
-
-/**
- * Helper: compute the radius value to use for the chord/rise verification dimension.
- * Operators measure chord/rise on the INSIDE surface of the bent profile (using a precision
- * straight bar laid against the inside, with a depth gauge). So the chord/rise math should
- * use the inside diameter — not centerline.
- *
- * If pitch is enabled, also runs the inside diameter through the TI-83 developed-diameter
- * formula so the verification dimension matches what the operator will actually measure on
- * the helically-bent part.
- *
- * @param {number} centerlineDia - the centerline floor diameter from the form's rollCalc
- * @param {number} profileSize - the profile dimension perpendicular to the bend axis
- *                               (subtracted from CL to get inside diameter)
- * @param {object} partData - the part data (used to read pitch fields if enabled)
- * @returns {number|null} the radius to use for chord/rise calc, or null if invalid
- */
-export function getInsideRadiusForChord(centerlineDia, profileSize, partData) {
-  if (!centerlineDia || centerlineDia <= 0) return null;
-  const ps = parseFloat(profileSize) || 0;
-  const insideDia = centerlineDia - ps;
-  if (insideDia <= 0) return null;
-
-  // If pitch is not enabled, just return the inside floor radius
-  if (!partData || !partData._pitchEnabled) {
-    return insideDia / 2;
-  }
-
-  // Pitch is enabled — compute developed inside diameter using TI-83 formula
-  let calcRun = parseFloat(partData._pitchRun) || 12;
-  let calcRise = 0;
-  if (partData._pitchMethod === 'runrise') {
-    calcRise = parseFloat(partData._pitchRise) || 0;
-  } else if (partData._pitchMethod === 'degree') {
-    const ang = parseFloat(partData._pitchAngle) || 0;
-    if (ang > 0 && ang < 90 && calcRun > 0) {
-      calcRise = calcRun * Math.tan(ang * (Math.PI / 180));
-    }
-  } else if (partData._pitchMethod === 'space') {
-    const sv = parseFloat(partData._pitchSpaceValue) || 0;
-    const insideCircumference = Math.PI * insideDia;
-    if (sv > 0 && insideCircumference > 0) {
-      const od = ps; // profile dimension acts as profile OD here
-      const risePerRev = partData._pitchSpaceType === 'center' ? sv : sv + od;
-      // Convert risePerRev to rise-per-run
-      calcRise = (risePerRev / insideCircumference) * (calcRun > 0 ? calcRun : 12);
-    }
-  }
-
-  if (calcRise <= 0 || calcRun <= 0) {
-    return insideDia / 2; // pitch enabled but no usable values — fall back to floor inside
-  }
-
-  // TI-83 developed-diameter formula, applied to the inside diameter
-  const h = (Math.PI * insideDia * calcRise) / (2 * calcRun);
-  const developedInsideDia = Math.sqrt(h * h + insideDia * insideDia);
-  return developedInsideDia / 2;
 }
 
 /**

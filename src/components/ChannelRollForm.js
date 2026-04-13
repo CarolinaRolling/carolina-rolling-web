@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
-import PitchSection, { getPitchDescriptionLines, getInsideRadiusForChord } from './PitchSection';
+import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import { useSectionSizes } from '../hooks/useSectionSizes';
 import HeatNumberInput from './HeatNumberInput';
 const DEFAULT_CHANNEL_SIZES = [
@@ -102,13 +102,13 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
 
   const riseCalc = useMemo(() => {
     if (clDiameter <= 100) return null;
-    const r = getInsideRadiusForChord(clDiameter, profileSize, partData);
+    const r = (clDiameter - (profileSize || 0)) / 2;
     if (!r || r <= 0) return null;
     const chord = r >= 60 ? 60 : r >= 24 ? 24 : r >= 12 ? 12 : r >= 6 ? 6 : 3;
     const rise = calculateRise(r, chord);
     if (rise !== null && rise > 0) return { rise, chord };
     return null;
-  }, [clDiameter, profileSize, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue]);
+  }, [clDiameter, profileSize]);
 
   const lengthInches = useMemo(() => {
     const raw = partData.length || '';

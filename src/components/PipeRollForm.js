@@ -3,7 +3,6 @@ import RollToOverride from './RollToOverride';
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import { useSectionSizes } from '../hooks/useSectionSizes';
-import { getInsideRadiusForChord } from './PitchSection';
 import HeatNumberInput from './HeatNumberInput';
 // Sagitta formula: h = R - sqrt(R² - (c/2)²)
 function calculateRise(radiusInches, chordInches) {
@@ -399,28 +398,21 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     return { angle, rise, run, risePerRev, spaceBetween, spaceCenter, circumference, od, developedDia, inputDia };
   }, [pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue, rollCalc, selectedSize, partData.outerDiameter, rollValue, rollMeasureType]);
 
-  // Calculate chord and rise (check dimension for verifying bend radius)
-  // Uses inside diameter (CL - OD) and accounts for pitch via the developed-diameter formula.
+  // Calculate chord and rise (check dimension for verifying floor bend radius)
+  // Always uses inside diameter (CL - OD) — operators measure on inside surface.
+  // Does NOT depend on pitch — chord/rise here verifies the floor spec only.
+  // For pitched parts, the developed-radius display has its own chord/rise.
   const riseCalc = useMemo(() => {
     if (!rollCalc) return null;
     if (rollCalc.centerlineDia <= 100) return null;
-    // Build a synthetic partData with the live pitch state (form's local state may be ahead of partData)
-    const livePitchData = {
-      _pitchEnabled: pitchEnabled,
-      _pitchMethod: pitchMethod,
-      _pitchRun: pitchRun,
-      _pitchRise: pitchRise,
-      _pitchAngle: pitchAngle,
-      _pitchSpaceType: pitchSpaceType,
-      _pitchSpaceValue: pitchSpaceValue
-    };
-    const radiusValue = getInsideRadiusForChord(rollCalc.centerlineDia, rollCalc.od, livePitchData);
-    if (!radiusValue || radiusValue <= 0) return null;
+    const insideDia = rollCalc.centerlineDia - (rollCalc.od || 0);
+    const radiusValue = insideDia > 0 ? insideDia / 2 : 0;
+    if (radiusValue <= 0) return null;
     const chord = radiusValue >= 60 ? 60 : radiusValue >= 24 ? 24 : radiusValue >= 12 ? 12 : radiusValue >= 6 ? 6 : 3;
     const rise = calculateRise(radiusValue, chord);
     if (rise !== null && rise > 0) return { rise, chord };
     return null;
-  }, [rollCalc, pitchEnabled, pitchMethod, pitchRun, pitchRise, pitchAngle, pitchSpaceType, pitchSpaceValue]);
+  }, [rollCalc]);
   // Auto-update quantity when complete rings changes
   useEffect(() => {
     if (completeRings && ringCalc && !ringCalc.error) {
@@ -1119,8 +1111,27 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                         </div>
                       </div>
                       <div style={{ fontSize: '0.7rem', color: '#666', marginTop: 4 }}>
-                        Developed Radius: <strong>{(pitchCalc.developedDia / 2).toFixed(4)}"</strong>
-                        {pitchCalc.inputDia > 0 && <span> | Floor {rollMeasurePoint === 'inside' ? 'ID' : rollMeasurePoint === 'outside' ? 'OD' : 'Ø'}: {pitchCalc.inputDia.toFixed(2)}" → Pitch {rollMeasurePoint === 'inside' ? 'ID' : rollMeasurePoint === 'outside' ? 'OD' : 'Ø'}: {pitchCalc.developedDia.toFixed(4)}" (+{(pitchCalc.developedDia - pitchCalc.inputDia).toFixed(4)}")</span>}
+                        {(() => {
+                          const devInsideDia = pitchCalc.developedDia - (pitchCalc.od || 0);
+                          const devInsideR = devInsideDia > 0 ? devInsideDia / 2 : 0;
+                          let chordRiseStr = '';
+                          if (devInsideR > 0) {
+                            const chord = devInsideR >= 60 ? 60 : devInsideR >= 24 ? 24 : devInsideR >= 12 ? 12 : devInsideR >= 6 ? 6 : 3;
+                            const halfChord = chord / 2;
+                            if (devInsideR * devInsideR - halfChord * halfChord >= 0) {
+                              const rise = devInsideR - Math.sqrt(devInsideR * devInsideR - halfChord * halfChord);
+                              if (rise > 0) {
+                                chordRiseStr = ` (Chord ${chord}" Rise ${rise.toFixed(4)}" From ID)`;
+                              }
+                            }
+                          }
+                          return (
+                            <>
+                              Developed: <strong>{pitchCalc.developedDia.toFixed(4)}" CLD / {(pitchCalc.developedDia / 2).toFixed(4)}" CLR{chordRiseStr}</strong>
+                              {pitchCalc.inputDia > 0 && <span> | Floor {rollMeasurePoint === 'inside' ? 'ID' : rollMeasurePoint === 'outside' ? 'OD' : 'Ø'}: {pitchCalc.inputDia.toFixed(2)}" → Pitch {rollMeasurePoint === 'inside' ? 'ID' : rollMeasurePoint === 'outside' ? 'OD' : 'Ø'}: {pitchCalc.developedDia.toFixed(4)}" (+{(pitchCalc.developedDia - pitchCalc.inputDia).toFixed(4)}")</span>}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   )}

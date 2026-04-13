@@ -96,15 +96,15 @@ function drawCone3D(canvas, cone, segments) {
     ctx.fillStyle = colors[i % colors.length] + '22'; ctx.strokeStyle = colors[i % colors.length]; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(cx - bH, bY); ctx.lineTo(cx + bH, bY); ctx.lineTo(cx + tH, tY); ctx.lineTo(cx - tH, tY); ctx.closePath(); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#333'; ctx.font = '10px Arial'; ctx.textAlign = 'left';
-    if (i === 0) ctx.fillText('\u2300' + bd.toFixed(1) + '"', cx + bH + 4, bY);
-    if (i === segments.length - 1) ctx.fillText('\u2300' + td.toFixed(1) + '"', cx + tH + 4, tY);
+    if (i === 0) ctx.fillText('\u2300' + bd.toFixed(3) + '"', cx + bH + 4, bY);
+    if (i === segments.length - 1) ctx.fillText('\u2300' + td.toFixed(3) + '"', cx + tH + 4, tY);
     ctx.textAlign = 'right'; ctx.fillStyle = colors[i % colors.length];
     ctx.fillText('L' + (i + 1), cx - Math.max(bH, tH) - 6, (bY + tY) / 2 + 4);
   }
   ctx.setLineDash([4, 4]); ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(cx, by + 10); ctx.lineTo(cx, by - cone.height * scale - 10); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle = '#666'; ctx.font = '11px Arial'; ctx.textAlign = 'center';
-  ctx.fillText('H: ' + cone.height.toFixed(2) + '"', cx, by + 25);
+  ctx.fillText('H: ' + cone.height.toFixed(3) + '"', cx, by + 25);
 }
 
 function drawBlank(canvas, blank, segAngle, layerNum) {
@@ -194,8 +194,18 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       var sA = bl.developedAngle / rS, arc = bl.arcLength / rS;
       var slope = Math.atan((bR - tR) / segH) * (180 / Math.PI);
       var aR = sA * Math.PI / 180;
-      var cW = sA <= 180 ? 2 * bl.outerRadius * Math.sin(aR / 2) : 2 * bl.outerRadius;
-      var rH = Math.abs(bl.outerRadius - bl.innerRadius);
+      // Sheet bounding box for the fan blank.
+      // Fan is oriented with bisector pointing DOWN (apex at top, arc opening downward).
+      // Use Math.max/min defensively in case outerRadius/innerRadius are swapped.
+      var Rmax = Math.max(bl.outerRadius, bl.innerRadius);
+      var Rmin = Math.min(bl.outerRadius, bl.innerRadius);
+      var halfAngleR = (sA / 2) * (Math.PI / 180);
+      // Width: max horizontal extent
+      var cW = sA <= 180 ? 2 * Rmax * Math.sin(halfAngleR) : 2 * Rmax;
+      // Height: from the topmost point (inner arc endpoints) down to the bottommost point (outer arc midpoint)
+      // For sA <= 180: top_y = -Rmin * cos(half), bottom_y = -Rmax → height = Rmax - Rmin * cos(half)
+      // For sA > 180: the inner arc wraps past horizontal so top_y = +Rmin (above origin) → height = Rmax + Rmin
+      var rH = sA <= 180 ? (Rmax - Rmin * Math.cos(halfAngleR)) : (Rmax + Rmin);
       return { layer: i + 1, bottomHeight: seg.bottomHeight, topHeight: seg.topHeight, segmentHeight: segH, bottomDia: coneData.getDiameterAtHeight(seg.bottomHeight), topDia: coneData.getDiameterAtHeight(seg.topHeight), slantHeight: bl.slantHeight, slopeAngle: slope, outerRadius: bl.outerRadius, innerRadius: bl.innerRadius, segmentAngle: sA, arcLength: arc, developedAngle: bl.developedAngle, sheetWidth: Math.ceil(cW + 1), sheetHeight: Math.ceil(rH + 1), blank: bl };
     });
   }, [coneData, heightSegs, radialSegments]);
@@ -226,7 +236,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
     if (coneData) {
       var ldLabel = largeDiaType === 'inside' ? 'ID' : largeDiaType === 'outside' ? 'OD' : 'CLD';
       var sdLabel = smallDiaType === 'inside' ? 'ID' : smallDiaType === 'outside' ? 'OD' : 'CLD';
-      parts.push(parseFloat(largeDia).toFixed(1) + '" ' + ldLabel + ' x ' + parseFloat(smallDia).toFixed(1) + '" ' + sdLabel + ' x ' + parseFloat(coneHeight).toFixed(1) + '" VH');
+      parts.push(parseFloat(largeDia).toFixed(3) + '" ' + ldLabel + ' x ' + parseFloat(smallDia).toFixed(3) + '" ' + sdLabel + ' x ' + parseFloat(coneHeight).toFixed(3) + '" VH');
     }
     if (partData.material) parts.push(partData.material);
     if (partData._materialOrigin) parts.push(partData._materialOrigin);
@@ -249,7 +259,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
     // Line 3: Multi-layer info (only if multiple layers)
     if (heightSegs.length > 1) {
       l.push(heightSegs.length + ' layers');
-      segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': ' + s.segmentAngle.toFixed(1) + ' deg - Sheet ' + s.sheetWidth + '"x' + s.sheetHeight + '" | OR:' + s.outerRadius.toFixed(1) + '" IR:' + s.innerRadius.toFixed(1) + '"'); });
+      segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': ' + s.segmentAngle.toFixed(3) + ' deg - Sheet ' + s.sheetWidth + '"x' + s.sheetHeight + '" | OR:' + s.outerRadius.toFixed(3) + '" IR:' + s.innerRadius.toFixed(3) + '"'); });
     }
     // Total pieces summary
     var segPerCone = heightSegs.length * rS;
@@ -261,7 +271,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
 
   useEffect(function() {
     var u = { materialDescription: materialDescription };
-    if (coneData) u.sectionSize = 'Dia ' + parseFloat(largeDia).toFixed(1) + '" to Dia ' + parseFloat(smallDia).toFixed(1) + '"';
+    if (coneData) u.sectionSize = 'Dia ' + parseFloat(largeDia).toFixed(3) + '" to Dia ' + parseFloat(smallDia).toFixed(3) + '"';
     setPartData(function(p) { return Object.assign({}, p, u); });
   }, [materialDescription]);
   useEffect(function() { if (rollingDescription) setPartData(function(p) { return Object.assign({}, p, { _rollingDescription: rollingDescription }); }); }, [rollingDescription]);
@@ -345,7 +355,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
               <div><span style={{ color: '#666' }}>CL Large ⌀:</span> <strong>{coneData.largeDia.toFixed(3)}"</strong></div>
               <div><span style={{ color: '#666' }}>CL Small ⌀:</span> <strong>{coneData.smallDia.toFixed(3)}"</strong></div>
               <div><span style={{ color: '#666' }}>Slant Height:</span> <strong>{coneData.slantHeight.toFixed(3)}"</strong></div>
-              <div><span style={{ color: '#666' }}>Semi-angle:</span> <strong>{coneData.semiAngle.toFixed(2)}°</strong></div>
+              <div><span style={{ color: '#666' }}>Semi-angle:</span> <strong>{coneData.semiAngle.toFixed(3)}°</strong></div>
             </div>
           </div>
         )}
@@ -422,15 +432,15 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
           {secHead('📋', 'Segment Details (' + segmentSpecs.length + ' layer' + (segmentSpecs.length > 1 ? 's' : '') + ' \u00d7 ' + radialSegments + ' seg' + (radialSegments > 1 ? 's' : '') + (coneCount > 1 ? ' \u00d7 ' + coneCount + ' cones' : '') + ')', '#2e7d32')}
           {segmentSpecs.map(function(sp) { return (
             <div key={sp.layer} style={{ background: '#f0fdf4', padding: 12, borderRadius: 8, marginBottom: 8, border: '1px solid #bbf7d0' }}>
-              <div style={{ fontWeight: 700, color: '#166534', marginBottom: 6, fontSize: '0.9rem' }}>Layer {sp.layer}: {sp.bottomHeight.toFixed(2)}" → {sp.topHeight.toFixed(2)}"</div>
+              <div style={{ fontWeight: 700, color: '#166534', marginBottom: 6, fontSize: '0.9rem' }}>Layer {sp.layer}: {sp.bottomHeight.toFixed(3)}" → {sp.topHeight.toFixed(3)}"</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: '0.8rem' }}>
                 <div>Bottom ⌀: <strong>{sp.bottomDia.toFixed(3)}"</strong></div>
                 <div>Top ⌀: <strong>{sp.topDia.toFixed(3)}"</strong></div>
                 <div>Slant: <strong>{sp.slantHeight.toFixed(3)}"</strong></div>
-                <div>Slope: <strong>{sp.slopeAngle.toFixed(2)}°</strong></div>
+                <div>Slope: <strong>{sp.slopeAngle.toFixed(3)}°</strong></div>
                 <div>Outer R: <strong>{sp.outerRadius.toFixed(3)}"</strong></div>
                 <div>Inner R: <strong>{sp.innerRadius.toFixed(3)}"</strong></div>
-                <div>Seg Angle: <strong>{sp.segmentAngle.toFixed(2)}°</strong></div>
+                <div>Seg Angle: <strong>{sp.segmentAngle.toFixed(3)}°</strong></div>
                 <div>Arc Length: <strong>{sp.arcLength.toFixed(3)}"</strong></div>
                 <div style={{ gridColumn: 'span 2', marginTop: 4, padding: '4px 8px', background: '#dcfce7', borderRadius: 4, fontWeight: 600 }}>📐 Sheet Size: {sp.sheetWidth}" × {sp.sheetHeight}" (with 1" trim)</div>
               </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
-import PitchSection, { getPitchDescriptionLines, getInsideRadiusForChord } from './PitchSection';
+import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import HeatNumberInput from './HeatNumberInput';
 
 const THICKNESS_OPTIONS = [
@@ -159,8 +159,8 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     const stockLengthsNeeded = Math.ceil(totalRings / ringsPerLength);
     const totalRingsFromStock = stockLengthsNeeded * ringsPerLength;
     const waste = totalRingsFromStock - totalRings;
-    const usedPerLength = (ringLength * ringsPerLength).toFixed(2);
-    const wastePerLength = (stock - ringLength * ringsPerLength).toFixed(2);
+    const usedPerLength = (ringLength * ringsPerLength).toFixed(3);
+    const wastePerLength = (stock - ringLength * ringsPerLength).toFixed(3);
     
     return { ringsPerLength, stockLengthsNeeded, totalRingsFromStock, waste, ringLength, stock, usedPerLength, wastePerLength };
   }, [nestingEnabled, isCompleteRing, calcResult, stockLength, partData.quantity]);
@@ -227,21 +227,21 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
   }, [partData.thickness, rollValue, rollMeasureType, rollMeasurePoint]);
 
   // Chord & rise verification dimension (for large diameters >100")
-  // Uses INSIDE diameter (CL - thickness) since operators measure on the inside surface.
-  // Honors pitch via the developed-diameter formula in the helper.
+  // Always uses INSIDE diameter (CL - thickness) since operators measure on inside surface.
+  // Does NOT depend on pitch — chord/rise here verifies the floor spec only.
   const riseCalc = useMemo(() => {
     if (clDiameter <= 100) return null;
     const profileSize = thicknessToDecimal(partData.thickness);
-    const r = getInsideRadiusForChord(clDiameter, profileSize, partData);
-    if (!r || r <= 0) return null;
+    const insideDia = clDiameter - profileSize;
+    const r = insideDia > 0 ? insideDia / 2 : 0;
+    if (r <= 0) return null;
     const chord = r >= 60 ? 60 : r >= 24 ? 24 : r >= 12 ? 12 : r >= 6 ? 6 : 3;
-    // Rise = R - sqrt(R^2 - (chord/2)^2)
     const halfChord = chord / 2;
     if (r * r - halfChord * halfChord < 0) return null;
     const rise = r - Math.sqrt(r * r - halfChord * halfChord);
     if (rise > 0) return { rise, chord };
     return null;
-  }, [clDiameter, partData.thickness, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue]);
+  }, [clDiameter, partData.thickness]);
 
   // Rolling description (includes pitch info)
   const rollingDescription = useMemo(() => {
@@ -415,7 +415,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
                     : '';
                   setPartData(prev => ({ 
                     ...prev, 
-                    length: totalLen.toFixed(2),
+                    length: totalLen.toFixed(3),
                     ...(autoDirection ? { rollType: autoDirection } : {})
                   }));
                   // Disable nesting if setting ring length directly
@@ -474,7 +474,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
                         <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#333', lineHeight: 1.8 }}>
                           <div>
                             <span style={{ color: '#888' }}>Ring circumference:</span>{' '}
-                            <strong>{nestingCalc.ringLength.toFixed(2)}"</strong>
+                            <strong>{nestingCalc.ringLength.toFixed(3)}"</strong>
                           </div>
                           <div>
                             <span style={{ color: '#888' }}>Stock length:</span>{' '}
@@ -523,7 +523,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
 
                     {nestingEnabled && stockLength && !nestingCalc && calcResult && (
                       <div style={{ background: '#fff3e0', padding: 8, borderRadius: 6, marginTop: 8, fontSize: '0.8rem', color: '#e65100' }}>
-                        ⚠️ Stock length ({stockLength}") is shorter than ring circumference ({calcResult.totalLength.toFixed(2)}") — can't nest
+                        ⚠️ Stock length ({stockLength}") is shorter than ring circumference ({calcResult.totalLength.toFixed(3)}") — can't nest
                       </div>
                     )}
                   </div>
