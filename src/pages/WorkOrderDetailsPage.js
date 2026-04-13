@@ -3191,19 +3191,25 @@ function WorkOrderDetailsPage() {
                       {((part.formData || {})._sideOrientation || part._sideOrientation) && <span>| {(part.formData || {})._sideOrientation || part._sideOrientation}" side {part.rollType === 'easy_way' ? 'out' : part.rollType === 'on_edge' ? 'edge' : 'in'}</span>}
                     </div>
                   )}
-                  {/* Rolling description (chord, rise, CL info) */}
-                  {(part.formData || {})._rollingDescription && (
-                    <div style={{ color: '#555', fontSize: '0.8rem', marginBottom: 2 }}>
-                      📐 {(part.formData || {})._rollingDescription}
-                    </div>
-                  )}
+                  {/* Rolling description — split by newline, one row per line (chord, rise, CL info, etc.) */}
+                  {(() => {
+                    const desc = (part.formData || {})._rollingDescription || '';
+                    const infoLines = desc.split('\n').filter(l => l.trim());
+                    return infoLines.length > 0 && (
+                      <div style={{ fontSize: '0.8rem', color: '#6a1b9a', marginTop: 2 }}>
+                        {infoLines.map((line, i) => (
+                          <div key={i}>📐 {line.trim()}</div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                   {/* Complete rings */}
                   {(part.formData || {})._completeRings && (part.formData || {})._ringsNeeded && (
-                    <div style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.82rem', marginBottom: 2 }}>⭕ {(part.formData || {})._ringsNeeded} complete ring(s) required</div>
+                    <div style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.82rem', marginTop: 2 }}>⭕ {(part.formData || {})._ringsNeeded} complete ring(s) required</div>
                   )}
                   {/* Pitch info */}
                   {((part.formData || {})._pitchEnabled || part._pitchEnabled) && (
-                    <div style={{ fontSize: '0.8rem', color: '#e65100', marginBottom: 2 }}>
+                    <div style={{ fontSize: '0.8rem', color: '#e65100', marginTop: 2 }}>
                       🌀 Pitch: {((part.formData || {})._pitchDirection || part._pitchDirection) === 'clockwise' ? 'CW' : 'CCW'}
                       {((part.formData || {})._pitchMethod || part._pitchMethod) === 'runrise' && ((part.formData || {})._pitchRise || part._pitchRise) && ` | Run: ${(part.formData || {})._pitchRun || part._pitchRun}" / Rise: ${(part.formData || {})._pitchRise || part._pitchRise}"`}
                       {((part.formData || {})._pitchMethod || part._pitchMethod) === 'degree' && ((part.formData || {})._pitchAngle || part._pitchAngle) && ` | Angle: ${(part.formData || {})._pitchAngle || part._pitchAngle}°`}
