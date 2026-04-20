@@ -2054,12 +2054,17 @@ function EstimateDetailsPage() {
                     onChange={async (e) => {
                       const contact = clientContacts.find(c => c.name === e.target.value);
                       const updates = contact
-                        ? { contactName: contact.name, contactEmail: contact.email || '', contactPhone: contact.phone || '' }
-                        : { contactName: '', contactEmail: '', contactPhone: '' };
+                        ? { contactName: contact.name, contactEmail: contact.email || '', contactPhone: contact.phone || '', contactExtension: contact.extension || '' }
+                        : { contactName: '', contactEmail: '', contactPhone: '', contactExtension: '' };
+                      // Update local state immediately
                       setFormData(prev => ({ ...prev, ...updates }));
-                      // Save immediately — don't rely on autosave which can be cancelled by loadEstimate
+                      // Save immediately with full context so server has the right value on next reload
                       if (!isNew && id) {
-                        try { await updateEstimate(id, updates); } catch (e) {}
+                        try {
+                          await updateEstimate(id, { ...updates, status: estimate?.status || 'draft' });
+                        } catch (err) {
+                          setError('Failed to save contact selection');
+                        }
                       }
                     }}>
                     {clientContacts.map((c, i) => (

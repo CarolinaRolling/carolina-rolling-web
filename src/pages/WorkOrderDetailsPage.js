@@ -2602,7 +2602,12 @@ function WorkOrderDetailsPage() {
               }
               return <>
                 <div className="form-group"><label className="form-label">Contact Name</label><input className="form-input" value={editData.contactName} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} placeholder="John Smith" /></div>
-                <div className="form-group"><label className="form-label">Contact Phone</label><input className="form-input" value={formatPhone(editData.contactPhone || '')} onChange={(e) => setEditData({ ...editData, contactPhone: formatPhone(e.target.value) })} placeholder="(555) 123-4567" /></div>
+                <div className="form-group"><label className="form-label">Contact Phone</label>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input className="form-input" style={{ flex: 1 }} value={formatPhone(editData.contactPhone || '')} onChange={(e) => setEditData({ ...editData, contactPhone: formatPhone(e.target.value) })} placeholder="(555) 123-4567" />
+                    {editData.contactExtension && <span style={{ fontSize: '0.85rem', color: '#555', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 4, padding: '4px 8px', whiteSpace: 'nowrap' }}>x{editData.contactExtension}</span>}
+                  </div>
+                </div>
                 <div className="form-group"><label className="form-label">Contact Email</label><input type="email" className="form-input" value={editData.contactEmail} onChange={(e) => setEditData({ ...editData, contactEmail: e.target.value })} placeholder="john@example.com" /></div>
               </>;
             })()}
