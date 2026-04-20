@@ -76,8 +76,16 @@ const ClientsVendorsPage = () => {
         getClients({ active: showInactive ? undefined : 'true' }),
         getVendors({ active: showInactive ? undefined : 'true' })
       ]);
-      setClients(clientsRes.data.data || []);
-      setVendors(vendorsRes.data.data || []);
+      const freshClients = clientsRes.data.data || [];
+      const freshVendors = vendorsRes.data.data || [];
+      setClients(freshClients);
+      setVendors(freshVendors);
+      // Refresh selectedItem so the detail panel reflects the latest saved data
+      setSelectedItem(prev => {
+        if (!prev) return prev;
+        const updated = [...freshClients, ...freshVendors].find(i => i.id === prev.id);
+        return updated || prev;
+      });
     } catch (err) {
       setError('Failed to load data');
     } finally {
