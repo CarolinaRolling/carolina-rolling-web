@@ -45,6 +45,7 @@ const ClientsVendorsPage = () => {
   const [workHistory, setWorkHistory] = useState([]);
   const [vendorHistory, setVendorHistory] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [showAccounting, setShowAccounting] = useState(true);
 
   useEffect(() => {
     loadData();
@@ -94,18 +95,24 @@ const ClientsVendorsPage = () => {
     setEditing(client);
     if (client) {
       const data = { ...client };
-      // Migrate primary contact into contacts array if not already there
+      // Migrate legacy single contact into contacts array if not already there
       if (data.contactName && (!data.contacts || !data.contacts.some(c => c.isPrimary))) {
         const existing = data.contacts || [];
         data.contacts = [{ name: data.contactName, email: data.contactEmail || '', phone: data.contactPhone || '', role: '', isPrimary: true }, ...existing.map(c => ({ ...c, isPrimary: false }))];
       }
+      if (!data.contacts) data.contacts = [];
       // Migrate emailScanAddresses to monitored flag on contacts
       const scanAddrs = (data.emailScanAddresses || []).map(a => a.toLowerCase());
-      if (data.contacts) {
-        data.contacts = data.contacts.map(c => ({
-          ...c,
-          monitored: c.monitored || (c.email && scanAddrs.includes(c.email.toLowerCase()))
-        }));
+      data.contacts = data.contacts.map(c => ({
+        ...c,
+        monitored: c.monitored || (c.email && scanAddrs.includes(c.email.toLowerCase()))
+      }));
+      // Sync primary contact back to top-level legacy fields (backend still reads them)
+      const primary = data.contacts.find(c => c.isPrimary) || data.contacts[0];
+      if (primary) {
+        data.contactName = primary.name || '';
+        data.contactEmail = primary.email || '';
+        data.contactPhone = primary.phone || '';
       }
       setFormData(data);
     } else {
@@ -214,12 +221,17 @@ const ClientsVendorsPage = () => {
         const existing = data.contacts || [];
         data.contacts = [{ name: data.contactName, email: data.contactEmail || '', phone: data.contactPhone || '', role: '', isPrimary: true }, ...existing.map(c => ({ ...c, isPrimary: false }))];
       }
+      if (!data.contacts) data.contacts = [];
       const scanAddrs = (data.emailScanAddresses || []).map(a => a.toLowerCase());
-      if (data.contacts) {
-        data.contacts = data.contacts.map(c => ({
-          ...c,
-          monitored: c.monitored || (c.email && scanAddrs.includes(c.email.toLowerCase()))
-        }));
+      data.contacts = data.contacts.map(c => ({
+        ...c,
+        monitored: c.monitored || (c.email && scanAddrs.includes(c.email.toLowerCase()))
+      }));
+      const primary = data.contacts.find(c => c.isPrimary) || data.contacts[0];
+      if (primary) {
+        data.contactName = primary.name || '';
+        data.contactEmail = primary.email || '';
+        data.contactPhone = primary.phone || '';
       }
       setFormData(data);
     } else {
@@ -386,7 +398,11 @@ const ClientsVendorsPage = () => {
                     transition: 'all 0.1s'
                   }}>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.name}</div>
-                  {item.contactName && <div style={{ fontSize: '0.8rem', color: '#666' }}>{item.contactName}</div>}
+                  {(() => {
+                    const primary = (item.contacts || []).find(c => c.isPrimary) || (item.contacts || [])[0];
+                    const name = primary?.name || item.contactName;
+                    return name ? <div style={{ fontSize: '0.8rem', color: '#666' }}>{name}{primary?.role ? <span style={{ color: '#1976d2', marginLeft: 4, fontSize: '0.75rem' }}>({primary.role})</span> : null}</div> : null;
+                  })()}
                   {activeTab === 'clients' && item.taxStatus && (
                     <div style={{ marginTop: 2 }}>{getTaxStatusBadge(item.taxStatus)}</div>
                   )}
@@ -418,7 +434,11 @@ const ClientsVendorsPage = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                     <div>
                       <h2 style={{ margin: 0, fontSize: '1.3rem' }}>{selectedItem.name}</h2>
-                      {selectedItem.contactName && <div style={{ fontSize: '0.9rem', color: '#555', marginTop: 4 }}>{selectedItem.contactName}</div>}
+                      {(() => {
+                      const primary = (selectedItem.contacts || []).find(c => c.isPrimary) || (selectedItem.contacts || [])[0];
+                      const name = primary?.name || selectedItem.contactName;
+                      return name ? <div style={{ fontSize: '0.9rem', color: '#555', marginTop: 4 }}>{name}{primary?.role ? <span style={{ color: '#1976d2', marginLeft: 6, fontSize: '0.8rem' }}>· {primary.role}</span> : null}</div> : null;
+                    })()}
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="btn btn-sm btn-outline" onClick={() => activeTab === 'clients' ? openClientModal(selectedItem) : openVendorModal(selectedItem)}><Edit size={14} /> Edit</button>
@@ -430,8 +450,15 @@ const ClientsVendorsPage = () => {
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px 24px', fontSize: '0.85rem' }}>
-                    {selectedItem.contactPhone && <div><span style={{ color: '#888' }}>📞</span> {formatPhone(selectedItem.contactPhone)}</div>}
-                    {selectedItem.contactEmail && <div><span style={{ color: '#888' }}>📧</span> {selectedItem.contactEmail}</div>}
+                    {(() => {
+                      const primary = (selectedItem.contacts || []).find(c => c.isPrimary) || (selectedItem.contacts || [])[0];
+                      const phone = primary?.phone || selectedItem.contactPhone;
+                      const email = primary?.email || selectedItem.contactEmail;
+                      return <>
+                        {phone && <div><span style={{ color: '#888' }}>📞</span> {formatPhone(phone)}</div>}
+                        {email && <div><span style={{ color: '#888' }}>📧</span> {email}</div>}
+                      </>;
+                    })()}
                     {selectedItem.apEmail && <div><span style={{ color: '#888' }}>📧 AP:</span> {selectedItem.apEmail}</div>}
                     {selectedItem.address && <div><span style={{ color: '#888' }}>📍</span> {selectedItem.address}</div>}
                     {activeTab === 'clients' && selectedItem.taxStatus && <div>Tax: {getTaxStatusBadge(selectedItem.taxStatus)}</div>}
@@ -442,32 +469,32 @@ const ClientsVendorsPage = () => {
                     {selectedItem.notes && <div style={{ gridColumn: 'span 2', color: '#666', fontStyle: 'italic' }}>{selectedItem.notes}</div>}
                   </div>
                   {/* Contacts list */}
-                  {((selectedItem.contacts && selectedItem.contacts.length > 0) || selectedItem.accountingContactName || selectedItem.accountingContactEmail) && (
+                  {(selectedItem.contacts && selectedItem.contacts.length > 1) && (
                     <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #f0f0f0' }}>
-                      {selectedItem.contacts && selectedItem.contacts.length > 0 && (
-                        <div style={{ marginBottom: 8 }}>
-                          <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: 4 }}>Additional Contacts:</div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            {selectedItem.contacts.map((c, i) => (
-                              <div key={i} style={{ padding: '4px 10px', background: '#f5f5f5', borderRadius: 6, fontSize: '0.8rem', border: '1px solid #e8e8e8' }}>
-                                <span style={{ fontWeight: 600 }}>{c.name || 'No name'}</span>
-                                {c.role && <span style={{ color: '#1976d2', marginLeft: 4 }}>({c.role})</span>}
-                                {c.monitored && <span style={{ color: '#E65100', marginLeft: 4, fontSize: '0.7rem' }}>📧</span>}
-                                {c.email && <span style={{ color: '#666', marginLeft: 6 }}>{c.email}</span>}
-                                {c.phone && <span style={{ color: '#888', marginLeft: 6 }}>{c.phone}</span>}
-                              </div>
-                            ))}
+                      <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: 6 }}>All Contacts:</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {selectedItem.contacts.map((c, i) => (
+                          <div key={i} style={{ padding: '5px 10px', background: c.isPrimary ? '#e8f5e9' : '#f5f5f5', borderRadius: 6, fontSize: '0.8rem', border: `1px solid ${c.isPrimary ? '#a5d6a7' : '#e8e8e8'}` }}>
+                            <span style={{ fontWeight: 600 }}>{c.name || 'No name'}</span>
+                            {c.isPrimary && <span style={{ color: '#2e7d32', marginLeft: 4, fontSize: '0.7rem', fontWeight: 700 }}>★</span>}
+                            {c.role && <span style={{ color: '#1976d2', marginLeft: 4 }}>· {c.role}</span>}
+                            {c.monitored && <span style={{ color: '#E65100', marginLeft: 4, fontSize: '0.7rem' }}>📧</span>}
+                            {c.email && <div style={{ color: '#666', marginTop: 1 }}>{c.email}</div>}
+                            {c.phone && <div style={{ color: '#888', marginTop: 1 }}>{c.phone}{c.extension ? <span style={{ marginLeft: 4 }}>x{c.extension}</span> : null}</div>}
                           </div>
-                        </div>
-                      )}
-                      {(selectedItem.accountingContactName || selectedItem.accountingContactEmail) && (
-                        <div style={{ fontSize: '0.8rem' }}>
-                          <span style={{ color: '#888' }}>🧾 Accounting:</span>{' '}
-                          <span style={{ fontWeight: 500 }}>{selectedItem.accountingContactName || ''}</span>
-                          {selectedItem.accountingContactEmail && <span style={{ color: '#666', marginLeft: 6 }}>{selectedItem.accountingContactEmail}</span>}
-                          {selectedItem.accountingContactPhone && <span style={{ color: '#888', marginLeft: 6 }}>{selectedItem.accountingContactPhone}</span>}
-                        </div>
-                      )}
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Accounting contact — always visible on client profile */}
+                  {(selectedItem.accountingContactName || selectedItem.accountingContactEmail) && (
+                    <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#888', marginBottom: 4 }}>🧾 Accounting Contact</div>
+                      <div style={{ fontSize: '0.85rem', padding: '6px 10px', background: '#f9f9f9', borderRadius: 6 }}>
+                        {selectedItem.accountingContactName && <div style={{ fontWeight: 600 }}>{selectedItem.accountingContactName}</div>}
+                        {selectedItem.accountingContactEmail && <div style={{ color: '#666' }}>📧 {selectedItem.accountingContactEmail}</div>}
+                        {selectedItem.accountingContactPhone && <div style={{ color: '#888' }}>📞 {formatPhone(selectedItem.accountingContactPhone)}</div>}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -730,26 +757,55 @@ const ClientsVendorsPage = () => {
                   <div style={{ fontSize: '0.8rem', color: '#999', padding: 12, textAlign: 'center', background: '#fafafa', borderRadius: 6, border: '1px dashed #ddd' }}>No contacts yet — add your first contact</div>
                 )}
                 {(formData.contacts || []).map((contact, idx) => (
-                  <div key={idx} style={{ marginBottom: 6, padding: '8px 10px', background: contact.isPrimary ? '#e8f5e9' : '#f9f9f9', borderRadius: 6, border: `1px solid ${contact.isPrimary ? '#66bb6a' : '#eee'}` }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 6 }}>
-                      <input className="form-input" placeholder="Name" value={contact.name || ''} style={{ fontSize: '0.85rem' }}
-                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], name: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                  <div key={idx} style={{ marginBottom: 8, padding: '8px 10px', background: contact.isPrimary ? '#e8f5e9' : '#f9f9f9', borderRadius: 6, border: `1px solid ${contact.isPrimary ? '#66bb6a' : '#eee'}` }}>
+                    {contact.isPrimary && <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#2e7d32', marginBottom: 4 }}>★ PRIMARY CONTACT</div>}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1.2fr 0.6fr 1fr auto', gap: 6 }}>
+                      <input className="form-input" placeholder="Name *" value={contact.name || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => {
+                          const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], name: e.target.value };
+                          const updates = { contacts: c };
+                          if (c[idx].isPrimary) { updates.contactName = e.target.value; }
+                          setFormData({ ...formData, ...updates });
+                        }} />
                       <input className="form-input" placeholder="Email" type="email" value={contact.email || ''} style={{ fontSize: '0.85rem' }}
-                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], email: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                        onChange={(e) => {
+                          const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], email: e.target.value };
+                          const updates = { contacts: c };
+                          if (c[idx].isPrimary) { updates.contactEmail = e.target.value; }
+                          setFormData({ ...formData, ...updates });
+                        }} />
                       <input className="form-input" placeholder="Phone" value={formatPhone(contact.phone || '')} style={{ fontSize: '0.85rem' }}
-                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], phone: formatPhone(e.target.value) }; setFormData({ ...formData, contacts: c }); }} />
-                      <button type="button" onClick={() => { const c = [...(formData.contacts || [])]; c.splice(idx, 1); setFormData({ ...formData, contacts: c }); }}
+                        onChange={(e) => {
+                          const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], phone: formatPhone(e.target.value) };
+                          const updates = { contacts: c };
+                          if (c[idx].isPrimary) { updates.contactPhone = formatPhone(e.target.value); }
+                          setFormData({ ...formData, ...updates });
+                        }} />
+                      <input className="form-input" placeholder="Ext" value={contact.extension || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], extension: e.target.value.replace(/\D/g, '') }; setFormData({ ...formData, contacts: c }); }} />
+                      <input className="form-input" placeholder="Role (e.g. Estimating)" value={contact.role || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], role: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                      <button type="button" onClick={() => {
+                          const c = [...(formData.contacts || [])]; c.splice(idx, 1);
+                          // If deleted contact was primary, make first remaining contact primary
+                          if (contact.isPrimary && c.length > 0) c[0].isPrimary = true;
+                          const newPrimary = c.find(ct => ct.isPrimary) || c[0];
+                          setFormData({ ...formData, contacts: c,
+                            contactName: newPrimary?.name || '', contactEmail: newPrimary?.email || '', contactPhone: newPrimary?.phone || '' });
+                        }}
                         style={{ background: '#ffebee', border: '1px solid #ef9a9a', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', alignSelf: 'center' }}>
                         <X size={14} color="#c62828" />
                       </button>
                     </div>
-                    <div style={{ marginTop: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <button type="button" onClick={() => {
-                        const c = (formData.contacts || []).map((ct, i) => ({ ...ct, isPrimary: i === idx }));
-                        setFormData({ ...formData, contacts: c, contactName: c[idx].name, contactEmail: c[idx].email, contactPhone: c[idx].phone });
-                      }} style={{ background: contact.isPrimary ? '#2e7d32' : '#f0f0f0', color: contact.isPrimary ? 'white' : '#666', border: 'none', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
-                        {contact.isPrimary ? '★ Primary' : '☆ Set as Primary'}
-                      </button>
+                    <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {!contact.isPrimary && (
+                        <button type="button" onClick={() => {
+                          const c = (formData.contacts || []).map((ct, i) => ({ ...ct, isPrimary: i === idx }));
+                          setFormData({ ...formData, contacts: c, contactName: c[idx].name || '', contactEmail: c[idx].email || '', contactPhone: c[idx].phone || '' });
+                        }} style={{ background: '#f0f0f0', color: '#1976d2', border: '1px solid #90caf9', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                          ☆ Set as Primary
+                        </button>
+                      )}
                       {contact.email && (
                         <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: '0.75rem', color: contact.monitored ? '#E65100' : '#999' }}>
                           <input type="checkbox" checked={contact.monitored || false} style={{ width: 14, height: 14, accentColor: '#E65100' }}
@@ -762,17 +818,24 @@ const ClientsVendorsPage = () => {
                 ))}
               </div>
 
-              {/* Accounting Contact */}
-              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 12, marginTop: 4 }}>
-                <h4 style={{ margin: 0, marginBottom: 8, color: '#2e7d32', fontSize: '0.9rem' }}>🧾 Accounting Contact</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                  <input className="form-input" placeholder="Name" value={formData.accountingContactName || ''} style={{ fontSize: '0.85rem' }}
-                    onChange={(e) => setFormData({ ...formData, accountingContactName: e.target.value })} />
-                  <input className="form-input" placeholder="Email" type="email" value={formData.accountingContactEmail || ''} style={{ fontSize: '0.85rem' }}
-                    onChange={(e) => setFormData({ ...formData, accountingContactEmail: e.target.value })} />
-                  <input className="form-input" placeholder="Phone" value={formatPhone(formData.accountingContactPhone || '')} style={{ fontSize: '0.85rem' }}
-                    onChange={(e) => setFormData({ ...formData, accountingContactPhone: formatPhone(e.target.value) })} />
-                </div>
+              {/* Accounting Contact — collapsible */}
+              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 10, marginTop: 4 }}>
+                <button type="button" onClick={() => setShowAccounting(a => !a)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: 0, color: '#2e7d32', fontWeight: 600, fontSize: '0.9rem', marginBottom: showAccounting ? 10 : 0 }}>
+                  🧾 Accounting Contact {showAccounting ? '▲' : '▼'}
+                  {(formData.accountingContactName || formData.accountingContactEmail) && !showAccounting &&
+                    <span style={{ fontSize: '0.8rem', color: '#555', fontWeight: 400, marginLeft: 4 }}>{formData.accountingContactName || formData.accountingContactEmail}</span>}
+                </button>
+                {showAccounting && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    <input className="form-input" placeholder="Name" value={formData.accountingContactName || ''} style={{ fontSize: '0.85rem' }}
+                      onChange={(e) => setFormData({ ...formData, accountingContactName: e.target.value })} />
+                    <input className="form-input" placeholder="Email" type="email" value={formData.accountingContactEmail || ''} style={{ fontSize: '0.85rem' }}
+                      onChange={(e) => setFormData({ ...formData, accountingContactEmail: e.target.value })} />
+                    <input className="form-input" placeholder="Phone" value={formatPhone(formData.accountingContactPhone || '')} style={{ fontSize: '0.85rem' }}
+                      onChange={(e) => setFormData({ ...formData, accountingContactPhone: formatPhone(e.target.value) })} />
+                  </div>
+                )}
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label">Address</label>
@@ -1035,26 +1098,55 @@ const ClientsVendorsPage = () => {
                   <div style={{ fontSize: '0.8rem', color: '#999', padding: 12, textAlign: 'center', background: '#fafafa', borderRadius: 6, border: '1px dashed #ddd' }}>No contacts yet — add your first contact</div>
                 )}
                 {(formData.contacts || []).map((contact, idx) => (
-                  <div key={idx} style={{ marginBottom: 6, padding: '8px 10px', background: contact.isPrimary ? '#e8f5e9' : '#f9f9f9', borderRadius: 6, border: `1px solid ${contact.isPrimary ? '#66bb6a' : '#eee'}` }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 6 }}>
-                      <input className="form-input" placeholder="Name" value={contact.name || ''} style={{ fontSize: '0.85rem' }}
-                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], name: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                  <div key={idx} style={{ marginBottom: 8, padding: '8px 10px', background: contact.isPrimary ? '#e8f5e9' : '#f9f9f9', borderRadius: 6, border: `1px solid ${contact.isPrimary ? '#66bb6a' : '#eee'}` }}>
+                    {contact.isPrimary && <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#2e7d32', marginBottom: 4 }}>★ PRIMARY CONTACT</div>}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1.2fr 0.6fr 1fr auto', gap: 6 }}>
+                      <input className="form-input" placeholder="Name *" value={contact.name || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => {
+                          const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], name: e.target.value };
+                          const updates = { contacts: c };
+                          if (c[idx].isPrimary) { updates.contactName = e.target.value; }
+                          setFormData({ ...formData, ...updates });
+                        }} />
                       <input className="form-input" placeholder="Email" type="email" value={contact.email || ''} style={{ fontSize: '0.85rem' }}
-                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], email: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                        onChange={(e) => {
+                          const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], email: e.target.value };
+                          const updates = { contacts: c };
+                          if (c[idx].isPrimary) { updates.contactEmail = e.target.value; }
+                          setFormData({ ...formData, ...updates });
+                        }} />
                       <input className="form-input" placeholder="Phone" value={formatPhone(contact.phone || '')} style={{ fontSize: '0.85rem' }}
-                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], phone: formatPhone(e.target.value) }; setFormData({ ...formData, contacts: c }); }} />
-                      <button type="button" onClick={() => { const c = [...(formData.contacts || [])]; c.splice(idx, 1); setFormData({ ...formData, contacts: c }); }}
+                        onChange={(e) => {
+                          const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], phone: formatPhone(e.target.value) };
+                          const updates = { contacts: c };
+                          if (c[idx].isPrimary) { updates.contactPhone = formatPhone(e.target.value); }
+                          setFormData({ ...formData, ...updates });
+                        }} />
+                      <input className="form-input" placeholder="Ext" value={contact.extension || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], extension: e.target.value.replace(/\D/g, '') }; setFormData({ ...formData, contacts: c }); }} />
+                      <input className="form-input" placeholder="Role (e.g. Estimating)" value={contact.role || ''} style={{ fontSize: '0.85rem' }}
+                        onChange={(e) => { const c = [...(formData.contacts || [])]; c[idx] = { ...c[idx], role: e.target.value }; setFormData({ ...formData, contacts: c }); }} />
+                      <button type="button" onClick={() => {
+                          const c = [...(formData.contacts || [])]; c.splice(idx, 1);
+                          // If deleted contact was primary, make first remaining contact primary
+                          if (contact.isPrimary && c.length > 0) c[0].isPrimary = true;
+                          const newPrimary = c.find(ct => ct.isPrimary) || c[0];
+                          setFormData({ ...formData, contacts: c,
+                            contactName: newPrimary?.name || '', contactEmail: newPrimary?.email || '', contactPhone: newPrimary?.phone || '' });
+                        }}
                         style={{ background: '#ffebee', border: '1px solid #ef9a9a', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', alignSelf: 'center' }}>
                         <X size={14} color="#c62828" />
                       </button>
                     </div>
-                    <div style={{ marginTop: 4, display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <button type="button" onClick={() => {
-                        const c = (formData.contacts || []).map((ct, i) => ({ ...ct, isPrimary: i === idx }));
-                        setFormData({ ...formData, contacts: c, contactName: c[idx].name, contactEmail: c[idx].email, contactPhone: c[idx].phone });
-                      }} style={{ background: contact.isPrimary ? '#2e7d32' : '#f0f0f0', color: contact.isPrimary ? 'white' : '#666', border: 'none', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
-                        {contact.isPrimary ? '★ Primary' : '☆ Set as Primary'}
-                      </button>
+                    <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {!contact.isPrimary && (
+                        <button type="button" onClick={() => {
+                          const c = (formData.contacts || []).map((ct, i) => ({ ...ct, isPrimary: i === idx }));
+                          setFormData({ ...formData, contacts: c, contactName: c[idx].name || '', contactEmail: c[idx].email || '', contactPhone: c[idx].phone || '' });
+                        }} style={{ background: '#f0f0f0', color: '#1976d2', border: '1px solid #90caf9', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                          ☆ Set as Primary
+                        </button>
+                      )}
                       {contact.email && (
                         <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: '0.75rem', color: contact.monitored ? '#E65100' : '#999' }}>
                           <input type="checkbox" checked={contact.monitored || false} style={{ width: 14, height: 14, accentColor: '#E65100' }}
@@ -1080,17 +1172,24 @@ const ClientsVendorsPage = () => {
                 <textarea className="form-textarea" value={formData.notes || ''} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={2} />
               </div>
 
-              {/* Accounting Contact */}
-              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 12, marginTop: 4 }}>
-                <h4 style={{ margin: 0, marginBottom: 8, color: '#2e7d32', fontSize: '0.9rem' }}>🧾 Accounting Contact</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                  <input className="form-input" placeholder="Name" value={formData.accountingContactName || ''} style={{ fontSize: '0.85rem' }}
-                    onChange={(e) => setFormData({ ...formData, accountingContactName: e.target.value })} />
-                  <input className="form-input" placeholder="Email" type="email" value={formData.accountingContactEmail || ''} style={{ fontSize: '0.85rem' }}
-                    onChange={(e) => setFormData({ ...formData, accountingContactEmail: e.target.value })} />
-                  <input className="form-input" placeholder="Phone" value={formatPhone(formData.accountingContactPhone || '')} style={{ fontSize: '0.85rem' }}
-                    onChange={(e) => setFormData({ ...formData, accountingContactPhone: formatPhone(e.target.value) })} />
-                </div>
+              {/* Accounting Contact — collapsible */}
+              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 10, marginTop: 4 }}>
+                <button type="button" onClick={() => setShowAccounting(a => !a)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: 0, color: '#2e7d32', fontWeight: 600, fontSize: '0.9rem', marginBottom: showAccounting ? 10 : 0 }}>
+                  🧾 Accounting Contact {showAccounting ? '▲' : '▼'}
+                  {(formData.accountingContactName || formData.accountingContactEmail) && !showAccounting &&
+                    <span style={{ fontSize: '0.8rem', color: '#555', fontWeight: 400, marginLeft: 4 }}>{formData.accountingContactName || formData.accountingContactEmail}</span>}
+                </button>
+                {showAccounting && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    <input className="form-input" placeholder="Name" value={formData.accountingContactName || ''} style={{ fontSize: '0.85rem' }}
+                      onChange={(e) => setFormData({ ...formData, accountingContactName: e.target.value })} />
+                    <input className="form-input" placeholder="Email" type="email" value={formData.accountingContactEmail || ''} style={{ fontSize: '0.85rem' }}
+                      onChange={(e) => setFormData({ ...formData, accountingContactEmail: e.target.value })} />
+                    <input className="form-input" placeholder="Phone" value={formatPhone(formData.accountingContactPhone || '')} style={{ fontSize: '0.85rem' }}
+                      onChange={(e) => setFormData({ ...formData, accountingContactPhone: formatPhone(e.target.value) })} />
+                  </div>
+                )}
               </div>
               
               {/* Email Scanner — shows when any contact has monitoring enabled */}

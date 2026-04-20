@@ -74,6 +74,7 @@ function WorkOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const [showAccountingContact, setShowAccountingContact] = useState(false);
   const [woTab, setWoTab] = useState('parts');
   const [clientPaymentTerms, setClientPaymentTerms] = useState(null);
   const [shipment, setShipment] = useState(null);
@@ -193,6 +194,10 @@ function WorkOrderDetailsPage() {
           loadedClient = clients.find(c => c.id === data.clientId);
           if (loadedClient?.paymentTerms) {
             setClientPaymentTerms(loadedClient.paymentTerms);
+          }
+          // Store client object on order so contact picker can use the contacts array
+          if (loadedClient) {
+            setOrder(prev => prev ? { ...prev, _clientObj: loadedClient } : prev);
           }
         } catch (e) { /* ignore */ }
       }
@@ -2515,9 +2520,18 @@ function WorkOrderDetailsPage() {
                       onMouseDown={() => {
                         const updates = {
                           ...editData, clientId: client.id, clientName: client.name, _clientSearch: undefined,
-                          contactName: client.contactName || editData.contactName,
-                          contactPhone: client.contactPhone || editData.contactPhone,
-                          contactEmail: client.contactEmail || editData.contactEmail
+                          ...(() => {
+                          let contacts = (client.contacts || []).filter(c => c.name);
+                          if (contacts.length === 0 && client.contactName) {
+                            contacts = [{ name: client.contactName, email: client.contactEmail || '', phone: client.contactPhone || '', isPrimary: true }];
+                          }
+                          const primary = contacts.find(c => c.isPrimary) || contacts[0] || {};
+                          return {
+                            contactName: primary.name || editData.contactName,
+                            contactPhone: primary.phone || editData.contactPhone,
+                            contactEmail: primary.email || editData.contactEmail,
+                          };
+                        })()
                         };
                         // Apply client-specific tax rate if they have one
                         if (client.customTaxRate) {
@@ -2542,7 +2556,11 @@ function WorkOrderDetailsPage() {
                         setShowClientSuggestions(false);
                       }}>
                       <strong>{client.name}</strong>
-                      {client.contactName && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{client.contactName}</span>}
+                      {(() => {
+                        const primary = (client.contacts || []).find(c => c.isPrimary) || (client.contacts || [])[0];
+                        const name = primary?.name || client.contactName;
+                        return name ? <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{name}{primary?.role ? <span style={{ color: '#1976d2', marginLeft: 4 }}>({primary.role})</span> : null}</span> : null;
+                      })()}
                     </div>
                   ))}
                   {editData._clientSearch && editData._clientSearch.length >= 2 && !clientSuggestions.some(c => c.name.toLowerCase() === (editData._clientSearch || '').toLowerCase()) && (
@@ -2560,9 +2578,33 @@ function WorkOrderDetailsPage() {
             <div className="form-group"><label className="form-label">Client PO#</label><input className="form-input" value={editData.clientPurchaseOrderNumber} onChange={(e) => setEditData({ ...editData, clientPurchaseOrderNumber: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Job Number</label><input className="form-input" value={editData.jobNumber} onChange={(e) => setEditData({ ...editData, jobNumber: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Storage Location</label><input className="form-input" value={editData.storageLocation} onChange={(e) => setEditData({ ...editData, storageLocation: e.target.value })} /></div>
-            <div className="form-group"><label className="form-label">Contact Name</label><input className="form-input" value={editData.contactName} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} placeholder="John Smith" /></div>
-            <div className="form-group"><label className="form-label">Contact Phone</label><input className="form-input" value={formatPhone(editData.contactPhone || '')} onChange={(e) => setEditData({ ...editData, contactPhone: formatPhone(e.target.value) })} placeholder="(555) 123-4567" /></div>
-            <div className="form-group"><label className="form-label">Contact Email</label><input type="email" className="form-input" value={editData.contactEmail} onChange={(e) => setEditData({ ...editData, contactEmail: e.target.value })} placeholder="john@example.com" /></div>
+            {/* Contact picker — uses client contacts array if available */}
+            {(() => {
+              const clientObj = order?._clientObj || null;
+              const contacts = clientObj ? (clientObj.contacts || []).filter(c => c.name) : [];
+              if (contacts.length > 1) {
+                return (
+                  <div className="form-group">
+                    <label className="form-label">Contact Person</label>
+                    <select className="form-select" value={editData.contactName || ''}
+                      onChange={(e) => {
+                        const c = contacts.find(ct => ct.name === e.target.value);
+                        if (c) setEditData({ ...editData, contactName: c.name, contactEmail: c.email || '', contactPhone: c.phone || '', contactExtension: c.extension || '' });
+                        else setEditData({ ...editData, contactName: e.target.value });
+                      }}>
+                      {contacts.map((c, i) => (
+                        <option key={i} value={c.name}>{c.name}{c.isPrimary ? ' ★' : ''}{c.role ? ` · ${c.role}` : ''}{c.extension ? ` x${c.extension}` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
+              return <>
+                <div className="form-group"><label className="form-label">Contact Name</label><input className="form-input" value={editData.contactName} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} placeholder="John Smith" /></div>
+                <div className="form-group"><label className="form-label">Contact Phone</label><input className="form-input" value={formatPhone(editData.contactPhone || '')} onChange={(e) => setEditData({ ...editData, contactPhone: formatPhone(e.target.value) })} placeholder="(555) 123-4567" /></div>
+                <div className="form-group"><label className="form-label">Contact Email</label><input type="email" className="form-input" value={editData.contactEmail} onChange={(e) => setEditData({ ...editData, contactEmail: e.target.value })} placeholder="john@example.com" /></div>
+              </>;
+            })()}
             <div className="form-group"><label className="form-label">Requested Due Date</label><input type="date" className="form-input" value={editData.requestedDueDate} onChange={(e) => setEditData({ ...editData, requestedDueDate: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Promised Date</label><input type="date" className="form-input" value={editData.promisedDate} onChange={(e) => setEditData({ ...editData, promisedDate: e.target.value })} /></div>
             <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Notes</label><textarea className="form-textarea" value={editData.notes} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} /></div>
@@ -2576,12 +2618,28 @@ function WorkOrderDetailsPage() {
               {order.jobNumber && <div className="detail-item"><div className="detail-item-label">Job#</div><div className="detail-item-value">{order.jobNumber}</div></div>}
               {order.storageLocation && <div className="detail-item"><div className="detail-item-label"><MapPin size={14} /> Location</div><div className="detail-item-value">{order.storageLocation}</div></div>}
               {order.contactName && <div className="detail-item"><div className="detail-item-label">Contact Name</div><div className="detail-item-value">{order.contactName}</div></div>}
-              {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Contact Phone</div><div className="detail-item-value">{formatPhone(order.contactPhone)}</div></div>}
+              {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Contact Phone</div><div className="detail-item-value">{formatPhone(order.contactPhone)}{order.contactExtension ? <span style={{ color: '#888', marginLeft: 4 }}>x{order.contactExtension}</span> : null}</div></div>}
               {order.contactEmail && <div className="detail-item"><div className="detail-item-label">Contact Email</div><div className="detail-item-value">{order.contactEmail}</div></div>}
               {order.promisedDate && <div className="detail-item"><div className="detail-item-label"><Calendar size={14} /> Promised</div><div className="detail-item-value">{formatDate(order.promisedDate)}</div></div>}
               <div className="detail-item"><div className="detail-item-label"><Clock size={14} /> Created</div><div className="detail-item-value">{formatDate(order.createdAt)}</div></div>
             </div>
             {order.notes && <div style={{ marginTop: 16, padding: 12, background: '#f9f9f9', borderRadius: 8 }}><strong>Notes:</strong> {order.notes}</div>}
+            {/* Collapsible accounting contact — for billing reference */}
+            {order._clientObj && (order._clientObj.accountingContactName || order._clientObj.accountingContactEmail) && (
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #eee' }}>
+                <button onClick={() => setShowAccountingContact(a => !a)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#666', display: 'flex', alignItems: 'center', gap: 4, padding: 0, fontWeight: 600 }}>
+                  🧾 Accounting Contact {showAccountingContact ? '▲' : '▼'}
+                </button>
+                {showAccountingContact && (
+                  <div style={{ marginTop: 8, padding: '8px 12px', background: '#f9f9f9', borderRadius: 6, fontSize: '0.85rem', border: '1px solid #e0e0e0' }}>
+                    {order._clientObj.accountingContactName && <div style={{ fontWeight: 600 }}>{order._clientObj.accountingContactName}</div>}
+                    {order._clientObj.accountingContactEmail && <div style={{ color: '#1565c0', marginTop: 2 }}>📧 {order._clientObj.accountingContactEmail}</div>}
+                    {order._clientObj.accountingContactPhone && <div style={{ color: '#555', marginTop: 2 }}>📞 {formatPhone(order._clientObj.accountingContactPhone)}</div>}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -3361,6 +3419,77 @@ function WorkOrderDetailsPage() {
                   </div>
                 )}
                 
+                {/* DXF Cut File Section — plate_roll, shaped_plate, flat_stock, cone_roll, press_brake */}
+                {['plate_roll', 'shaped_plate', 'flat_stock', 'cone_roll', 'press_brake'].includes(part.partType) && (() => {
+                  const dxfFile = (part.files || []).find(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.dxf$/i));
+                  const hasCutPerPrint = part._cutPerPrint || (part.formData || {})._cutPerPrint;
+                  return (
+                    <div style={{ marginTop: 12, padding: 10, background: '#EDE7F6', borderRadius: 8, border: '1.5px solid #B39DDB' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: dxfFile ? 8 : 0 }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#4527a0' }}>✂️ DXF Cut File</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: hasCutPerPrint ? '#4527a0' : '#999' }}>
+                            <input type="checkbox" checked={!!hasCutPerPrint}
+                              onChange={async (e) => {
+                                try {
+                                  await updateWorkOrderPart(id, part.id, { _cutPerPrint: e.target.checked });
+                                  await loadOrder();
+                                } catch {}
+                              }}
+                              style={{ width: 14, height: 14 }} />
+                            ✂️ Cut Per Print
+                          </label>
+                          <label style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'white', border: '1px solid #7E57C2', borderRadius: 5, color: '#4527a0', fontSize: '0.8rem', fontWeight: 600 }}>
+                            📎 {dxfFile ? 'Replace' : 'Upload DXF'}
+                            <input type="file" accept=".dxf,.DXF" hidden onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              if (dxfFile) {
+                                try { await deletePartFile(id, part.id, dxfFile.id); } catch {}
+                              }
+                              try {
+                                await uploadPartFiles(id, part.id, [file]);
+                                await updateWorkOrderPart(id, part.id, { cutFileReference: file.name });
+                                await loadOrder();
+                                showMessage(`Uploaded ${file.name}`);
+                              } catch { setError('Failed to upload DXF'); }
+                              e.target.value = '';
+                            }} />
+                          </label>
+                        </div>
+                      </div>
+                      {dxfFile ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'white', borderRadius: 6, border: '1px solid #D1C4E9' }}>
+                          <span style={{ fontSize: '1rem' }}>📐</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, color: '#4527a0', fontSize: '0.9rem' }}>{dxfFile.originalName}</div>
+                            <div style={{ fontSize: '0.7rem', color: '#888' }}>
+                              {(() => {
+                                const d = dxfFile.updatedAt || dxfFile.createdAt;
+                                if (!d) return '';
+                                const dt = new Date(d);
+                                return 'Uploaded: ' + dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                              })()}
+                            </div>
+                          </div>
+                          <button onClick={() => handleViewFile(part.id, dxfFile.id, dxfFile.url)}
+                            style={{ background: '#4527a0', color: 'white', border: 'none', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
+                            <Eye size={12} style={{ verticalAlign: 'middle', marginRight: 3 }} />View
+                          </button>
+                          <button onClick={() => handleDeleteFile(part.id, dxfFile.id)}
+                            style={{ background: 'none', border: '1px solid #c62828', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', color: '#c62828', fontSize: '0.75rem' }}>
+                            <X size={12} style={{ verticalAlign: 'middle' }} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ color: '#9575CD', fontSize: '0.8rem', textAlign: 'center', padding: 4 }}>
+                          No DXF uploaded — upload a cut file to send with vendor RFQs
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Part Files */}
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>

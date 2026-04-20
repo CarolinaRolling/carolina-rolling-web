@@ -278,13 +278,10 @@ function EstimateDetailsPage() {
           const client = clients.find(c => c.name === data.clientName);
           if (client) {
             setSelectedClient(client);
-            // Build contacts list: primary + additional
-            const allContacts = [];
-            if (client.contactName) {
-              allContacts.push({ name: client.contactName, email: client.contactEmail || '', phone: client.contactPhone || '', isPrimary: true });
-            }
-            if (client.contacts && client.contacts.length > 0) {
-              client.contacts.forEach(c => { if (c.name) allContacts.push({ ...c, isPrimary: false }); });
+            // Build contacts list from array, fall back to legacy fields if array is empty
+            let allContacts = (client.contacts || []).filter(c => c.name);
+            if (allContacts.length === 0 && client.contactName) {
+              allContacts = [{ name: client.contactName, email: client.contactEmail || '', phone: client.contactPhone || '', role: '', isPrimary: true }];
             }
             setClientContacts(allContacts);
             setClientLocked(true);
@@ -1988,13 +1985,10 @@ function EstimateDetailsPage() {
                               display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                             }}
                             onMouseDown={() => {
-                              // Build full contacts list: primary + additional
-                              const allContacts = [];
-                              if (client.contactName) {
-                                allContacts.push({ name: client.contactName, email: client.contactEmail || '', phone: client.contactPhone || '', isPrimary: true });
-                              }
-                              if (client.contacts && client.contacts.length > 0) {
-                                client.contacts.forEach(c => { if (c.name) allContacts.push({ ...c, isPrimary: false }); });
+                              // Build contacts from array, fall back to legacy fields
+                              let allContacts = (client.contacts || []).filter(c => c.name);
+                              if (allContacts.length === 0 && client.contactName) {
+                                allContacts = [{ name: client.contactName, email: client.contactEmail || '', phone: client.contactPhone || '', role: '', isPrimary: true }];
                               }
                               const primary = allContacts.find(c => c.isPrimary) || allContacts[0] || {};
                               setFormData({
@@ -2020,7 +2014,11 @@ function EstimateDetailsPage() {
                           >
                             <div>
                               <strong>{client.name}</strong>
-                              {client.contactName && <div style={{ fontSize: '0.8rem', color: '#666' }}>{client.contactName}</div>}
+                              {(() => {
+                                const primary = (client.contacts || []).find(c => c.isPrimary) || (client.contacts || [])[0];
+                                const name = primary?.name || client.contactName;
+                                return name ? <div style={{ fontSize: '0.8rem', color: '#666' }}>{name}{primary?.role ? <span style={{ color: '#1976d2', marginLeft: 4 }}>({primary.role})</span> : null}</div> : null;
+                              })()}
                             </div>
                             <span style={{ 
                               fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4,
@@ -2055,13 +2053,15 @@ function EstimateDetailsPage() {
                     onChange={(e) => {
                       const contact = clientContacts.find(c => c.name === e.target.value);
                       if (contact) {
-                        setFormData({ ...formData, contactName: contact.name, contactEmail: contact.email || '', contactPhone: contact.phone || '' });
+                        setFormData({ ...formData, contactName: contact.name, contactEmail: contact.email || '', contactPhone: contact.phone || '', contactExtension: contact.extension || '' });
                       } else if (e.target.value === '__custom__') {
-                        setFormData({ ...formData, contactName: '', contactEmail: '', contactPhone: '' });
+                        setFormData({ ...formData, contactName: '', contactEmail: '', contactPhone: '', contactExtension: '' });
                       }
                     }}>
                     {clientContacts.map((c, i) => (
-                      <option key={i} value={c.name}>{c.name}{c.isPrimary ? ' (Primary)' : ''}</option>
+                      <option key={i} value={c.name}>
+                        {c.name}{c.isPrimary ? ' ★' : ''}{c.role ? ` · ${c.role}` : ''}{c.extension ? ` x${c.extension}` : ''}
+                      </option>
                     ))}
                     <option value="__custom__">+ Enter manually...</option>
                   </select>
