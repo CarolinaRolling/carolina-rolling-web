@@ -2628,7 +2628,7 @@ function WorkOrderDetailsPage() {
                 const clientContact = (order._clientObj?.contacts || []).find(c => c.name === order.contactName);
                 const ext = order.contactExtension || clientContact?.extension || '';
                 return <>
-                  <div className="detail-item"><div className="detail-item-label">Contact Name</div><div className="detail-item-value">{order.contactName}{ext ? <span style={{ color: '#888', marginLeft: 6, fontSize: '0.85rem' }}>x{ext}</span> : null}</div></div>
+                  <div className="detail-item"><div className="detail-item-label">Contact Name</div><div className="detail-item-value">{order.contactName}</div></div>
                   {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Contact Phone</div><div className="detail-item-value">{formatPhone(order.contactPhone)}{ext ? <span style={{ color: '#888', marginLeft: 4 }}>x{ext}</span> : null}</div></div>}
                 </>;
               })()}
