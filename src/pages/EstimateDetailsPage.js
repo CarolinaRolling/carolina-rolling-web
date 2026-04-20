@@ -251,6 +251,7 @@ function EstimateDetailsPage() {
         estimateNumber: data.estimateNumber || '',
         clientName: data.clientName || '', contactName: data.contactName || '',
         contactEmail: data.contactEmail || '', contactPhone: data.contactPhone || '',
+        contactExtension: data.contactExtension || '',
         projectDescription: data.projectDescription || '', notes: data.notes || '',
         internalNotes: data.internalNotes || '', validUntil: data.validUntil || '',
         taxRate: parseFloat(data.taxRate) || 7.0, useCustomTax: data.useCustomTax || false,
@@ -2050,12 +2051,15 @@ function EstimateDetailsPage() {
                   <label className="form-label">Contact Person</label>
                   <select className="form-select" 
                     value={formData.contactName || ''}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const contact = clientContacts.find(c => c.name === e.target.value);
-                      if (contact) {
-                        setFormData({ ...formData, contactName: contact.name, contactEmail: contact.email || '', contactPhone: contact.phone || '', contactExtension: contact.extension || '' });
-                      } else if (e.target.value === '__custom__') {
-                        setFormData({ ...formData, contactName: '', contactEmail: '', contactPhone: '', contactExtension: '' });
+                      const updates = contact
+                        ? { contactName: contact.name, contactEmail: contact.email || '', contactPhone: contact.phone || '' }
+                        : { contactName: '', contactEmail: '', contactPhone: '' };
+                      setFormData(prev => ({ ...prev, ...updates }));
+                      // Save immediately — don't rely on autosave which can be cancelled by loadEstimate
+                      if (!isNew && id) {
+                        try { await updateEstimate(id, updates); } catch (e) {}
                       }
                     }}>
                     {clientContacts.map((c, i) => (
@@ -2081,8 +2085,15 @@ function EstimateDetailsPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Phone</label>
-                <input type="tel" className="form-input" value={formatPhone(formData.contactPhone || '')}
-                  onChange={(e) => setFormData({ ...formData, contactPhone: formatPhone(e.target.value) })} />
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input type="tel" className="form-input" style={{ flex: 1 }} value={formatPhone(formData.contactPhone || '')}
+                    onChange={(e) => setFormData({ ...formData, contactPhone: formatPhone(e.target.value) })} />
+                  {formData.contactExtension && (
+                    <span style={{ fontSize: '0.85rem', color: '#555', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 4, padding: '4px 8px', whiteSpace: 'nowrap' }}>
+                      x{formData.contactExtension}
+                    </span>
+                  )}
+                </div>
               </div>
               {clientPaymentTerms && (
                 <div className="form-group">

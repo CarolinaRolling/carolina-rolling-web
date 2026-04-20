@@ -229,6 +229,7 @@ function WorkOrderDetailsPage() {
         contactName: data.contactName || '',
         contactPhone: data.contactPhone || '',
         contactEmail: data.contactEmail || '',
+        contactExtension: data.contactExtension || '',
         storageLocation: data.storageLocation || '',
         notes: data.notes || '',
         receivedBy: data.receivedBy || '',
