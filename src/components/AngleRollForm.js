@@ -61,6 +61,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
   const [tangentLength, setTangentLength] = useState(partData._tangentLength || '12');
   const [kerfWidth, setKerfWidth] = useState(partData._kerfWidth || '0.125');
   const [showDiaFind, setShowDiaFind] = useState(false);
+  const [showDiamondOptions, setShowDiamondOptions] = useState(!!(partData._diamondOrientation));
   const [diaFindChord, setDiaFindChord] = useState('');
   const [diaFindRise, setDiaFindRise] = useState('');
   const diaFindResult = (diaFindChord && diaFindRise && parseFloat(diaFindRise) > 0) ? ((parseFloat(diaFindChord) ** 2) / (4 * parseFloat(diaFindRise))) + parseFloat(diaFindRise) : null;
@@ -273,10 +274,12 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     const lines = [];
     
     const spec = rollMeasurePoint === 'inside' ? (rollMeasureType === 'radius' ? 'ISR' : 'ID') : rollMeasurePoint === 'outside' ? (rollMeasureType === 'radius' ? 'OSR' : 'OD') : (rollMeasureType === 'radius' ? 'CLR' : 'CLD');
+    const diamondLabel = partData._diamondOrientation === 'diamond_in' ? 'Diamond-In' : partData._diamondOrientation === 'diamond_out' ? 'Diamond-Out' : partData._diamondOrientation === 'diamond_up' ? 'Diamond-Up' : '';
     const ewHw = partData.rollType === 'easy_way' ? 'EW' : partData.rollType === 'hard_way' ? 'HW' : '';
     
     let rollLine = `Roll to ${rv}" ${spec}`;
     if (ewHw) rollLine += ` ${ewHw}`;
+    if (diamondLabel) rollLine += ` ${diamondLabel}`;
     
     if (isUnequalLegs && partData._legOrientation) {
       rollLine += ` (${partData._legOrientation}" leg ${partData.rollType === 'easy_way' ? 'out' : 'in'})`;
@@ -298,7 +301,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     }
     
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, isUnequalLegs, partData._legOrientation, partData._orientationOption, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, partData._diamondOrientation, isUnequalLegs, partData._legOrientation, partData._orientationOption, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded]);
 
   // Auto-update material description + sectionSize
   useEffect(() => {
@@ -519,6 +522,49 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
               Hard Way (HW)
             </button>
           </div>
+        </div>
+
+        {/* Advanced: Diamond Orientations */}
+        <div style={{ marginBottom: 12 }}>
+          <button type="button"
+            onClick={() => {
+              setShowDiamondOptions(s => !s);
+              if (showDiamondOptions) setPartData({ ...partData, _diamondOrientation: '' });
+            }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#888', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {showDiamondOptions ? '▲' : '▼'} Advanced{partData._diamondOrientation ? ` · ${partData._diamondOrientation === 'diamond_in' ? 'Diamond-In' : partData._diamondOrientation === 'diamond_out' ? 'Diamond-Out' : 'Diamond-Up'}` : ''}
+          </button>
+          {showDiamondOptions && (
+            <div style={{ marginTop: 8, padding: '10px 12px', background: '#f3e5f5', borderRadius: 8, border: '1px solid #ce93d8' }}>
+              <div style={{ fontSize: '0.8rem', color: '#6a1b9a', fontWeight: 600, marginBottom: 8 }}>💎 Diamond Orientation</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { key: 'diamond_in', label: 'Diamond-In', desc: 'Apex points inward (toward center)' },
+                  { key: 'diamond_out', label: 'Diamond-Out', desc: 'Apex points outward (away from center)' },
+                  { key: 'diamond_up', label: 'Diamond-Up', desc: 'Apex points upward (vertical)' }
+                ].map(opt => (
+                  <button key={opt.key} type="button"
+                    onClick={() => setPartData({ ...partData, _diamondOrientation: partData._diamondOrientation === opt.key ? '' : opt.key })}
+                    title={opt.desc}
+                    style={{
+                      flex: 1, padding: '8px 6px', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                      border: `2px solid ${partData._diamondOrientation === opt.key ? '#7b1fa2' : '#ce93d8'}`,
+                      background: partData._diamondOrientation === opt.key ? '#7b1fa2' : '#fff',
+                      color: partData._diamondOrientation === opt.key ? '#fff' : '#6a1b9a'
+                    }}>
+                    💎 {opt.label}
+                  </button>
+                ))}
+              </div>
+              {partData._diamondOrientation && (
+                <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#6a1b9a' }}>
+                  {partData._diamondOrientation === 'diamond_in' && '↙ Apex pointing toward the center of the arc'}
+                  {partData._diamondOrientation === 'diamond_out' && '↗ Apex pointing away from the center of the arc'}
+                  {partData._diamondOrientation === 'diamond_up' && '↑ Apex pointing vertically upward'}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Measurement Orientation Diagram — EW+OD or HW+ID */}
