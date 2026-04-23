@@ -5,7 +5,7 @@ import {
   getEstimateById, createEstimate, updateEstimate,
   addEstimatePart, updateEstimatePart, deleteEstimatePart, reorderEstimateParts,
   uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
-  downloadEstimatePDF, convertEstimateToWorkOrder,
+  downloadEstimatePDF, convertEstimateToWorkOrder, duplicateEstimate,
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile, toggleEstimateFilePortal,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
   getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
@@ -114,6 +114,7 @@ function EstimateDetailsPage() {
   const [showPartTypePicker, setShowPartTypePicker] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderParts, setReorderParts] = useState([]);
+  const [duplicating, setDuplicating] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
   const [partData, setPartData] = useState({});
   
@@ -1352,6 +1353,21 @@ function EstimateDetailsPage() {
     }
   };
 
+  const handleDuplicateEstimate = async () => {
+    if (!window.confirm('Duplicate this estimate? A new draft estimate will be created with all parts and files copied.')) return;
+    try {
+      setDuplicating(true);
+      const res = await duplicateEstimate(id, {});
+      const newId = res.data?.data?.id;
+      showMessage('Estimate duplicated — opening new estimate');
+      setTimeout(() => navigate(`/estimates/${newId}`), 800);
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to duplicate estimate');
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   // Convert to Work Order Handlers
   const openConvertModal = async () => {
     if (parts.length === 0) {
@@ -1716,6 +1732,13 @@ function EstimateDetailsPage() {
             <span style={{ fontSize: '0.8rem', color: autoSaveStatus === 'saving' ? '#ff9800' : '#4caf50', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
               {autoSaveStatus === 'saving' ? '⏳ Saving...' : '✓ Saved'}
             </span>
+          )}
+          {!isNew && (
+            <button className="btn btn-outline btn-sm" onClick={handleDuplicateEstimate} disabled={duplicating}
+              style={{ color: '#546e7a', borderColor: '#546e7a' }}
+              title="Copy this estimate to a new draft — useful for alternate pricing options">
+              📋 {duplicating ? 'Duplicating...' : 'Duplicate'}
+            </button>
           )}
           {!isNew && !estimate?.workOrderId && (
             <button className="btn" onClick={openConvertModal} disabled={converting}

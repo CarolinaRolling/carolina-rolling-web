@@ -231,7 +231,23 @@ function TodoBar() {
                 ) : (
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, color: colors.text }}>{todo.title}</div>
-                    {todo.description && <div style={{ fontSize: '0.8rem', color: '#666', marginTop: 2 }}>{todo.description}</div>}
+                    {todo.description && (() => {
+                      // Split description into text and URL parts — make Gmail links clickable
+                      const urlRegex = /(https?:\/\/[^\s]+)/g;
+                      const parts = todo.description.split(urlRegex);
+                      return (
+                        <div style={{ fontSize: '0.8rem', color: '#666', marginTop: 2 }}>
+                          {parts.map((part, i) =>
+                            urlRegex.test(part)
+                              ? <a key={i} href={part} target="_blank" rel="noopener noreferrer"
+                                  style={{ color: '#1565c0', textDecoration: 'underline', wordBreak: 'break-all' }}>
+                                  📧 Open Email
+                                </a>
+                              : <span key={i}>{part.replace(/📧\s*$/, '').replace(/📧\s*/, '')}</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>
                       {todo.createdBy && `by ${todo.createdBy}`}
                       {todo.assignedTo && ` → ${todo.assignedTo}`}
