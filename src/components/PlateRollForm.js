@@ -16,6 +16,7 @@ const DEFAULT_GRADE_OPTIONS = ['A36', '304 S/S', '316 S/S', 'AR400', 'Custom'];
 // Convert thickness string to decimal inches for calculation
 function thicknessToDecimal(t) {
   if (!t) return 0;
+  t = String(t); // ensure string — AI may return numbers
   const gaugeMap = {
     '24 ga': 0.0239, '20 ga': 0.0359, '16 ga': 0.0598, '14 ga': 0.0747,
     '12 ga': 0.1046, '11 ga': 0.1196, '10 ga': 0.1345
