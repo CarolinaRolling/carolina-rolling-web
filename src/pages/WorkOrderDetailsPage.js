@@ -3120,6 +3120,50 @@ function WorkOrderDetailsPage() {
                     ) : null}
                     {part.cutFileReference && <div style={{ color: '#1565c0', fontSize: '0.875rem' }}>📐 Cut File: {part.cutFileReference}</div>}
                   </div>
+                  {/* Milestone progress — only for qty > 20 */}
+                  {(() => {
+                    const qty = parseInt(part.quantity) || 1;
+                    if (qty <= 20 || part.status === 'completed') return null;
+                    const progress = part.progressCount || 0;
+                    const rawStep = Math.round(qty / 4 / 5) * 5;
+                    const step = rawStep >= 5 ? rawStep : Math.round(qty / 4);
+                    const milestones = [step, step * 2, step * 3];
+                    const pct = Math.min(100, Math.round((progress / qty) * 100));
+                    return (
+                      <div style={{ marginBottom: 8 }}>
+                        {progress > 0 && (
+                          <div style={{ marginBottom: 5 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#666', marginBottom: 3 }}>
+                              <span>Progress</span>
+                              <span style={{ fontWeight: 600 }}>{progress} / {qty} pcs{part.progressLastUpdatedAt ? ` · ${new Date(part.progressLastUpdatedAt).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'})}` : ''}</span>
+                            </div>
+                            <div style={{ height: 5, background: '#e0e0e0', borderRadius: 99, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: pct + '%', background: '#1976d2', borderRadius: 99, transition: 'width 0.3s' }} />
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                          {milestones.map(ms => {
+                            const reached = progress >= ms;
+                            const isNext = !reached && (ms === milestones[0] || progress >= milestones[milestones.indexOf(ms) - 1]);
+                            return (
+                              <button key={ms} disabled={reached}
+                                onClick={() => updateWorkOrderPart(id, part.id, { progressCount: ms }).then(() => loadOrder())}
+                                style={{
+                                  padding: '3px 9px', borderRadius: 5, fontSize: '0.72rem', fontWeight: 600,
+                                  cursor: reached ? 'default' : 'pointer',
+                                  border: `1px solid ${reached ? '#a5d6a7' : isNext ? '#1976d2' : '#ccc'}`,
+                                  background: reached ? '#e8f5e9' : isNext ? '#e3f2fd' : '#fff',
+                                  color: reached ? '#2e7d32' : isNext ? '#1565c0' : '#bbb'
+                                }}>
+                                {reached ? '✓ ' : ''}{ms} pcs
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="actions-row">
                     <select className="form-select" value={part.status} onChange={(e) => handlePartStatusChange(part.id, e.target.value)} style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
                       <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>

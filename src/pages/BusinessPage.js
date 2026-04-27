@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Receipt, Users, BarChart3, Plus, DollarSign } from 'lucide-react';
-import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, updateVacationLog, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, deletePayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment } from '../services/api';
+import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, updateVacationLog, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, deletePayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment, reorderEmployees } from '../services/api';
 import InvoiceCenterPage from './InvoiceCenterPage';
 
 const LB_CATS = [
@@ -121,7 +121,14 @@ function BusinessPage() {
   const [otEntry, setOtEntry] = useState(null); // the payroll entry being edited
   const [otList, setOtList] = useState([]); // working copy of overtimeDetails
   const [otNewDate, setOtNewDate] = useState('');
-  const [otNewHrs, setOtNewHrs] = useState(0.5);
+  const [otNewHrs, setOtNewHrs] = useState(1.5);
+
+  // Extended Hours (bulk OT) modal state
+  const [showExtHrs, setShowExtHrs] = useState(false);
+  const [extHrsEmps, setExtHrsEmps] = useState([]); // selected employee entry ids
+  const [extHrsDates, setExtHrsDates] = useState([]); // selected dates
+  const [extHrsHours, setExtHrsHours] = useState(1.5);
+  const [extHrsSaving, setExtHrsSaving] = useState(false);
 
   // Vacation editor state (payroll entry)
   const [vacEntry, setVacEntry] = useState(null);
@@ -133,7 +140,7 @@ function BusinessPage() {
     setOtEntry(en);
     setOtList([...(en.overtimeDetails || [])]);
     setOtNewDate('');
-    setOtNewHrs(0.5);
+    setOtNewHrs(1.5);
   };
 
   const saveOt = async () => {
@@ -172,7 +179,8 @@ function BusinessPage() {
     await loadPR();
   };
   const printPayrollService = (pr) => {
-    const entries = (pr.entries || []).map(en => {
+    const sortedEntries = (pr.entries || []).slice().sort((a,b)=>{const ea=emps.find(e=>e.id===a.employeeId),eb=emps.find(e=>e.id===b.employeeId);return ((ea?.sortOrder??999)-(eb?.sortOrder??999))||a.employeeName.localeCompare(b.employeeName);});
+    const entries = sortedEntries.map(en => {
       const emp = emps.find(e => e.id === en.employeeId) || {};
       return { ...en, controlNumber: emp.controlNumber || '', deductions: emp.deductions || '', description: emp.description || '' };
     });
@@ -212,7 +220,8 @@ function BusinessPage() {
   };
 
   const printPayrollDetailed = (pr) => {
-    const entries = (pr.entries || []).map(en => {
+    const sortedEntries = (pr.entries || []).slice().sort((a,b)=>{const ea=emps.find(e=>e.id===a.employeeId),eb=emps.find(e=>e.id===b.employeeId);return ((ea?.sortOrder??999)-(eb?.sortOrder??999))||a.employeeName.localeCompare(b.employeeName);});
+    const entries = sortedEntries.map(en => {
       const emp = emps.find(e => e.id === en.employeeId) || {};
       return { ...en, annualVacationDays: emp.annualVacationDays || 0, vacationDaysUsed: emp.vacationDaysUsed || 0 };
     });
@@ -275,6 +284,30 @@ function BusinessPage() {
       '</body></html>');
     w.document.close();
     w.print();
+  };
+
+  const applyExtHrs = async () => {
+    if (extHrsEmps.length === 0 || extHrsDates.length === 0) { setErr('Select at least one employee and one date'); return; }
+    setExtHrsSaving(true);
+    try {
+      for (const entryId of extHrsEmps) {
+        const entry = (activePR?.entries || []).find(e => e.id === entryId);
+        if (!entry) continue;
+        const existing = [...(entry.overtimeDetails || [])];
+        for (const date of extHrsDates) {
+          const idx = existing.findIndex(x => x.date === date);
+          if (idx >= 0) existing[idx] = { ...existing[idx], hours: existing[idx].hours + extHrsHours };
+          else existing.push({ date, hours: extHrsHours });
+        }
+        existing.sort((a,b) => a.date.localeCompare(b.date));
+        const totalOt = existing.reduce((s,x) => s + x.hours, 0);
+        await updateEntry(entry, { overtimeDetails: existing, overtimeHours: totalOt });
+      }
+      await loadPR();
+      setShowExtHrs(false);
+      showMsg(`Extended hours applied to ${extHrsEmps.length} employee(s) across ${extHrsDates.length} day(s)`);
+    } catch { setErr('Failed to apply extended hours'); }
+    finally { setExtHrsSaving(false); }
   };
 
   const TABS = [
@@ -499,7 +532,11 @@ function BusinessPage() {
             <div key={e.id} style={{padding:16,borderRadius:10,border:'1px solid #e0e0e0',background:e.isActive?'white':'#f9f9f9',opacity:e.isActive?1:0.6}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                 <div><div style={{fontWeight:700,fontSize:'1rem'}}>{e.name}</div>{e.role&&<div style={{fontSize:'0.85rem',color:'#1976d2'}}>{e.role}</div>}</div>
-                <div style={{display:'flex',gap:4}}>
+                <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                  <div style={{display:'flex',flexDirection:'column',gap:1}}>
+                    <button onClick={async()=>{const idx=emps.findIndex(x=>x.id===e.id);if(idx<=0)return;const updated=[...emps];[updated[idx-1],updated[idx]]=[updated[idx],updated[idx-1]];setEmps(updated);try{await reorderEmployees(updated.map((x,i)=>({id:x.id,sortOrder:i})));}catch{}}} style={{background:'#f0f0f0',border:'none',borderRadius:3,padding:'1px 5px',cursor:'pointer',fontSize:'0.65rem',lineHeight:1}} title="Move up">▲</button>
+                    <button onClick={async()=>{const idx=emps.findIndex(x=>x.id===e.id);if(idx>=emps.length-1)return;const updated=[...emps];[updated[idx],updated[idx+1]]=[updated[idx+1],updated[idx]];setEmps(updated);try{await reorderEmployees(updated.map((x,i)=>({id:x.id,sortOrder:i})));}catch{}}} style={{background:'#f0f0f0',border:'none',borderRadius:3,padding:'1px 5px',cursor:'pointer',fontSize:'0.65rem',lineHeight:1}} title="Move down">▼</button>
+                  </div>
                   <button onClick={()=>{setEditEmp(e);setEf({name:e.name,phone:e.phone||'',hourlyRate:e.hourlyRate,role:e.role||'',startDate:e.startDate||'',controlNumber:e.controlNumber||'',deductions:e.deductions||'ACH 100%',description:e.description||'',annualVacationDays:e.annualVacationDays||''});setShowEmp(true);}} style={{background:'#f0f0f0',border:'none',borderRadius:4,padding:'4px 6px',cursor:'pointer',fontSize:'0.8rem'}}>✏️</button>
                   {e.isActive&&<button onClick={async()=>{if(!window.confirm(`Deactivate ${e.name}?`))return;try{await deleteEmployee(e.id);await loadEmps();}catch{}}} style={{background:'none',border:'1px solid #e0e0e0',borderRadius:4,padding:'4px 6px',cursor:'pointer',color:'#c62828',fontSize:'0.8rem'}}>✕</button>}
                 </div>
@@ -543,6 +580,7 @@ function BusinessPage() {
               <div style={{display:'flex',gap:8}}>
                 {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{if(!window.confirm('Submit payroll?'))return;try{await submitPayroll(activePR.id);showMsg('Submitted');setActivePR(null);await loadPR();await loadEmps();}catch{setErr('Failed');}}} style={{background:'#2e7d32',color:'white'}}>📤 Submit</button>}
                 {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{if(!window.confirm('Delete this payroll draft? All entries will be lost.'))return;try{await deletePayroll(activePR.id);showMsg('Draft deleted');setActivePR(null);await loadPR();}catch{setErr('Failed to delete');}}} style={{background:'#c62828',color:'white'}}>🗑️ Delete Draft</button>}
+                {activePR.status==='draft'&&<button className="btn btn-sm" onClick={()=>{setExtHrsEmps([]);setExtHrsDates([]);setExtHrsHours(1.5);setShowExtHrs(true);}} style={{background:'#E65100',color:'white'}}>⏱️ Extended Hours</button>}
                 <button className="btn btn-sm" onClick={()=>printPayrollService(activePR)} style={{background:'#1565c0',color:'white'}}>🖨️ Payroll Sheet</button>
                 <button className="btn btn-sm" onClick={()=>printPayrollDetailed(activePR)} style={{background:'#6a1b9a',color:'white'}}>🖨️ Detailed</button>
                 <button className="btn btn-sm btn-outline" onClick={()=>setActivePR(null)}>Close</button>
@@ -550,7 +588,7 @@ function BusinessPage() {
             </div>
             <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.9rem'}}>
               <thead><tr style={{background:'#e3f2fd'}}><th style={{padding:'8px 12px',textAlign:'left'}}>Employee</th><th style={{padding:'8px',textAlign:'center',width:80}}>Rate</th><th style={{padding:'8px',textAlign:'center',width:90}}>Regular</th><th style={{padding:'8px',textAlign:'center',width:100}}>Overtime</th><th style={{padding:'8px',textAlign:'center',width:90}}>Vacation</th><th style={{padding:'8px',textAlign:'center',width:90}}>Bonus</th><th style={{padding:'8px 12px',textAlign:'right',width:100}}>Gross</th></tr></thead>
-              <tbody>{(activePR.entries||[]).map(en=>(
+              <tbody>{(activePR.entries||[]).slice().sort((a,b)=>{const ea=emps.find(e=>e.id===a.employeeId),eb=emps.find(e=>e.id===b.employeeId);return ((ea?.sortOrder??999)-(eb?.sortOrder??999))||a.employeeName.localeCompare(b.employeeName);}).map(en=>(
                 <tr key={en.id} style={{borderBottom:'1px solid #e0e0e0'}}>
                   <td style={{padding:'8px 12px',fontWeight:600}}>{en.employeeName}</td>
                   <td style={{padding:'8px',textAlign:'center',color:'#888'}}>{fmt(en.hourlyRate)}</td>
@@ -624,7 +662,7 @@ function BusinessPage() {
                   {[0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,7,8].map(h=><option key={h} value={h}>{h}h</option>)}
                 </select>
               </div>
-              <button onClick={()=>{if(!otNewDate)return;setOtList([...otList,{date:otNewDate,hours:otNewHrs}].sort((a,b)=>a.date.localeCompare(b.date)));setOtNewDate('');setOtNewHrs(0.5);}} style={{background:'#E65100',color:'white',border:'none',borderRadius:6,padding:'4px 14px',cursor:'pointer',fontWeight:600,alignSelf:'end',marginBottom:2}}>+ Add</button>
+              <button onClick={()=>{if(!otNewDate)return;setOtList([...otList,{date:otNewDate,hours:otNewHrs}].sort((a,b)=>a.date.localeCompare(b.date)));setOtNewDate('');setOtNewHrs(1.5);}} style={{background:'#E65100',color:'white',border:'none',borderRadius:6,padding:'4px 14px',cursor:'pointer',fontWeight:600,alignSelf:'end',marginBottom:2}}>+ Add</button>
             </div>
 
             {/* OT entries list */}
@@ -661,6 +699,74 @@ function BusinessPage() {
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={()=>setOtEntry(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={saveOt} style={{background:'#E65100'}}>💾 Save Overtime ({otList.reduce((s,e)=>s+e.hours,0).toFixed(1)}h)</button>
+          </div>
+        </div></div>}
+
+        {/* Extended Hours (Bulk OT) Modal */}
+        {showExtHrs&&activePR&&<div className="modal-overlay"><div className="modal" style={{maxWidth:600}}>
+          <div className="modal-header">
+            <h3 className="modal-title">⏱️ Extended Hours — Bulk Overtime Entry</h3>
+            <button className="modal-close" onClick={()=>setShowExtHrs(false)}>&times;</button>
+          </div>
+          <div style={{padding:'4px 20px 4px',fontSize:'0.85rem',color:'#666'}}>
+            Pay period: {new Date(activePR.weekStart+'T12:00:00').toLocaleDateString()} — {new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString()}
+          </div>
+          <div style={{padding:'16px 20px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+            {/* Employee checkboxes */}
+            <div>
+              <div style={{fontWeight:700,fontSize:'0.9rem',marginBottom:8,color:'#E65100'}}>👥 Select Employees</div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',padding:'4px 8px',background:extHrsEmps.length===(activePR.entries||[]).length?'#fff3e0':'transparent',borderRadius:6}}>
+                  <input type="checkbox" checked={extHrsEmps.length===(activePR.entries||[]).length} onChange={e=>setExtHrsEmps(e.target.checked?(activePR.entries||[]).map(en=>en.id):[])} style={{width:16,height:16}}/>
+                  <span style={{fontWeight:600,color:'#E65100'}}>All Employees</span>
+                </label>
+                {(activePR.entries||[]).slice().sort((a,b)=>{const ea=emps.find(e=>e.id===a.employeeId),eb=emps.find(e=>e.id===b.employeeId);return ((ea?.sortOrder??999)-(eb?.sortOrder??999))||a.employeeName.localeCompare(b.employeeName);}).map(en=>(
+                  <label key={en.id} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',padding:'4px 8px',background:extHrsEmps.includes(en.id)?'#fff3e0':'transparent',borderRadius:6}}>
+                    <input type="checkbox" checked={extHrsEmps.includes(en.id)} onChange={e=>setExtHrsEmps(prev=>e.target.checked?[...prev,en.id]:prev.filter(x=>x!==en.id))} style={{width:16,height:16}}/>
+                    <span style={{fontWeight:500}}>{en.employeeName}</span>
+                    <span style={{fontSize:'0.75rem',color:'#888'}}>${parseFloat(en.hourlyRate).toFixed(2)}/hr</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {/* Date checkboxes — generate days in pay period */}
+            <div>
+              <div style={{fontWeight:700,fontSize:'0.9rem',marginBottom:8,color:'#1565c0'}}>📅 Select Dates</div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                {(()=>{
+                  const dates=[];
+                  const start=new Date(activePR.weekStart+'T12:00:00');
+                  const end=new Date(activePR.weekEnd+'T12:00:00');
+                  for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
+                    dates.push(new Date(d).toISOString().split('T')[0]);
+                  }
+                  return dates.map(dt=>(
+                    <label key={dt} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',padding:'4px 8px',background:extHrsDates.includes(dt)?'#e3f2fd':'transparent',borderRadius:6}}>
+                      <input type="checkbox" checked={extHrsDates.includes(dt)} onChange={e=>setExtHrsDates(prev=>e.target.checked?[...prev,dt]:prev.filter(x=>x!==dt))} style={{width:16,height:16}}/>
+                      <span style={{fontWeight:500}}>{new Date(dt+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</span>
+                    </label>
+                  ));
+                })()}
+              </div>
+              {/* Hours selector */}
+              <div style={{marginTop:16,padding:'10px 12px',background:'#fff3e0',borderRadius:8,border:'1px solid #FFE0B2'}}>
+                <label style={{fontWeight:700,fontSize:'0.85rem',color:'#E65100',display:'block',marginBottom:6}}>⏱️ OT Hours per day</label>
+                <select className="form-select" value={extHrsHours} onChange={e=>setExtHrsHours(parseFloat(e.target.value))}>
+                  {OT_INC.map(h=><option key={h} value={h}>{h}h</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+          {extHrsEmps.length>0&&extHrsDates.length>0&&(
+            <div style={{margin:'0 20px 12px',padding:'10px 14px',background:'#e8f5e9',borderRadius:8,fontSize:'0.85rem',color:'#2e7d32',fontWeight:600}}>
+              → Will add {extHrsHours}h OT to {extHrsEmps.length} employee(s) × {extHrsDates.length} day(s) = {(extHrsHours*extHrsEmps.length*extHrsDates.length).toFixed(1)} total OT hours
+            </div>
+          )}
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={()=>setShowExtHrs(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={applyExtHrs} disabled={extHrsSaving||extHrsEmps.length===0||extHrsDates.length===0} style={{background:'#E65100'}}>
+              {extHrsSaving?'Applying...':'⚡ Apply Extended Hours'}
+            </button>
           </div>
         </div></div>}
 
