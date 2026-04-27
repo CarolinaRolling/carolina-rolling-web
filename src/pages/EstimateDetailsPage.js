@@ -2033,6 +2033,18 @@ function EstimateDetailsPage() {
                               setClientLocked(true);
                               setShowClientSuggestions(false);
                               setClientPaymentTerms(client.paymentTerms || null);
+                              // Save clientName immediately — don't rely on autosave which can be overwritten by loadEstimate
+                              if (!isNew && id) {
+                                try {
+                                  await updateEstimate(id, {
+                                    clientName: client.name,
+                                    contactName: primary.name || formData.contactName,
+                                    contactEmail: primary.email || formData.contactEmail,
+                                    contactPhone: primary.phone || formData.contactPhone,
+                                    status: estimate?.status || 'draft'
+                                  });
+                                } catch (e) { setError('Failed to save client change'); }
+                              }
                               showMessage(`Applied ${client.name}'s info`);
                             }}
                           >
