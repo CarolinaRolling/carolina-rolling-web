@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Receipt, Users, BarChart3, Plus, DollarSign } from 'lucide-react';
-import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, updateVacationLog, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, deletePayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment, reorderEmployees } from '../services/api';
+import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, updateVacationLog, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, deletePayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment, reorderEmployees, sendPayrollEmail, getEmailAccounts } from '../services/api';
 import InvoiceCenterPage from './InvoiceCenterPage';
 
 const LB_CATS = [
@@ -60,6 +60,17 @@ function BusinessPage() {
   const [health, setHealth] = useState(null);
   const [healthLoad, setHealthLoad] = useState(false);
 
+  // Gmail accounts for sending payroll
+  const [gmailAccounts, setGmailAccounts] = useState([]);
+  const [payrollSenderAccountId, setPayrollSenderAccountId] = useState('');
+  const [payrollSenderSaving, setPayrollSenderSaving] = useState(false);
+  const [sendingPayroll, setSendingPayroll] = useState(false);
+
+  // Payroll service email
+  const [payrollEmail, setPayrollEmail] = useState('');
+  const [payrollEmailEdit, setPayrollEmailEdit] = useState(false);
+  const [payrollEmailSaving, setPayrollEmailSaving] = useState(false);
+
   // Payments
   const [outstanding, setOutstanding] = useState(null);
   const [payHistory, setPayHistory] = useState(null);
@@ -70,10 +81,31 @@ function BusinessPage() {
 
   useEffect(() => {
     if (tab === 'liabilities') loadLiabs();
-    if (tab === 'employees') { loadEmps(); loadPR(); }
+    if (tab === 'employees') { loadEmps(); loadPR(); loadPayrollEmail(); loadGmailAccounts(); }
     if (tab === 'health') loadHealth();
     if (tab === 'payments') loadPayments();
   }, [tab, liabF, liabCat]);
+
+  const loadGmailAccounts = async () => {
+    try { const r = await getEmailAccounts(); setGmailAccounts(r.data?.data || []); } catch {}
+  };
+  const loadPayrollSenderAccount = async () => {
+    try { const r = await getSettings('payroll_sender_account'); setPayrollSenderAccountId(r.data?.data?.value || ''); } catch {}
+  };
+  const savePayrollSenderAccount = async (id) => {
+    setPayrollSenderSaving(true);
+    try { await updateSettings('payroll_sender_account', id); setPayrollSenderAccountId(id); showMsg('Sending account saved'); } catch { setErr('Failed'); }
+    finally { setPayrollSenderSaving(false); }
+  };
+
+  const loadPayrollEmail = async () => {
+    try { const r = await getSettings('payroll_service_email'); setPayrollEmail(r.data?.data?.value || ''); } catch {}
+  };
+  const savePayrollEmail = async (email) => {
+    setPayrollEmailSaving(true);
+    try { await updateSettings('payroll_service_email', email); setPayrollEmail(email); setPayrollEmailEdit(false); showMsg('Payroll service email saved'); } catch { setErr('Failed to save email'); }
+    finally { setPayrollEmailSaving(false); }
+  };
 
   const loadLiabs = async () => { try { setLiabLoad(true); const [a,b] = await Promise.all([getLiabilities({status:liabF,category:liabCat}),getLiabilitySummary()]); setLiabs(a.data.data||[]); setLiabSum(b.data.data); } catch{} finally{setLiabLoad(false);} };
   const loadPayments = async () => { try { setPayLoading(true); const [a,b] = await Promise.all([getOutstandingPayments(), getPaymentHistory()]); setOutstanding(a.data.data); setPayHistory(b.data.data); } catch{} finally{setPayLoading(false);} };
@@ -178,8 +210,37 @@ function BusinessPage() {
     setVacEntryList([]);
     await loadPR();
   };
+  const downloadPayrollPdf = (pr) => {
+    // Build the same HTML as printPayrollService but trigger download via blob
+    const sortedEntries = (pr.entries || []).slice().sort((a,b)=>((a.sortOrder??999)-(b.sortOrder??999))||a.employeeName.localeCompare(b.employeeName));
+    const entries = sortedEntries.map(en => {
+      const emp = emps.find(e => e.id === en.employeeId) || {};
+      return { ...en, controlNumber: emp.controlNumber || en.controlNumber || '', deductions: emp.deductions || en.deductions || '', description: emp.description || en.description || '' };
+    });
+    const sd = new Date(pr.weekStart+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    const ed = new Date(pr.weekEnd+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    const css = `* { box-sizing: border-box; } body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 20px 30px; font-size: 11px; color: #222; } .header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 3px solid #1a1a1a; } .company-name { font-size: 18px; font-weight: 800; letter-spacing: 0.5px; } .doc-title { font-size: 13px; font-weight: 600; color: #555; margin-top: 2px; } .date-range { margin-top: 8px; padding: 8px 14px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; font-weight: 700; text-align: center; } table { width: 100%; border-collapse: collapse; margin-top: 12px; } th { background: #1a1a1a; color: white; padding: 7px 8px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; } td { border: 1px solid #bbb; padding: 6px 8px; font-size: 11px; } td.c { text-align: center; } tr:nth-child(even) { background: #f9f9f9; } .foot { margin-top: 20px; padding-top: 10px; border-top: 2px solid #1a1a1a; display: flex; justify-content: space-between; font-size: 10px; color: #888; } @media print { @page { margin: 0.4in; size: portrait; } }`;
+    const rows = entries.map(en => {
+      const op = [];
+      if (parseFloat(en.vacationHours) > 0) op.push('Vac: ' + en.vacationHours + 'h');
+      if (parseFloat(en.bonus) > 0) op.push('Bonus: $' + parseFloat(en.bonus).toFixed(2));
+      return '<tr><td>' + (en.controlNumber||'') + '</td><td style="font-weight:600">' + en.employeeName + '</td><td>' + (en.deductions||'') + '</td><td>' + (en.description||'') + '</td><td class="c">$' + parseFloat(en.hourlyRate).toFixed(2) + '</td><td class="c" style="font-weight:600">' + en.regularHours + '</td><td class="c" style="font-weight:600;color:' + (parseFloat(en.overtimeHours)>0?'#c62828':'#888') + '">' + en.overtimeHours + '</td><td>' + op.join(', ') + '</td></tr>';
+    }).join('');
+    const html = '<html><head><title>Payroll</title><style>' + css + '</style></head><body><div class="header"><div><div class="company-name">Carolina Rolling Co., Inc.</div><div class="doc-title">Weekly Payroll Report</div></div></div><div class="date-range">Pay Period: ' + sd + ' — ' + ed + '</div><table><thead><tr><th>Control #</th><th>Employee Name</th><th>Deductions</th><th>Description</th><th style="text-align:center">Rate</th><th style="text-align:center">Reg Hours</th><th style="text-align:center">OT</th><th>Other Pay</th></tr></thead><tbody>' + rows + '</tbody></table><div class="foot"><span>Generated: ' + new Date().toLocaleDateString() + '</span><span>Carolina Rolling Co., Inc.</span></div></body></html>';
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Payroll_${pr.weekStart}_to_${pr.weekEnd}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return { sd, ed };
+  };
+
   const printPayrollService = (pr) => {
-    const sortedEntries = (pr.entries || []).slice().sort((a,b)=>{const ea=emps.find(e=>e.id===a.employeeId),eb=emps.find(e=>e.id===b.employeeId);return ((ea?.sortOrder??999)-(eb?.sortOrder??999))||a.employeeName.localeCompare(b.employeeName);});
+    const sortedEntries = (pr.entries || []).slice().sort((a,b)=>((a.sortOrder??999)-(b.sortOrder??999))||a.employeeName.localeCompare(b.employeeName));
     const entries = sortedEntries.map(en => {
       const emp = emps.find(e => e.id === en.employeeId) || {};
       return { ...en, controlNumber: emp.controlNumber || '', deductions: emp.deductions || '', description: emp.description || '' };
@@ -220,7 +281,7 @@ function BusinessPage() {
   };
 
   const printPayrollDetailed = (pr) => {
-    const sortedEntries = (pr.entries || []).slice().sort((a,b)=>{const ea=emps.find(e=>e.id===a.employeeId),eb=emps.find(e=>e.id===b.employeeId);return ((ea?.sortOrder??999)-(eb?.sortOrder??999))||a.employeeName.localeCompare(b.employeeName);});
+    const sortedEntries = (pr.entries || []).slice().sort((a,b)=>((a.sortOrder??999)-(b.sortOrder??999))||a.employeeName.localeCompare(b.employeeName));
     const entries = sortedEntries.map(en => {
       const emp = emps.find(e => e.id === en.employeeId) || {};
       return { ...en, annualVacationDays: emp.annualVacationDays || 0, vacationDaysUsed: emp.vacationDaysUsed || 0 };
@@ -534,8 +595,8 @@ function BusinessPage() {
                 <div><div style={{fontWeight:700,fontSize:'1rem'}}>{e.name}</div>{e.role&&<div style={{fontSize:'0.85rem',color:'#1976d2'}}>{e.role}</div>}</div>
                 <div style={{display:'flex',gap:4,alignItems:'center'}}>
                   <div style={{display:'flex',flexDirection:'column',gap:1}}>
-                    <button onClick={async()=>{const idx=emps.findIndex(x=>x.id===e.id);if(idx<=0)return;const updated=[...emps];[updated[idx-1],updated[idx]]=[updated[idx],updated[idx-1]];setEmps(updated);try{await reorderEmployees(updated.map((x,i)=>({id:x.id,sortOrder:i})));}catch{}}} style={{background:'#f0f0f0',border:'none',borderRadius:3,padding:'1px 5px',cursor:'pointer',fontSize:'0.65rem',lineHeight:1}} title="Move up">▲</button>
-                    <button onClick={async()=>{const idx=emps.findIndex(x=>x.id===e.id);if(idx>=emps.length-1)return;const updated=[...emps];[updated[idx],updated[idx+1]]=[updated[idx+1],updated[idx]];setEmps(updated);try{await reorderEmployees(updated.map((x,i)=>({id:x.id,sortOrder:i})));}catch{}}} style={{background:'#f0f0f0',border:'none',borderRadius:3,padding:'1px 5px',cursor:'pointer',fontSize:'0.65rem',lineHeight:1}} title="Move down">▼</button>
+                    <button onClick={async()=>{const idx=emps.findIndex(x=>x.id===e.id);if(idx<=0)return;const updated=[...emps];[updated[idx-1],updated[idx]]=[updated[idx],updated[idx-1]];setEmps(updated);try{await reorderEmployees(updated.map((x,i)=>({id:x.id,sortOrder:i})));if(activePR){const entries=activePR.entries||[];const reordered=updated.map((x,i)=>({...entries.find(e=>e.employeeId===x.id)||{},sortOrder:i}));setActivePR(prev=>prev?{...prev,entries:entries.map(e=>{const u=reordered.find(r=>r.employeeId===e.employeeId);return u?{...e,sortOrder:u.sortOrder}:e;})}:prev);}}catch{}}} style={{background:'#f0f0f0',border:'none',borderRadius:3,padding:'1px 5px',cursor:'pointer',fontSize:'0.65rem',lineHeight:1}} title="Move up">▲</button>
+                    <button onClick={async()=>{const idx=emps.findIndex(x=>x.id===e.id);if(idx>=emps.length-1)return;const updated=[...emps];[updated[idx],updated[idx+1]]=[updated[idx+1],updated[idx]];setEmps(updated);try{await reorderEmployees(updated.map((x,i)=>({id:x.id,sortOrder:i})));if(activePR){const entries=activePR.entries||[];const reordered=updated.map((x,i)=>({...entries.find(e=>e.employeeId===x.id)||{},sortOrder:i}));setActivePR(prev=>prev?{...prev,entries:entries.map(e=>{const u=reordered.find(r=>r.employeeId===e.employeeId);return u?{...e,sortOrder:u.sortOrder}:e;})}:prev);}}catch{}}} style={{background:'#f0f0f0',border:'none',borderRadius:3,padding:'1px 5px',cursor:'pointer',fontSize:'0.65rem',lineHeight:1}} title="Move down">▼</button>
                   </div>
                   <button onClick={()=>{setEditEmp(e);setEf({name:e.name,phone:e.phone||'',hourlyRate:e.hourlyRate,role:e.role||'',startDate:e.startDate||'',controlNumber:e.controlNumber||'',deductions:e.deductions||'ACH 100%',description:e.description||'',annualVacationDays:e.annualVacationDays||''});setShowEmp(true);}} style={{background:'#f0f0f0',border:'none',borderRadius:4,padding:'4px 6px',cursor:'pointer',fontSize:'0.8rem'}}>✏️</button>
                   {e.isActive&&<button onClick={async()=>{if(!window.confirm(`Deactivate ${e.name}?`))return;try{await deleteEmployee(e.id);await loadEmps();}catch{}}} style={{background:'none',border:'1px solid #e0e0e0',borderRadius:4,padding:'4px 6px',cursor:'pointer',color:'#c62828',fontSize:'0.8rem'}}>✕</button>}
@@ -560,6 +621,48 @@ function BusinessPage() {
             </div>))}</div>}
         </div>
 
+        {/* Payroll Service Email Setting */}
+        <div className="card" style={{marginBottom:12,padding:'12px 16px'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <span style={{fontSize:'1rem'}}>📧</span>
+              <div>
+                <div style={{fontWeight:700,fontSize:'0.9rem'}}>Payroll Service Email</div>
+                <div style={{fontSize:'0.78rem',color:'#888'}}>Payroll sheet will be emailed here when submitted</div>
+              </div>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:12,flex:1}}>
+              {/* Recipient email */}
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:'0.8rem',color:'#888',width:80,flexShrink:0}}>Send to:</span>
+                {payrollEmailEdit ? (
+                  <div style={{display:'flex',gap:8,alignItems:'center',flex:1}}>
+                    <input className="form-input" type="email" value={payrollEmail} onChange={e=>setPayrollEmail(e.target.value)} placeholder="payroll@service.com" style={{flex:1}}/>
+                    <button className="btn btn-primary btn-sm" onClick={()=>savePayrollEmail(payrollEmail)} disabled={payrollEmailSaving}>{payrollEmailSaving?'Saving...':'Save'}</button>
+                    <button className="btn btn-sm btn-outline" onClick={()=>setPayrollEmailEdit(false)}>Cancel</button>
+                  </div>
+                ) : (
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    <span style={{fontWeight:600,color:payrollEmail?'#1565c0':'#bbb'}}>{payrollEmail||'Not set'}</span>
+                    <button className="btn btn-sm btn-outline" onClick={()=>setPayrollEmailEdit(true)}>✏️ {payrollEmail?'Change':'Set'}</button>
+                  </div>
+                )}
+              </div>
+              {/* Sending account */}
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:'0.8rem',color:'#888',width:80,flexShrink:0}}>Send from:</span>
+                {gmailAccounts.length === 0 ? (
+                  <span style={{color:'#c62828',fontSize:'0.85rem'}}>No Gmail accounts connected — add one in Admin → Email Scanner</span>
+                ) : (
+                  <select className="form-select" style={{flex:1,maxWidth:320}} value={payrollSenderAccountId} onChange={e=>{setPayrollSenderAccountId(e.target.value);savePayrollSenderAccount(e.target.value);}}>
+                    {gmailAccounts.map(a=><option key={a.id} value={a.id}>{a.email}{!a.isActive?' (inactive)':''}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Payroll */}
         <div className="card">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}><h3 style={{margin:0}}>📊 Weekly Payroll</h3><button className="btn btn-primary btn-sm" onClick={()=>setShowNewPR(true)}><Plus size={16}/> Create Weekly Payroll</button></div>
@@ -578,7 +681,29 @@ function BusinessPage() {
                 <span style={{padding:'2px 8px',borderRadius:4,fontSize:'0.8rem',fontWeight:600,background:activePR.status==='submitted'?'#c8e6c9':'#fff3e0',color:activePR.status==='submitted'?'#2e7d32':'#E65100'}}>{activePR.status==='submitted'?'✓ Submitted':'Draft'}</span>
               </div>
               <div style={{display:'flex',gap:8}}>
-                {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{if(!window.confirm('Submit payroll?'))return;try{await submitPayroll(activePR.id);showMsg('Submitted');setActivePR(null);await loadPR();await loadEmps();}catch{setErr('Failed');}}} style={{background:'#2e7d32',color:'white'}}>📤 Submit</button>}
+                {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{
+                  if(!payrollEmail){setErr('Set a payroll service email address first');return;}
+                  const senderId = payrollSenderAccountId || (gmailAccounts[0]?.id);
+                  if(!senderId){setErr('No Gmail account connected — connect one in Admin → Email Scanner');return;}
+                  const senderAcc = gmailAccounts.find(a=>a.id===senderId);
+                  if(!window.confirm(`Submit payroll and send via ${senderAcc?.email||'Gmail'} to ${payrollEmail}?`))return;
+                  setSendingPayroll(true);
+                  try{
+                    const sd = new Date(activePR.weekStart+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+                    const ed = new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+                    await sendPayrollEmail(activePR.id,{
+                      gmailAccountId: senderId,
+                      toEmail: payrollEmail,
+                      subject: 'Carolina Rolling Payroll ' + sd + ' — ' + ed
+                    });
+                    await submitPayroll(activePR.id);
+                    showMsg('✅ Payroll submitted and emailed to ' + payrollEmail);
+                    setActivePR(null);await loadPR();await loadEmps();
+                  }catch(e){setErr('Failed to send: '+(e.response?.data?.error?.message||e.message));}
+                  finally{setSendingPayroll(false);}
+                }} disabled={sendingPayroll} style={{background:'#2e7d32',color:'white'}}>
+                  {sendingPayroll?'Sending...':'📤 Submit & Email'}
+                </button>}
                 {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{if(!window.confirm('Delete this payroll draft? All entries will be lost.'))return;try{await deletePayroll(activePR.id);showMsg('Draft deleted');setActivePR(null);await loadPR();}catch{setErr('Failed to delete');}}} style={{background:'#c62828',color:'white'}}>🗑️ Delete Draft</button>}
                 {activePR.status==='draft'&&<button className="btn btn-sm" onClick={()=>{setExtHrsEmps([]);setExtHrsDates([]);setExtHrsHours(1.5);setShowExtHrs(true);}} style={{background:'#E65100',color:'white'}}>⏱️ Extended Hours</button>}
                 <button className="btn btn-sm" onClick={()=>printPayrollService(activePR)} style={{background:'#1565c0',color:'white'}}>🖨️ Payroll Sheet</button>
@@ -588,7 +713,7 @@ function BusinessPage() {
             </div>
             <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.9rem'}}>
               <thead><tr style={{background:'#e3f2fd'}}><th style={{padding:'8px 12px',textAlign:'left'}}>Employee</th><th style={{padding:'8px',textAlign:'center',width:80}}>Rate</th><th style={{padding:'8px',textAlign:'center',width:90}}>Regular</th><th style={{padding:'8px',textAlign:'center',width:100}}>Overtime</th><th style={{padding:'8px',textAlign:'center',width:90}}>Vacation</th><th style={{padding:'8px',textAlign:'center',width:90}}>Bonus</th><th style={{padding:'8px 12px',textAlign:'right',width:100}}>Gross</th></tr></thead>
-              <tbody>{(activePR.entries||[]).slice().sort((a,b)=>{const ea=emps.find(e=>e.id===a.employeeId),eb=emps.find(e=>e.id===b.employeeId);return ((ea?.sortOrder??999)-(eb?.sortOrder??999))||a.employeeName.localeCompare(b.employeeName);}).map(en=>(
+              <tbody>{(activePR.entries||[]).slice().sort((a,b)=>((a.sortOrder??999)-(b.sortOrder??999))||a.employeeName.localeCompare(b.employeeName)).map(en=>(
                 <tr key={en.id} style={{borderBottom:'1px solid #e0e0e0'}}>
                   <td style={{padding:'8px 12px',fontWeight:600}}>{en.employeeName}</td>
                   <td style={{padding:'8px',textAlign:'center',color:'#888'}}>{fmt(en.hourlyRate)}</td>
@@ -720,7 +845,7 @@ function BusinessPage() {
                   <input type="checkbox" checked={extHrsEmps.length===(activePR.entries||[]).length} onChange={e=>setExtHrsEmps(e.target.checked?(activePR.entries||[]).map(en=>en.id):[])} style={{width:16,height:16}}/>
                   <span style={{fontWeight:600,color:'#E65100'}}>All Employees</span>
                 </label>
-                {(activePR.entries||[]).slice().sort((a,b)=>{const ea=emps.find(e=>e.id===a.employeeId),eb=emps.find(e=>e.id===b.employeeId);return ((ea?.sortOrder??999)-(eb?.sortOrder??999))||a.employeeName.localeCompare(b.employeeName);}).map(en=>(
+                {(activePR.entries||[]).slice().sort((a,b)=>((a.sortOrder??999)-(b.sortOrder??999))||a.employeeName.localeCompare(b.employeeName)).map(en=>(
                   <label key={en.id} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',padding:'4px 8px',background:extHrsEmps.includes(en.id)?'#fff3e0':'transparent',borderRadius:6}}>
                     <input type="checkbox" checked={extHrsEmps.includes(en.id)} onChange={e=>setExtHrsEmps(prev=>e.target.checked?[...prev,en.id]:prev.filter(x=>x!==en.id))} style={{width:16,height:16}}/>
                     <span style={{fontWeight:500}}>{en.employeeName}</span>
