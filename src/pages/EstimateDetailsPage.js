@@ -2008,7 +2008,7 @@ function EstimateDetailsPage() {
                               padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #eee',
                               display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                             }}
-                            onMouseDown={() => {
+                            onMouseDown={async () => {
                               // Build contacts from array, fall back to legacy fields
                               let allContacts = (client.contacts || []).filter(c => c.name);
                               if (allContacts.length === 0 && client.contactName) {
