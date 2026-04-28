@@ -164,6 +164,25 @@ function EstimatesPage() {
     }
   };
 
+  const handleSaveNewContact = async () => {
+    if (!newContact.name.trim() || !selectedNewClient) return;
+    setSavingContact(true);
+    try {
+      const existingContacts = (selectedNewClient.contacts || []).filter(c => c.name);
+      const updatedContacts = [...existingContacts, { ...newContact, isPrimary: existingContacts.length === 0 }];
+      await updateClient(selectedNewClient.id, { contacts: updatedContacts });
+      const freshClient = { ...selectedNewClient, contacts: updatedContacts };
+      setSelectedNewClient(freshClient);
+      setNewEstData(prev => ({ ...prev, contactName: newContact.name, contactEmail: newContact.email || '', contactPhone: newContact.phone || '', contactExtension: newContact.extension || '' }));
+      setNewContact({ name: '', phone: '', email: '', extension: '', role: '' });
+      setShowAddContact(false);
+    } catch (err) {
+      setError('Failed to save contact: ' + (err.response?.data?.error?.message || err.message));
+    } finally {
+      setSavingContact(false);
+    }
+  };
+
   const handleCreateEstimate = async () => {
     if (!newEstData.clientName.trim()) { setError('Client name is required'); return; }
     try {
@@ -181,7 +200,7 @@ function EstimatesPage() {
   };
 
   const openNewEstimateModal = () => {
-    setNewEstData({ clientName: '', contactName: '', contactEmail: '', contactPhone: '', projectDescription: '' });
+    setNewEstData({ clientName: '', contactName: '', contactEmail: '', contactPhone: '', contactExtension: '' });
     setClientSuggestions([]);
     setShowNewModal(true);
   };
@@ -630,21 +649,6 @@ function EstimatesPage() {
               {selectedNewClient && (() => {
                 const contacts = (selectedNewClient.contacts || []).filter(c => c.name);
 
-                const saveNewContact = async () => {
-                  if (!newContact.name.trim()) return;
-                  setSavingContact(true);
-                  try {
-                    const updatedContacts = [...contacts, { ...newContact, isPrimary: contacts.length === 0 }];
-                    const updated = await updateClient(selectedNewClient.id, { ...selectedNewClient, contacts: updatedContacts });
-                    const freshClient = updated.data?.data || { ...selectedNewClient, contacts: updatedContacts };
-                    setSelectedNewClient(freshClient);
-                    setNewEstData({ ...newEstData, contactName: newContact.name, contactEmail: newContact.email || '', contactPhone: newContact.phone || '', contactExtension: newContact.extension || '' });
-                    setNewContact({ name: '', phone: '', email: '', extension: '', role: '' });
-                    setShowAddContact(false);
-                  } catch { }
-                  finally { setSavingContact(false); }
-                };
-
                 return (
                   <div className="form-group">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -701,7 +705,7 @@ function EstimatesPage() {
                         <input className="form-input" placeholder="Email" type="email" value={newContact.email}
                           onChange={e => setNewContact(p => ({ ...p, email: e.target.value }))} style={{ marginBottom: 8, width: '100%' }} />
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                          <button type="button" className="btn btn-primary btn-sm" onClick={saveNewContact} disabled={savingContact || !newContact.name.trim()}>
+                          <button type="button" className="btn btn-primary btn-sm" onClick={handleSaveNewContact} disabled={savingContact || !newContact.name.trim()}>
                             {savingContact ? 'Saving...' : '💾 Save & Select'}
                           </button>
                         </div>
