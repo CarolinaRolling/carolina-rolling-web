@@ -1898,6 +1898,12 @@ function EstimateDetailsPage() {
           {estimate.status === 'draft' && (
             <button className="btn btn-sm" onClick={async () => {
               try {
+                // Check if a generated PDF already exists
+                const hasPdf = files.some(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-'));
+                if (!hasPdf) {
+                  showMessage('Generating PDF before sending...');
+                  await generatePdfPreview();
+                }
                 await updateEstimate(id, { status: 'sent' });
                 await loadEstimate();
                 showMessage('Estimate marked as sent');
