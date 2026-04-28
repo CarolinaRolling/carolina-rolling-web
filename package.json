@@ -20,7 +20,7 @@
     "heroku-postbuild": "CI=false npm run build"
   },
   "engines": {
-    "node": "18.x"
+    "node": "20.x"
   },
   "eslintConfig": {
     "extends": [

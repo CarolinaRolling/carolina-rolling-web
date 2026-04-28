@@ -990,10 +990,22 @@ function WorkOrderDetailsPage() {
         if (selectedItems.length === 0) { setError('Enter quantity for at least one item'); setSaving(false); return; }
         await recordPickup(id, { type: 'partial', pickedUpBy: pickupData.pickedUpBy, items: selectedItems });
       }
-      await loadOrder();
+      const updatedOrder = await loadOrder();
       setShowPickupModal(false);
       setPickupData({ pickedUpBy: '', type: null, items: {} });
       showMessage(pickupData.type === 'full' ? 'Full pickup recorded' : 'Partial pickup recorded & receipt saved');
+      // Auto-print the pickup receipt for the entry we just created
+      try {
+        // The new entry is the last one in pickupHistory
+        const history = order?.pickupHistory || [];
+        const newIdx = history.length; // after reload it will be length-1, but we use the pre-reload length as the index
+        const response = await getPickupReceipt(id, newIdx);
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      } catch (printErr) {
+        console.warn('Auto-print failed — use Outbound tab to print:', printErr.message);
+      }
     } catch (err) {
       console.error('Pickup error:', err.response?.data || err);
       setError(err.response?.data?.error?.message || 'Failed to record pickup');
@@ -1802,7 +1814,17 @@ function WorkOrderDetailsPage() {
     let eaPricedTotal = 0;
     parts.forEach(p => {
       if (p.partType === 'rush_service') return; // handle separately
-      const total = parseFloat(p.partTotal) || 0;
+      // Fall back to formData.partTotal, then recalculate from labor+material if both are null
+      let total = parseFloat(p.partTotal) || parseFloat((p.formData || {}).partTotal) || 0;
+      if (!total) {
+        // Recalculate from components
+        const qty = parseInt(p.quantity) || 1;
+        const matCost = parseFloat(p.materialTotal) || parseFloat((p.formData || {}).materialTotal) || 0;
+        const matMarkup = parseFloat(p.materialMarkupPercent) ?? 20;
+        const matEach = matCost * (1 + matMarkup / 100);
+        const lab = parseFloat(p.laborTotal) || parseFloat((p.formData || {}).laborTotal) || 0;
+        total = (matEach + lab) * qty;
+      }
       if (EA_PRICED.includes(p.partType)) {
         eaPricedTotal += total;
       } else {
@@ -3649,7 +3671,8 @@ function WorkOrderDetailsPage() {
                     : (rawLaborEach * lr + opCostPerPart);
                   const adjMaterial = hiddenFromCustomer ? 0 : (parseFloat(part.materialTotal) || 0);
                   const laborDelta = hiddenFromCustomer ? 0 : ((rawLaborEach * lr - rawLaborEach) * partQty);
-                  const adjPartTotal = hiddenFromCustomer ? 0 : (isEa ? (parseFloat(part.partTotal) || 0) + laborDelta : (parseFloat(part.partTotal) || 0));
+                  const rawPartTotal = parseFloat(part.partTotal) || parseFloat((part.formData || {}).partTotal) || 0;
+                  const adjPartTotal = hiddenFromCustomer ? 0 : (isEa ? rawPartTotal + laborDelta : rawPartTotal);
                   return (
                   <tr key={part.id} style={{ borderBottom: '1px solid #eee', background: hiddenFromCustomer ? '#FFEBEE' : (isLinkedService ? '#fce4ec' : 'transparent') }}>
                     <td style={{ padding: 8 }}>{isLinkedService ? '' : part.partNumber}</td>
