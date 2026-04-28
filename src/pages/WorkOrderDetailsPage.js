@@ -3058,7 +3058,11 @@ function WorkOrderDetailsPage() {
               const transportMatPerPart = 0;
               const transportLabPerPart = 0;
               // Compute display values that include transport allocation AND outside processing cost
-              const baseLaborPerPart = parseFloat(part.laborTotal) || 0;
+              const baseLaborPerPart = (() => {
+                const stored = parseFloat((part.formData || {})._baseLaborTotal);
+                if (!isNaN(stored) && stored > 0) return stored;
+                return parseFloat(part.laborTotal) || parseFloat((part.formData || {}).laborTotal) || 0;
+              })();
               const baseMaterialPerPart = (() => {
                 const matCost = parseFloat(part.materialTotal) || 0;
                 const matMarkupRaw = parseFloat(part.materialMarkupPercent);
@@ -3459,7 +3463,7 @@ function WorkOrderDetailsPage() {
                       </div>
                     ) : null;
                   })()
-                ) : (part.partTotal || part.laborTotal || part.materialTotal) && (
+                ) : (parseFloat(part.partTotal) > 0 || parseFloat(part.laborTotal) > 0 || parseFloat(part.materialTotal) > 0 || parseFloat((part.formData||{}).partTotal) > 0 || parseFloat((part.formData||{}).laborTotal) > 0) && (
                   <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12, marginTop: 8 }}>
                     {part.materialDescription && !['fab_service', 'shop_rate'].includes(part.partType) && (
                       <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
