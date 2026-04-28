@@ -1236,8 +1236,7 @@ function AdminPage({ section = 'users-logs' }) {
                       </td>
                       </tr>
                     ))
-                    ]);
-                  })()}
+                  }
                 </tbody>
               </table>
             </div>
@@ -2886,7 +2885,9 @@ function AdminPage({ section = 'users-logs' }) {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                      ))
+                    ]);
+                  })()}
                 </tbody>
               </table>
             )}
