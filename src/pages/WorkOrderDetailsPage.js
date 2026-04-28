@@ -3162,15 +3162,18 @@ function WorkOrderDetailsPage() {
                           })}
                         </div>
                       </div>
+
                     );
                   })()}
                   <div className="actions-row">
+                    {part.completedBy && part.status === 'completed' && (
+                      <span style={{ fontSize: '0.75rem', color: '#388e3c', fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+                        Completed by {part.completedBy.replace(/\s*\(.*\)\s*$/, '')} on {part.completedAt ? new Date(part.completedAt).toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' ' + new Date(part.completedAt).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) : ''}
+                      </span>
+                    )}
                     <select className="form-select" value={part.status} onChange={(e) => handlePartStatusChange(part.id, e.target.value)} style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
                       <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>
                     </select>
-                    {part.completedBy && part.status === 'completed' && (
-                      <span style={{ fontSize: '0.75rem', color: '#388e3c', fontStyle: 'italic' }}>by {part.completedBy}</span>
-                    )}
                     <button className="btn btn-sm btn-outline" onClick={() => printPartLabel(part)} title="Print Label"><Tag size={14} /></button>
                     <button className="btn btn-sm btn-outline" onClick={() => openEditPartModal(part)}><Edit size={14} /></button>
                     <button className="btn btn-sm btn-outline" onClick={() => handleDuplicatePart(part)} title="Duplicate part" style={{ color: '#546e7a' }}>📋</button>
