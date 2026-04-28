@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search, DollarSign, Send, Check, X, Archive, Trash2 } from 'lucide-react';
-import { getEstimates, deleteEstimate, restoreEstimate, permanentDeleteEstimate, getEstimateTrash, convertEstimateToWorkOrder, createEstimate, searchClients } from '../services/api';
+import { getEstimates, deleteEstimate, restoreEstimate, permanentDeleteEstimate, getEstimateTrash, convertEstimateToWorkOrder, createEstimate, searchClients, updateClient } from '../services/api';
 
 function EstimatesPage() {
   const navigate = useNavigate();
@@ -31,8 +31,12 @@ function EstimatesPage() {
   // New estimate modal state
   const [showNewModal, setShowNewModal] = useState(false);
   const [newEstData, setNewEstData] = useState({
-    clientName: '', contactName: '', contactEmail: '', contactPhone: '', projectDescription: ''
+    clientName: '', contactName: '', contactEmail: '', contactPhone: '', contactExtension: ''
   });
+  const [selectedNewClient, setSelectedNewClient] = useState(null);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [newContact, setNewContact] = useState({ name: '', phone: '', email: '', extension: '', role: '' });
+  const [savingContact, setSavingContact] = useState(false);
   const [creating, setCreating] = useState(false);
   const [clientSuggestions, setClientSuggestions] = useState([]);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
@@ -506,7 +510,7 @@ function EstimatesPage() {
 
       {/* New Estimate Modal */}
       {showNewModal && (
-        <div className="modal-overlay" onClick={() => setShowNewModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowNewModal(false); setSelectedNewClient(null); setShowAddContact(false); setNewContact({ name: '', phone: '', email: '', extension: '', role: '' }); }}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 550 }}>
             <div className="modal-header">
               <h3 className="modal-title">New Estimate</h3>
@@ -561,19 +565,28 @@ function EstimatesPage() {
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                         }}
                         onMouseDown={() => {
+                          // Pick primary contact from contacts array
+                          const contacts = (client.contacts || []).filter(c => c.name);
+                          const primary = contacts.find(c => c.isPrimary) || contacts[0] || null;
+                          setSelectedNewClient(client);
                           setNewEstData({
                             ...newEstData,
                             clientName: client.name,
-                            contactName: client.contactName || '',
-                            contactEmail: client.contactEmail || '',
-                            contactPhone: client.contactPhone || ''
+                            contactName: primary?.name || client.contactName || '',
+                            contactEmail: primary?.email || client.contactEmail || '',
+                            contactPhone: primary?.phone || client.contactPhone || '',
+                            contactExtension: primary?.extension || ''
                           });
                           setShowClientSuggestions(false);
                         }}
                       >
                         <div>
                           <strong>{client.name}</strong>
-                          {client.contactName && <div style={{ fontSize: '0.8rem', color: '#666' }}>{client.contactName}</div>}
+                          {(() => {
+                            const primary = (client.contacts || []).find(c => c.isPrimary) || (client.contacts || [])[0];
+                            const name = primary?.name || client.contactName;
+                            return name ? <div style={{ fontSize: '0.8rem', color: '#666' }}>{name}{primary?.role ? <span style={{ color: '#1976d2', marginLeft: 4 }}>({primary.role})</span> : null}</div> : null;
+                          })()}
                         </div>
                         <span style={{
                           fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4,
@@ -613,36 +626,94 @@ function EstimatesPage() {
                 )}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label className="form-label">Contact Name</label>
-                  <input type="text" className="form-input" value={newEstData.contactName}
-                    onChange={(e) => setNewEstData({ ...newEstData, contactName: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Phone</label>
-                  <input type="tel" className="form-input" value={newEstData.contactPhone}
-                    onChange={(e) => setNewEstData({ ...newEstData, contactPhone: e.target.value })} />
-                </div>
-              </div>
+              {/* Contact picker + inline add-contact */}
+              {selectedNewClient && (() => {
+                const contacts = (selectedNewClient.contacts || []).filter(c => c.name);
 
-              <div className="form-group">
-                <label className="form-label">Email</label>
-                <input type="email" className="form-input" value={newEstData.contactEmail}
-                  onChange={(e) => setNewEstData({ ...newEstData, contactEmail: e.target.value })} />
-              </div>
+                const saveNewContact = async () => {
+                  if (!newContact.name.trim()) return;
+                  setSavingContact(true);
+                  try {
+                    const updatedContacts = [...contacts, { ...newContact, isPrimary: contacts.length === 0 }];
+                    const updated = await updateClient(selectedNewClient.id, { ...selectedNewClient, contacts: updatedContacts });
+                    const freshClient = updated.data?.data || { ...selectedNewClient, contacts: updatedContacts };
+                    setSelectedNewClient(freshClient);
+                    setNewEstData({ ...newEstData, contactName: newContact.name, contactEmail: newContact.email || '', contactPhone: newContact.phone || '', contactExtension: newContact.extension || '' });
+                    setNewContact({ name: '', phone: '', email: '', extension: '', role: '' });
+                    setShowAddContact(false);
+                  } catch { }
+                  finally { setSavingContact(false); }
+                };
 
-              <div className="form-group">
-                <label className="form-label">Project Description</label>
-                <textarea className="form-textarea" value={newEstData.projectDescription}
-                  onChange={(e) => setNewEstData({ ...newEstData, projectDescription: e.target.value })}
-                  placeholder="Brief description of the job..."
-                  rows={2} />
-              </div>
+                return (
+                  <div className="form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <label className="form-label" style={{ margin: 0 }}>Contact Person</label>
+                      <button type="button" onClick={() => { setShowAddContact(s => !s); setNewContact({ name: '', phone: '', email: '', extension: '', role: '' }); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1976d2', fontSize: '0.8rem', fontWeight: 600, padding: 0 }}>
+                        {showAddContact ? '✕ Cancel' : '+ New Contact'}
+                      </button>
+                    </div>
+
+                    {contacts.length > 0 && !showAddContact && (
+                      <>
+                        <select className="form-select" value={newEstData.contactName}
+                          onChange={(e) => {
+                            const c = contacts.find(x => x.name === e.target.value);
+                            if (c) setNewEstData({ ...newEstData, contactName: c.name, contactEmail: c.email || '', contactPhone: c.phone || '', contactExtension: c.extension || '' });
+                          }}>
+                          {contacts.map((c, i) => (
+                            <option key={i} value={c.name}>
+                              {c.name}{c.isPrimary ? ' ★' : ''}{c.role ? ` · ${c.role}` : ''}{c.extension ? ` x${c.extension}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {newEstData.contactPhone && (
+                          <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#666', display: 'flex', gap: 16 }}>
+                            <span>📞 {newEstData.contactPhone}{newEstData.contactExtension ? ` x${newEstData.contactExtension}` : ''}</span>
+                            {newEstData.contactEmail && <span>📧 {newEstData.contactEmail}</span>}
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {contacts.length === 0 && !showAddContact && (
+                      <div style={{ padding: '10px 12px', background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 6, fontSize: '0.85rem', color: '#795548' }}>
+                        No contacts on file for this client — click <strong>+ New Contact</strong> to add one.
+                      </div>
+                    )}
+
+                    {showAddContact && (
+                      <div style={{ padding: '12px', background: '#f0f7ff', borderRadius: 8, border: '1px solid #90caf9' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1565c0', marginBottom: 10 }}>
+                          👤 New Contact — will be saved to {selectedNewClient.name}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                          <input className="form-input" placeholder="Name *" value={newContact.name}
+                            onChange={e => setNewContact(p => ({ ...p, name: e.target.value }))} />
+                          <input className="form-input" placeholder="Role (e.g. Estimating)" value={newContact.role}
+                            onChange={e => setNewContact(p => ({ ...p, role: e.target.value }))} />
+                          <input className="form-input" placeholder="Phone" value={newContact.phone}
+                            onChange={e => setNewContact(p => ({ ...p, phone: e.target.value }))} />
+                          <input className="form-input" placeholder="Ext" value={newContact.extension}
+                            onChange={e => setNewContact(p => ({ ...p, extension: e.target.value.replace(/\D/g, '') }))} />
+                        </div>
+                        <input className="form-input" placeholder="Email" type="email" value={newContact.email}
+                          onChange={e => setNewContact(p => ({ ...p, email: e.target.value }))} style={{ marginBottom: 8, width: '100%' }} />
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                          <button type="button" className="btn btn-primary btn-sm" onClick={saveNewContact} disabled={savingContact || !newContact.name.trim()}>
+                            {savingContact ? 'Saving...' : '💾 Save & Select'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowNewModal(false)}>Cancel</button>
+              <button className="btn btn-secondary" onClick={() => { setShowNewModal(false); setSelectedNewClient(null); setShowAddContact(false); setNewContact({ name: '', phone: '', email: '', extension: '', role: '' }); }}>Cancel</button>
               <button
                 className="btn btn-primary"
                 onClick={handleCreateEstimate}
