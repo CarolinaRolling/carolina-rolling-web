@@ -1234,8 +1234,10 @@ function AdminPage({ section = 'users-logs' }) {
                           <Trash2 size={12} />
                         </button>
                       </td>
-                    </tr>
-                  ))}
+                      </tr>
+                    ))
+                    ]);
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -2800,16 +2802,32 @@ function AdminPage({ section = 'users-logs' }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {apiKeys.map(key => (
-                    <tr key={key.id} style={{ opacity: key.isActive ? 1 : 0.6 }}>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{key.name}</div>
-                        {key.deviceName && <div style={{ fontSize: '0.75rem', color: '#666' }}>📱 {key.deviceName}</div>}
-                        {key.clientName && <div style={{ fontSize: '0.75rem', color: '#1565c0' }}>🔒 Client: {key.clientName}</div>}
-                        {key.vendorName && <div style={{ fontSize: '0.75rem', color: '#E65100' }}>🏭 Vendor: {key.vendorName}</div>}
-                        {key.allowedIPs && <div style={{ fontSize: '0.7rem', color: '#e65100' }}>🌐 {key.allowedIPs}</div>}
-                      </td>
-                      <td>{key.operatorName || <span style={{ color: '#ccc' }}>—</span>}</td>
+                  {(() => {
+                    const sorted = [...apiKeys].sort((a, b) => a.name.localeCompare(b.name));
+                    const shopDevices = sorted.filter(k => (k.deviceName || k.operatorName) && !k.clientName && !k.vendorName);
+                    const portals = sorted.filter(k => k.clientName || k.vendorName);
+                    const other = sorted.filter(k => !k.deviceName && !k.operatorName && !k.clientName && !k.vendorName);
+                    const groups = [
+                      { label: '🖥️ Shop Devices', color: '#1565c0', bg: '#e3f2fd', keys: shopDevices },
+                      { label: '🔒 Portals', color: '#E65100', bg: '#fff3e0', keys: portals },
+                      ...(other.length > 0 ? [{ label: '🔑 Other', color: '#555', bg: '#f5f5f5', keys: other }] : [])
+                    ];
+                    return groups.map(group => group.keys.length === 0 ? null : [
+                      <tr key={'hdr-' + group.label}>
+                        <td colSpan={6} style={{ background: group.bg, padding: '6px 12px', fontWeight: 700, fontSize: '0.8rem', color: group.color, letterSpacing: '0.4px', textTransform: 'uppercase', borderTop: '2px solid ' + group.color + '33' }}>
+                          {group.label} <span style={{ fontWeight: 400, opacity: 0.7 }}>({group.keys.length})</span>
+                        </td>
+                      </tr>,
+                      ...group.keys.map(key => (
+                      <tr key={key.id} style={{ opacity: key.isActive ? 1 : 0.6 }}>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{key.name}</div>
+                          {key.deviceName && <div style={{ fontSize: '0.75rem', color: '#666' }}>📱 {key.deviceName}</div>}
+                          {key.clientName && <div style={{ fontSize: '0.75rem', color: '#1565c0' }}>🔒 Client: {key.clientName}</div>}
+                          {key.vendorName && <div style={{ fontSize: '0.75rem', color: '#E65100' }}>🏭 Vendor: {key.vendorName}</div>}
+                          {key.allowedIPs && <div style={{ fontSize: '0.7rem', color: '#e65100' }}>🌐 {key.allowedIPs}</div>}
+                        </td>
+                        <td>{key.operatorName || <span style={{ color: '#ccc' }}>—</span>}</td>
                       <td>
                         <span style={{
                           padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 500,
