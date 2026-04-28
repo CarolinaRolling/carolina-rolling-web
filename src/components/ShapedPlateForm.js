@@ -20,6 +20,9 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
   const [customThickness, setCustomThickness] = useState('');
   const [customGrade, setCustomGrade] = useState('');
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
+  const [showDiaFind, setShowDiaFind] = useState(false);
+  const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'inside');
+  const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'diameter');
 
   useEffect(() => {
     const loadGrades = async () => {
