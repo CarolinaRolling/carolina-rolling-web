@@ -81,24 +81,30 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
     }
     
     if (shape === 'round' && partData._rollDiameter) {
-      d.push(`Roll to ${partData._rollDiameter}" Diameter`);
+      const mpLabel = rollMeasurePoint === 'inside' ? 'ID' : rollMeasurePoint === 'outside' ? 'OD' : 'CLD';
+      const typeLabel = rollMeasureType === 'radius' ? 'Radius' : 'Diameter';
+      d.push(`Roll to ${partData._rollDiameter}" ${mpLabel} ${typeLabel}`);
     } else if (shape === 'donut' && partData._donutPurpose === 'cylinder' && partData._rollDiameter) {
-      d.push(`Form to ${partData._rollDiameter}" Cylinder Diameter`);
+      const mpLabel = rollMeasurePoint === 'inside' ? 'ID' : rollMeasurePoint === 'outside' ? 'OD' : 'CLD';
+      const typeLabel = rollMeasureType === 'radius' ? 'Radius' : 'Diameter';
+      d.push(`Form to ${partData._rollDiameter}" ${mpLabel} ${typeLabel} Cylinder`);
     } else if (shape === 'donut' && partData._donutPurpose === 'head' && partData._headDepth) {
       d.push(`Form to Head — ${partData._headDepth}" Depth`);
     } else if (shape === 'head' && partData._headDepth) {
       d.push(`Dish Depth: ${partData._headDepth}"`);
     } else if (shape === 'custom' && partData._rollDiameter) {
-      d.push(`Form to ${partData._rollDiameter}" Diameter`);
+      const mpLabel = rollMeasurePoint === 'inside' ? 'ID' : rollMeasurePoint === 'outside' ? 'OD' : 'CLD';
+      const typeLabel = rollMeasureType === 'radius' ? 'Radius' : 'Diameter';
+      d.push(`Form to ${partData._rollDiameter}" ${mpLabel} ${typeLabel}`);
     }
 
     if (partData.specialInstructions) d.push(partData.specialInstructions);
     return d.join(' — ');
-  }, [shape, partData._rollToMethod, partData._rollDiameter, partData._headDepth, partData._donutPurpose, partData.specialInstructions]);
+  }, [shape, partData._rollToMethod, partData._rollDiameter, partData._headDepth, partData._donutPurpose, partData.specialInstructions, rollMeasurePoint, rollMeasureType]);
 
   useEffect(() => {
-    setPartData(prev => ({ ...prev, materialDescription, _materialDescription: materialDescription, _rollingDescription: rollingDescription }));
-  }, [materialDescription, rollingDescription]);
+    setPartData(prev => ({ ...prev, materialDescription, _materialDescription: materialDescription, _rollingDescription: rollingDescription, _rollMeasurePoint: rollMeasurePoint, _rollMeasureType: rollMeasureType }));
+  }, [materialDescription, rollingDescription, rollMeasurePoint, rollMeasureType]);
 
   // Pricing calculations
   const qty = parseInt(partData.quantity) || 1;
@@ -271,7 +277,7 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
       {/* === FORMING / ROLLING === */}
       <div style={sectionStyle}>
         {sectionTitle('🔄', 'Forming', '#0288d1')}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: partData._rollToMethod === 'to_diameter' && (shape === 'round' || (shape === 'donut' && partData._donutPurpose === 'cylinder') || shape === 'custom') ? '1fr 1fr 1fr 1fr' : '1fr 1fr', gap: 12 }}>
           <div className="form-group">
             <label className="form-label">Method</label>
             <select className="form-select" value={partData._rollToMethod || ''}
@@ -282,17 +288,32 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
               <option value="per_sample">Per Sample</option>
             </select>
           </div>
-          {/* Roll Diameter — shown for round plate, donut+cylinder, custom */}
-          {(shape === 'round' || (shape === 'donut' && partData._donutPurpose === 'cylinder') || shape === 'custom') && partData._rollToMethod === 'to_diameter' && (
+          {/* Roll Diameter + Measure Point + Type — shown for round plate, donut+cylinder, custom */}
+          {(shape === 'round' || (shape === 'donut' && partData._donutPurpose === 'cylinder') || shape === 'custom') && partData._rollToMethod === 'to_diameter' && (<>
             <div className="form-group">
-              <label className="form-label">{shape === 'donut' ? 'Cylinder Diameter' : 'Roll Diameter'}</label>
+              <label className="form-label">Roll Value *</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <input type="number" step="any" className="form-input" value={partData._rollDiameter || ''}
-                  onChange={(e) => setPartData({ ...partData, _rollDiameter: e.target.value })} placeholder="Optional" />
-                <span style={{ color: '#888', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>inches</span>
+                  onChange={(e) => setPartData({ ...partData, _rollDiameter: e.target.value })} placeholder="e.g. 48" />
+                <span style={{ color: '#888', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>in</span>
               </div>
             </div>
-          )}
+            <div className="form-group">
+              <label className="form-label">Measured At</label>
+              <select className="form-select" value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
+                <option value="inside">Inside</option>
+                <option value="outside">Outside</option>
+                <option value="centerline">Centerline</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Type</label>
+              <select className="form-select" value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
+                <option value="diameter">Diameter</option>
+                <option value="radius">Radius</option>
+              </select>
+            </div>
+          </>)}
           {/* Head Depth — shown for donut+head */}
           {shape === 'donut' && partData._donutPurpose === 'head' && (
             <div className="form-group">
