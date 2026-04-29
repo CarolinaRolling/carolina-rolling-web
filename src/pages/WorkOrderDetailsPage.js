@@ -128,6 +128,8 @@ function WorkOrderDetailsPage() {
   const fileInputRefs = useRef({});
   const docInputRef = useRef(null);
   const mtrInputRef = useRef(null);
+  const shippingDocInputRef = useRef(null);
+  const [uploadingShippingDoc, setUploadingShippingDoc] = useState(false);
   const [defaultTaxRate, setDefaultTaxRate] = useState(9.75);
   const [showLinkShipmentModal, setShowLinkShipmentModal] = useState(false);
   const [unlinkedShipments, setUnlinkedShipments] = useState([]);
@@ -3911,7 +3913,7 @@ function WorkOrderDetailsPage() {
           {/* Order Documents */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header">
-              <h3 className="card-title"><File size={20} style={{ marginRight: 8 }} />Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr').length || 0})</h3>
+              <h3 className="card-title"><File size={20} style={{ marginRight: 8 }} />Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc').length || 0})</h3>
               <div>
                 <button className="btn btn-sm btn-outline" onClick={() => docInputRef.current?.click()} disabled={uploadingDocs}>
                   <Upload size={14} />{uploadingDocs ? 'Uploading...' : 'Upload'}
@@ -3921,7 +3923,7 @@ function WorkOrderDetailsPage() {
               </div>
             </div>
             <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Customer POs, supplier quotes, drawings, COCs, etc.</p>
-            {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr').length > 0 ? (
+            {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc').length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr').map(doc => (
                   <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: doc.portalVisible ? '#e8f5e9' : '#f5f5f5', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', border: doc.portalVisible ? '1px solid #a5d6a7' : '1px solid #eee' }}>
@@ -3931,6 +3933,7 @@ function WorkOrderDetailsPage() {
                       {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }) : ''}
                     </span>
                     {doc.documentType === 'coc' && <span style={{ background: '#6a1b9a', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>COC</span>}
+                    {doc.documentType === 'shipping_doc' && <span style={{ background: '#1565c0', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>SHIPPING</span>}
                     <button onClick={() => handleViewDocument(doc.id)} style={{ background: '#1976d2', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
                       <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
                     </button>
@@ -3946,6 +3949,111 @@ function WorkOrderDetailsPage() {
               </div>
             ) : (
               <div style={{ background: '#fafafa', padding: 20, borderRadius: 8, textAlign: 'center', color: '#999' }}>No documents uploaded yet</div>
+            )}
+          </div>
+
+
+          {/* MTR Section */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title" style={{ color: '#6a1b9a' }}><FileText size={20} style={{ marginRight: 8 }} />Material Test Reports ({order.documents?.filter(d => d.documentType === 'mtr').length || 0})</h3>
+              <div>
+                <button className="btn btn-sm" onClick={() => mtrInputRef.current?.click()} disabled={uploadingMtrs}
+                  style={{ background: '#6a1b9a', color: 'white', border: 'none' }}>
+                  <Upload size={14} />{uploadingMtrs ? 'Uploading...' : 'Upload MTR'}
+                </button>
+                <input type="file" multiple accept=".pdf" ref={mtrInputRef} style={{ display: 'none' }} 
+                  onChange={(e) => { handleMtrUpload(Array.from(e.target.files)); e.target.value = ''; }} />
+              </div>
+            </div>
+            {order.documents?.filter(d => d.documentType === 'mtr').length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {order.documents.filter(d => d.documentType === 'mtr').map(doc => (
+                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f3e5f5', padding: '10px 14px', borderRadius: 8, border: '1px solid #ce93d8', fontSize: '0.85rem' }}>
+                    <FileText size={18} color="#6a1b9a" />
+                    <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#999' }}>
+                      {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }) : ''}
+                    </span>
+                    <button onClick={() => handleViewDocument(doc.id)} 
+                      style={{ background: '#6a1b9a', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
+                      <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
+                    </button>
+                    <button onClick={async () => {
+                      try {
+                        const response = await downloadWorkOrderDocument(id, doc.id);
+                        const blob = new Blob([response.data], { type: response.headers['content-type'] || 'application/pdf' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a'); a.href = url; a.download = doc.originalName || 'MTR.pdf';
+                        document.body.appendChild(a); a.click(); document.body.removeChild(a); window.URL.revokeObjectURL(url);
+                      } catch { setError('Failed to download'); }
+                    }} style={{ background: '#4527a0', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
+                      ⬇ Download
+                    </button>
+                    <button onClick={() => handleDeleteDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: '#fafafa', padding: 20, borderRadius: 8, textAlign: 'center', color: '#999' }}>No MTRs uploaded yet</div>
+            )}
+          </div>
+          {/* Shipping Documents — portal visible by default */}
+          <div className="card" style={{ marginBottom: 16, border: '1.5px solid #1565c0' }}>
+            <div className="card-header" style={{ background: '#e3f2fd' }}>
+              <h3 className="card-title" style={{ color: '#1565c0' }}>
+                🚚 Shipping Documents
+                <span style={{ fontSize: '0.75rem', fontWeight: 400, marginLeft: 8, color: '#555' }}>({(order.documents || []).filter(d => d.documentType === 'shipping_doc').length})</span>
+              </h3>
+              <button className="btn btn-sm btn-outline" onClick={() => shippingDocInputRef.current?.click()} disabled={uploadingShippingDoc}
+                style={{ borderColor: '#1565c0', color: '#1565c0' }}>
+                <Upload size={14} /> {uploadingShippingDoc ? 'Uploading...' : 'Upload Shipping Doc'}
+              </button>
+              <input type="file" multiple accept=".pdf,.doc,.docx,image/*" ref={shippingDocInputRef} style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files);
+                  if (!files.length) return;
+                  setUploadingShippingDoc(true);
+                  try {
+                    await uploadWorkOrderDocuments(id, files, 'shipping_doc', true);
+                    await loadOrder();
+                    showMessage('Shipping document(s) uploaded — visible on client portal');
+                  } catch { setError('Failed to upload shipping document'); }
+                  finally { setUploadingShippingDoc(false); e.target.value = ''; }
+                }} />
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>
+              Bill of lading, freight receipts, delivery confirmations from trucking companies. 
+              <span style={{ color: '#2e7d32', fontWeight: 600 }}> Automatically visible on client portal.</span>
+            </p>
+            {(order.documents || []).filter(d => d.documentType === 'shipping_doc').length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(order.documents).filter(d => d.documentType === 'shipping_doc').map(doc => (
+                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#e8f5e9', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', border: '1px solid #a5d6a7' }}>
+                    <File size={16} color="#1565c0" />
+                    <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#999' }}>
+                      {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }) : ''}
+                    </span>
+                    <span style={{ background: '#1565c0', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>SHIPPING</span>
+                    <span style={{ color: '#2e7d32', fontSize: '0.72rem', fontWeight: 600 }}>🌐 Portal</span>
+                    <button onClick={() => handleViewDocument(doc.id)} style={{ background: '#1976d2', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
+                      <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
+                    </button>
+                    <button onClick={async () => {
+                      try { await toggleDocumentPortal(id, doc.id, !doc.portalVisible); await loadOrder(); } catch {}
+                    }} title={doc.portalVisible ? 'Visible on client portal — click to hide' : 'Hidden from portal — click to show'}
+                      style={{ background: 'none', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', fontSize: '0.75rem', color: doc.portalVisible ? '#2e7d32' : '#bbb' }}>
+                      {doc.portalVisible ? '🌐' : '🔒'}
+                    </button>
+                    <button onClick={() => handleDeleteDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: '#fafafa', padding: 20, borderRadius: 8, textAlign: 'center', color: '#999', fontSize: '0.85rem' }}>
+                No shipping documents uploaded yet
+              </div>
             )}
           </div>
 
@@ -4028,52 +4136,6 @@ function WorkOrderDetailsPage() {
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* MTR Section */}
-          <div className="card">
-            <div className="card-header">
-              <h3 className="card-title" style={{ color: '#6a1b9a' }}><FileText size={20} style={{ marginRight: 8 }} />Material Test Reports ({order.documents?.filter(d => d.documentType === 'mtr').length || 0})</h3>
-              <div>
-                <button className="btn btn-sm" onClick={() => mtrInputRef.current?.click()} disabled={uploadingMtrs}
-                  style={{ background: '#6a1b9a', color: 'white', border: 'none' }}>
-                  <Upload size={14} />{uploadingMtrs ? 'Uploading...' : 'Upload MTR'}
-                </button>
-                <input type="file" multiple accept=".pdf" ref={mtrInputRef} style={{ display: 'none' }} 
-                  onChange={(e) => { handleMtrUpload(Array.from(e.target.files)); e.target.value = ''; }} />
-              </div>
-            </div>
-            {order.documents?.filter(d => d.documentType === 'mtr').length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {order.documents.filter(d => d.documentType === 'mtr').map(doc => (
-                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f3e5f5', padding: '10px 14px', borderRadius: 8, border: '1px solid #ce93d8', fontSize: '0.85rem' }}>
-                    <FileText size={18} color="#6a1b9a" />
-                    <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
-                    <span style={{ fontSize: '0.7rem', color: '#999' }}>
-                      {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }) : ''}
-                    </span>
-                    <button onClick={() => handleViewDocument(doc.id)} 
-                      style={{ background: '#6a1b9a', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
-                      <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
-                    </button>
-                    <button onClick={async () => {
-                      try {
-                        const response = await downloadWorkOrderDocument(id, doc.id);
-                        const blob = new Blob([response.data], { type: response.headers['content-type'] || 'application/pdf' });
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a'); a.href = url; a.download = doc.originalName || 'MTR.pdf';
-                        document.body.appendChild(a); a.click(); document.body.removeChild(a); window.URL.revokeObjectURL(url);
-                      } catch { setError('Failed to download'); }
-                    }} style={{ background: '#4527a0', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
-                      ⬇ Download
-                    </button>
-                    <button onClick={() => handleDeleteDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}><X size={14} /></button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ background: '#fafafa', padding: 20, borderRadius: 8, textAlign: 'center', color: '#999' }}>No MTRs uploaded yet</div>
             )}
           </div>
         </div>
