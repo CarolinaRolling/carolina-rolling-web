@@ -832,18 +832,6 @@ const ClientsVendorsPage = () => {
                 ))}
               </div>
 
-              {/* COC Required */}
-              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 10, marginTop: 4 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={!!formData.requiresCoc} style={{ width: 16, height: 16, accentColor: '#E65100' }}
-                    onChange={(e) => setFormData({ ...formData, requiresCoc: e.target.checked })} />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#E65100' }}>📜 COC Required for All Orders</div>
-                    <div style={{ fontSize: '0.75rem', color: '#888' }}>Automatically generate a Certificate of Conformance when all parts are completed</div>
-                  </div>
-                </label>
-              </div>
-
               {/* Accounting Contact — collapsible */}
               <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 10, marginTop: 4 }}>
                 <button type="button" onClick={() => setShowAccounting(a => !a)}
@@ -1069,6 +1057,15 @@ const ClientsVendorsPage = () => {
                   </div>
                 )}
               </div>
+              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 12, marginTop: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={!!formData.requiresCoc} style={{ width: 18, height: 18, accentColor: '#E65100' }}
+                    onChange={(e) => setFormData({ ...formData, requiresCoc: e.target.checked })} />
+                  <span style={{ fontWeight: 600, color: formData.requiresCoc ? '#E65100' : '#333' }}>
+                    📜 COC Required — Auto-generate Certificate of Conformance when all parts complete
+                  </span>
+                </label>
+              </div>
 
               {/* Email Scanner Notes — shows when any contact has monitoring enabled */}
               {(formData.contacts || []).some(c => c.monitored) && (
@@ -1196,18 +1193,6 @@ const ClientsVendorsPage = () => {
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label">Notes</label>
                 <textarea className="form-textarea" value={formData.notes || ''} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={2} />
-              </div>
-
-              {/* COC Required */}
-              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 10, marginTop: 4 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={!!formData.requiresCoc} style={{ width: 16, height: 16, accentColor: '#E65100' }}
-                    onChange={(e) => setFormData({ ...formData, requiresCoc: e.target.checked })} />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#E65100' }}>📜 COC Required for All Orders</div>
-                    <div style={{ fontSize: '0.75rem', color: '#888' }}>Automatically generate a Certificate of Conformance when all parts are completed</div>
-                  </div>
-                </label>
               </div>
 
               {/* Accounting Contact — collapsible */}
