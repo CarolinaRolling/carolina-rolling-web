@@ -3,60 +3,34 @@ import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
+import { useSectionSizes } from '../hooks/useSectionSizes';
 import HeatNumberInput from './HeatNumberInput';
-const FLAT_BAR_SIZES = [
-  '1/2x1/4', '3/4x1/4', '3/4x3/8',
-  '1x1/4', '1x3/8', '1x1/2',
-  '1-1/2x1/4', '1-1/2x3/8', '1-1/2x1/2',
-  '2x1/4', '2x3/8', '2x1/2', '2x3/4',
-  '2-1/2x1/4', '2-1/2x3/8', '2-1/2x1/2',
-  '3x1/4', '3x3/8', '3x1/2', '3x3/4', '3x1',
-  '4x3/8', '4x1/2', '4x3/4', '4x1',
-  '5x3/8', '5x1/2', '5x3/4', '5x1',
-  '6x3/8', '6x1/2', '6x3/4', '6x1',
-  '8x1/2', '8x3/4', '8x1',
-  '10x1/2', '10x3/4', '10x1',
-  '12x1/2', '12x3/4', '12x1',
-  'Custom'
+const DEFAULT_CHANNEL_SIZES = [
+  'C3x4.1', 'C3x5', 'C3x6',
+  'C4x5.4', 'C4x7.25',
+  'C5x6.7', 'C5x9',
+  'C6x8.2', 'C6x10.5', 'C6x13',
+  'C7x9.8', 'C7x12.25', 'C7x14.75',
+  'C8x11.5', 'C8x13.75', 'C8x18.75',
+  'C9x13.4', 'C9x15', 'C9x20',
+  'C10x15.3', 'C10x20', 'C10x25', 'C10x30',
+  'C12x20.7', 'C12x25', 'C12x30',
+  'C15x33.9', 'C15x40', 'C15x50',
+  'MC6x12', 'MC6x15.3', 'MC6x16.3',
+  'MC8x8.5', 'MC8x18.7', 'MC8x20', 'MC8x21.4', 'MC8x22.8',
+  'MC10x6.5', 'MC10x22', 'MC10x25', 'MC10x28.5', 'MC10x33.6',
+  'MC12x10.6', 'MC12x31', 'MC12x35', 'MC12x40', 'MC12x45', 'MC12x50',
+  'MC13x31.8', 'MC13x35', 'MC13x40',
+  'MC18x42.7', 'MC18x45.8', 'MC18x51.9', 'MC18x58'
 ];
 
-const SQUARE_BAR_SIZES = [
-  '1/4', '3/8', '1/2', '5/8', '3/4', '7/8',
-  '1', '1-1/4', '1-1/2', '1-3/4',
-  '2', '2-1/2', '3', '3-1/2', '4',
-  'Custom'
-];
+const DEFAULT_GRADE_OPTIONS = ['A36', 'A572 Gr 50', '304 S/S', '316 S/S', 'Custom'];
 
-const DEFAULT_GRADE_OPTIONS = ['A36', '304 S/S', '316 S/S', 'AR400', 'Custom'];
-
-function parseFlatBarSize(sizeStr) {
+function parseChannelSize(sizeStr) {
   if (!sizeStr || sizeStr === 'Custom') return null;
-  const parts = sizeStr.split('x');
-  if (parts.length !== 2) return null;
-  const toDecimal = (s) => {
-    s = s.trim();
-    // Handle mixed numbers like "1-1/2"
-    const mixedMatch = s.match(/^(\d+)-(\d+)\/(\d+)$/);
-    if (mixedMatch) return parseInt(mixedMatch[1]) + parseInt(mixedMatch[2]) / parseInt(mixedMatch[3]);
-    // Handle fractions like "1/4"
-    const fracMatch = s.match(/^(\d+)\/(\d+)$/);
-    if (fracMatch) return parseInt(fracMatch[1]) / parseInt(fracMatch[2]);
-    return parseFloat(s) || 0;
-  };
-  const width = toDecimal(parts[0]);
-  const thickness = toDecimal(parts[1]);
-  if (width > 0 && thickness > 0) return { width, thickness };
+  const m = sizeStr.match(/^(?:MC|C)(\d+(?:\.\d+)?)/);
+  if (m) return { depth: parseFloat(m[1]), label: sizeStr };
   return null;
-}
-
-function formatFraction(val) {
-  const fracs = [[0.125,'1/8'],[0.25,'1/4'],[0.375,'3/8'],[0.5,'1/2'],[0.625,'5/8'],[0.75,'3/4'],[0.875,'7/8']];
-  const whole = Math.floor(val);
-  const frac = val - whole;
-  const match = fracs.find(f => Math.abs(f[0] - frac) < 0.01);
-  if (match) return whole > 0 ? `${whole}-${match[1]}"` : `${match[1]}"`;
-  if (frac === 0) return `${whole}"`;
-  return `${val}"`;
 }
 
 function calculateRise(radiusInches, chordInches) {
@@ -66,28 +40,18 @@ function calculateRise(radiusInches, chordInches) {
   return radiusInches - Math.sqrt(radiusInches * radiusInches - halfChord * halfChord);
 }
 
-function parseSquareBarSize(sizeStr) {
-  if (!sizeStr || sizeStr === 'Custom') return null;
-  const toDecimal = (s) => {
-    s = s.trim();
-    const mixedMatch = s.match(/^(\d+)-(\d+)\/(\d+)$/);
-    if (mixedMatch) return parseInt(mixedMatch[1]) + parseInt(mixedMatch[2]) / parseInt(mixedMatch[3]);
-    const fracMatch = s.match(/^(\d+)\/(\d+)$/);
-    if (fracMatch) return parseInt(fracMatch[1]) / parseInt(fracMatch[2]);
-    return parseFloat(s) || 0;
-  };
-  const side = toDecimal(sizeStr);
-  if (side > 0) return { width: side, thickness: side };
-  return null;
-}
-
-export default function FlatBarRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
-  const [barShape, setBarShape] = useState(partData._barShape || 'flat');
+export default function ChannelRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
+  const dynamicChannelSizes = useSectionSizes('channel', DEFAULT_CHANNEL_SIZES);
+  const CHANNEL_SIZES = [...dynamicChannelSizes, 'Custom'];
   const [customGrade, setCustomGrade] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
   const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');
   const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'diameter');
   const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'inside');
+  const [showDiaFind, setShowDiaFind] = useState(false);
+  const [diaFindChord, setDiaFindChord] = useState('');
+  const [diaFindRise, setDiaFindRise] = useState('');
+  const diaFindResult = (diaFindChord && diaFindRise && parseFloat(diaFindRise) > 0) ? ((parseFloat(diaFindChord) ** 2) / (4 * parseFloat(diaFindRise))) + parseFloat(diaFindRise) : null;
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
   const [completeRings, setCompleteRings] = useState(!!(partData._completeRings));
   const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
@@ -99,7 +63,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
       try {
         const resp = await getSettings('material_grades');
         if (resp.data.data?.value) {
-          const grades = resp.data.data.value.filter(g => g.partTypes?.includes('flat_bar'));
+          const grades = resp.data.data.value.filter(g => g.partTypes?.includes('channel_roll'));
           if (grades.length > 0) setGradeOptions([...grades.map(g => g.name), 'Custom']);
         }
       } catch {}
@@ -108,15 +72,12 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
   }, []);
 
   useEffect(() => {
-    if (partData.radius && !partData.diameter) {
-      setRollValue(partData.radius);
-      setRollMeasureType('radius');
-    } else if (partData.diameter) {
-      setRollValue(partData.diameter);
-      setRollMeasureType('diameter');
-    }
+    if (partData.radius && !partData.diameter) { setRollValue(partData.radius); setRollMeasureType('radius'); }
+    else if (partData.diameter) { setRollValue(partData.diameter); setRollMeasureType('diameter'); }
     if (partData._rollMeasureType) setRollMeasureType(partData._rollMeasureType);
     if (partData._rollMeasurePoint) setRollMeasurePoint(partData._rollMeasurePoint);
+    // Default to Hard Way for channels
+    if (!partData.rollType) setPartData(prev => ({ ...prev, rollType: 'hard_way' }));
   }, []);
 
   useEffect(() => {
@@ -127,18 +88,8 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     setPartData(prev => ({ ...prev, ...updates }));
   }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint]);
 
-  const parsedSize = useMemo(() => {
-    if (barShape === 'square') return parseSquareBarSize(partData._barSize);
-    return parseFlatBarSize(partData._barSize);
-  }, [partData._barSize, barShape]);
-
-  // Profile size for CL offset: square bar always uses full side; flat bar: EW=thickness, HW=width
-  const profileSize = useMemo(() => {
-    if (!parsedSize) return 0;
-    if (barShape === 'square') return parsedSize.width;
-    if (partData.rollType === 'hard_way') return parsedSize.width;
-    return parsedSize.thickness; // easy way or no selection
-  }, [parsedSize, partData.rollType, barShape]);
+  const parsedSize = useMemo(() => parseChannelSize(partData._channelSize), [partData._channelSize]);
+  const profileSize = useMemo(() => parsedSize ? parsedSize.depth : 0, [parsedSize]);
 
   const clDiameter = useMemo(() => {
     const rv = parseFloat(rollValue) || 0;
@@ -210,9 +161,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
         laborTotal: laborPerUnit > 0 ? laborPerUnit.toFixed(2) : prev.laborTotal,
       };
     });
-    } else {
-      setPartData(prev => ({ ...prev, _completeRings: false }));
-    }
+    } else { setPartData(prev => ({ ...prev, _completeRings: false })); }
   }, [completeRings, ringCalc, ringsNeeded, tangentLength, partData._ringMaterialPerLength, partData._ringLaborPerUnit]);
 
   const materialDescription = useMemo(() => {
@@ -220,33 +169,14 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     const parts = [completeRings && ringCalc && !ringCalc.error
       ? `${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' length(s):`
       : `${qty}pc:`];
-    if (barShape === 'square') {
-      if (parsedSize) {
-        parts.push(`${formatFraction(parsedSize.width)} x ${formatFraction(parsedSize.width)}`);
-      } else if (partData._customBarSize) {
-        parts.push(partData._customBarSize);
-      }
-      parts.push('Square Bar');
-    } else {
-      if (parsedSize) {
-        parts.push(`${formatFraction(parsedSize.width)} x ${formatFraction(parsedSize.thickness)}`);
-      } else if (partData._customBarSize) {
-        parts.push(partData._customBarSize);
-      }
-      parts.push('Flat Bar');
-    }
+    if (partData._channelSize && partData._channelSize !== 'Custom') parts.push(partData._channelSize);
+    else if (partData._customChannelSize) parts.push(partData._customChannelSize);
+    parts.push('Channel');
     if (partData.length) parts.push(`x ${partData.length} long`);
     if (partData.material) parts.push(partData.material);
     if (partData._materialOrigin) parts.push(partData._materialOrigin);
     return parts.join(' ');
-  }, [partData._barSize, partData._customBarSize, partData.length, partData.material, partData._materialOrigin, partData.quantity, parsedSize, barShape, completeRings, ringCalc]);
-
-  // Input diameter (raw user value, not CL-adjusted) — for developed diameter in pitch calc
-  const inputDiameter = useMemo(() => {
-    const rv = parseFloat(rollValue) || 0;
-    if (!rv) return 0;
-    return rollMeasureType === 'radius' ? rv * 2 : rv;
-  }, [rollValue, rollMeasureType]);
+  }, [partData._channelSize, partData._customChannelSize, partData.length, partData.material, partData._materialOrigin, partData.quantity, completeRings, ringCalc]);
 
   const rollingDescription = useMemo(() => {
     if (rollToMethod === 'template') return 'Roll Per Template / Sample';
@@ -256,48 +186,31 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
     const lines = [];
     
     const spec = rollMeasurePoint === 'inside' ? (rollMeasureType === 'radius' ? 'ISR' : 'ID') : rollMeasurePoint === 'outside' ? (rollMeasureType === 'radius' ? 'OSR' : 'OD') : (rollMeasureType === 'radius' ? 'CLR' : 'CLD');
-    const ewHw = barShape === 'square' ? '' : (partData.rollType === 'easy_way' ? 'EW' : partData.rollType === 'hard_way' ? 'HW' : '');
+    const ewHw = partData.rollType === 'easy_way' ? 'EW' : partData.rollType === 'hard_way' ? 'HW' : partData.rollType === 'on_edge' ? 'OE' : '';
     let rollLine = `Roll to ${rv}" ${spec}`;
-    if (ewHw) rollLine += ` ${ewHw}`;
+    if (ewHw) rollLine += ` ${ewHw} (${partData.rollType === 'easy_way' ? 'flanges out' : partData.rollType === 'hard_way' ? 'flanges in' : 'on edge'})`;
     lines.push(rollLine);
+    // Orientation option
+    if (partData._orientationOption) {
+      const combo = partData.rollType === 'easy_way' ? 'EW-OD' : 'HW-ID';
+      lines.push(`Orientation: ${combo} Option ${partData._orientationOption}`);
+    }
     if (riseCalc) lines.push(`Chord: ${riseCalc.chord}" Rise: ${riseCalc.rise.toFixed(4)}" (From ID)`);
-    lines.push(...getPitchDescriptionLines(partData, clDiameter, profileSize));
     if (completeRings && ringCalc && !ringCalc.error) {
       lines.push(`${ringsNeeded} complete ring(s) required`);
     }
+    lines.push(...getPitchDescriptionLines(partData, clDiameter, profileSize));
     return lines.join('\n');
-  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded, barShape, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
+  }, [rollValue, rollMeasureType, rollMeasurePoint, partData.rollType, partData._orientationOption, riseCalc, clDiameter, completeRings, ringCalc, ringsNeeded, partData._pitchEnabled, partData._pitchMethod, partData._pitchRun, partData._pitchRise, partData._pitchAngle, partData._pitchSpaceType, partData._pitchSpaceValue, partData._pitchDirection, partData._pitchDevelopedDia]);
 
   useEffect(() => {
     const updates = { materialDescription, _materialDescription: materialDescription };
-    if (barShape === 'square') {
-      if (partData._barSize && partData._barSize !== 'Custom') {
-        const p = parseSquareBarSize(partData._barSize);
-        if (p) { updates.sectionSize = `${partData._barSize}x${partData._barSize}`; updates.width = String(p.width); updates.thickness = String(p.thickness); }
-      } else if (partData._customBarSize) {
-        updates.sectionSize = partData._customBarSize;
-      }
-    } else {
-      if (partData._barSize && partData._barSize !== 'Custom') {
-        updates.sectionSize = partData._barSize;
-        if (parsedSize) { updates.width = String(parsedSize.width); updates.thickness = String(parsedSize.thickness); }
-      } else if (partData._customBarSize) {
-        updates.sectionSize = partData._customBarSize;
-      }
-    }
+    if (partData._channelSize && partData._channelSize !== 'Custom') updates.sectionSize = partData._channelSize;
+    else if (partData._customChannelSize) updates.sectionSize = partData._customChannelSize;
     setPartData(prev => ({ ...prev, ...updates }));
   }, [materialDescription]);
 
-  // Sync barShape to partData and clear rollType when switching to square
-  useEffect(() => {
-    const updates = { _barShape: barShape };
-    if (barShape === 'square') { updates.rollType = null; }
-    setPartData(prev => ({ ...prev, ...updates }));
-  }, [barShape]);
-
-  useEffect(() => {
-    setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription }));
-  }, [rollingDescription]);
+  useEffect(() => { setPartData(prev => ({ ...prev, _rollingDescription: rollingDescription })); }, [rollingDescription]);
 
   const qty = parseInt(partData.quantity) || 1;
   const materialCost = parseFloat(partData.materialTotal) || 0;
@@ -318,7 +231,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
 
   const isCustomGrade = partData.material && !gradeOptions.includes(partData.material);
   const selectedGradeOption = gradeOptions.includes(partData.material) ? partData.material : (partData.material ? 'Custom' : '');
-  const selectedBarSize = FLAT_BAR_SIZES.includes(partData._barSize) ? partData._barSize : (partData._barSize ? 'Custom' : '');
+  const selectedChannelSize = CHANNEL_SIZES.includes(partData._channelSize) ? partData._channelSize : (partData._channelSize ? 'Custom' : '');
 
   const sectionStyle = { gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', marginTop: 8, paddingTop: 12 };
   const sectionTitle = (icon, text, color) => <h4 style={{ marginBottom: 10, color, fontSize: '0.95rem' }}>{icon} {text}</h4>;
@@ -332,65 +245,31 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
           onFocus={(e) => e.target.select()} min="1" disabled={completeRings}
           style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
         {completeRings && ringCalc && !ringCalc.error && (
-          <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>
-            ⭕ {ringsNeeded} ring(s) — {ringCalc.sticksNeeded} stick(s) needed{!ringCalc.multiSegment ? ` (${ringCalc.ringsPerStick} rings/stick)` : ` (${ringCalc.segmentsPerRing} segments/ring)`}
-          </div>
+          <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>⭕ {ringsNeeded} ring(s) — {ringCalc.sticksNeeded} stick(s) needed{!ringCalc.multiSegment ? ` (${ringCalc.ringsPerStick} rings/stick)` : ` (${ringCalc.segmentsPerRing} segments/ring)`}</div>
         )}
       </div>
 
       <div className="form-group">
-        <label className="form-label">Bar Shape *</label>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" style={{ flex: 1, padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.9rem',
-              border: `2px solid ${barShape === 'flat' ? '#1565c0' : '#ccc'}`, background: barShape === 'flat' ? '#e3f2fd' : '#fff', color: barShape === 'flat' ? '#1565c0' : '#666', cursor: 'pointer' }}
-            onClick={() => { setBarShape('flat'); setPartData(prev => ({ ...prev, _barSize: '', _customBarSize: '', _barShape: 'flat' })); }}>
-            ▬ Flat Bar
-          </button>
-          <button type="button" style={{ flex: 1, padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.9rem',
-              border: `2px solid ${barShape === 'square' ? '#1565c0' : '#ccc'}`, background: barShape === 'square' ? '#e3f2fd' : '#fff', color: barShape === 'square' ? '#1565c0' : '#666', cursor: 'pointer' }}
-            onClick={() => { setBarShape('square'); setPartData(prev => ({ ...prev, _barSize: '', _customBarSize: '', _barShape: 'square', rollType: null })); }}>
-            ◼ Square Bar
-          </button>
-        </div>
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">{barShape === 'square' ? 'Square Bar Size *' : 'Flat Bar Size *'}</label>
-        {barShape === 'square' ? (
-          <select className="form-select" value={SQUARE_BAR_SIZES.includes(partData._barSize) ? partData._barSize : (partData._barSize === 'Custom' ? 'Custom' : '')} onChange={(e) => {
-            if (e.target.value === 'Custom') {
-              setPartData({ ...partData, _barSize: 'Custom' });
-            } else {
-              setPartData({ ...partData, _barSize: e.target.value, _customBarSize: '' });
-            }
-          }}>
-            <option value="">Select...</option>
-            {SQUARE_BAR_SIZES.map(s => {
-              if (s === 'Custom') return <option key={s} value={s}>{s}</option>;
-              return <option key={s} value={s}>{formatFraction(parseSquareBarSize(s)?.width || 0)} × {formatFraction(parseSquareBarSize(s)?.width || 0)}</option>;
-            })}
-          </select>
-        ) : (
-        <select className="form-select" value={selectedBarSize} onChange={(e) => {
-          if (e.target.value === 'Custom') {
-            setPartData({ ...partData, _barSize: 'Custom' });
-          } else {
-            setPartData({ ...partData, _barSize: e.target.value, _customBarSize: '' });
-          }
+        <label className="form-label">Channel Size *</label>
+        <select className="form-select" value={selectedChannelSize} onChange={(e) => {
+          if (e.target.value === 'Custom') setPartData({ ...partData, _channelSize: 'Custom' });
+          else setPartData({ ...partData, _channelSize: e.target.value, _customChannelSize: '' });
         }}>
           <option value="">Select...</option>
-          {FLAT_BAR_SIZES.map(s => {
-            if (s === 'Custom') return <option key={s} value={s}>{s}</option>;
-            const p = parseFlatBarSize(s);
-            return <option key={s} value={s}>{formatFraction(p.width)} × {formatFraction(p.thickness)}</option>;
-          })}
+          <optgroup label="C - American Standard">
+            {CHANNEL_SIZES.filter(s => s.startsWith('C') && !s.startsWith('Cu')).map(s => <option key={s} value={s}>{s}</option>)}
+          </optgroup>
+          <optgroup label="MC - Miscellaneous">
+            {CHANNEL_SIZES.filter(s => s.startsWith('MC')).map(s => <option key={s} value={s}>{s}</option>)}
+          </optgroup>
+          <option value="Custom">Custom</option>
         </select>
+        {selectedChannelSize === 'Custom' && (
+          <input className="form-input" style={{ marginTop: 4 }} placeholder='e.g. C8x11.5'
+            value={partData._customChannelSize || ''}
+            onChange={(e) => setPartData({ ...partData, _customChannelSize: e.target.value })} />
         )}
-        {(partData._barSize === 'Custom') && (
-          <input className="form-input" style={{ marginTop: 4 }} placeholder={barShape === 'square' ? 'e.g. 2-1/2 or 2.5' : 'e.g. 4x3/4 or 4" x 3/4"'}
-            value={partData._customBarSize || ''}
-            onChange={(e) => setPartData({ ...partData, _customBarSize: e.target.value })} />
-        )}
+        {parsedSize && <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 2 }}>Depth: {parsedSize.depth}"</div>}
       </div>
 
       <div className="form-group">
@@ -402,14 +281,13 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
         }}>
           <option value="">Select...</option>
           <option value="20'">20'</option>
-          <option value="24'">24'</option>
+          <option value="30'">30'</option>
           <option value="40'">40'</option>
           <option value="Custom">Custom</option>
         </select>
         {partData._lengthOption === 'Custom' && (
           <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter length"
-            value={partData._customLength || ''}
-            onChange={(e) => setPartData({ ...partData, _customLength: e.target.value, length: e.target.value })} />
+            value={partData._customLength || ''} onChange={(e) => setPartData({ ...partData, _customLength: e.target.value, length: e.target.value })} />
         )}
       </div>
 
@@ -418,66 +296,119 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
         {sectionTitle('🔄', 'Roll Information', '#1565c0')}
         <RollToOverride rollToMethod={rollToMethod} onMethodChange={setRollToMethod} />
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
-          <div className="form-group">
-            <label className="form-label">Roll to: *</label>
-            <input className="form-input" value={rollToMethod ? '' : rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder={rollToMethod === 'template' ? 'Per Template/Sample' : rollToMethod === 'print' ? 'Per Print' : 'Enter value'} type="number" step="0.001" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Measured At</label>
-            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
-              <option value="inside">Inside</option>
-              <option value="outside">Outside</option>
-              <option value="centerline">Centerline</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Type</label>
-            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}>
-              <option value="diameter">Diameter</option>
-              <option value="radius">Radius</option>
-            </select>
-          </div>
+          <div className="form-group"><label className="form-label">Roll to: *</label><input className="form-input" value={rollToMethod ? '' : rollValue} onChange={(e) => setRollValue(e.target.value)} placeholder={rollToMethod === 'template' ? 'Per Template/Sample' : rollToMethod === 'print' ? 'Per Print' : 'Enter value'} type="number" step="0.001" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} /></div>
+          <div className="form-group"><label className="form-label">Measured At</label>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasurePoint} onChange={(e) => { setRollMeasurePoint(e.target.value); setPartData(prev => ({ ...prev, _orientationOption: '' })); }}><option value="inside">Inside</option><option value="outside">Outside</option></select></div>
+          <div className="form-group"><label className="form-label">Type</label>
+            <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasureType} onChange={(e) => setRollMeasureType(e.target.value)}><option value="diameter">Diameter</option><option value="radius">Radius</option></select></div>
         </div>
 
-        {/* Easy Way / Hard Way — only for flat bars */}
-        {barShape !== 'square' && (
+        {/* DiaFind - chord & rise to diameter calculator */}
+        {!rollToMethod && (
+          <div style={{ marginBottom: 12 }}>
+            <button type="button" onClick={() => setShowDiaFind(!showDiaFind)}
+              style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+              📐 DiaFind {showDiaFind ? '▾' : '▸'} <span style={{ fontWeight: 400, color: '#888' }}>— chord & rise → diameter</span>
+            </button>
+            {showDiaFind && (
+              <div style={{ marginTop: 8, padding: 12, background: '#f3e5f5', borderRadius: 8, border: '1px solid #ce93d8' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Chord (inches)</label>
+                    <input type="number" step="0.001" className="form-input" value={diaFindChord} onFocus={(e) => e.target.select()} onChange={(e) => setDiaFindChord(e.target.value)} placeholder="e.g. 48" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Rise (inches)</label>
+                    <input type="number" step="0.001" className="form-input" value={diaFindRise} onFocus={(e) => e.target.select()} onChange={(e) => setDiaFindRise(e.target.value)} placeholder="e.g. 2.5" />
+                  </div>
+                </div>
+                {diaFindResult && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                    <span style={{ fontWeight: 700, color: '#6a1b9a', fontSize: '1rem' }}>⌀ {diaFindResult.toFixed(3)}"</span>
+                    <button type="button" onClick={() => { setRollValue(diaFindResult.toFixed(3)); setRollMeasureType('diameter'); setShowDiaFind(false); }}
+                      style={{ padding: '6px 16px', background: '#7b1fa2', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem' }}>
+                      Apply Diameter
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Easy Way / Hard Way */}
         <div style={{ marginBottom: 12 }}>
           <label className="form-label">Roll Direction *</label>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" style={{ flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem',
                 border: `2px solid ${partData.rollType === 'easy_way' ? '#2e7d32' : '#ccc'}`, background: partData.rollType === 'easy_way' ? '#e8f5e9' : '#fff', color: partData.rollType === 'easy_way' ? '#2e7d32' : '#666', cursor: 'pointer' }}
-              onClick={() => setPartData({ ...partData, rollType: 'easy_way' })}>Easy Way (EW) — On Edge</button>
+              onClick={() => setPartData({ ...partData, rollType: 'easy_way', _orientationOption: '' })}>Easy Way (EW) — Flanges Out</button>
             <button type="button" style={{ flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem',
                 border: `2px solid ${partData.rollType === 'hard_way' ? '#c62828' : '#ccc'}`, background: partData.rollType === 'hard_way' ? '#ffebee' : '#fff', color: partData.rollType === 'hard_way' ? '#c62828' : '#666', cursor: 'pointer' }}
-              onClick={() => setPartData({ ...partData, rollType: 'hard_way' })}>Hard Way (HW) — Flat Way</button>
+              onClick={() => setPartData({ ...partData, rollType: 'hard_way', _orientationOption: '' })}>Hard Way (HW) — Flanges In</button>
+            <button type="button" style={{ flex: 1, padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: '0.95rem',
+                border: `2px solid ${partData.rollType === 'on_edge' ? '#1565c0' : '#ccc'}`, background: partData.rollType === 'on_edge' ? '#e3f2fd' : '#fff', color: partData.rollType === 'on_edge' ? '#1565c0' : '#666', cursor: 'pointer' }}
+              onClick={() => setPartData({ ...partData, rollType: 'on_edge', _orientationOption: '' })}>On-Edge (OE)</button>
           </div>
-          {parsedSize && partData.rollType && (
-            <div style={{ fontSize: '0.8rem', color: '#666', marginTop: 6 }}>
-              {partData.rollType === 'easy_way'
-                ? `Rolling on edge: ${formatFraction(parsedSize.thickness)} side against rollers, ${formatFraction(parsedSize.width)} standing up`
-                : `Rolling flat way: ${formatFraction(parsedSize.width)} side against rollers`}
-            </div>
-          )}
         </div>
+
+        {/* Measurement Orientation Diagram — EW+OD or HW+ID */}
+        {partData.rollType && rollMeasurePoint && !rollToMethod && (
+          (partData.rollType === 'easy_way' && rollMeasurePoint === 'outside') ||
+          (partData.rollType === 'hard_way' && rollMeasurePoint === 'inside')
+        ) && (
+          <div style={{
+            padding: 14, borderRadius: 8, marginBottom: 12,
+            background: partData._orientationOption ? '#e8f5e9' : '#fff3e0',
+            border: `2px solid ${partData._orientationOption ? '#4caf50' : '#ff9800'}`
+          }}>
+            <label className="form-label" style={{ 
+              color: partData._orientationOption ? '#2e7d32' : '#e65100', 
+              fontWeight: 700, marginBottom: 10, display: 'block' 
+            }}>
+              {partData._orientationOption ? '✅' : '⚠️'} Which orientation? Select where the {rollMeasurePoint === 'outside' ? 'OD' : 'ID'} is measured from:
+            </label>
+            <div style={{ display: 'flex', gap: 12 }}>
+              {[1, 2].map(opt => {
+                const imgFile = partData.rollType === 'easy_way' 
+                  ? `ChannelEWODOp${opt}.png` 
+                  : `ChannelHWIDOp${opt}.png`;
+                const isSelected = partData._orientationOption === String(opt);
+                return (
+                  <div key={opt}
+                    onClick={() => setPartData({ ...partData, _orientationOption: String(opt) })}
+                    style={{
+                      flex: 1, cursor: 'pointer', borderRadius: 8, overflow: 'hidden',
+                      border: `3px solid ${isSelected ? '#2e7d32' : '#ccc'}`,
+                      background: isSelected ? '#e8f5e9' : '#fff',
+                      boxShadow: isSelected ? '0 0 8px rgba(46,125,50,0.3)' : 'none',
+                      transition: 'all 0.15s'
+                    }}>
+                    <img 
+                      src={`/images/angle-orientation/${imgFile}`} 
+                      alt={`Option ${opt}`}
+                      style={{ width: '100%', display: 'block' }}
+                    />
+                    <div style={{ 
+                      padding: '8px 0', textAlign: 'center', fontWeight: 700,
+                      fontSize: '0.9rem',
+                      color: isSelected ? '#2e7d32' : '#666',
+                      background: isSelected ? '#c8e6c9' : '#f5f5f5'
+                    }}>
+                      {isSelected ? '✓ ' : ''}Option {opt}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
-        {/* Rolling Description Preview */}
         {rollingDescription && (
           <div style={{ background: '#f3e5f5', padding: 12, borderRadius: 8 }}>
             <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#6a1b9a', marginBottom: 6 }}>Rolling Description Preview:</div>
-            <pre style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: '#333' }}>
-              {materialDescription}{'\n'}{rollingDescription}
-            </pre>
+            <pre style={{ margin: 0, fontSize: '0.9rem', whiteSpace: 'pre-wrap', fontFamily: 'monospace', color: '#333' }}>{materialDescription}{'\n'}{rollingDescription}</pre>
           </div>
         )}
-
-        {/* Pitch / Helix */}
-        <PitchSection 
-          partData={partData} 
-          setPartData={setPartData} 
-          clDiameter={clDiameter} 
-          inputDiameter={inputDiameter} 
-          profileOD={profileSize} 
-        />
 
         {/* === COMPLETE RINGS === */}
         <div style={{ marginTop: 12, padding: 14, borderRadius: 8, background: completeRings ? '#e8f5e9' : '#f9f9f9', border: `2px solid ${completeRings ? '#4caf50' : '#e0e0e0'}`, transition: 'all 0.2s' }}>
@@ -488,15 +419,8 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
           {completeRings && (
             <div style={{ marginTop: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Rings Needed</label>
-                  <input type="number" min="1" className="form-input" value={ringsNeeded} onFocus={(e) => e.target.select()} onChange={(e) => setRingsNeeded(parseInt(e.target.value) || 1)} />
-                </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Tangent Each End (inches)</label>
-                  <input type="number" step="0.5" className="form-input" value={tangentLength} onFocus={(e) => e.target.select()} onChange={(e) => setTangentLength(e.target.value)} />
-                  <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Machine grab — straight material each end per ring</div>
-                </div>
+                <div className="form-group" style={{ margin: 0 }}><label className="form-label">Rings Needed</label><input type="number" min="1" className="form-input" value={ringsNeeded} onChange={(e) => setRingsNeeded(parseInt(e.target.value) || 1)} /></div>
+                <div className="form-group" style={{ margin: 0 }}><label className="form-label">Tangent Each End (inches)</label><input type="number" step="0.5" className="form-input" value={tangentLength} onFocus={(e) => e.target.select()} onChange={(e) => setTangentLength(e.target.value)} /><div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Machine grab — straight material each end per ring</div></div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div className="form-group" style={{ margin: 0 }}>
@@ -564,98 +488,42 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
                     </div>
                   </div>
                 {ringCalc && ringCalc.error && (<div style={{ background: '#ffebee', padding: 8, borderRadius: 6, fontSize: '0.85rem', color: '#c62828' }}>⚠️ {ringCalc.error}</div>)}
-              {!ringCalc && clDiameter <= 0 && (<div style={{ background: '#fff3e0', padding: 8, borderRadius: 6, fontSize: '0.85rem', color: '#e65100' }}>⚠️ Enter a roll diameter/radius above to calculate</div>)}
+              {!ringCalc && clDiameter <= 0 && (<div style={{ background: '#fff3e0', padding: 8, borderRadius: 6, fontSize: '0.85rem', color: '#e65100' }}>⚠️ Enter a roll diameter/radius above</div>)}
             </div>
           )}
         </div>
+
+        <PitchSection partData={partData} setPartData={setPartData} clDiameter={clDiameter} inputDiameter={rollMeasureType === 'radius' ? (parseFloat(rollValue) || 0) * 2 : (parseFloat(rollValue) || 0)} profileOD={profileSize} />
       </div>
 
-      {/* === FILE UPLOAD === */}
-      <div style={sectionStyle}>
-        <div className="form-group">
-          <label className="form-label">Custom Shape / Drawing (PDF)</label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px dashed #bbb', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}>
-            <Upload size={16} /> Upload drawing...
-            <input type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }} onChange={(e) => { if (e.target.files[0]) { const file = e.target.files[0]; setPartData({ ...partData, _shapeFile: file, _shapeFileName: file.name }); } }} />
-          </label>
-          {(partData._shapeFile || partData._shapeFileName) && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile?.name || partData._shapeFileName} {!partData._shapeFile && partData._shapeFileName && <span style={{ color: '#999' }}>(saved)</span>}</div>}
-        </div>
-      </div>
+      <div style={sectionStyle}><div className="form-group"><label className="form-label">Custom Shape / Drawing (PDF)</label><label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px dashed #bbb', borderRadius: 6, cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}><Upload size={16} /> Upload drawing...<input type="file" accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }} onChange={(e) => { if (e.target.files[0]) { const file = e.target.files[0]; setPartData({ ...partData, _shapeFile: file, _shapeFileName: file.name }); } }} /></label>{(partData._shapeFile || partData._shapeFileName) && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>📎 {partData._shapeFile?.name || partData._shapeFileName} {!partData._shapeFile && partData._shapeFileName && <span style={{ color: '#999' }}>(saved)</span>}</div>}</div></div>
 
-      {/* === SPECIAL INSTRUCTIONS === */}
-      <div style={sectionStyle}>
-        <div className="form-group">
-          <label className="form-label">Special Instructions</label>
-          <textarea className="form-textarea" value={partData.specialInstructions || ''} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} rows={2} />
-        </div>
-      </div>
+      <div style={sectionStyle}><div className="form-group"><label className="form-label">Special Instructions</label><textarea className="form-textarea" value={partData.specialInstructions || ''} onChange={(e) => setPartData({ ...partData, specialInstructions: e.target.value })} rows={2} /></div></div>
 
       {/* === MATERIAL INFO === */}
       <div style={sectionStyle}>
         {sectionTitle('📦', 'Material Information', '#e65100')}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <div className="form-group">
-            <label className="form-label">Grade</label>
-            <select className="form-select" value={selectedGradeOption} onChange={(e) => {
-              if (e.target.value === 'Custom') setPartData({ ...partData, material: customGrade || 'Custom' });
-              else { setPartData({ ...partData, material: e.target.value }); setCustomGrade(''); }
-            }}>
-              <option value="">Select...</option>
-              {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
-            {(selectedGradeOption === 'Custom' || isCustomGrade) && (
-              <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter grade"
-                value={isCustomGrade ? partData.material : customGrade}
-                onChange={(e) => { setCustomGrade(e.target.value); setPartData({ ...partData, material: e.target.value }); }} />
-            )}
-          </div>
-          <div className="form-group">
-            <label className="form-label">Origin</label>
-            <select className="form-select" value={partData._materialOrigin || ''} onChange={(e) => setPartData({ ...partData, _materialOrigin: e.target.value })}>
-              <option value="">Select...</option>
-              <option value="Domestic">Domestic</option>
-              <option value="Import">Import</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Material Source</label>
-            <select className="form-select" value={partData.materialSource || 'customer_supplied'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
-              <option value="customer_supplied">Client Supplies</option>
-              <option value="we_order">We Order</option>
-              <option value="in_stock">In Stock (We Supply)</option>
-            </select>
-          </div>
+          <div className="form-group"><label className="form-label">Grade</label>
+            <select className="form-select" value={selectedGradeOption} onChange={(e) => { if (e.target.value === 'Custom') setPartData({ ...partData, material: customGrade || 'Custom' }); else { setPartData({ ...partData, material: e.target.value }); setCustomGrade(''); } }}><option value="">Select...</option>{gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}</select>
+            {(selectedGradeOption === 'Custom' || isCustomGrade) && (<input className="form-input" style={{ marginTop: 4 }} placeholder="Enter grade" value={isCustomGrade ? partData.material : customGrade} onChange={(e) => { setCustomGrade(e.target.value); setPartData({ ...partData, material: e.target.value }); }} />)}</div>
+          <div className="form-group"><label className="form-label">Origin</label><select className="form-select" value={partData._materialOrigin || ''} onChange={(e) => setPartData({ ...partData, _materialOrigin: e.target.value })}><option value="">Select...</option><option value="Domestic">Domestic</option><option value="Import">Import</option></select></div>
+          <div className="form-group"><label className="form-label">Material Source</label><select className="form-select" value={partData.materialSource || 'customer_supplied'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}><option value="customer_supplied">Client Supplies</option><option value="we_order">We Order</option><option value="in_stock">In Stock (We Supply)</option></select></div>
         </div>
         {partData.materialSource === 'we_order' && (
           <>
           <div className="form-group" style={{ position: 'relative', marginTop: 8 }}>
             <label className="form-label">Vendor</label>
-            <input className="form-input"
-              value={partData._vendorSearch !== undefined ? partData._vendorSearch : (partData.supplierName || partData.vendor?.name || '')}
-              onChange={async (e) => {
-                const value = e.target.value;
-                setPartData({ ...partData, _vendorSearch: value });
-                if (value.length >= 1) { try { const res = await searchVendors(value); setVendorSuggestions(res.data.data || []); setShowVendorSuggestions(true); } catch { setVendorSuggestions([]); } }
-                else { setPartData({ ...partData, _vendorSearch: value, vendorId: null, supplierName: '', vendor: null }); setVendorSuggestions([]); setShowVendorSuggestions(false); }
-              }}
+            <input className="form-input" value={partData._vendorSearch !== undefined ? partData._vendorSearch : (partData.supplierName || partData.vendor?.name || '')}
+              onChange={async (e) => { const value = e.target.value; setPartData({ ...partData, _vendorSearch: value }); if (value.length >= 1) { try { const res = await searchVendors(value); setVendorSuggestions(res.data.data || []); setShowVendorSuggestions(true); } catch { setVendorSuggestions([]); } } else { setPartData({ ...partData, _vendorSearch: value, vendorId: null, supplierName: '', vendor: null }); setVendorSuggestions([]); setShowVendorSuggestions(false); } }}
               onFocus={async () => { try { const res = await searchVendors(''); setVendorSuggestions(res.data.data || []); setShowVendorSuggestions(true); } catch {} }}
-              onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
-              placeholder="Search or add vendor..." autoComplete="off" />
+              onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)} placeholder="Search or add vendor..." autoComplete="off" />
             {showVendorSuggestions && (
               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid #ddd', borderRadius: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-                {vendorSuggestions.map(v => (
-                  <div key={v.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                    onMouseDown={() => { setPartData({ ...partData, vendorId: v.id, supplierName: v.name, vendor: null, _vendorSearch: undefined }); setShowVendorSuggestions(false); }}>
-                    <strong>{v.name}</strong>{v.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{v.contactPhone}</span>}
-                  </div>
-                ))}
+                {vendorSuggestions.map(v => (<div key={v.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }} onMouseDown={() => { setPartData({ ...partData, vendorId: v.id, supplierName: v.name, vendor: null, _vendorSearch: undefined }); setShowVendorSuggestions(false); }}><strong>{v.name}</strong>{v.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{v.contactPhone}</span>}</div>))}
                 {partData._vendorSearch && partData._vendorSearch.length >= 2 && !vendorSuggestions.some(v => v.name.toLowerCase() === (partData._vendorSearch || '').toLowerCase()) && (
                   <div style={{ padding: '8px 12px', cursor: 'pointer', background: '#e8f5e9', color: '#2e7d32', fontWeight: 600 }}
-                    onMouseDown={async () => {
-                      try { const resp = await createVendor({ name: partData._vendorSearch });
-                        if (resp.data.data) { setPartData({ ...partData, vendorId: resp.data.data.id, supplierName: resp.data.data.name, vendor: null, _vendorSearch: undefined }); showMessage(`Vendor "${resp.data.data.name}" created`); }
-                      } catch { setError('Failed to create vendor'); } setShowVendorSuggestions(false);
-                    }}>+ Add "{partData._vendorSearch}" as new vendor</div>
+                    onMouseDown={async () => { try { const resp = await createVendor({ name: partData._vendorSearch }); if (resp.data.data) { setPartData({ ...partData, vendorId: resp.data.data.id, supplierName: resp.data.data.name, vendor: null, _vendorSearch: undefined }); showMessage(`Vendor "${resp.data.data.name}" created`); } } catch { setError('Failed to create vendor'); } setShowVendorSuggestions(false); }}>+ Add "{partData._vendorSearch}" as new vendor</div>
                 )}
               </div>
             )}
@@ -669,11 +537,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
           </div>
           </>
         )}
-        <div className="form-group" style={{ marginTop: 12 }}>
-          <label className="form-label">Material Description (for ordering)</label>
-          <textarea className="form-textarea" value={partData.materialDescription || ''} onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })} rows={2} style={{ fontFamily: 'monospace', fontSize: '0.9rem' }} />
-          <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 2 }}>Auto-generated — edit as needed</div>
-        </div>
+        <div className="form-group" style={{ marginTop: 12 }}><label className="form-label">Material Description (for ordering)</label><textarea className="form-textarea" value={partData.materialDescription || ''} onChange={(e) => setPartData({ ...partData, materialDescription: e.target.value })} rows={2} style={{ fontFamily: 'monospace', fontSize: '0.9rem' }} /><div style={{ fontSize: '0.75rem', color: '#999', marginTop: 2 }}>Auto-generated — edit as needed</div></div>
       </div>
 
       {/* === PRICING === */}
@@ -709,14 +573,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9' }}><strong>Line Total ({qty} × ${unitPrice.toFixed(2)})</strong><strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong></div>
         </div>
       </div>
-      {/* === TRACKING === */}
-      <div style={sectionStyle}>
-        {sectionTitle('🏷️', 'Tracking', '#616161')}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="form-group"><label className="form-label">Client Part Number</label><input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" /></div>
-          <HeatNumberInput partData={partData} setPartData={setPartData} />
-        </div>
-      </div>
+      <div style={sectionStyle}>{sectionTitle('🏷️', 'Tracking', '#616161')}<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div className="form-group"><label className="form-label">Client Part Number</label><input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" /></div><HeatNumberInput partData={partData} setPartData={setPartData} /></div></div>
     </>
   );
 }
