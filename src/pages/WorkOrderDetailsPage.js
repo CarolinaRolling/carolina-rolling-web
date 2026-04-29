@@ -128,6 +128,8 @@ function WorkOrderDetailsPage() {
   const fileInputRefs = useRef({});
   const docInputRef = useRef(null);
   const mtrInputRef = useRef(null);
+  const shippingDocInputRef = useRef(null);
+  const [uploadingShippingDoc, setUploadingShippingDoc] = useState(false);
   const [defaultTaxRate, setDefaultTaxRate] = useState(9.75);
   const [showLinkShipmentModal, setShowLinkShipmentModal] = useState(false);
   const [unlinkedShipments, setUnlinkedShipments] = useState([]);
@@ -3931,6 +3933,7 @@ function WorkOrderDetailsPage() {
                       {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }) : ''}
                     </span>
                     {doc.documentType === 'coc' && <span style={{ background: '#6a1b9a', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>COC</span>}
+                    {doc.documentType === 'shipping_doc' && <span style={{ background: '#1565c0', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>SHIPPING</span>}
                     <button onClick={() => handleViewDocument(doc.id)} style={{ background: '#1976d2', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
                       <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
                     </button>
@@ -3946,6 +3949,65 @@ function WorkOrderDetailsPage() {
               </div>
             ) : (
               <div style={{ background: '#fafafa', padding: 20, borderRadius: 8, textAlign: 'center', color: '#999' }}>No documents uploaded yet</div>
+            )}
+          </div>
+
+          {/* Shipping Documents — portal visible by default */}
+          <div className="card" style={{ marginBottom: 16, border: '1.5px solid #1565c0' }}>
+            <div className="card-header" style={{ background: '#e3f2fd' }}>
+              <h3 className="card-title" style={{ color: '#1565c0' }}>
+                🚚 Shipping Documents
+                <span style={{ fontSize: '0.75rem', fontWeight: 400, marginLeft: 8, color: '#555' }}>({(order.documents || []).filter(d => d.documentType === 'shipping_doc').length})</span>
+              </h3>
+              <button className="btn btn-sm btn-outline" onClick={() => shippingDocInputRef.current?.click()} disabled={uploadingShippingDoc}
+                style={{ borderColor: '#1565c0', color: '#1565c0' }}>
+                <Upload size={14} /> {uploadingShippingDoc ? 'Uploading...' : 'Upload Shipping Doc'}
+              </button>
+              <input type="file" multiple accept=".pdf,.doc,.docx,image/*" ref={shippingDocInputRef} style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files);
+                  if (!files.length) return;
+                  setUploadingShippingDoc(true);
+                  try {
+                    await uploadWorkOrderDocuments(id, files, 'shipping_doc', true);
+                    await loadOrder();
+                    showMessage('Shipping document(s) uploaded — visible on client portal');
+                  } catch { setError('Failed to upload shipping document'); }
+                  finally { setUploadingShippingDoc(false); e.target.value = ''; }
+                }} />
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>
+              Bill of lading, freight receipts, delivery confirmations from trucking companies. 
+              <span style={{ color: '#2e7d32', fontWeight: 600 }}> Automatically visible on client portal.</span>
+            </p>
+            {(order.documents || []).filter(d => d.documentType === 'shipping_doc').length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(order.documents).filter(d => d.documentType === 'shipping_doc').map(doc => (
+                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#e8f5e9', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', border: '1px solid #a5d6a7' }}>
+                    <File size={16} color="#1565c0" />
+                    <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#999' }}>
+                      {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }) : ''}
+                    </span>
+                    <span style={{ background: '#1565c0', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>SHIPPING</span>
+                    <span style={{ color: '#2e7d32', fontSize: '0.72rem', fontWeight: 600 }}>🌐 Portal</span>
+                    <button onClick={() => handleViewDocument(doc.id)} style={{ background: '#1976d2', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
+                      <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
+                    </button>
+                    <button onClick={async () => {
+                      try { await toggleDocumentPortal(id, doc.id, !doc.portalVisible); await loadOrder(); } catch {}
+                    }} title={doc.portalVisible ? 'Visible on client portal — click to hide' : 'Hidden from portal — click to show'}
+                      style={{ background: 'none', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', fontSize: '0.75rem', color: doc.portalVisible ? '#2e7d32' : '#bbb' }}>
+                      {doc.portalVisible ? '🌐' : '🔒'}
+                    </button>
+                    <button onClick={() => handleDeleteDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ background: '#fafafa', padding: 20, borderRadius: 8, textAlign: 'center', color: '#999', fontSize: '0.85rem' }}>
+                No shipping documents uploaded yet
+              </div>
             )}
           </div>
 
