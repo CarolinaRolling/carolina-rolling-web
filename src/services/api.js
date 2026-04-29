@@ -174,11 +174,10 @@ export const deletePartFile = (workOrderId, partId, fileId) =>
   api.delete(`/workorders/${workOrderId}/parts/${partId}/files/${fileId}`);
 
 // Work Order Documents (for order-level attachments like POs, supplier docs)
-export const uploadWorkOrderDocuments = (workOrderId, files, documentType, portalVisible = false) => {
+export const uploadWorkOrderDocuments = (workOrderId, files, documentType) => {
   const formData = new FormData();
   files.forEach((file) => formData.append('documents', file));
   if (documentType) formData.append('documentType', documentType);
-  formData.append('portalVisible', String(portalVisible));
   return api.post(`/workorders/${workOrderId}/documents`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
