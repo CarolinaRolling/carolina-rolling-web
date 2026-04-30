@@ -103,6 +103,7 @@ function WorkOrderDetailsPage() {
   const [uploadingMtrs, setUploadingMtrs] = useState(false);
   const [showPickupModal, setShowPickupModal] = useState(false);
   const [pickupData, setPickupData] = useState({ pickedUpBy: '', type: null, items: {} });
+  const [editShipmentModal, setEditShipmentModal] = useState(null); // { idx, entry } or null
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [showCocModal, setShowCocModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -4261,6 +4262,10 @@ function WorkOrderDetailsPage() {
                         }} title="Print pickup receipt" style={{ background: 'none', border: '1px solid #1976d2', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', color: '#1976d2', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
                           <Printer size={12} /> Print
                         </button>
+                        <button onClick={() => setEditShipmentModal({ idx, entry: JSON.parse(JSON.stringify(entry)) })}
+                          title="Edit this shipment" style={{ background: '#1976d2', border: 'none', borderRadius: 4, padding: '3px 8px', cursor: 'pointer', color: 'white', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <Edit size={12} /> Edit
+                        </button>
                         <button onClick={async () => {
                           if (!window.confirm(`Delete this shipment record? Quantities will be restored.`)) return;
                           try { await deletePickupEntry(id, idx); await loadOrder(); showMessage('Shipment deleted'); } catch { setError('Failed'); }
@@ -4517,6 +4522,66 @@ function WorkOrderDetailsPage() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Edit Shipment Modal */}
+      {editShipmentModal && (
+        <div className="modal-overlay" onClick={() => setEditShipmentModal(null)}>
+          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">✏️ Edit Shipment #{editShipmentModal.idx + 1}</h3>
+              <button className="btn-icon" onClick={() => setEditShipmentModal(null)}><X size={20} /></button>
+            </div>
+            <div className="modal-body">
+              {/* Picked up by */}
+              <div className="form-group" style={{ marginBottom: 20 }}>
+                <label className="form-label" style={{ fontWeight: 700, fontSize: '0.95rem' }}>🧑 Picked Up By</label>
+                <input className="form-input" value={editShipmentModal.entry.pickedUpBy || ''}
+                  placeholder="Driver or company name"
+                  onChange={e => setEditShipmentModal(prev => ({
+                    ...prev, entry: { ...prev.entry, pickedUpBy: e.target.value }
+                  }))} />
+              </div>
+              {/* Items */}
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 10, color: '#333' }}>📦 Items</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(editShipmentModal.entry.items || []).map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: '#f9f9f9', borderRadius: 6, border: '1px solid #e0e0e0' }}>
+                    <div style={{ flex: 1, fontSize: '0.85rem' }}>
+                      <span style={{ fontWeight: 600 }}>Part #{item.partNumber}</span>
+                      {item.clientPartNumber && <span style={{ color: '#1976d2', marginLeft: 6 }}>{item.clientPartNumber}</span>}
+                      {item.description && <div style={{ color: '#666', fontSize: '0.78rem', marginTop: 2 }}>{(item.description || '').replace(/^\d+pc:\s*/i, '')}</div>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <label style={{ fontSize: '0.8rem', color: '#555', whiteSpace: 'nowrap' }}>Qty:</label>
+                      <input type="number" min="0" style={{ width: 64, padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc', fontSize: '0.9rem', textAlign: 'center' }}
+                        value={item.quantity}
+                        onChange={e => {
+                          const updated = [...editShipmentModal.entry.items];
+                          updated[i] = { ...updated[i], quantity: parseInt(e.target.value) || 0 };
+                          setEditShipmentModal(prev => ({ ...prev, entry: { ...prev.entry, items: updated } }));
+                        }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setEditShipmentModal(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={async () => {
+                try {
+                  const { idx, entry } = editShipmentModal;
+                  const cleanItems = entry.items.filter(i => (i.quantity || 0) > 0);
+                  if (cleanItems.length === 0) { setError('At least one item must have a quantity'); return; }
+                  await updatePickupEntry(id, idx, { pickedUpBy: entry.pickedUpBy, items: cleanItems });
+                  await loadOrder();
+                  setEditShipmentModal(null);
+                  showMessage('Shipment updated');
+                } catch { setError('Failed to update shipment'); }
+              }}>💾 Save Changes</button>
+            </div>
+          </div>
         </div>
       )}
 
