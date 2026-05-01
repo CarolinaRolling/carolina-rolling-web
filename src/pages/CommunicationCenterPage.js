@@ -64,6 +64,8 @@ export default function CommunicationCenterPage() {
     try {
       const res = await getCommScanLogs();
       setLogs(res.data.data || []);
+      const st = res.data.status;
+      if (st?.running) setScanning(true);
     } catch { /* silent */ }
     finally { setLogsLoading(false); }
   };
@@ -74,15 +76,23 @@ export default function CommunicationCenterPage() {
     setShowLogs(true);
     try {
       await scanCommNow();
-      // Poll logs every 2s for 16s to show progress
+      // Poll until scan completes (status.running === false) — max 5 minutes
       let polls = 0;
+      const maxPolls = 150; // 5 min at 2s intervals
       const interval = setInterval(async () => {
-        await fetchLogs();
         polls++;
-        if (polls >= 8) {
+        const res = await getCommScanLogs().catch(() => null);
+        if (res) setLogs(res.data.data || []);
+        const status = res?.data?.status;
+        // Stop when running=false OR timeout
+        if ((status && !status.running) || polls >= maxPolls) {
           clearInterval(interval);
+          if (status?.error) {
+            setError('Scan failed: ' + status.error);
+          } else {
+            setMessage('Scan complete — inbox refreshed');
+          }
           await loadEmails();
-          setMessage('Scan complete — inbox refreshed');
           setScanning(false);
         }
       }, 2000);
