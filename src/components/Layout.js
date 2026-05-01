@@ -56,7 +56,7 @@ function Layout({ children }) {
           <ul className="sidebar-nav">
             <li><NavLink to="/inventory" className={({ isActive }) => isActive ? 'active' : ''}><Package size={20} /><span>Inventory</span></NavLink></li>
             <li><NavLink to="/scheduling" className={({ isActive }) => isActive ? 'active' : ''}><CalendarClock size={20} /><span>Scheduling</span></NavLink></li>
-            <li><NavLink to="/shipments" className={({ isActive }) => isActive ? 'active' : ''}><Truck size={20} /><span>Shipments</span></NavLink></li>
+            <li><NavLink to="/shipments" className={({ isActive }) => isActive ? 'active' : ''}><Truck size={20} /><span>Receiving</span></NavLink></li>
             <li><NavLink to="/purchase-orders" className={({ isActive }) => isActive ? 'active' : ''}><ShoppingCart size={20} /><span>Purchase Orders</span></NavLink></li>
             <li><NavLink to="/pending-orders" className={({ isActive }) => isActive ? 'active' : ''}><FileCode size={20} /><span>Pending Orders</span>{pendingOrderCount > 0 && <span style={{ marginLeft: 'auto', background: '#E65100', color: 'white', borderRadius: 10, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 700, minWidth: 18, textAlign: 'center' }}>{pendingOrderCount}</span>}</NavLink></li>
             <li><NavLink to="/estimates" className={({ isActive }) => isActive ? 'active' : ''}><DollarSign size={20} /><span>Estimates</span></NavLink></li>

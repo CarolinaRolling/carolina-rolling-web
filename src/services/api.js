@@ -555,3 +555,5 @@ export const deleteCalendarEvent = (id) => api.delete(`/business/calendar/${id}`
 export const getCommEmails = (params) => api.get('/com-center/emails', { params });
 export const archiveCommEmail = (id) => api.patch(`/com-center/emails/${id}/archive`);
 export const updateCommEmailCategory = (id, category) => api.patch(`/com-center/emails/${id}/category`, { category });
+
+export const scanCommNow = () => api.post('/com-center/scan-now');
