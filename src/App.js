@@ -8,6 +8,8 @@ import ShipmentDetailsPage from './pages/ShipmentDetailsPage';
 import NewShipmentPage from './pages/NewShipmentPage';
 import InboundPage from './pages/InboundPage';
 import InboundDetailsPage from './pages/InboundDetailsPage';
+import CombinedShipmentsPage from './pages/CombinedShipmentsPage';
+import CommunicationCenterPage from './pages/CommunicationCenterPage';
 import PendingOrdersPage from './pages/PendingOrdersPage';
 import WorkOrdersPage from './pages/WorkOrdersPage';
 import WorkOrderDetailsPage from './pages/WorkOrderDetailsPage';
@@ -162,6 +164,9 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       
+      <Route path="/com-center" element={
+          <Layout><CommunicationCenterPage /></Layout>
+        } />
       <Route path="/invoicing" element={
         <ProtectedRoute>
           <Layout><InvoiceCenterPage /></Layout>

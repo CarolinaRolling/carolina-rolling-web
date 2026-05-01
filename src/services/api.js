@@ -550,3 +550,8 @@ export const createCalendarEvent = (data) => api.post('/business/calendar', data
 export const updateCalendarEvent = (id, data) => api.put(`/business/calendar/${id}`, data);
 export const completeCalendarEvent = (id) => api.post(`/business/calendar/${id}/complete`);
 export const deleteCalendarEvent = (id) => api.delete(`/business/calendar/${id}`);
+
+// Communication Center
+export const getCommEmails = (params) => api.get('/com-center/emails', { params });
+export const archiveCommEmail = (id) => api.patch(`/com-center/emails/${id}/archive`);
+export const updateCommEmailCategory = (id, category) => api.patch(`/com-center/emails/${id}/category`, { category });

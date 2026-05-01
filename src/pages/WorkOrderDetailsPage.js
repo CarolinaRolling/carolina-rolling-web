@@ -985,7 +985,8 @@ function WorkOrderDetailsPage() {
               clientPartNumber: part?.clientPartNumber || '',
               description: fd._materialDescription || part?.materialDescription || part?.sectionSize || PART_TYPES[part?.partType]?.label || part?.partType,
               rollingDescription: fd._rollingDescription || part?.rollingDescription || '',
-              quantity: parseInt(v.qty) || 0
+              quantity: parseInt(v.qty) || 0,
+              _linkedPartId: fd._linkedPartId || part?._linkedPartId || null
             };
           })
           .filter(i => i.quantity > 0);
@@ -4989,7 +4990,7 @@ function WorkOrderDetailsPage() {
 
       {/* Pickup Modal */}
       {showPickupModal && (
-        <div className="modal-overlay" onClick={() => { setShowPickupModal(false); setPickupData({ pickedUpBy: '', type: null, items: {} }); }}>
+        <div className="modal-overlay">
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
             <div className="modal-header">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Truck size={22} /> Record Pickup</h3>
