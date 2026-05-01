@@ -557,3 +557,5 @@ export const archiveCommEmail = (id) => api.patch(`/com-center/emails/${id}/arch
 export const updateCommEmailCategory = (id, category) => api.patch(`/com-center/emails/${id}/category`, { category });
 
 export const scanCommNow = () => api.post('/com-center/scan-now');
+
+export const getCommScanLogs = () => api.get('/com-center/logs');

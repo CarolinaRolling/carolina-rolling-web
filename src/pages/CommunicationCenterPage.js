@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap } from 'lucide-react';
-import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow } from '../services/api';
+import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs } from '../services/api';
 
 const CATEGORIES = [
   { key: 'all',            label: 'All',            color: '#555',    bg: '#f5f5f5', icon: '✉️' },
@@ -37,6 +37,9 @@ export default function CommunicationCenterPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [showLogs, setShowLogs] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeCategory, setActiveCategory] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
@@ -56,13 +59,38 @@ export default function CommunicationCenterPage() {
   useEffect(() => { loadEmails(); }, [loadEmails]);
   useEffect(() => { if (message) { const t = setTimeout(() => setMessage(null), 4000); return () => clearTimeout(t); } }, [message]);
 
+  const fetchLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const res = await getCommScanLogs();
+      setLogs(res.data.data || []);
+    } catch { /* silent */ }
+    finally { setLogsLoading(false); }
+  };
+
   const handleScanNow = async () => {
     setScanning(true);
     setMessage('Scanning all accounts...');
+    setShowLogs(true);
     try {
       await scanCommNow();
-      setTimeout(async () => { await loadEmails(); setMessage('Scan complete'); setScanning(false); }, 8000);
-    } catch { setError('Scan failed'); setScanning(false); }
+      // Poll logs every 2s for 16s to show progress
+      let polls = 0;
+      const interval = setInterval(async () => {
+        await fetchLogs();
+        polls++;
+        if (polls >= 8) {
+          clearInterval(interval);
+          await loadEmails();
+          setMessage('Scan complete — inbox refreshed');
+          setScanning(false);
+        }
+      }, 2000);
+    } catch (e) {
+      setError('Scan request failed: ' + (e.response?.data?.error?.message || e.message));
+      setScanning(false);
+      await fetchLogs();
+    }
   };
 
   const handleArchive = async (id) => {
@@ -95,11 +123,35 @@ export default function CommunicationCenterPage() {
           <button onClick={handleScanNow} disabled={scanning} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', background: scanning ? '#aaa' : '#f57c00', color: 'white', border: 'none', borderRadius: 6, cursor: scanning ? 'not-allowed' : 'pointer', fontSize: '0.82rem', fontWeight: 700 }}>
             ⚡ {scanning ? 'Scanning...' : 'Scan Now'}
           </button>
+          <button onClick={async () => { setShowLogs(s => !s); if (!showLogs) await fetchLogs(); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: showLogs ? '#1565c0' : 'white', color: showLogs ? 'white' : '#555', border: '1px solid #ddd', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
+            📋 {showLogs ? 'Hide Logs' : 'Logs'}
+          </button>
         </div>
       </div>
 
       {message && <div style={{ padding: '7px 24px', background: '#e8f5e9', borderBottom: '1px solid #a5d6a7', color: '#2e7d32', fontSize: '0.82rem', fontWeight: 600, flexShrink: 0 }}>{message}</div>}
       {error && <div style={{ padding: '7px 24px', background: '#ffebee', borderBottom: '1px solid #ef9a9a', color: '#c62828', fontSize: '0.82rem', flexShrink: 0 }}>{error}</div>}
+
+      {/* Scan Logs Panel */}
+      {showLogs && (
+        <div style={{ background: '#1a1a2e', color: '#e0e0e0', fontSize: '0.75rem', fontFamily: 'monospace', padding: '10px 16px', maxHeight: 200, overflowY: 'auto', flexShrink: 0, borderBottom: '1px solid #333' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ color: '#aaa', fontWeight: 600 }}>📋 Scan Log {logsLoading && <span style={{ color: '#f57c00' }}>(refreshing...)</span>}</span>
+            <button onClick={fetchLogs} style={{ background: 'none', border: '1px solid #444', color: '#aaa', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: '0.7rem' }}>↻ Refresh</button>
+          </div>
+          {logs.length === 0 ? (
+            <div style={{ color: '#666', fontStyle: 'italic' }}>No log entries yet — click Scan Now to start</div>
+          ) : logs.map((log, i) => (
+            <div key={i} style={{ padding: '2px 0', borderBottom: '1px solid #222', color: log.level === 'error' ? '#ff6b6b' : log.level === 'warn' ? '#ffd93d' : '#6bcb77' }}>
+              <span style={{ color: '#666', marginRight: 8 }}>{new Date(log.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+              <span style={{ color: log.level === 'error' ? '#ff6b6b' : '#aaa', marginRight: 6 }}>[{log.level.toUpperCase()}]</span>
+              <span>{log.message}</span>
+              {log.detail && <div style={{ color: '#ff8c8c', paddingLeft: 80, whiteSpace: 'pre-wrap', fontSize: '0.7rem', marginTop: 1 }}>{log.detail}</div>}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Sidebar */}
