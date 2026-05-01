@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap } from 'lucide-react';
-import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs } from '../services/api';
+import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection } from '../services/api';
 
 const CATEGORIES = [
   { key: 'all',            label: 'All',            color: '#555',    bg: '#f5f5f5', icon: '✉️' },
@@ -132,6 +132,21 @@ export default function CommunicationCenterPage() {
           </button>
           <button onClick={handleScanNow} disabled={scanning} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', background: scanning ? '#aaa' : '#f57c00', color: 'white', border: 'none', borderRadius: 6, cursor: scanning ? 'not-allowed' : 'pointer', fontSize: '0.82rem', fontWeight: 700 }}>
             ⚡ {scanning ? 'Scanning...' : 'Scan Now'}
+          </button>
+          <button onClick={async () => {
+            setShowLogs(true);
+            setMessage('Testing Gmail connections...');
+            try {
+              const res = await testCommConnection();
+              const results = res.data.results || [];
+              results.forEach(r => {
+                if (r.ok) setLogs(prev => [{ ts: new Date().toISOString(), level: 'info', message: '✅ ' + r.account + ' connected — ' + r.messagesTotal + ' total messages', detail: null }, ...prev]);
+                else setLogs(prev => [{ ts: new Date().toISOString(), level: 'error', message: '❌ ' + r.account + ' FAILED', detail: r.error }, ...prev]);
+              });
+              setMessage(results.every(r => r.ok) ? 'All accounts connected' : 'Some accounts have errors — check logs');
+            } catch(e) { setError('Test failed: ' + (e.response?.data?.error || e.message)); }
+          }} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'white', color: '#2e7d32', border: '1px solid #a5d6a7', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
+            🔌 Test Connection
           </button>
           <button onClick={async () => { setShowLogs(s => !s); if (!showLogs) await fetchLogs(); }}
             style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: showLogs ? '#1565c0' : 'white', color: showLogs ? 'white' : '#555', border: '1px solid #ddd', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>

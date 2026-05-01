@@ -558,4 +558,6 @@ export const updateCommEmailCategory = (id, category) => api.patch(`/com-center/
 
 export const scanCommNow = () => api.post('/com-center/scan-now');
 
-export const getCommScanLogs = () => api.get('/com-center/logs');
+export const getCommScanLogs = () => api.get('/com-center/logs', { params: { _t: Date.now() } });
+
+export const testCommConnection = () => api.get('/com-center/test-connection');
