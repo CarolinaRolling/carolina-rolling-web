@@ -275,7 +275,12 @@ function AppRoutes() {
 
       <Route path="/shipments" element={
         <ProtectedRoute>
-          <Layout><ShipmentsAdminPage /></Layout>
+          <Layout><CombinedShipmentsPage /></Layout>
+        </ProtectedRoute>
+      } />
+      <Route path="/inbound" element={
+        <ProtectedRoute>
+          <Layout><CombinedShipmentsPage initialTab="inbound" /></Layout>
         </ProtectedRoute>
       } />
       
