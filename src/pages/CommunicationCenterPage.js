@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap } from 'lucide-react';
-import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection } from '../services/api';
+import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan } from '../services/api';
 
 const CATEGORIES = [
   { key: 'all',            label: 'All',            color: '#555',    bg: '#f5f5f5', icon: '✉️' },
@@ -45,6 +45,8 @@ export default function CommunicationCenterPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [message, setMessage] = useState(null);
   const [categoryMenuId, setCategoryMenuId] = useState(null);
+  const logsRef = React.useRef(null);
+  const userScrolledUp = React.useRef(false);
 
   const loadEmails = useCallback(async () => {
     setLoading(true); setError(null);
@@ -66,6 +68,10 @@ export default function CommunicationCenterPage() {
       setLogs(res.data.data || []);
       const st = res.data.status;
       if (st?.running) setScanning(true);
+      // Auto-scroll to bottom only if user hasn't scrolled up
+      if (!userScrolledUp.current && logsRef.current) {
+        logsRef.current.scrollTop = logsRef.current.scrollHeight;
+      }
     } catch { /* silent */ }
     finally { setLogsLoading(false); }
   };
@@ -130,9 +136,17 @@ export default function CommunicationCenterPage() {
           <button onClick={loadEmails} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'white', color: '#555', border: '1px solid #ddd', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
             <RefreshCw size={13} /> Refresh
           </button>
-          <button onClick={handleScanNow} disabled={scanning} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', background: scanning ? '#aaa' : '#f57c00', color: 'white', border: 'none', borderRadius: 6, cursor: scanning ? 'not-allowed' : 'pointer', fontSize: '0.82rem', fontWeight: 700 }}>
-            ⚡ {scanning ? 'Scanning...' : 'Scan Now'}
-          </button>
+          {scanning ? (
+            <button onClick={async () => { await cancelCommScan().catch(() => {}); setScanning(false); setMessage('Scan cancelled'); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', background: '#c62828', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700 }}>
+              ✕ Cancel Scan
+            </button>
+          ) : (
+            <button onClick={handleScanNow}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', background: '#f57c00', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700 }}>
+              ⚡ Scan Now
+            </button>
+          )}
           <button onClick={async () => {
             setShowLogs(true);
             setMessage('Testing Gmail connections...');
@@ -160,21 +174,58 @@ export default function CommunicationCenterPage() {
 
       {/* Scan Logs Panel */}
       {showLogs && (
-        <div style={{ background: '#1a1a2e', color: '#e0e0e0', fontSize: '0.75rem', fontFamily: 'monospace', padding: '10px 16px', maxHeight: 200, overflowY: 'auto', flexShrink: 0, borderBottom: '1px solid #333' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ color: '#aaa', fontWeight: 600 }}>📋 Scan Log {logsLoading && <span style={{ color: '#f57c00' }}>(refreshing...)</span>}</span>
-            <button onClick={fetchLogs} style={{ background: 'none', border: '1px solid #444', color: '#aaa', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: '0.7rem' }}>↻ Refresh</button>
-          </div>
-          {logs.length === 0 ? (
-            <div style={{ color: '#666', fontStyle: 'italic' }}>No log entries yet — click Scan Now to start</div>
-          ) : logs.map((log, i) => (
-            <div key={i} style={{ padding: '2px 0', borderBottom: '1px solid #222', color: log.level === 'error' ? '#ff6b6b' : log.level === 'warn' ? '#ffd93d' : '#6bcb77' }}>
-              <span style={{ color: '#666', marginRight: 8 }}>{new Date(log.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-              <span style={{ color: log.level === 'error' ? '#ff6b6b' : '#aaa', marginRight: 6 }}>[{log.level.toUpperCase()}]</span>
-              <span>{log.message}</span>
-              {log.detail && <div style={{ color: '#ff8c8c', paddingLeft: 80, whiteSpace: 'pre-wrap', fontSize: '0.7rem', marginTop: 1 }}>{log.detail}</div>}
+        <div style={{ background: '#1a1a2e', color: '#e0e0e0', fontSize: '0.75rem', fontFamily: 'monospace', flexShrink: 0, borderBottom: '2px solid #333' }}>
+          {/* Log toolbar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 14px', borderBottom: '1px solid #333', background: '#111' }}>
+            <span style={{ color: '#aaa', fontWeight: 600, fontSize: '0.78rem' }}>
+              📋 Scan Log
+              {scanning && <span style={{ color: '#f57c00', marginLeft: 8 }}>● RUNNING</span>}
+              {!scanning && logs.length > 0 && <span style={{ color: '#888', marginLeft: 8 }}>({logs.length} entries)</span>}
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {userScrolledUp.current && (
+                <button onClick={() => { userScrolledUp.current = false; if (logsRef.current) logsRef.current.scrollTop = logsRef.current.scrollHeight; }}
+                  style={{ background: '#f57c00', border: 'none', color: 'white', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 700 }}>
+                  ↓ Resume scroll
+                </button>
+              )}
+              <button onClick={() => { userScrolledUp.current = false; fetchLogs(); }}
+                style={{ background: 'none', border: '1px solid #444', color: '#aaa', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: '0.7rem' }}>↻ Refresh</button>
+              <button onClick={() => setLogs([])}
+                style={{ background: 'none', border: '1px solid #444', color: '#888', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: '0.7rem' }}>Clear</button>
             </div>
-          ))}
+          </div>
+          {/* Log entries */}
+          <div ref={logsRef} style={{ maxHeight: 240, overflowY: 'auto', padding: '8px 14px' }}
+            onScroll={(e) => {
+              const el = e.target;
+              const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+              userScrolledUp.current = !atBottom;
+            }}>
+            {logs.length === 0 ? (
+              <div style={{ color: '#555', fontStyle: 'italic', padding: '4px 0' }}>No log entries yet — click Scan Now to start</div>
+            ) : [...logs].reverse().map((log, i) => (
+              <div key={i} style={{ padding: '3px 0', borderBottom: '1px solid #1e1e2e' }}>
+                <span style={{ color: '#555', marginRight: 6, userSelect: 'none' }}>
+                  {new Date(log.ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+                {log.level === 'error' && (
+                  <span style={{ background: '#c62828', color: 'white', borderRadius: 3, padding: '0 5px', marginRight: 6, fontSize: '0.68rem', fontWeight: 700 }}>ERROR</span>
+                )}
+                {log.level === 'warn' && (
+                  <span style={{ background: '#f57c00', color: 'white', borderRadius: 3, padding: '0 5px', marginRight: 6, fontSize: '0.68rem', fontWeight: 700 }}>WARN</span>
+                )}
+                <span style={{ color: log.level === 'error' ? '#ff8a80' : log.level === 'warn' ? '#ffd740' : '#b9f6ca' }}>
+                  {log.message}
+                </span>
+                {log.detail && (
+                  <div style={{ color: '#ff6e6e', paddingLeft: 16, whiteSpace: 'pre-wrap', fontSize: '0.7rem', marginTop: 2, background: '#2a0000', padding: '4px 8px', borderRadius: 4, marginTop: 3 }}>
+                    {log.detail}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
