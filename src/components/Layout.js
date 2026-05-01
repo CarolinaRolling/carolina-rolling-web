@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, DollarSign, Database, Hash, ShoppingCart, FileCode, Truck, Users, Wrench, FileText, Briefcase } from 'lucide-react';
+import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, DollarSign, Database, Hash, ShoppingCart, FileCode, Truck, Users, Wrench, FileText, Briefcase, MessageSquare } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
 import TodoBar from './TodoBar';
