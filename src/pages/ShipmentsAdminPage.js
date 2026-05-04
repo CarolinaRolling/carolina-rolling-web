@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Trash2, Archive, Package, ArrowLeft, CheckSquare, Square, Link, AlertCircle, Edit2, X, Save, FileText } from 'lucide-react';
-import { getShipments, getBlankShipper, getBlankShipper, deleteShipment, archiveShipment, bulkArchiveShipments, bulkDeleteShipments, updateShipment, linkShipmentToWorkOrder, getWorkOrders } from '../services/api';
+import { getShipments, deleteShipment, archiveShipment, bulkArchiveShipments, bulkDeleteShipments, updateShipment, linkShipmentToWorkOrder, getWorkOrders } from '../services/api';
 
 const STATUS_CONFIG = {
   received: { label: 'Received', color: '#1976d2', bg: '#e3f2fd' },

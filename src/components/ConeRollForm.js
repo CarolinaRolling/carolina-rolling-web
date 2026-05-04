@@ -217,6 +217,12 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
     });
   }, [coneData, heightSegs, radialSegments]);
 
+  var syncedLayerSegments = useMemo(function() {
+    var n = heightSegs.length;
+    if (layerSegments.length === n) return layerSegments;
+    return Array.from({ length: n }, function(_, i) { return layerSegments[i] || layerSegments[0] || 1; });
+  }, [heightSegs.length, layerSegments]);
+
   // Generated AutoCAD commands
   var generatedCmds = useMemo(function() {
     if (!coneData) return [];
