@@ -193,29 +193,24 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
 
   var segmentSpecs = useMemo(function() {
     if (!coneData) return [];
-    var rS = parseInt(radialSegments) || 1;
+    var n = heightSegs.length;
+    var synced = layerSegments.length === n ? layerSegments :
+      Array.from({ length: n }, function(_, i) { return layerSegments[i] || layerSegments[0] || 1; });
     return heightSegs.map(function(seg, i) {
+      var rS = parseInt(synced[i]) || 1;
       var segH = seg.topHeight - seg.bottomHeight;
       var bR = coneData.getRadiusAtHeight(seg.bottomHeight), tR = coneData.getRadiusAtHeight(seg.topHeight);
       var bl = coneData.calculateBlankDimensions(tR, bR, segH);
       var sA = bl.developedAngle / rS, arc = bl.arcLength / rS;
       var slope = Math.atan((bR - tR) / segH) * (180 / Math.PI);
-      var aR = sA * Math.PI / 180;
-      // Sheet bounding box for the fan blank.
-      // Fan is oriented with bisector pointing DOWN (apex at top, arc opening downward).
-      // Use Math.max/min defensively in case outerRadius/innerRadius are swapped.
       var Rmax = Math.max(bl.outerRadius, bl.innerRadius);
       var Rmin = Math.min(bl.outerRadius, bl.innerRadius);
       var halfAngleR = (sA / 2) * (Math.PI / 180);
-      // Width: max horizontal extent
       var cW = sA <= 180 ? 2 * Rmax * Math.sin(halfAngleR) : 2 * Rmax;
-      // Height: from the topmost point (inner arc endpoints) down to the bottommost point (outer arc midpoint)
-      // For sA <= 180: top_y = -Rmin * cos(half), bottom_y = -Rmax → height = Rmax - Rmin * cos(half)
-      // For sA > 180: the inner arc wraps past horizontal so top_y = +Rmin (above origin) → height = Rmax + Rmin
       var rH = sA <= 180 ? (Rmax - Rmin * Math.cos(halfAngleR)) : (Rmax + Rmin);
-      return { layer: i + 1, bottomHeight: seg.bottomHeight, topHeight: seg.topHeight, segmentHeight: segH, bottomDia: coneData.getDiameterAtHeight(seg.bottomHeight), topDia: coneData.getDiameterAtHeight(seg.topHeight), slantHeight: bl.slantHeight, slopeAngle: slope, outerRadius: bl.outerRadius, innerRadius: bl.innerRadius, segmentAngle: sA, arcLength: arc, developedAngle: bl.developedAngle, sheetWidth: Math.ceil(cW + 1), sheetHeight: Math.ceil(rH + 1), blank: bl };
+      return { layer: i + 1, radialSegments: rS, bottomHeight: seg.bottomHeight, topHeight: seg.topHeight, segmentHeight: segH, bottomDia: coneData.getDiameterAtHeight(seg.bottomHeight), topDia: coneData.getDiameterAtHeight(seg.topHeight), slantHeight: bl.slantHeight, slopeAngle: slope, outerRadius: bl.outerRadius, innerRadius: bl.innerRadius, segmentAngle: sA, arcLength: arc, developedAngle: bl.developedAngle, sheetWidth: Math.ceil(cW + 1), sheetHeight: Math.ceil(rH + 1), blank: bl };
     });
-  }, [coneData, heightSegs, radialSegments]);
+  }, [coneData, heightSegs, layerSegments]);
 
   var syncedLayerSegments = useMemo(function() {
     var n = heightSegs.length;
