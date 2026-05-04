@@ -562,3 +562,5 @@ export const getCommScanLogs = () => api.get('/com-center/logs', { params: { _t:
 
 export const testCommConnection = () => api.get('/com-center/test-connection');
 export const cancelCommScan = () => api.post('/com-center/cancel-scan');
+
+export const getBlankShipper = () => api.get('/workorders/blank-shipper', { responseType: 'blob' });

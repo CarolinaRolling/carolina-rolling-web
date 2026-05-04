@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Trash2, Archive, Package, ArrowLeft, CheckSquare, Square, Link, AlertCircle, Edit2, X, Save, FileText } from 'lucide-react';
-import { getShipments, deleteShipment, archiveShipment, bulkArchiveShipments, bulkDeleteShipments, updateShipment, linkShipmentToWorkOrder, getWorkOrders } from '../services/api';
+import { getShipments, getBlankShipper, getBlankShipper, deleteShipment, archiveShipment, bulkArchiveShipments, bulkDeleteShipments, updateShipment, linkShipmentToWorkOrder, getWorkOrders } from '../services/api';
 
 const STATUS_CONFIG = {
   received: { label: 'Received', color: '#1976d2', bg: '#e3f2fd' },
@@ -203,6 +203,15 @@ function ShipmentsAdminPage() {
         </div>
         <button className="btn btn-primary" onClick={() => navigate('/new-shipment')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Package size={18} /> + Receive Shipment
+        </button>
+        <button onClick={async () => {
+          try {
+            const res = await getBlankShipper();
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+            window.open(url, '_blank');
+          } catch { alert('Failed to generate blank shipper'); }
+        }} style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#555', display: 'flex', alignItems: 'center', gap: 6 }}>
+          🖨️ Blank Shipper
         </button>
       </div>
 

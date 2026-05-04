@@ -97,6 +97,7 @@ export default function CommunicationCenterPage() {
             setError('Scan failed: ' + status.error);
           } else {
             setMessage('Scan complete — inbox refreshed');
+            setTimeout(() => setShowLogs(false), 2000);
           }
           await loadEmails();
           setScanning(false);

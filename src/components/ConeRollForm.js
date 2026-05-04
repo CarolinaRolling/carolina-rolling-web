@@ -145,7 +145,13 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   var [smallDiaMeasure, setSmallDiaMeasure] = useState(partData._coneSmallDiaMeasure || 'diameter');
   var [coneHeight, setConeHeight] = useState(partData._coneHeight || '');
   var [showAdvanced, setShowAdvanced] = useState(!!(partData._coneShowAdvanced));
-  var [radialSegments, setRadialSegments] = useState(partData._coneRadialSegments || 1);
+  // radialSegments is now per-layer: array of ints, one per height segment
+  var [layerSegments, setLayerSegments] = useState(
+    Array.isArray(partData._coneLayerSegments) ? partData._coneLayerSegments :
+    (partData._coneRadialSegments ? Array(parseInt(partData._coneHeightSegments) || 1).fill(parseInt(partData._coneRadialSegments)) : [1])
+  );
+  // Keep legacy radialSegments for backward compat with generateCommands/AutoCAD
+  var radialSegments = layerSegments[0] || 1;
   var [heightCutMethod, setHeightCutMethod] = useState(partData._coneHeightCutMethod || 'equal');
   var [heightSegments, setHeightSegments] = useState(partData._coneHeightSegments || 1);
   var [customCuts, setCustomCuts] = useState(partData._coneCustomCuts || '');
@@ -221,10 +227,10 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   useEffect(function() { segmentSpecs.forEach(function(sp) { var cv = blankRefs.current[sp.layer]; if (cv && sp.blank) drawBlank(cv, sp.blank, sp.segmentAngle, sp.layer); }); }, [segmentSpecs]);
 
   useEffect(function() {
-    setPartData(function(p) { return Object.assign({}, p, { _coneLargeDia: largeDia, _coneLargeDiaType: largeDiaType, _coneLargeDiaMeasure: largeDiaMeasure, _coneSmallDia: smallDia, _coneSmallDiaType: smallDiaType, _coneSmallDiaMeasure: smallDiaMeasure, _coneHeight: coneHeight, _coneRadialSegments: radialSegments, _coneShowAdvanced: showAdvanced, _coneHeightCutMethod: heightCutMethod, _coneHeightSegments: heightSegments, _coneCustomCuts: customCuts, _coneType: coneType, _coneEccentricAngle: eccentricAngle,
+    setPartData(function(p) { return Object.assign({}, p, { _coneLargeDia: largeDia, _coneLargeDiaType: largeDiaType, _coneLargeDiaMeasure: largeDiaMeasure, _coneSmallDia: smallDia, _coneSmallDiaType: smallDiaType, _coneSmallDiaMeasure: smallDiaMeasure, _coneHeight: coneHeight, _coneRadialSegments: syncedLayerSegments[0] || 1, _coneLayerSegments: syncedLayerSegments, _coneShowAdvanced: showAdvanced, _coneHeightCutMethod: heightCutMethod, _coneHeightSegments: heightSegments, _coneCustomCuts: customCuts, _coneType: coneType, _coneEccentricAngle: eccentricAngle,
       _coneSegmentDetails: segmentSpecs.map(function(s) { return { layer: s.layer, segmentAngle: s.segmentAngle, sheetWidth: s.sheetWidth, sheetHeight: s.sheetHeight, outerRadius: s.outerRadius, innerRadius: s.innerRadius, bottomDia: s.bottomDia, topDia: s.topDia }; })
     }); });
-  }, [largeDia, largeDiaType, largeDiaMeasure, smallDia, smallDiaType, smallDiaMeasure, coneHeight, radialSegments, showAdvanced, heightCutMethod, heightSegments, customCuts, segmentSpecs, coneType, eccentricAngle]);
+  }, [largeDia, largeDiaType, largeDiaMeasure, smallDia, smallDiaType, smallDiaMeasure, coneHeight, layerSegments, syncedLayerSegments, showAdvanced, heightCutMethod, heightSegments, customCuts, segmentSpecs, coneType, eccentricAngle]);
 
   var coneCount = parseInt(partData._coneCount) || 1;
   var segPerCone = heightSegs.length * (parseInt(radialSegments) || 1);
@@ -391,16 +397,13 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
                 </div>
               )}
             </div>
-            {/* Radial */}
-            <div style={{ marginBottom: 16 }}>
-              <label className="form-label" style={{ fontWeight: 700, color: '#764ba2' }}>Segments Around Cone: <strong>{radialSegments}</strong></label>
-              <input type="range" min="1" max="16" value={radialSegments} onChange={function(e) { setRadialSegments(parseInt(e.target.value)); }} style={{ width: '100%', accentColor: '#764ba2' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#999' }}><span>1 (full wrap)</span><span>16 pieces</span></div>
-            </div>
-            {/* Height */}
-            <div style={{ borderTop: '1px solid #e9d5ff', paddingTop: 14 }}>
+            {/* Height Segmentation — first, then per-layer segments */}
+            <div style={{ marginBottom: 0 }}>
               <label className="form-label" style={{ fontWeight: 700, color: '#764ba2' }}>Height Segmentation</label>
-              <select className="form-select" value={heightCutMethod} onChange={function(e) { setHeightCutMethod(e.target.value); }} style={{ marginBottom: 8 }}><option value="equal">Equal Height Segments</option><option value="custom">Custom Cut Positions</option></select>
+              <select className="form-select" value={heightCutMethod} onChange={function(e) { setHeightCutMethod(e.target.value); }} style={{ marginBottom: 8 }}>
+                <option value="equal">Equal Height Layers</option>
+                <option value="custom">Custom Cut Positions</option>
+              </select>
               {heightCutMethod === 'equal' ? (
                 <div>
                   <label className="form-label">Number of Height Layers: <strong style={{ color: '#764ba2' }}>{heightSegments}</strong></label>
@@ -412,6 +415,54 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
                   <label className="form-label">Cut Heights (inches from bottom)</label>
                   <input className="form-input" value={customCuts} onChange={function(e) { setCustomCuts(e.target.value); }} placeholder="e.g., 6, 12" />
                   <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Comma-separated. "6, 12" = layers at 0→6", 6→12", 12→top</div>
+                </div>
+              )}
+
+              {/* Per-layer segments + live sheet size */}
+              {coneData && heightSegs.length > 0 && (
+                <div style={{ marginTop: 16, borderTop: '1px solid #e9d5ff', paddingTop: 14 }}>
+                  <label className="form-label" style={{ fontWeight: 700, color: '#764ba2', marginBottom: 10, display: 'block' }}>
+                    Segments Around Cone — per layer
+                  </label>
+                  {heightSegs.map(function(seg, i) {
+                    var rS = syncedLayerSegments[i] || 1;
+                    // Quick sheet size calc for this layer
+                    var sheetW = '—', sheetH = '—';
+                    if (segmentSpecs[i]) { sheetW = segmentSpecs[i].sheetWidth + '"'; sheetH = segmentSpecs[i].sheetHeight + '"'; }
+                    var bDia = coneData ? coneData.getDiameterAtHeight(seg.bottomHeight).toFixed(2) : '?';
+                    var tDia = coneData ? coneData.getDiameterAtHeight(seg.topHeight).toFixed(2) : '?';
+                    return (
+                      <div key={i} style={{ background: '#f5f0ff', border: '1px solid #d8b4fe', borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#6d28d9' }}>
+                            Layer {i + 1} &nbsp;
+                            <span style={{ fontWeight: 400, color: '#888', fontSize: '0.78rem' }}>
+                              {seg.bottomHeight.toFixed(2)}" → {seg.topHeight.toFixed(2)}"&nbsp;|&nbsp;⌀{bDia}" → ⌀{tDia}"
+                            </span>
+                          </span>
+                          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#6d28d9' }}>{rS} seg{rS > 1 ? 's' : ''}</span>
+                        </div>
+                        <input type="range" min="1" max="16" value={rS}
+                          onChange={function(e) {
+                            var v = parseInt(e.target.value);
+                            setLayerSegments(function(prev) {
+                              var arr = syncedLayerSegments.slice();
+                              arr[i] = v;
+                              return arr;
+                            });
+                          }}
+                          style={{ width: '100%', accentColor: '#7c3aed', marginBottom: 6 }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#999', marginBottom: 6 }}>
+                          <span>1 (full wrap)</span><span>16 pieces</span>
+                        </div>
+                        {/* Live sheet size */}
+                        <div style={{ background: '#ede9fe', borderRadius: 6, padding: '6px 10px', fontSize: '0.82rem', fontWeight: 700, color: '#5b21b6', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          📐 Sheet Size: <span style={{ color: '#7c3aed' }}>{sheetW} × {sheetH}</span>
+                          <span style={{ fontWeight: 400, color: '#888', fontSize: '0.75rem' }}>(with 1" trim)</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -430,10 +481,10 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       {/* SEGMENT DETAILS — concentric only */}
       {segmentSpecs.length > 0 && coneType === 'concentric' && (
         <div style={secStyle}>
-          {secHead('📋', 'Segment Details (' + segmentSpecs.length + ' layer' + (segmentSpecs.length > 1 ? 's' : '') + ' \u00d7 ' + radialSegments + ' seg' + (radialSegments > 1 ? 's' : '') + (coneCount > 1 ? ' \u00d7 ' + coneCount + ' cones' : '') + ')', '#2e7d32')}
+          {secHead('📋', 'Segment Details (' + segmentSpecs.length + ' layer' + (segmentSpecs.length > 1 ? 's' : '') + (coneCount > 1 ? ' \u00d7 ' + coneCount + ' cones' : '') + ')', '#2e7d32')}
           {segmentSpecs.map(function(sp) { return (
             <div key={sp.layer} style={{ background: '#f0fdf4', padding: 12, borderRadius: 8, marginBottom: 8, border: '1px solid #bbf7d0' }}>
-              <div style={{ fontWeight: 700, color: '#166534', marginBottom: 6, fontSize: '0.9rem' }}>Layer {sp.layer}: {sp.bottomHeight.toFixed(3)}" → {sp.topHeight.toFixed(3)}"</div>
+              <div style={{ fontWeight: 700, color: '#166534', marginBottom: 6, fontSize: '0.9rem' }}>Layer {sp.layer}: {sp.bottomHeight.toFixed(3)}" → {sp.topHeight.toFixed(3)}" <span style={{ fontWeight: 400, color: '#888' }}>({sp.radialSegments} seg{sp.radialSegments > 1 ? 's' : ''})</span></div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: '0.8rem' }}>
                 <div>Bottom ⌀: <strong>{sp.bottomDia.toFixed(3)}"</strong></div>
                 <div>Top ⌀: <strong>{sp.topDia.toFixed(3)}"</strong></div>
