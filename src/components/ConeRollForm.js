@@ -452,7 +452,8 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
                           onChange={function(e) {
                             var v = parseInt(e.target.value);
                             setLayerSegments(function(prev) {
-                              var arr = syncedLayerSegments.slice();
+                              var n = heightSegs.length;
+                              var arr = Array.from({ length: n }, function(_, k) { return prev[k] || prev[0] || 1; });
                               arr[i] = v;
                               return arr;
                             });
