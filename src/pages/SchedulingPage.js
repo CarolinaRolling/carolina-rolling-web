@@ -48,6 +48,7 @@ function SchedulingPage() {
     return localStorage.getItem('scheduling_statusFilter') || 'all';
   });
   const [editingDate, setEditingDate] = useState(null); // { orderId, field, value }
+  const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'waiting'
 
   const handleDateSave = async () => {
     if (!editingDate) return;
@@ -124,15 +125,13 @@ function SchedulingPage() {
       );
     }
 
+    // Always exclude waiting_for_materials from queue — they get their own tab
+    filtered = filtered.filter(o => o.status !== 'waiting_for_materials');
+
     if (statusFilter !== 'all') {
       filtered = filtered.filter(o => {
-        // Handle legacy mappings
-        if (statusFilter === 'processing') {
-          return o.status === 'processing' || o.status === 'in_progress';
-        }
-        if (statusFilter === 'received') {
-          return o.status === 'received' || o.status === 'draft';
-        }
+        if (statusFilter === 'processing') return o.status === 'processing' || o.status === 'in_progress';
+        if (statusFilter === 'received') return o.status === 'received' || o.status === 'draft';
         return o.status === statusFilter;
       });
     }
@@ -249,6 +248,12 @@ function SchedulingPage() {
     return STATUSES[status] || { label: status, color: '#666', bg: '#f5f5f5' };
   };
 
+  // Split orders
+  const queueOrders = filteredOrders; // already excludes WFM
+  const waitingOrders = workOrders
+    .filter(o => o.status === 'waiting_for_materials')
+    .sort((a, b) => new Date(a.receivedAt || a.createdAt || 0) - new Date(b.receivedAt || b.createdAt || 0));
+
   // Stats
   const overdueCount = workOrders.filter(o => 
     getDateStatus(o.promisedDate) === 'overdue' || 
@@ -280,7 +285,7 @@ function SchedulingPage() {
         <div>
           <h1 className="page-title">Scheduling</h1>
           <p style={{ color: '#666', fontSize: '0.875rem', marginTop: 4 }}>
-            {filteredOrders.length} active jobs
+            {queueOrders.length} in queue · {waitingOrders.length} waiting for materials
           </p>
         </div>
       </div>
@@ -344,8 +349,32 @@ function SchedulingPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="card" style={{ marginBottom: 20 }}>
+      {/* Tabs */}
+      <div style={{ display: 'flex', borderBottom: '2px solid #e0e0e0', marginBottom: 20 }}>
+        <button onClick={() => setActiveTab('queue')} style={{
+          padding: '10px 24px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem',
+          background: 'none', borderBottom: activeTab === 'queue' ? '3px solid #1976d2' : '3px solid transparent',
+          color: activeTab === 'queue' ? '#1976d2' : '#666', marginBottom: -2, display: 'flex', alignItems: 'center', gap: 8
+        }}>
+          🔧 Shop Queue
+          <span style={{ background: activeTab === 'queue' ? '#1976d2' : '#e0e0e0', color: activeTab === 'queue' ? 'white' : '#666', borderRadius: 99, padding: '1px 8px', fontSize: '0.75rem' }}>
+            {queueOrders.length}
+          </span>
+        </button>
+        <button onClick={() => setActiveTab('waiting')} style={{
+          padding: '10px 24px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem',
+          background: 'none', borderBottom: activeTab === 'waiting' ? '3px solid #f57c00' : '3px solid transparent',
+          color: activeTab === 'waiting' ? '#f57c00' : '#666', marginBottom: -2, display: 'flex', alignItems: 'center', gap: 8
+        }}>
+          ⏳ Waiting for Materials
+          <span style={{ background: activeTab === 'waiting' ? '#f57c00' : '#e0e0e0', color: activeTab === 'waiting' ? 'white' : '#666', borderRadius: 99, padding: '1px 8px', fontSize: '0.75rem' }}>
+            {waitingOrders.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Filters — only show on queue tab */}
+      {activeTab === 'queue' && <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           <div className="search-box" style={{ flex: 1, minWidth: 200, marginBottom: 0 }}>
             <Search size={18} className="search-box-icon" />
@@ -363,9 +392,8 @@ function SchedulingPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             <option value="all">All Statuses</option>
-            {ACTIVE_STATUSES.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
+            <option value="received">Received</option>
+            <option value="processing">Processing</option>
           </select>
           <select
             className="form-select"
@@ -396,7 +424,7 @@ function SchedulingPage() {
             </optgroup>
           </select>
         </div>
-      </div>
+      </div>}
 
       {/* Schedule Board */}
       {filteredOrders.length === 0 ? (
@@ -405,7 +433,7 @@ function SchedulingPage() {
           <div className="empty-state-title">No jobs to schedule</div>
           <p>{searchQuery || statusFilter !== 'all' ? 'No jobs match your filters' : 'All jobs are complete!'}</p>
         </div>
-      ) : (
+      ) : activeTab === 'queue' ? (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           {/* Table Header */}
           <div style={{ 
@@ -648,6 +676,70 @@ function SchedulingPage() {
             );
           })}
         </div>
+      )}
+
+      {/* Waiting for Materials Tab */}
+      {activeTab === 'waiting' && (
+        waitingOrders.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">✅</div>
+            <div className="empty-state-title">Nothing waiting for materials</div>
+            <p>All orders have their materials ready.</p>
+          </div>
+        ) : (
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '12px 16px', background: '#fff8f0', borderBottom: '1px solid #ffe0b2', fontSize: '0.8rem', color: '#e65100', fontWeight: 600 }}>
+              ⏳ {waitingOrders.length} order{waitingOrders.length !== 1 ? 's' : ''} waiting — sorted by oldest first
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 140px', background: '#f5f5f5', padding: '12px 16px', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', color: '#666', borderBottom: '2px solid #e0e0e0' }}>
+              <div>DR# / Client</div>
+              <div>Client PO#</div>
+              <div>Received</div>
+              <div>Waiting</div>
+              <div>Requested</div>
+              <div>Status</div>
+            </div>
+            {waitingOrders.map((order, index) => {
+              const isRush = order.parts?.some(p => p.partType === 'rush_service');
+              const waitingDays = Math.floor((new Date() - new Date(order.receivedAt || order.createdAt)) / (1000 * 60 * 60 * 24));
+              const waitingColor = waitingDays > 14 ? '#c62828' : waitingDays > 7 ? '#f57c00' : '#388e3c';
+              const rowBg = isRush ? '#ffebee' : (index % 2 === 0 ? 'white' : '#fafafa');
+              return (
+                <div key={order.id}
+                  style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 140px', padding: '14px 16px', borderBottom: '1px solid #eee', cursor: 'pointer', background: rowBg, alignItems: 'center', borderLeft: isRush ? '4px solid #c62828' : '4px solid #f57c00', transition: 'background 0.2s' }}
+                  onClick={() => navigate(`/workorders/${order.id}`)}
+                  onMouseEnter={e => e.currentTarget.style.background = '#fff8f0'}
+                  onMouseLeave={e => e.currentTarget.style.background = rowBg}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                      <span style={{ fontWeight: 700, color: isRush ? '#c62828' : '#1565c0', fontSize: '0.95rem' }}>
+                        {order.drNumber ? `DR-${order.drNumber}` : order.orderNumber || '—'}
+                      </span>
+                      {isRush && <span style={{ background: '#c62828', color: 'white', padding: '2px 8px', borderRadius: 4, fontSize: '0.7rem', fontWeight: 700 }}>🚨 RUSH</span>}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#333' }}>{order.clientName}</div>
+                    {order.description && <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 2 }}>{order.description}</div>}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#555' }}>{order.clientPurchaseOrderNumber || '—'}</div>
+                  <div style={{ fontSize: '0.82rem', color: '#666' }}>{formatDate(order.receivedAt || order.createdAt)}</div>
+                  <div>
+                    <span style={{ fontWeight: 700, color: waitingColor, fontSize: '0.85rem' }}>
+                      {waitingDays}d
+                    </span>
+                    <div style={{ fontSize: '0.72rem', color: waitingColor }}>{waitingDays > 14 ? 'Long wait' : waitingDays > 7 ? 'Check up' : 'Recent'}</div>
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#666' }}>{formatDate(order.requestedDueDate)}</div>
+                  <div>
+                    <span style={{ background: '#fff3e0', color: '#e65100', padding: '3px 10px', borderRadius: 4, fontSize: '0.78rem', fontWeight: 600 }}>
+                      Waiting for Materials
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
       )}
     </div>
   );
