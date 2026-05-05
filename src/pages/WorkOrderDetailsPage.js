@@ -112,6 +112,7 @@ function WorkOrderDetailsPage() {
   const [cocCertifiedBy, setCocCertifiedBy] = useState('Jason Thornton');
   const [cocDate, setCocDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [cocGenerating, setCocGenerating] = useState(false);
+  const [cocSelectedParts, setCocSelectedParts] = useState(null); // null = all parts
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [orderPONumber, setOrderPONumber] = useState('');
   const [selectedPartIds, setSelectedPartIds] = useState([]);
@@ -2280,7 +2281,7 @@ function WorkOrderDetailsPage() {
                 <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
                 
                 <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Certificates</div>
-                <button onClick={() => { setShowPrintMenu(false); setShowCocModal(true); }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #6A1B9A', background: 'white', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#6A1B9A', textAlign: 'center', margin: '4px 0' }}>
+                <button onClick={() => { setShowPrintMenu(false); setShowCocModal(true); setCocSelectedParts(null); }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #6A1B9A', background: 'white', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#6A1B9A', textAlign: 'center', margin: '4px 0' }}>
                   📜 Certificate of Conformance (COC)
                 </button>
 
@@ -5850,8 +5851,36 @@ function WorkOrderDetailsPage() {
             <div style={{ padding: 12, background: '#f3e5f5', borderRadius: 8, fontSize: '0.9rem' }}>
               <strong>DR-{order.drNumber}</strong> — {order.clientName}
               <div style={{ fontSize: '0.8rem', color: '#666', marginTop: 4 }}>
-                {(order.parts || []).filter(p => !['fab_service','shop_rate','rush_service'].includes(p.partType)).length} part(s) will be included
+                Select which parts to include in this COC
               </div>
+            </div>
+            {/* Part selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label className="form-label">Parts to Include</label>
+              {(order.parts || []).filter(p => !['fab_service','shop_rate','rush_service'].includes(p.partType)).map(p => {
+                const fd = p.formData || {};
+                const desc = fd._materialDescription || p.materialDescription || p.partType || '';
+                const isSelected = cocSelectedParts === null || cocSelectedParts.includes(p.id);
+                return (
+                  <label key={p.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 10px', background: isSelected ? '#f3e5f5' : '#fafafa', border: '1px solid ' + (isSelected ? '#ce93d8' : '#e0e0e0'), borderRadius: 6, cursor: 'pointer', fontSize: '0.83rem' }}>
+                    <input type="checkbox" checked={isSelected} onChange={e => {
+                      const allParts = (order.parts || []).filter(p2 => !['fab_service','shop_rate','rush_service'].includes(p2.partType)).map(p2 => p2.id);
+                      const current = cocSelectedParts === null ? allParts : cocSelectedParts;
+                      if (e.target.checked) {
+                        const next = [...current, p.id];
+                        setCocSelectedParts(next.length === allParts.length ? null : next);
+                      } else {
+                        setCocSelectedParts(current.filter(id => id !== p.id));
+                      }
+                    }} style={{ marginTop: 2 }} />
+                    <div>
+                      <span style={{ fontWeight: 700 }}>Part #{p.partNumber}</span>
+                      {p.clientPartNumber && <span style={{ color: '#1976d2', marginLeft: 6 }}>{p.clientPartNumber}</span>}
+                      <div style={{ color: '#666', fontSize: '0.78rem' }}>{desc.replace(/^\d+pc:\s*/i, '').substring(0, 80)}</div>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Certified By</label>
@@ -5885,7 +5914,8 @@ function WorkOrderDetailsPage() {
                   const response = await generateCOC(order.id, {
                     wpsId: cocWpsId || null,
                     certifiedBy: cocCertifiedBy,
-                    certDate: cocDate
+                    certDate: cocDate,
+                    selectedPartIds: cocSelectedParts || []
                   });
                   const blob = new Blob([response.data], { type: 'application/pdf' });
                   const url = window.URL.createObjectURL(blob);
