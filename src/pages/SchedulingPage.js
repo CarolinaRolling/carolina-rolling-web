@@ -434,8 +434,7 @@ function SchedulingPage() {
           <p>{searchQuery || statusFilter !== 'all' ? 'No jobs match your filters' : 'All jobs are complete!'}</p>
         </div>
       ) : activeTab === 'queue' ? (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          {/* Table Header */}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>          {/* Table Header */}
           <div style={{ 
             display: 'grid', 
             gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 100px 140px',
@@ -676,7 +675,7 @@ function SchedulingPage() {
             );
           })}
         </div>
-      )}
+      ) : null}
 
       {/* Waiting for Materials Tab */}
       {activeTab === 'waiting' && (
