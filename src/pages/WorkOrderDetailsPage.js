@@ -3426,6 +3426,31 @@ function WorkOrderDetailsPage() {
                       {(parseInt((part.formData || {})._coneRadialSegments) || 1) > 1 && ` | ${(part.formData || {})._coneRadialSegments} @ ${(360 / (parseInt((part.formData || {})._coneRadialSegments) || 1)).toFixed(0)}°`}
                     </div>
                   )}
+                  {/* Per-layer cone breakdown */}
+                  {part.partType === 'cone_roll' && (() => {
+                    const fd = part.formData || {};
+                    const segs = fd._coneSegmentDetails;
+                    if (!Array.isArray(segs) || segs.length < 2) return null;
+                    return (
+                      <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {segs.map((seg, i) => {
+                          const rS = seg.radialSegments || 1;
+                          const bDia = typeof seg.bottomDia === 'number' ? seg.bottomDia.toFixed(3) : '?';
+                          const tDia = typeof seg.topDia === 'number' ? seg.topDia.toFixed(3) : '?';
+                          const segH = typeof seg.segmentHeight === 'number' ? seg.segmentHeight.toFixed(3) : '?';
+                          const angle = rS > 1 ? ` ${360 / rS}°` : '';
+                          return (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#f5f0ff', borderRadius: 5, border: '1px solid #d8b4fe', fontSize: '0.78rem', fontWeight: 600, color: '#5b21b6' }}>
+                              <span style={{ minWidth: 20, opacity: 0.6 }}>L{seg.layer}</span>
+                              <span>{rS}pc</span>
+                              <span style={{ opacity: 0.5 }}>—</span>
+                              <span>{bDia}" OD × {tDia}" OD × {segH}" VH{angle}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                   {part.partType === 'cone_roll' && part.cutFileReference && (
                     <div style={{ fontSize: '0.8rem', color: '#1565c0', marginTop: 2 }}>Layout Filename: {part.cutFileReference}</div>
                   )}
