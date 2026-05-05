@@ -229,7 +229,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
 
   useEffect(function() {
     setPartData(function(p) { return Object.assign({}, p, { _coneLargeDia: largeDia, _coneLargeDiaType: largeDiaType, _coneLargeDiaMeasure: largeDiaMeasure, _coneSmallDia: smallDia, _coneSmallDiaType: smallDiaType, _coneSmallDiaMeasure: smallDiaMeasure, _coneHeight: coneHeight, _coneRadialSegments: syncedLayerSegments[0] || 1, _coneLayerSegments: syncedLayerSegments, _coneShowAdvanced: showAdvanced, _coneHeightCutMethod: heightCutMethod, _coneHeightSegments: heightSegments, _coneCustomCuts: customCuts, _coneType: coneType, _coneEccentricAngle: eccentricAngle,
-      _coneSegmentDetails: segmentSpecs.map(function(s) { return { layer: s.layer, segmentAngle: s.segmentAngle, sheetWidth: s.sheetWidth, sheetHeight: s.sheetHeight, outerRadius: s.outerRadius, innerRadius: s.innerRadius, bottomDia: s.bottomDia, topDia: s.topDia }; })
+      _coneSegmentDetails: segmentSpecs.map(function(s) { return { layer: s.layer, radialSegments: s.radialSegments, segmentHeight: s.segmentHeight, segmentAngle: s.segmentAngle, sheetWidth: s.sheetWidth, sheetHeight: s.sheetHeight, outerRadius: s.outerRadius, innerRadius: s.innerRadius, bottomDia: s.bottomDia, topDia: s.topDia }; })
     }); });
   }, [largeDia, largeDiaType, largeDiaMeasure, smallDia, smallDiaType, smallDiaMeasure, coneHeight, layerSegments, syncedLayerSegments, showAdvanced, heightCutMethod, heightSegments, customCuts, segmentSpecs, coneType, eccentricAngle]);
 
