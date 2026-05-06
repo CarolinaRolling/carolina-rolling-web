@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Receipt, Users, BarChart3, Plus, DollarSign } from 'lucide-react';
-import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, updateVacationLog, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, deletePayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment, reorderEmployees, sendPayrollEmail, getEmailAccounts, getSettings, updateSettings } from '../services/api';
+import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, updateVacationLog, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, deletePayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment, reorderEmployees, sendPayrollEmail, getEmailAccounts, getSettings, updateSettings, previewPayrollPdf } from '../services/api';
 import InvoiceCenterPage from './InvoiceCenterPage';
 
 const LB_CATS = [
@@ -681,6 +681,13 @@ function BusinessPage() {
                 <span style={{padding:'2px 8px',borderRadius:4,fontSize:'0.8rem',fontWeight:600,background:activePR.status==='submitted'?'#c8e6c9':'#fff3e0',color:activePR.status==='submitted'?'#2e7d32':'#E65100'}}>{activePR.status==='submitted'?'✓ Submitted':'Draft'}</span>
               </div>
               <div style={{display:'flex',gap:8}}>
+                {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{
+                  try {
+                    const res = await previewPayrollPdf(activePR.id);
+                    const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+                    window.open(url, '_blank');
+                  } catch { setErr('Failed to generate preview'); }
+                }} style={{background:'#1565c0',color:'white'}}>👁️ Preview PDF</button>}
                 {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{
                   if(!payrollEmail){setErr('Set a payroll service email address first');return;}
                   const senderId = payrollSenderAccountId || (gmailAccounts[0]?.id);

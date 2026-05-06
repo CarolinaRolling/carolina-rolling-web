@@ -564,3 +564,4 @@ export const testCommConnection = () => api.get('/com-center/test-connection');
 export const cancelCommScan = () => api.post('/com-center/cancel-scan');
 
 export const getBlankShipper = () => api.get('/workorders/blank-shipper', { responseType: 'blob' });
+export const previewPayrollPdf = (payrollId) => api.get(`/business/payroll/${payrollId}/preview-pdf`, { responseType: 'blob' });
