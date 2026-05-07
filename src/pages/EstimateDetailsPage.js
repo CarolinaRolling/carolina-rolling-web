@@ -1238,6 +1238,7 @@ function EstimateDetailsPage() {
     };
     // Remove IDs and timestamps
     delete newData.id;
+    delete newData.partNumber;
     delete newData.createdAt;
     delete newData.updatedAt;
     delete newData.estimateId;

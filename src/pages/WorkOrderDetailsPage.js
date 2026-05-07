@@ -894,6 +894,7 @@ function WorkOrderDetailsPage() {
       cutFileReference: part.cutFileReference || '',
     };
     delete newData.id;
+    delete newData.partNumber;
     delete newData.createdAt;
     delete newData.updatedAt;
     delete newData.workOrderId;
@@ -2991,19 +2992,33 @@ function WorkOrderDetailsPage() {
         </div>
         {/* Progress Bar */}
         {order.parts?.length > 0 && (() => {
-          const totalParts = order.parts.length;
-          const completedParts = order.parts.filter(p => p.status === 'completed').length;
-          const inProgressParts = order.parts.filter(p => p.status === 'in_progress').length;
-          const pct = Math.round((completedParts / totalParts) * 100);
+          const SERVICE_TYPES = ['fab_service', 'shop_rate', 'rush_service'];
+          const productionParts = order.parts.filter(p => !SERVICE_TYPES.includes(p.partType));
+          const totalParts = productionParts.length;
+          const completedParts = productionParts.filter(p => p.status === 'completed').length;
           const isShippedOrArchived = ['shipped', 'archived'].includes(order.status);
-          const displayPct = isShippedOrArchived ? 100 : pct;
+
+          // Piece-level progress
+          const totalPieces = productionParts.reduce((s, p) => s + (p.quantity || 1), 0);
+          const completedPieces = isShippedOrArchived ? totalPieces : productionParts.reduce((s, p) => {
+            if (p.status === 'completed') return s + (p.quantity || 1);
+            if ((p.quantity || 1) > 20 && (p.progressCount || 0) > 0) return s + p.progressCount;
+            return s;
+          }, 0);
+          const piecePct = totalPieces > 0 ? Math.round((completedPieces / totalPieces) * 100) : 0;
           const displayCompleted = isShippedOrArchived ? totalParts : completedParts;
+          const displayPct = isShippedOrArchived ? 100 : piecePct;
+
           return (
             <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid #eee' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span style={{ fontSize: '0.85rem', color: '#555' }}>
-                  {displayCompleted} of {totalParts} part{totalParts !== 1 ? 's' : ''} complete
-                  {inProgressParts > 0 && !isShippedOrArchived && <span style={{ color: '#0288d1', marginLeft: 8 }}>({inProgressParts} in progress)</span>}
+                  <strong style={{ color: displayPct === 100 ? '#2e7d32' : '#1565c0' }}>
+                    {completedPieces} / {totalPieces} pieces
+                  </strong>
+                  <span style={{ color: '#999', marginLeft: 10, fontSize: '0.8rem' }}>
+                    ({displayCompleted} of {totalParts} part{totalParts !== 1 ? 's' : ''} done)
+                  </span>
                 </span>
                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: displayPct === 100 ? '#2e7d32' : displayPct > 0 ? '#1565c0' : '#999' }}>
                   {displayPct}%
