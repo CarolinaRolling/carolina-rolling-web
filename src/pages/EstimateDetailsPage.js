@@ -3541,6 +3541,7 @@ function EstimateDetailsPage() {
               ) : partData.partType === 'plate_roll' ? (
                 <div className="grid grid-2">
                   <PlateRollForm
+                    key={editingPart?.id || 'new'}
                     partData={partData}
                     setPartData={setPartData}
                     vendorSuggestions={vendorSuggestions}
@@ -3567,6 +3568,7 @@ function EstimateDetailsPage() {
               ) : partData.partType === 'angle_roll' ? (
                 <div className="grid grid-2">
                   <AngleRollForm
+                    key={editingPart?.id || 'new'}
                     partData={partData}
                     setPartData={setPartData}
                     vendorSuggestions={vendorSuggestions}
@@ -3580,6 +3582,7 @@ function EstimateDetailsPage() {
               ) : partData.partType === 'pipe_roll' ? (
                 <div className="grid grid-2">
                   <PipeRollForm
+                    key={editingPart?.id || 'new'}
                     partData={partData}
                     setPartData={setPartData}
                     vendorSuggestions={vendorSuggestions}
@@ -3671,6 +3674,7 @@ function EstimateDetailsPage() {
               ) : partData.partType === 'cone_roll' ? (
                 <div className="grid grid-2">
                   <ConeRollForm
+                    key={editingPart?.id || 'new'}
                     partData={partData}
                     setPartData={setPartData}
                     vendorSuggestions={vendorSuggestions}

@@ -613,7 +613,7 @@ function WorkOrderDetailsPage() {
       partType: type, clientPartNumber: '', heatNumber: '', cutFileReference: '', quantity: 1,
       material: '', thickness: '', width: '', length: '',
       outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '',
-      arcDegrees: '', sectionSize: '', flangeOut: false, specialInstructions: '',
+      arcDegrees: '', sectionSize: '', flangeOut: false, specialInstructions: '', internalNotes: '', serviceFitting: false, serviceFittingCost: '', serviceFittingVendor: '', serviceWelding: false, serviceWeldingCost: '', serviceWeldingVendor: '', serviceWeldingPercent: 100,
       laborRate: '', laborHours: '', laborTotal: '', materialUnitCost: '', materialTotal: '',
       setupCharge: '', otherCharges: '', partTotal: '',
       materialSource: 'customer_supplied', vendorId: null, supplierName: '', materialDescription: '',
@@ -2917,7 +2917,7 @@ function WorkOrderDetailsPage() {
           { key: 'materials', label: '📋 Materials' },
           ...(((order.vendorIssues || []).filter(i => i.status !== 'resolved').length > 0) ? [{ key: 'vendor_issues', label: '⚠ Vendor Issues', count: (order.vendorIssues || []).filter(i => i.status !== 'resolved').length, urgent: true }] : []),
           { key: 'summary', label: '📊 Summary' },
-          { key: 'shipping', label: '🚚 Outbound', count: (order.pickupHistory || []).length || undefined }
+          { key: 'shipping', label: '🚚 Outbound', count: (order.pickupHistory || []).length || undefined, badge: (order.pickupHistory || []).length > 0 ? ((order.pickupHistory || []).some(e => e.type === 'full') ? 'FULL' : 'PARTIAL') : undefined }
         ].map(tab => (
           <button key={tab.key} onClick={(e) => { e.preventDefault(); setWoTab(tab.key); setTimeout(() => document.getElementById('wo-tabs')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}
             style={{
@@ -2929,6 +2929,7 @@ function WorkOrderDetailsPage() {
               transition: 'all 0.15s'
             }}>
             {tab.label}{tab.count !== undefined ? ` (${tab.count})` : ''}
+            {tab.badge && <span style={{ marginLeft: 5, padding: '1px 6px', borderRadius: 99, fontSize: '0.65rem', fontWeight: 700, background: tab.badge === 'FULL' ? '#2e7d32' : '#e65100', color: 'white', letterSpacing: '0.3px' }}>{tab.badge}</span>}
           </button>
         ))}
       </div>
@@ -3478,6 +3479,13 @@ function WorkOrderDetailsPage() {
                   );
                 })()}
                 {part.specialInstructions && <div style={{ marginTop: 8, padding: 8, background: '#f5f5f5', borderRadius: 4, fontSize: '0.875rem' }}><strong>Instructions:</strong> {part.specialInstructions}</div>}
+                {part.internalNotes && <div style={{ marginTop: 4, padding: 8, background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 4, fontSize: '0.8rem', color: '#795548' }}><strong>📋 Internal:</strong> {part.internalNotes}</div>}
+                {(part.serviceFitting || part.serviceWelding) && (
+                  <div style={{ marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {part.serviceFitting && <span style={{ padding: '2px 8px', background: '#e8f5e9', border: '1px solid #4caf50', borderRadius: 4, fontSize: '0.78rem', color: '#2e7d32' }}>🔧 Fitting{part.serviceFittingCost ? ` $${parseFloat(part.serviceFittingCost).toFixed(2)}` : ''}</span>}
+                    {part.serviceWelding && <span style={{ padding: '2px 8px', background: '#fff3e0', border: '1px solid #ff9800', borderRadius: 4, fontSize: '0.78rem', color: '#e65100' }}>🔥 Welding{part.serviceWeldingCost ? ` $${parseFloat(part.serviceWeldingCost).toFixed(2)}` : ''}</span>}
+                  </div>
+                )}
                 
                 {/* Pricing Summary — Material and Labor lines include allocated transport (bundled, hidden from customer view) */}
                 {hiddenFromCustomer ? (
@@ -4268,6 +4276,15 @@ function WorkOrderDetailsPage() {
                         <strong style={{ color: entry.type === 'full' ? '#2e7d32' : '#e65100', fontSize: '0.95rem' }}>
                           {entry.type === 'full' ? '📦 Full Shipment' : `📦 Partial Shipment #${idx + 1}`}
                         </strong>
+                        <span style={{ marginLeft: 8 }}>
+                          <span style={{
+                            padding: '2px 10px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700,
+                            background: entry.type === 'full' ? '#2e7d32' : '#e65100',
+                            color: 'white', textTransform: 'uppercase', letterSpacing: '0.5px'
+                          }}>
+                            {entry.type === 'full' ? 'FULL' : 'PARTIAL'}
+                          </span>
+                        </span>
                         <span style={{ color: '#666', marginLeft: 8, fontSize: '0.85rem' }}>
                           — {totalItems} item{totalItems !== 1 ? 's' : ''}
                         </span>
@@ -4923,7 +4940,7 @@ function WorkOrderDetailsPage() {
                 </div>
               ) : selectedPartType === 'plate_roll' ? (
                 <div className="grid grid-2">
-                  <PlateRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                  <PlateRollForm key={editingPart?.id || 'new'} partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
                 </div>
               ) : selectedPartType === 'shaped_plate' ? (
                 <div className="grid grid-2">
@@ -4931,11 +4948,11 @@ function WorkOrderDetailsPage() {
                 </div>
               ) : selectedPartType === 'angle_roll' ? (
                 <div className="grid grid-2">
-                  <AngleRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                  <AngleRollForm key={editingPart?.id || 'new'} partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
                 </div>
               ) : selectedPartType === 'pipe_roll' ? (
                 <div className="grid grid-2">
-                  <PipeRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                  <PipeRollForm key={editingPart?.id || 'new'} partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
                 </div>
               ) : selectedPartType === 'tube_roll' ? (
                 <div className="grid grid-2">
@@ -4963,7 +4980,7 @@ function WorkOrderDetailsPage() {
                 </div>
               ) : selectedPartType === 'cone_roll' ? (
                 <div className="grid grid-2">
-                  <ConeRollForm partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
+                  <ConeRollForm key={editingPart?.id || 'new'} partData={partData} setPartData={setPartData} vendorSuggestions={vendorSuggestions} setVendorSuggestions={setVendorSuggestions} showVendorSuggestions={showVendorSuggestions} setShowVendorSuggestions={setShowVendorSuggestions} showMessage={showMessage} setError={setError} />
                 </div>
               ) : selectedPartType === 'fab_service' ? (
                 <div className="grid grid-2">
@@ -4997,6 +5014,67 @@ function WorkOrderDetailsPage() {
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">📐 Cut File Reference <span style={{ fontWeight: 400, color: '#999' }}>(DXF/STEP filename to send to vendor)</span></label>
                   <input type="text" className="form-input" value={partData.cutFileReference || ''} onChange={(e) => setPartData({ ...partData, cutFileReference: e.target.value })} placeholder="e.g. Part2_cutout.dxf — will appear on purchase order" />
+                </div>
+              </div>
+
+              {/* Services — Fitting & Welding (matches estimate) */}
+              {!['fab_service','shop_rate','rush_service'].includes(selectedPartType) && (
+                <div style={{ marginTop: 12, padding: '12px 0', borderTop: '1px solid #eee' }}>
+                  <h4 style={{ margin: '0 0 10px', fontSize: '0.9rem', color: '#555' }}>🔩 Additional Services</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {/* Fitting */}
+                    <div style={{ padding: 12, borderRadius: 8, background: partData.serviceFitting ? '#e8f5e9' : '#fafafa', border: `1px solid ${partData.serviceFitting ? '#4caf50' : '#e0e0e0'}` }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={partData.serviceFitting || false} onChange={(e) => setPartData({ ...partData, serviceFitting: e.target.checked })} />
+                        <strong>🔧 Fitting</strong>
+                      </label>
+                      {partData.serviceFitting && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+                          <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Cost ($)</label>
+                            <input type="number" className="form-input" value={partData.serviceFittingCost || ''} onChange={(e) => setPartData({ ...partData, serviceFittingCost: e.target.value })} step="0.01" placeholder="0.00" />
+                          </div>
+                          <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Vendor</label>
+                            <input type="text" className="form-input" value={partData.serviceFittingVendor || ''} onChange={(e) => setPartData({ ...partData, serviceFittingVendor: e.target.value })} placeholder="In-house" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {/* Welding */}
+                    <div style={{ padding: 12, borderRadius: 8, background: partData.serviceWelding ? '#fff3e0' : '#fafafa', border: `1px solid ${partData.serviceWelding ? '#ff9800' : '#e0e0e0'}` }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={partData.serviceWelding || false} onChange={(e) => setPartData({ ...partData, serviceWelding: e.target.checked })} />
+                        <strong>🔥 Welding</strong>
+                      </label>
+                      {partData.serviceWelding && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
+                          <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Cost ($)</label>
+                            <input type="number" className="form-input" value={partData.serviceWeldingCost || ''} onChange={(e) => setPartData({ ...partData, serviceWeldingCost: e.target.value })} step="0.01" placeholder="0.00" />
+                          </div>
+                          <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Welding %</label>
+                            <select className="form-select" value={partData.serviceWeldingPercent || 100} onChange={(e) => setPartData({ ...partData, serviceWeldingPercent: parseInt(e.target.value) })}>
+                              <option value={25}>25%</option><option value={50}>50%</option><option value={75}>75%</option><option value={100}>100%</option>
+                            </select>
+                          </div>
+                          <div className="form-group" style={{ margin: 0 }}>
+                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Vendor</label>
+                            <input type="text" className="form-input" value={partData.serviceWeldingVendor || ''} onChange={(e) => setPartData({ ...partData, serviceWeldingVendor: e.target.value })} placeholder="In-house" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Internal Notes — office only, not shown on portal */}
+              <div style={{ marginTop: 8, padding: '12px 0', borderTop: '1px solid #eee' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">📋 Internal Notes <span style={{ fontWeight: 400, color: '#999' }}>(office only — not visible on client portal)</span></label>
+                  <textarea className="form-textarea" rows={2} value={partData.internalNotes || ''} onChange={(e) => setPartData({ ...partData, internalNotes: e.target.value })} placeholder="Internal notes, reminders, pricing context..." />
                 </div>
               </div>
             </div>

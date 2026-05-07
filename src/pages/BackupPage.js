@@ -150,6 +150,38 @@ function BackupPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
+      {/* Last backup status banner */}
+      {backupInfo?.lastBackupStatus && (
+        <div style={{
+          marginBottom: 16,
+          padding: '12px 16px',
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          background: backupInfo.lastBackupStatus.status === 'failed' ? '#ffebee' : '#e8f5e9',
+          border: `1px solid ${backupInfo.lastBackupStatus.status === 'failed' ? '#ef9a9a' : '#a5d6a7'}`
+        }}>
+          <span style={{ fontSize: '1.3rem' }}>{backupInfo.lastBackupStatus.status === 'failed' ? '🚨' : '✅'}</span>
+          <div style={{ flex: 1 }}>
+            <strong style={{ color: backupInfo.lastBackupStatus.status === 'failed' ? '#c62828' : '#2e7d32' }}>
+              {backupInfo.lastBackupStatus.status === 'failed' ? 'Last Auto-Backup Failed' : 'Last Auto-Backup Succeeded'}
+            </strong>
+            <div style={{ fontSize: '0.82rem', color: '#666', marginTop: 2 }}>
+              {new Date(backupInfo.lastBackupStatus.timestamp).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} PT
+              {backupInfo.lastBackupStatus.status === 'success' && backupInfo.lastBackupStatus.size && ` — ${(backupInfo.lastBackupStatus.size / 1024).toFixed(0)}KB`}
+              {backupInfo.lastBackupStatus.status === 'failed' && backupInfo.lastBackupStatus.error && ` — ${backupInfo.lastBackupStatus.error}`}
+            </div>
+          </div>
+          {backupInfo.lastBackupStatus.status === 'failed' && (
+            <button className="btn btn-sm" style={{ background: '#c62828', color: 'white', whiteSpace: 'nowrap' }}
+              onClick={() => document.getElementById('run-backup-now')?.click()}>
+              Run Backup Now
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-2">
         {/* Create Backup */}
         <div className="card" style={{ border: '2px dashed #1976d2', background: '#f0f7ff' }}>
@@ -381,7 +413,7 @@ function BackupPage() {
             <input type="email" className="form-input" placeholder="Email for notification"
               value={bgEmail} onChange={(e) => setBgEmail(e.target.value)}
               style={{ flex: 1, minWidth: 200, maxWidth: 300 }} />
-            <button className="btn btn-primary" onClick={handleBackgroundBackup}
+            <button className="btn btn-primary" id="run-backup-now" onClick={handleBackgroundBackup}
               disabled={bgBackupStarted} style={{ whiteSpace: 'nowrap' }}>
               {bgBackupStarted ? '✅ Backup Running...' : '🚀 Run Cloud Backup Now'}
             </button>

@@ -701,7 +701,7 @@ function BusinessPage() {
                     await sendPayrollEmail(activePR.id,{
                       gmailAccountId: senderId,
                       toEmail: payrollEmail,
-                      subject: 'Carolina Rolling Payroll ' + sd + ' — ' + ed
+                      subject: 'Carolina Rolling Payroll ' + sd + ' - ' + ed
                     });
                     await submitPayroll(activePR.id);
                     showMsg('✅ Payroll submitted and emailed to ' + payrollEmail);
