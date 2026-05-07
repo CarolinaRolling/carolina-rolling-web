@@ -3013,11 +3013,14 @@ function WorkOrderDetailsPage() {
             <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid #eee' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span style={{ fontSize: '0.85rem', color: '#555' }}>
-                  <strong style={{ color: displayPct === 100 ? '#2e7d32' : '#1565c0' }}>
+                  <strong style={{ color: displayPct === 100 ? '#2e7d32' : completedPieces > 0 ? '#1565c0' : '#999' }}>
                     {completedPieces} / {totalPieces} pieces
                   </strong>
                   <span style={{ color: '#999', marginLeft: 10, fontSize: '0.8rem' }}>
-                    ({displayCompleted} of {totalParts} part{totalParts !== 1 ? 's' : ''} done)
+                    ({displayCompleted} of {totalParts} part{totalParts !== 1 ? 's' : ''} complete)
+                    {completedPieces > 0 && completedParts < totalParts && (
+                      <span style={{ color: '#1976d2', marginLeft: 6 }}>· {productionParts.filter(p => p.status === 'in_progress' || ((p.progressCount || 0) > 0)).length} in progress</span>
+                    )}
                   </span>
                 </span>
                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: displayPct === 100 ? '#2e7d32' : displayPct > 0 ? '#1565c0' : '#999' }}>
