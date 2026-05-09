@@ -62,6 +62,7 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
   const [rollMeasurePoint, setRollMeasurePoint] = useState(partData._rollMeasurePoint || 'inside');
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
   const [completeRings, setCompleteRings] = useState(!!(partData._completeRings));
+  const [cutServiceType, setCutServiceType] = useState(partData._cutServiceType || ''); // '' | 'cut_to_ring' | 'cut_to_ring_overlap' | 'cut_to_size'
   const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
   const [tangentLength, setTangentLength] = useState(partData._tangentLength || '12');
   const kerfWidth = 0.125; // Standard saw blade kerf — hardcoded
@@ -164,12 +165,16 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
       return { ...prev,
         quantity: String(numRings), _completeRings: true, _ringsNeeded: ringsNeeded, _tangentLength: tangentLength,
         _kerfWidth: kerfWidth, _ringSticksNeeded: ringCalc.sticksNeeded, _ringRingsPerStick: ringCalc.ringsPerStick || 0, _ringMultiSegment: ringCalc.multiSegment || false,
+        _cutServiceType: cutServiceType,
+        _ringCircumference: ringCalc.circumference || 0,
+        _ringSegmentsPerRing: ringCalc.segmentsPerRing || 1,
         materialTotal: matPerRing > 0 ? matPerRing.toFixed(2) : prev.materialTotal,
         laborTotal: laborPerUnit > 0 ? laborPerUnit.toFixed(2) : prev.laborTotal,
+        _baseLaborTotal: laborPerUnit > 0 ? laborPerUnit.toFixed(2) : prev._baseLaborTotal,
       };
     });
     } else { setPartData(prev => ({ ...prev, _completeRings: false })); }
-  }, [completeRings, ringCalc, ringsNeeded, tangentLength, partData._ringMaterialPerLength, partData._ringLaborPerUnit]);
+  }, [completeRings, ringCalc, ringsNeeded, tangentLength, partData._ringMaterialPerLength, partData._ringLaborPerUnit, cutServiceType]);
 
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
@@ -367,6 +372,58 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
                 </div>
               )}
               
+                  {/* Cut Service Selection */}
+                  <div style={{ marginTop: 12, padding: 12, background: '#fff8e1', borderRadius: 8, border: '1px solid #ffe082' }}>
+                    <div style={{ fontWeight: 600, color: '#795548', marginBottom: 10, fontSize: '0.9rem' }}>✂️ Auto-Add Cut Fabrication Service</div>
+                    {!ringCalc.multiSegment ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                          <input type="radio" name="cutType" value="" checked={cutServiceType === ''} onChange={() => setCutServiceType('')} style={{ marginTop: 3 }} />
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>No cut service</div>
+                            <div style={{ fontSize: '0.75rem', color: '#888' }}>Don't add a fabrication service</div>
+                          </div>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                          <input type="radio" name="cutType" value="cut_to_ring" checked={cutServiceType === 'cut_to_ring'} onChange={() => setCutServiceType('cut_to_ring')} style={{ marginTop: 3 }} />
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1565c0' }}>Cut to ring</div>
+                            <div style={{ fontSize: '0.75rem', color: '#888' }}>
+                              CL circumference: {ringCalc.circumference?.toFixed(3)}" (π × {ringCalc.circumference ? (ringCalc.circumference / Math.PI).toFixed(3) : '?'}") — {ringCalc.ringsPerStick} ring(s)/length
+                            </div>
+                          </div>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                          <input type="radio" name="cutType" value="cut_to_ring_overlap" checked={cutServiceType === 'cut_to_ring_overlap'} onChange={() => setCutServiceType('cut_to_ring_overlap')} style={{ marginTop: 3 }} />
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1565c0' }}>Cut to ring with overlap</div>
+                            <div style={{ fontSize: '0.75rem', color: '#888' }}>
+                              CL circumference: {ringCalc.circumference?.toFixed(3)}" (π × {ringCalc.circumference ? (ringCalc.circumference / Math.PI).toFixed(3) : '?'}") — with weld overlap
+                            </div>
+                          </div>
+                        </label>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                          <input type="radio" name="cutType" value="" checked={cutServiceType === ''} onChange={() => setCutServiceType('')} style={{ marginTop: 3 }} />
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>No cut service</div>
+                          </div>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                          <input type="radio" name="cutType" value="cut_to_size" checked={cutServiceType === 'cut_to_size'} onChange={() => setCutServiceType('cut_to_size')} style={{ marginTop: 3 }} />
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#e65100' }}>Cut to size</div>
+                            <div style={{ fontSize: '0.75rem', color: '#888' }}>
+                              {ringCalc.segmentsPerRing} segments/ring — each: {ringCalc.circumference ? (ringCalc.circumference / ringCalc.segmentsPerRing).toFixed(3) : '?'}" ({ringCalc.circumference?.toFixed(3)}" ÷ {ringCalc.segmentsPerRing})
+                            </div>
+                          </div>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Ring Pricing */}
                   <div style={{ marginTop: 12, padding: 12, background: '#fff', borderRadius: 8, border: '1px solid #a5d6a7' }}>
                     <div style={{ fontWeight: 600, color: '#1565c0', marginBottom: 10, fontSize: '0.9rem' }}>💰 Ring Pricing</div>
