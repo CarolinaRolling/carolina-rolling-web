@@ -838,23 +838,22 @@ function WorkOrderDetailsPage() {
       }
       
       // On EDIT: if cut service changed to none, remove any linked auto-cut fab service
-      if (editingPart && ((editingPart.formData || {})._completeRings || editingPart._completeRings)) {
-        const prevCutType = (editingPart.formData || {})._cutServiceType || editingPart._cutServiceType || '';
-        const newCutType = partData._cutServiceType || '';
-        if (prevCutType !== '' && newCutType === '') {
-          try {
-            const linkedFabs = (order.parts || []).filter(p =>
-              p.partType === 'fab_service' &&
-              ((p.formData || {})._linkedPartId === editingPart.id || p._linkedPartId === editingPart.id) &&
-              ((p.formData || {})._serviceType === 'cut_to_size' ||
-               (p.specialInstructions || '').toLowerCase().includes('cut to ring') ||
-               (p.specialInstructions || '').toLowerCase().includes('cut to size'))
-            );
-            for (const fab of linkedFabs) {
-              await deleteWorkOrderPart(id, fab.id);
-            }
-          } catch (e) { console.warn('Auto-remove cut fab failed:', e); }
-        }
+      // If editing and cut service is now none, remove any linked cut fab services
+      if (editingPart && (!partData._cutServiceType || partData._cutServiceType === '')) {
+        try {
+          const linkedFabs = (order.parts || []).filter(p =>
+            p.partType === 'fab_service' &&
+            (p.formData || {})._linkedPartId === editingPart.id &&
+            (
+              (p.formData || {})._serviceType === 'cut_to_size' ||
+              (p.specialInstructions || '').toLowerCase().includes('cut to ring') ||
+              (p.specialInstructions || '').toLowerCase().includes('cut to size')
+            )
+          );
+          for (const fab of linkedFabs) {
+            await deleteWorkOrderPart(id, fab.id);
+          }
+        } catch (e) { console.warn('Auto-remove cut fab failed:', e); }
       }
       if (selectedPartType === 'rush_service' && (partData._expediteEnabled || partData._emergencyEnabled)) {
         try {
@@ -933,6 +932,50 @@ function WorkOrderDetailsPage() {
   };
 
   const handleDeletePart = async (partId) => {
+    const part = order?.parts?.find(p => p.id === partId);
+    const fd = part?.formData || {};
+    const isCutFab = part?.partType === 'fab_service' &&
+      (fd._serviceType === 'cut_to_size' ||
+       (part.specialInstructions || '').toLowerCase().includes('cut to ring') ||
+       (part.specialInstructions || '').toLowerCase().includes('cut to size'));
+    const linkedPartId = fd._linkedPartId || part?._linkedPartId;
+    const linkedParent = linkedPartId && order?.parts?.find(p => p.id === linkedPartId);
+    const parentIsRings = linkedParent && ((linkedParent.formData || {})._completeRings || linkedParent._completeRings);
+
+    if (isCutFab && parentIsRings) {
+      // Smart 3-option dialog
+      const partNum = linkedParent.partNumber || '?';
+      const choice = window.confirm(
+        `This is a cut fabrication service linked to Part #${partNum} (complete rings).
+
+` +
+        `Would you also like to set Part #${partNum} to "No Cut Service"?
+
+` +
+        `OK = Yes, remove cut service from Part #${partNum} and delete this fab
+` +
+        `Cancel = Do not delete anything`
+      );
+      if (!choice) {
+        // User said no to updating parent — ask if they just want to delete the fab
+        if (!window.confirm(`Delete the fabrication service without changing Part #${partNum}?`)) return;
+        try {
+          await deleteWorkOrderPart(id, partId);
+          await loadOrder();
+          showMessage('Fab service deleted');
+        } catch (err) { setError('Failed to delete part'); }
+        return;
+      }
+      // Yes — update parent part to clear cut service type, then delete fab
+      try {
+        await updateWorkOrderPart(id, linkedParent.id, { _cutServiceType: '' });
+        await deleteWorkOrderPart(id, partId);
+        await loadOrder();
+        showMessage('Cut service removed and fab service deleted');
+      } catch (err) { setError('Failed to delete part'); }
+      return;
+    }
+
     if (!window.confirm('Delete this part?')) return;
     try {
       await deleteWorkOrderPart(id, partId);

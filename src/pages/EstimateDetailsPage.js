@@ -1155,28 +1155,23 @@ function EstimateDetailsPage() {
 
       // Auto-add Cut to Size fab service for complete rings
       // On EDIT: if cut service switched to none, delete the linked auto-cut fab service
-      if (editingPart && (editingPart.formData || {})._completeRings) {
-        const prevCut = (editingPart.formData || {})._cutServiceType || '';
-        const newCut = dataToSend._cutServiceType || '';
-        console.log('[AutoFab] prevCut:', prevCut, 'newCut:', newCut, 'editingPart.id:', editingPart.id);
-        if (prevCut !== '' && newCut === '') {
-          try {
-            const currentParts = parts || [];
-            console.log('[AutoFab] All fab parts:', currentParts.filter(p => p.partType === 'fab_service').map(p => ({id: p.id, linked: (p.formData||{})._linkedPartId, svc: (p.formData||{})._serviceType, instr: p.specialInstructions})));
-            const toRemove = currentParts.filter(p =>
-              p.partType === 'fab_service' &&
-              (
-                (p.formData || {})._linkedPartId === editingPart.id ||
-                p._linkedPartId === editingPart.id ||
-                (p.formData || {})._linkedPartId === String(editingPart.id)
-              )
-            );
-            console.log('[AutoFab] toRemove:', toRemove.map(p => p.id));
-            for (const fab of toRemove) {
-              await deleteEstimatePart(id, fab.id);
-            }
-          } catch (e) { console.warn('Auto-remove cut fab failed:', e); }
-        }
+      // If editing a complete-rings part and cut service is now none, remove any linked cut fab services
+      if (editingPart && (!dataToSend._cutServiceType || dataToSend._cutServiceType === '')) {
+        try {
+          const currentParts = parts || [];
+          const toRemove = currentParts.filter(p =>
+            p.partType === 'fab_service' &&
+            (p.formData || {})._linkedPartId === editingPart.id &&
+            (
+              (p.formData || {})._serviceType === 'cut_to_size' ||
+              (p.specialInstructions || '').toLowerCase().includes('cut to ring') ||
+              (p.specialInstructions || '').toLowerCase().includes('cut to size')
+            )
+          );
+          for (const fab of toRemove) {
+            await deleteEstimatePart(id, fab.id);
+          }
+        } catch (e) { console.warn('Auto-remove cut fab failed:', e); }
       }
 
       if (dataToSend._completeRings && savedPartId && dataToSend._cutServiceType && dataToSend._cutServiceType !== '' && dataToSend.partType !== 'fab_service' && dataToSend.partType !== 'shop_rate') {
@@ -1260,6 +1255,50 @@ function EstimateDetailsPage() {
   };
 
   const handleDeletePart = async (partId) => {
+    const part = parts?.find(p => p.id === partId);
+    const fd = part?.formData || {};
+    const isCutFab = part?.partType === 'fab_service' &&
+      (fd._serviceType === 'cut_to_size' ||
+       (part.specialInstructions || '').toLowerCase().includes('cut to ring') ||
+       (part.specialInstructions || '').toLowerCase().includes('cut to size'));
+    const linkedPartId = fd._linkedPartId || part?._linkedPartId;
+    const linkedParent = linkedPartId && parts?.find(p => p.id === linkedPartId);
+    const parentIsRings = linkedParent && ((linkedParent.formData || {})._completeRings || linkedParent._completeRings);
+
+    if (isCutFab && parentIsRings) {
+      const partNum = linkedParent.partNumber || '?';
+      const choice = window.confirm(
+        `This is a cut fabrication service linked to Part #${partNum} (complete rings).
+
+` +
+        `Would you also like to set Part #${partNum} to "No Cut Service"?
+
+` +
+        `OK = Yes, remove cut service from Part #${partNum} and delete this fab
+` +
+        `Cancel = Do not delete anything`
+      );
+      if (!choice) {
+        // User said no to updating parent — ask if they just want to delete the fab
+        if (!window.confirm('Delete the fabrication service without changing Part #' + partNum + '?')) return;
+        try {
+          await deleteEstimatePart(id, partId);
+          await loadEstimate();
+        regeneratePdfIfActive();
+          showMessage('Fab service deleted');
+        } catch (err) { setError('Failed to delete part'); }
+        return;
+      }
+      try {
+        await updateEstimatePart(id, linkedParent.id, { _cutServiceType: '' });
+        await deleteEstimatePart(id, partId);
+        await loadEstimate();
+        regeneratePdfIfActive();
+        showMessage('Cut service removed and fab service deleted');
+      } catch (err) { setError('Failed to delete part'); }
+      return;
+    }
+
     if (!window.confirm('Delete this part?')) return;
     try {
       await deleteEstimatePart(id, partId);
