@@ -968,7 +968,9 @@ function WorkOrderDetailsPage() {
       }
       // Yes — update parent part to clear cut service type, then delete fab
       try {
-        await updateWorkOrderPart(id, linkedParent.id, { _cutServiceType: '' });
+        // Merge _cutServiceType='' into existing formData so other ring fields aren't wiped
+        const parentFd = linkedParent.formData || {};
+        await updateWorkOrderPart(id, linkedParent.id, { ...parentFd, _cutServiceType: '' });
         await deleteWorkOrderPart(id, partId);
         await loadOrder();
         showMessage('Cut service removed and fab service deleted');

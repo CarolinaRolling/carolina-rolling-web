@@ -1290,7 +1290,9 @@ function EstimateDetailsPage() {
         return;
       }
       try {
-        await updateEstimatePart(id, linkedParent.id, { _cutServiceType: '' });
+        // Merge _cutServiceType='' into existing formData so other ring fields aren't wiped
+        const parentFd = linkedParent.formData || {};
+        await updateEstimatePart(id, linkedParent.id, { ...parentFd, _cutServiceType: '' });
         await deleteEstimatePart(id, partId);
         await loadEstimate();
         regeneratePdfIfActive();
