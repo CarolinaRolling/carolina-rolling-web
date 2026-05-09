@@ -1154,6 +1154,27 @@ function EstimateDetailsPage() {
       }
 
       // Auto-add Cut to Size fab service for complete rings
+      // On EDIT: if cut service switched to none, delete the linked auto-cut fab service
+      if (editingPart && (editingPart.formData || {})._completeRings) {
+        const prevCut = (editingPart.formData || {})._cutServiceType || '';
+        const newCut = dataToSend._cutServiceType || '';
+        if (prevCut && prevCut !== '' && (!newCut || newCut === '')) {
+          try {
+            const currentParts = parts || [];
+            const toRemove = currentParts.filter(p =>
+              p.partType === 'fab_service' &&
+              ((p.formData || {})._linkedPartId === editingPart.id) &&
+              ((p.formData || {})._serviceType === 'cut_to_size' ||
+               (p.specialInstructions || '').toLowerCase().includes('cut to ring') ||
+               (p.specialInstructions || '').toLowerCase().includes('cut to size'))
+            );
+            for (const fab of toRemove) {
+              await deleteEstimatePart(id, fab.id);
+            }
+          } catch (e) { console.warn('Auto-remove cut fab failed:', e); }
+        }
+      }
+
       if (dataToSend._completeRings && savedPartId && dataToSend._cutServiceType && dataToSend._cutServiceType !== '' && dataToSend.partType !== 'fab_service' && dataToSend.partType !== 'shop_rate') {
         try {
           // Check if a cut service already exists for this part

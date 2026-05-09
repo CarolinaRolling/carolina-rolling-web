@@ -838,16 +838,17 @@ function WorkOrderDetailsPage() {
       }
       
       // On EDIT: if cut service changed to none, remove any linked auto-cut fab service
-      if (editingPart && partData._completeRings) {
-        const prevCutType = editingPart._cutServiceType || (editingPart.formData || {})._cutServiceType;
+      if (editingPart && ((editingPart.formData || {})._completeRings || editingPart._completeRings)) {
+        const prevCutType = (editingPart.formData || {})._cutServiceType || editingPart._cutServiceType || '';
         const newCutType = partData._cutServiceType || '';
-        if (prevCutType && !newCutType) {
-          // Find linked fab_service parts for this part and remove auto-cut ones
+        if (prevCutType !== '' && newCutType === '') {
           try {
             const linkedFabs = (order.parts || []).filter(p =>
               p.partType === 'fab_service' &&
               ((p.formData || {})._linkedPartId === editingPart.id || p._linkedPartId === editingPart.id) &&
-              ((p.formData || {})._serviceType === 'cut_to_size' || (p.specialInstructions || '').includes('Cut to ring') || (p.specialInstructions || '').includes('Cut to size'))
+              ((p.formData || {})._serviceType === 'cut_to_size' ||
+               (p.specialInstructions || '').toLowerCase().includes('cut to ring') ||
+               (p.specialInstructions || '').toLowerCase().includes('cut to size'))
             );
             for (const fab of linkedFabs) {
               await deleteWorkOrderPart(id, fab.id);
