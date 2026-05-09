@@ -1154,36 +1154,54 @@ function EstimateDetailsPage() {
       }
 
       // Auto-add Cut to Size fab service for complete rings
-      if (dataToSend._completeRings && savedPartId && dataToSend.partType !== 'fab_service' && dataToSend.partType !== 'shop_rate') {
+      if (dataToSend._completeRings && savedPartId && dataToSend._cutServiceType && dataToSend._cutServiceType !== '' && dataToSend.partType !== 'fab_service' && dataToSend.partType !== 'shop_rate') {
         try {
-          // Check if a cut_to_size service already exists for this part
+          // Check if a cut service already exists for this part
           const currentParts = parts || [];
-          const existingCut = currentParts.find(p => 
-            (p.partType === 'fab_service') && 
+          const existingCut = currentParts.find(p =>
+            (p.partType === 'fab_service') &&
             ((p.formData || {})._linkedPartId === savedPartId || p._linkedPartId === savedPartId) &&
-            ((p.formData || {})._fabType === 'cut_to_size' || (p.formData || {})._fabType === 'cut_to_fit')
+            ((p.formData || {})._serviceType === 'cut_to_size' || (p.formData || {})._fabType === 'cut_to_size')
           );
           if (!existingCut) {
             const ringCount = parseInt(dataToSend._ringsNeeded) || 1;
             const sticksNeeded = parseInt(dataToSend._ringSticksNeeded) || 1;
-            await addEstimatePart(id, {
-              partType: 'fab_service',
-              quantity: ringCount,
-              _linkedPartId: savedPartId,
-              _fabType: 'cut_to_size',
-              specialInstructions: `Cut to size for ${ringCount} complete ring(s) — ${sticksNeeded} stock length(s)`,
-              laborTotal: '',
-              materialTotal: '0',
-              formData: {
+            const cutType = dataToSend._cutServiceType;
+            const circ = parseFloat(dataToSend._ringCircumference) || 0;
+            const clDia = circ > 0 ? (circ / Math.PI).toFixed(3) : null;
+            const segs = dataToSend._ringSegmentsPerRing || 1;
+            const segLength = circ > 0 && segs > 1 ? (circ / segs).toFixed(3) : null;
+
+            let cutNotes = '';
+            if (cutType === 'cut_to_ring') {
+              cutNotes = `Cut to ring — ${ringCount} ring(s) from ${sticksNeeded} length(s)` + (circ ? ` — CL circumference: ${circ.toFixed(3)}" (π × ${clDia}")` : '');
+            } else if (cutType === 'cut_to_ring_overlap') {
+              cutNotes = `Cut to ring with overlap — ${ringCount} ring(s) from ${sticksNeeded} length(s)` + (circ ? ` — CL circumference: ${circ.toFixed(3)}" (π × ${clDia}")` : '');
+            } else if (cutType === 'cut_to_size') {
+              cutNotes = `Cut to size — ${sticksNeeded} lengths to make ${ringCount} complete ring(s), ${segs} segments/ring` + (segLength ? ` — each segment: ${segLength}" (${circ.toFixed(3)}" ÷ ${segs})` : '');
+            }
+
+            if (cutNotes) {
+              await addEstimatePart(id, {
+                partType: 'fab_service',
+                quantity: 1,
                 _linkedPartId: savedPartId,
-                _fabType: 'cut_to_size',
-                _materialDescription: `✂️ Cut to Size — ${ringCount} ring(s) from ${sticksNeeded} length(s)`
-              }
-            });
-            console.log(`[AutoFab] Created Cut to Size service for part ${savedPartId}`);
+                _serviceType: 'cut_to_size',
+                _serviceNotes: cutNotes,
+                specialInstructions: cutNotes,
+                laborTotal: '',
+                materialTotal: '0',
+                formData: {
+                  _linkedPartId: savedPartId,
+                  _serviceType: 'cut_to_size',
+                  _serviceNotes: cutNotes,
+                  _materialDescription: `✂️ Cut — ${ringCount} ring(s)`
+                }
+              });
+            }
           }
         } catch (fabErr) {
-          console.warn('[AutoFab] Failed to auto-add Cut to Size:', fabErr.message);
+          console.warn('[AutoFab] Failed to auto-add cut service:', fabErr.message);
         }
       }
       
