@@ -639,14 +639,14 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
                     {!ringCalc.multiSegment ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-                          <input type="radio" name="cutType" value="" checked={cutServiceType === ''} onChange={() => setCutServiceType('')} style={{ marginTop: 3 }} />
+                          <input type="radio" name="cutType" value="" checked={cutServiceType === ''} onChange={() => { setCutServiceType(''); setPartData(prev => ({...prev, _cutServiceType: ''})  ); }} style={{ marginTop: 3 }} />
                           <div>
                             <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>No cut service</div>
                             <div style={{ fontSize: '0.75rem', color: '#888' }}>Don't add a fabrication service</div>
                           </div>
                         </label>
                         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-                          <input type="radio" name="cutType" value="cut_to_ring" checked={cutServiceType === 'cut_to_ring'} onChange={() => setCutServiceType('cut_to_ring')} style={{ marginTop: 3 }} />
+                          <input type="radio" name="cutType" value="cut_to_ring" checked={cutServiceType === 'cut_to_ring'} onChange={() => { setCutServiceType('cut_to_ring'); setPartData(prev => ({...prev, _cutServiceType: 'cut_to_ring'})  ); }} style={{ marginTop: 3 }} />
                           <div>
                             <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1565c0' }}>Cut to ring</div>
                             <div style={{ fontSize: '0.75rem', color: '#888' }}>
@@ -655,7 +655,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
                           </div>
                         </label>
                         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-                          <input type="radio" name="cutType" value="cut_to_ring_overlap" checked={cutServiceType === 'cut_to_ring_overlap'} onChange={() => setCutServiceType('cut_to_ring_overlap')} style={{ marginTop: 3 }} />
+                          <input type="radio" name="cutType" value="cut_to_ring_overlap" checked={cutServiceType === 'cut_to_ring_overlap'} onChange={() => { setCutServiceType('cut_to_ring_overlap'); setPartData(prev => ({...prev, _cutServiceType: 'cut_to_ring_overlap'})  ); }} style={{ marginTop: 3 }} />
                           <div>
                             <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1565c0' }}>Cut to ring with overlap</div>
                             <div style={{ fontSize: '0.75rem', color: '#888' }}>
@@ -667,13 +667,13 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-                          <input type="radio" name="cutType" value="" checked={cutServiceType === ''} onChange={() => setCutServiceType('')} style={{ marginTop: 3 }} />
+                          <input type="radio" name="cutType" value="" checked={cutServiceType === ''} onChange={() => { setCutServiceType(''); setPartData(prev => ({...prev, _cutServiceType: ''})  ); }} style={{ marginTop: 3 }} />
                           <div>
                             <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>No cut service</div>
                           </div>
                         </label>
                         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-                          <input type="radio" name="cutType" value="cut_to_size" checked={cutServiceType === 'cut_to_size'} onChange={() => setCutServiceType('cut_to_size')} style={{ marginTop: 3 }} />
+                          <input type="radio" name="cutType" value="cut_to_size" checked={cutServiceType === 'cut_to_size'} onChange={() => { setCutServiceType('cut_to_size'); setPartData(prev => ({...prev, _cutServiceType: 'cut_to_size'})  ); }} style={{ marginTop: 3 }} />
                           <div>
                             <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#e65100' }}>Cut to size</div>
                             <div style={{ fontSize: '0.75rem', color: '#888' }}>

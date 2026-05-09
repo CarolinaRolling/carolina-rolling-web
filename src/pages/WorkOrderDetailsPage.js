@@ -837,7 +837,24 @@ function WorkOrderDetailsPage() {
         }
       }
       
-      // Rush service: set promise date to today
+      // On EDIT: if cut service changed to none, remove any linked auto-cut fab service
+      if (editingPart && partData._completeRings) {
+        const prevCutType = editingPart._cutServiceType || (editingPart.formData || {})._cutServiceType;
+        const newCutType = partData._cutServiceType || '';
+        if (prevCutType && !newCutType) {
+          // Find linked fab_service parts for this part and remove auto-cut ones
+          try {
+            const linkedFabs = (order.parts || []).filter(p =>
+              p.partType === 'fab_service' &&
+              ((p.formData || {})._linkedPartId === editingPart.id || p._linkedPartId === editingPart.id) &&
+              ((p.formData || {})._serviceType === 'cut_to_size' || (p.specialInstructions || '').includes('Cut to ring') || (p.specialInstructions || '').includes('Cut to size'))
+            );
+            for (const fab of linkedFabs) {
+              await deleteWorkOrderPart(id, fab.id);
+            }
+          } catch (e) { console.warn('Auto-remove cut fab failed:', e); }
+        }
+      }
       if (selectedPartType === 'rush_service' && (partData._expediteEnabled || partData._emergencyEnabled)) {
         try {
           const today = new Date().toISOString().split('T')[0];
@@ -846,34 +863,39 @@ function WorkOrderDetailsPage() {
       }
 
       // Auto-add cut fabrication service when complete rings is selected (new parts only)
-      if (!editingPart && partData._completeRings && savedPartId && partData._cutServiceType) {
+      if (!editingPart && partData._completeRings && savedPartId && partData._cutServiceType && partData._cutServiceType !== '') {
         try {
           const numRings = parseInt(partData.quantity) || parseInt(partData._ringsNeeded) || 1;
           const sticksNeeded = partData._ringSticksNeeded || 0;
-          const multiSegment = partData._ringMultiSegment;
           const cutType = partData._cutServiceType;
           const circ = parseFloat(partData._ringCircumference) || 0;
           const clDia = circ > 0 ? (circ / Math.PI).toFixed(3) : null;
           const segmentsPerRing = partData._ringSegmentsPerRing || 1;
           const segLength = circ > 0 && segmentsPerRing > 1 ? (circ / segmentsPerRing).toFixed(3) : null;
 
-          let cutDesc = '';
+          // Map cut type to fab service _serviceType
+          const fabServiceType = (cutType === 'cut_to_ring' || cutType === 'cut_to_ring_overlap' || cutType === 'cut_to_size')
+            ? 'cut_to_size' : null;
+
+          let cutNotes = '';
           if (cutType === 'cut_to_ring') {
-            cutDesc = `Cut to ring — ${numRings} ring(s) from ${sticksNeeded} length(s)` +
+            cutNotes = `Cut to ring — ${numRings} ring(s) from ${sticksNeeded} length(s)` +
               (circ ? ` — CL circumference: ${circ.toFixed(3)}" (π × ${clDia}")` : '');
           } else if (cutType === 'cut_to_ring_overlap') {
-            cutDesc = `Cut to ring with overlap — ${numRings} ring(s) from ${sticksNeeded} length(s)` +
+            cutNotes = `Cut to ring with overlap — ${numRings} ring(s) from ${sticksNeeded} length(s)` +
               (circ ? ` — CL circumference: ${circ.toFixed(3)}" (π × ${clDia}")` : '');
           } else if (cutType === 'cut_to_size') {
-            cutDesc = `Cut to size — ${sticksNeeded} lengths to make ${numRings} complete ring(s), ${segmentsPerRing} segments/ring` +
+            cutNotes = `Cut to size — ${sticksNeeded} lengths to make ${numRings} complete ring(s), ${segmentsPerRing} segments/ring` +
               (segLength ? ` — each segment: ${segLength}" (${circ.toFixed(3)}" ÷ ${segmentsPerRing})` : '');
           }
 
-          if (cutDesc) {
+          if (fabServiceType && cutNotes) {
             await addWorkOrderPart(id, {
               partType: 'fab_service',
               quantity: 1,
-              specialInstructions: cutDesc,
+              _serviceType: fabServiceType,
+              _serviceNotes: cutNotes,
+              specialInstructions: cutNotes,
               materialSource: 'customer_supplied',
               _linkedPartId: savedPartId,
               status: 'pending',
