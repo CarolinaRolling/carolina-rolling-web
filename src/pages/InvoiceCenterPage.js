@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, assignInvoiceNumber, exportBatchIIF, getNextInvoiceNumber, skipInvoice, restoreInvoice, markInvoiceSent } from '../services/api';
+import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, assignInvoiceNumber, exportBatchIIF, exportBatchWithReconciliation, generateInvoicePDF, getNextInvoiceNumber, skipInvoice, restoreInvoice, markInvoiceSent } from '../services/api';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -50,6 +50,47 @@ const InvoiceCenterPage = ({ embedded = false }) => {
 
   const toggleSelect = (id) => { setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
   const toggleSelectAll = () => { setSelected(selected.size === filteredQueue.length ? new Set() : new Set(filteredQueue.map(wo => wo.id))); };
+
+  const handleGenerateInvoicePDF = async (wo) => {
+    try {
+      setSaving(true);
+      const response = await generateInvoicePDF(wo.id);
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url;
+      a.download = `invoice-${wo.invoiceNumber || wo.drNumber}-${(wo.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+      setSuccess(`Invoice PDF generated${wo.invoiceNumber ? ' — #' + wo.invoiceNumber : ''}`);
+      loadData();
+    } catch (err) { setError(err.response?.data?.error?.message || 'Failed to generate invoice PDF'); }
+    finally { setSaving(false); }
+  };
+
+  const handleBatchExportWithReconciliation = async () => {
+    try {
+      setSaving(true);
+      const response = await exportBatchWithReconciliation(batchPreview.map(p => p.id));
+      const { iifContent, iifFilename, reconcPdf, reconcFilename } = response.data.data;
+
+      // Download IIF
+      const iifBlob = new Blob([Buffer.from ? Buffer.from(iifContent, 'base64') : Uint8Array.from(atob(iifContent), c => c.charCodeAt(0))], { type: 'text/plain' });
+      const iifUrl = window.URL.createObjectURL(iifBlob);
+      const iifLink = document.createElement('a'); iifLink.href = iifUrl; iifLink.download = iifFilename;
+      document.body.appendChild(iifLink); iifLink.click(); window.URL.revokeObjectURL(iifUrl); iifLink.remove();
+
+      // Download reconciliation PDF
+      setTimeout(() => {
+        const pdfBlob = new Blob([Uint8Array.from(atob(reconcPdf), c => c.charCodeAt(0))], { type: 'application/pdf' });
+        const pdfUrl = window.URL.createObjectURL(pdfBlob);
+        const pdfLink = document.createElement('a'); pdfLink.href = pdfUrl; pdfLink.download = reconcFilename;
+        document.body.appendChild(pdfLink); pdfLink.click(); window.URL.revokeObjectURL(pdfUrl); pdfLink.remove();
+      }, 500);
+
+      setSuccess(`Batch exported — ${batchPreview.length} invoices + reconciliation PDF downloaded`);
+      setBatchConfirmOpen(false); setSelected(new Set()); loadData();
+    } catch (err) { setError(err.response?.data?.error?.message || 'Failed to export batch'); }
+    finally { setSaving(false); }
+  };
 
   const handleExportIIF = async (wo) => {
     try {
@@ -233,6 +274,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                           <button className="btn btn-outline" style={{ padding: '8px 12px', fontSize: '0.85rem', borderColor: '#2E7D32', color: '#2E7D32' }} onClick={() => handleExportIIF(wo)}>IIF</button>
+                          <button className="btn btn-outline" style={{ padding: '8px 12px', fontSize: '0.85rem', borderColor: '#7B1FA2', color: '#7B1FA2' }} onClick={() => handleGenerateInvoicePDF(wo)} title="Generate Invoice PDF">📄 PDF</button>
                           <button className="btn" style={{ padding: '8px 14px', fontSize: '0.85rem', background: '#7B1FA2', color: 'white', border: 'none', fontWeight: 600 }} onClick={() => { setManualModal(wo); setManualInvNum(wo.invoiceNumber || ''); }}>Assign #</button>
                           {wo.invoiceNumber && !wo.invoiceDate && (
                             <button className="btn" style={{ padding: '8px 14px', fontSize: '0.85rem', background: '#1565C0', color: 'white', border: 'none', fontWeight: 600 }} onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date().toISOString().split('T')[0]); }}>Invoice Sent</button>
@@ -266,7 +308,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
                       <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333', marginLeft: 'auto' }}>{formatCurrency(group.items.reduce((s, wo) => s + getWOTotal(wo), 0))}</span>
                     </div>
                     <table className="table" style={{ marginBottom: 0 }}>
-                      <thead><tr><th>Invoice #</th><th>DR#</th><th>Client</th><th>Amount</th><th>Sent</th><th>PDF</th><th></th></tr></thead>
+                      <thead><tr><th>Invoice #</th><th>DR#</th><th>Client</th><th>Amount</th><th>Sent</th><th>QB Export</th><th>PDF</th><th></th></tr></thead>
                       <tbody>
                         {group.items.map(wo => (
                           <tr key={wo.id}>
@@ -285,6 +327,11 @@ const InvoiceCenterPage = ({ embedded = false }) => {
                                   Confirm Sent
                                 </button>
                               )}
+                            </td>
+                            <td style={{ fontSize: '0.8rem' }}>
+                              {wo.iifExportedAt
+                                ? <span style={{ color: '#2E7D32', fontWeight: 500 }} title={`Batch: ${wo.iifBatchId || '—'}`}>✓ {new Date(wo.iifExportedAt).toLocaleDateString()}</span>
+                                : <span style={{ color: '#999' }}>Not exported</span>}
                             </td>
                             <td>{wo.invoicePdfUrl ? <a href={wo.invoicePdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 600, fontSize: '0.85rem' }}>View</a> : <button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={() => { setPdfUploadWO(wo); setPdfFile(null); }}>Upload</button>}</td>
                             <td><button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px', color: '#c62828', borderColor: '#c62828' }} onClick={() => handleClearInvoice(wo)}>Clear</button></td>
@@ -356,7 +403,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
               </table>
             </div>
             <div style={{ padding: '16px 24px', borderTop: '1px solid #eee', display: 'flex', gap: 12 }}>
-              <button className="btn" onClick={handleBatchExport} disabled={saving} style={{ flex: 1, background: '#2E7D32', color: 'white', border: 'none', padding: '14px', fontWeight: 700, borderRadius: 8, fontSize: '1rem' }}>{saving ? 'Exporting...' : `Export ${batchPreview.length} Invoices to IIF`}</button>
+              <button className="btn" onClick={handleBatchExportWithReconciliation} disabled={saving} style={{ flex: 1, background: '#2E7D32', color: 'white', border: 'none', padding: '14px', fontWeight: 700, borderRadius: 8, fontSize: '1rem' }}>{saving ? 'Exporting...' : `Export ${batchPreview.length} Invoices → IIF + Reconciliation PDF`}</button>
               <button onClick={() => setBatchConfirmOpen(false)} style={{ padding: '14px 20px', background: 'none', border: '1px solid #ccc', borderRadius: 8, cursor: 'pointer', color: '#666' }}>Cancel</button>
             </div>
           </div>
