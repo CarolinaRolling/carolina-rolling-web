@@ -1158,16 +1158,20 @@ function EstimateDetailsPage() {
       if (editingPart && (editingPart.formData || {})._completeRings) {
         const prevCut = (editingPart.formData || {})._cutServiceType || '';
         const newCut = dataToSend._cutServiceType || '';
-        if (prevCut && prevCut !== '' && (!newCut || newCut === '')) {
+        console.log('[AutoFab] prevCut:', prevCut, 'newCut:', newCut, 'editingPart.id:', editingPart.id);
+        if (prevCut !== '' && newCut === '') {
           try {
             const currentParts = parts || [];
+            console.log('[AutoFab] All fab parts:', currentParts.filter(p => p.partType === 'fab_service').map(p => ({id: p.id, linked: (p.formData||{})._linkedPartId, svc: (p.formData||{})._serviceType, instr: p.specialInstructions})));
             const toRemove = currentParts.filter(p =>
               p.partType === 'fab_service' &&
-              ((p.formData || {})._linkedPartId === editingPart.id) &&
-              ((p.formData || {})._serviceType === 'cut_to_size' ||
-               (p.specialInstructions || '').toLowerCase().includes('cut to ring') ||
-               (p.specialInstructions || '').toLowerCase().includes('cut to size'))
+              (
+                (p.formData || {})._linkedPartId === editingPart.id ||
+                p._linkedPartId === editingPart.id ||
+                (p.formData || {})._linkedPartId === String(editingPart.id)
+              )
             );
+            console.log('[AutoFab] toRemove:', toRemove.map(p => p.id));
             for (const fab of toRemove) {
               await deleteEstimatePart(id, fab.id);
             }
