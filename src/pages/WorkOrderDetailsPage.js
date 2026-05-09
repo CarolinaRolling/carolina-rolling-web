@@ -31,7 +31,7 @@ import {
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
-  getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment,
+  getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL,
   generateCOC, getWeldProcedures
 } from '../services/api';
@@ -2346,19 +2346,10 @@ function WorkOrderDetailsPage() {
                 
                 <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
                 
-                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Pickup / Loading</div>
-                <button onClick={() => handleCODCheck('checklist')} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #388E3C', background: '#E8F5E9', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#388E3C', textAlign: 'center', margin: '4px 0' }}>
-                  ☑️ Pickup Checklist
-                  {isCODClient && !codPaid && <span style={{ display: 'block', fontWeight: 600, fontSize: '0.75rem', color: '#c62828', marginTop: 2 }}>⚠️ COD — Payment confirmation required</span>}
-                </button>
-                
-                <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
-                
                 <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>QuickBooks</div>
                 <button onClick={async () => {
                   try {
                     setShowPrintMenu(false);
-                    // Assign invoice number if not already assigned
                     if (!order.invoiceNumber) {
                       const assignRes = await assignInvoiceNumber(order.id);
                       order.invoiceNumber = assignRes.data.data.invoiceNumber;
@@ -2382,6 +2373,23 @@ function WorkOrderDetailsPage() {
                   }
                 }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #2E7D32', background: 'white', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#2E7D32', textAlign: 'center', margin: '4px 0' }}>
                   📗 Export Invoice (.iif)
+                </button>
+                <button onClick={async () => {
+                  try {
+                    setShowPrintMenu(false);
+                    const response = await generateInvoicePDF(order.id);
+                    const blob = new Blob([response.data], { type: 'application/pdf' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url;
+                    a.download = `invoice-${order.invoiceNumber || order.drNumber}-${(order.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+                    document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+                    showMessage(`Invoice PDF generated${order.invoiceNumber ? ' — #' + order.invoiceNumber : ''}`);
+                    loadOrder();
+                  } catch (err) {
+                    setError(err.response?.data?.error?.message || 'Failed to generate invoice PDF');
+                  }
+                }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #1565C0', background: '#E3F2FD', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#1565C0', textAlign: 'center', margin: '4px 0' }}>
+                  📄 Generate Invoice PDF
                 </button>
                 
                 <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>

@@ -62,7 +62,6 @@ function Layout({ children }) {
             <li><NavLink to="/estimates" className={({ isActive }) => isActive ? 'active' : ''}><DollarSign size={20} /><span>Estimates</span></NavLink></li>
             <li><NavLink to="/clients-vendors" className={({ isActive }) => isActive ? 'active' : ''}><Users size={20} /><span>Clients & Vendors</span></NavLink></li>
             <li><NavLink to="/shop-supplies" className={({ isActive }) => isActive ? 'active' : ''}><Package size={20} /><span>Shop Supplies</span></NavLink></li>
-            <li><NavLink to="/invoicing" className={({ isActive }) => isActive ? 'active' : ''}><FileText size={20} /><span>Invoice Center</span></NavLink></li>
             <li><NavLink to="/com-center" className={({ isActive }) => isActive ? 'active' : ''}><MessageSquare size={20} /><span>Com Center</span></NavLink></li>
             {isAdmin() && (
               <>
