@@ -603,7 +603,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                     <div>
                       <div style={{ color: '#666', fontSize: '0.7rem' }}>CL Circumference</div>
-                      <div style={{ fontWeight: 600 }}>{ringCalc.circumference.toFixed(2)}"</div>
+                      <div style={{ fontWeight: 600 }}>{ringCalc.circumference?.toFixed(2)}"</div>
                     </div>
                     <div>
                       <div style={{ color: '#666', fontSize: '0.7rem' }}>Usable Length</div>

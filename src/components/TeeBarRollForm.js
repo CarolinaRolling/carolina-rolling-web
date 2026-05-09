@@ -355,8 +355,8 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
                 <div style={{ background: '#c8e6c9', borderRadius: 8, padding: 12, fontSize: '0.85rem' }}>
                   <div style={{ fontWeight: 600, color: '#2e7d32', marginBottom: 8 }}>⭕ Ring Calculation</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                    <div><div style={{ color: '#666', fontSize: '0.7rem' }}>CL Circumference</div><div style={{ fontWeight: 600 }}>{ringCalc.circumference.toFixed(2)}"</div></div>
-                    <div><div style={{ color: '#666', fontSize: '0.7rem' }}>+ Tangents ({ringCalc.tangent}" × 2)</div><div style={{ fontWeight: 600 }}>{(ringCalc.tangent * 2).toFixed(2)}"</div></div>
+                    <div><div style={{ color: '#666', fontSize: '0.7rem' }}>CL Circumference</div><div style={{ fontWeight: 600 }}>{ringCalc.circumference?.toFixed(2)}"</div></div>
+                    <div><div style={{ color: '#666', fontSize: '0.7rem' }}>+ Tangents ({ringCalc?.tangent || 0}" × 2)</div><div style={{ fontWeight: 600 }}>{((ringCalc?.tangent || 0) * 2).toFixed(2)}"</div></div>
                     <div><div style={{ color: '#666', fontSize: '0.7rem' }}>Cut Length / Ring</div><div style={{ fontWeight: 700, color: '#1565c0' }}>{ringCalc.cutLengthPerRing.toFixed(2)}"</div></div>
                     <div><div style={{ color: '#666', fontSize: '0.7rem' }}>{ringCalc.multiSegment ? 'Segments/Ring' : 'Rings/Stick'}</div><div style={{ fontWeight: 600, fontSize: '1.1rem', color: '#1565c0' }}>{ringCalc.multiSegment ? ringCalc.segmentsPerRing : ringCalc.ringsPerStick}</div></div>
                   </div>
@@ -387,7 +387,7 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
                           <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
                         </div>
                         <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 2 }}>
-                          {ringCalc.sticksNeeded} length(s) × ${parseFloat(partData._ringMaterialPerLength) || 0} = <strong>${((parseFloat(partData._ringMaterialPerLength) || 0) * ringCalc.sticksNeeded).toFixed(2)}</strong> total ÷ {ringsNeeded} = <strong>${(((parseFloat(partData._ringMaterialPerLength) || 0) * ringCalc.sticksNeeded) / (parseInt(ringsNeeded) || 1)).toFixed(2)}</strong>/ring
+                          {ringCalc?.sticksNeeded || 0} length(s) × ${parseFloat(partData._ringMaterialPerLength) || 0} = <strong>${((parseFloat(partData._ringMaterialPerLength) || 0) * (ringCalc?.sticksNeeded || 0)).toFixed(2)}</strong> total ÷ {ringsNeeded} = <strong>${(((parseFloat(partData._ringMaterialPerLength) || 0) * (ringCalc?.sticksNeeded || 0)) / (parseInt(ringsNeeded) || 1)).toFixed(2)}</strong>/ring
                         </div>
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>

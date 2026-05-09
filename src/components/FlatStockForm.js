@@ -54,6 +54,18 @@ const SQ_TUBE_THICKNESSES = [
   '1/8"', '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '1"', 'Custom'
 ];
 
+// Pipe schedules — wall thickness by nominal size
+const PIPE_SCHEDULES_FLAT = {
+  '1.315':  { '5': '0.065', '10': '0.109', '40': '0.133', '80': '0.179', '160': '0.250' },
+  '1.660':  { '5': '0.065', '10': '0.109', '40': '0.140', '80': '0.191', '160': '0.250' },
+  '1.900':  { '5': '0.065', '10': '0.109', '40': '0.145', '80': '0.200', '160': '0.281' },
+  '2.375':  { '5': '0.065', '10': '0.109', '40': '0.154', '80': '0.218', '160': '0.344' },
+  '3.500':  { '5': '0.083', '10': '0.120', '40': '0.216', '80': '0.300', '160': '0.438' },
+  '4.500':  { '5': '0.083', '10': '0.120', '40': '0.237', '80': '0.337', '160': '0.531' },
+};
+const TUBE_WALL_OPTIONS_FLAT = ['.035"','.049"','.058"','.065"','.083"','.095"','.109"','.120"','.125"','.134"','.156"','.188"','.250"','.375"','.500"'];
+const PIPE_ODS = Object.keys(PIPE_SCHEDULES_FLAT);
+
 const ROUND_TUBE_OPTIONS = [
   { label: '.625" OD Tube', od: '0.625' },
   { label: '.75" OD Tube', od: '0.750' },
@@ -371,7 +383,8 @@ export default function FlatStockForm({ partData, setPartData, vendorSuggestions
                   setPartData({ ...partData, _roundTubeSelection: 'Custom', outerDiameter: '' });
                 } else {
                   const found = ROUND_TUBE_OPTIONS.find(r => r.od === sel);
-                  setPartData({ ...partData, _roundTubeSelection: sel, outerDiameter: sel, _roundTubeLabel: found?.label || sel });
+                  const isPipe = PIPE_ODS.includes(sel);
+                  setPartData({ ...partData, _roundTubeSelection: sel, outerDiameter: sel, _roundTubeLabel: found?.label || sel, _schedule: '', wallThickness: isPipe ? '' : partData.wallThickness });
                 }
               }}>
               <option value="">Select...</option>
@@ -384,11 +397,47 @@ export default function FlatStockForm({ partData, setPartData, vendorSuggestions
                 onChange={(e) => setPartData({ ...partData, outerDiameter: e.target.value })} />
             )}
           </div>
-          <div className="form-group">
-            <label className="form-label">Wall Thickness</label>
-            <input type="text" className="form-input" value={partData.wallThickness || ''} placeholder="e.g. .120"
-              onChange={(e) => setPartData({ ...partData, wallThickness: e.target.value })} />
-          </div>
+          {/* Schedule selector for pipes, wall thickness dropdown for tubes */}
+          {PIPE_ODS.includes(partData._roundTubeSelection) ? (
+            <div className="form-group">
+              <label className="form-label">Schedule *</label>
+              <select className="form-select" value={partData._schedule || ''}
+                onChange={(e) => {
+                  const sch = e.target.value;
+                  const wall = PIPE_SCHEDULES_FLAT[partData._roundTubeSelection]?.[sch];
+                  setPartData({ ...partData, _schedule: sch, wallThickness: wall ? String(wall) : '' });
+                }}>
+                <option value="">Select schedule...</option>
+                {Object.entries(PIPE_SCHEDULES_FLAT[partData._roundTubeSelection] || {}).map(([sch, wall]) => (
+                  <option key={sch} value={sch}>Sch {sch} — {wall}"</option>
+                ))}
+                <option value="Custom">Custom wall</option>
+              </select>
+              {(partData._schedule === 'Custom' || (partData.wallThickness && !Object.values(PIPE_SCHEDULES_FLAT[partData._roundTubeSelection] || {}).map(String).includes(partData.wallThickness))) && (
+                <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter wall thickness"
+                  value={partData.wallThickness || ''}
+                  onChange={(e) => setPartData({ ...partData, wallThickness: e.target.value })} />
+              )}
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">Wall Thickness</label>
+              <select className="form-select" value={TUBE_WALL_OPTIONS_FLAT.includes(partData.wallThickness) ? partData.wallThickness : (partData.wallThickness ? 'Custom' : '')}
+                onChange={(e) => {
+                  if (e.target.value === 'Custom') setPartData({ ...partData, wallThickness: '' });
+                  else setPartData({ ...partData, wallThickness: e.target.value });
+                }}>
+                <option value="">Select...</option>
+                {TUBE_WALL_OPTIONS_FLAT.map(t => <option key={t} value={t}>{t}</option>)}
+                <option value="Custom">Custom</option>
+              </select>
+              {(partData.wallThickness && !TUBE_WALL_OPTIONS_FLAT.includes(partData.wallThickness)) && (
+                <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter wall thickness"
+                  value={partData.wallThickness || ''}
+                  onChange={(e) => setPartData({ ...partData, wallThickness: e.target.value })} />
+              )}
+            </div>
+          )}
           <div className="form-group">
             <label className="form-label">Length</label>
             <input type="text" className="form-input" value={partData.length || ''} placeholder="e.g. 20'"

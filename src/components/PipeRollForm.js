@@ -894,11 +894,11 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                     <div>
                       <div style={{ color: '#666', fontSize: '0.7rem' }}>CL Circumference</div>
-                      <div style={{ fontWeight: 600 }}>{ringCalc.circumference.toFixed(2)}"</div>
+                      <div style={{ fontWeight: 600 }}>{ringCalc.circumference?.toFixed(2)}"</div>
                     </div>
                     <div>
                       <div style={{ color: '#666', fontSize: '0.7rem' }}>Usable Length</div>
-                      <div style={{ fontWeight: 600 }}>{ringCalc.usable.toFixed(2)}" <span style={{ color: '#999', fontSize: '0.75rem' }}>({lengthInches}" - {ringCalc.tangent * 2}" tang)</span></div>
+                      <div style={{ fontWeight: 600 }}>{ringCalc.cutLengthPerRing?.toFixed(2)}" <span style={{ color: '#999', fontSize: '0.75rem' }}>({lengthInches}" - {(ringCalc.tangent || 0) * 2}" tang)</span></div>
                     </div>
                     <div>
                       <div style={{ color: '#666', fontSize: '0.7rem' }}>{ringCalc.multiSegment ? 'Segments/Ring' : 'Rings/Stick'}</div>
@@ -932,7 +932,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                           <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
                         </div>
                         <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 2 }}>
-                          {ringCalc.sticksNeeded} length(s) × ${parseFloat(partData._ringMaterialPerLength) || 0} = <strong>${((parseFloat(partData._ringMaterialPerLength) || 0) * ringCalc.sticksNeeded).toFixed(2)}</strong> total ÷ {ringsNeeded} = <strong>${(((parseFloat(partData._ringMaterialPerLength) || 0) * ringCalc.sticksNeeded) / (parseInt(ringsNeeded) || 1)).toFixed(2)}</strong>/ring
+                          {ringCalc?.sticksNeeded || 0} length(s) × ${parseFloat(partData._ringMaterialPerLength) || 0} = <strong>${((parseFloat(partData._ringMaterialPerLength) || 0) * (ringCalc?.sticksNeeded || 0)).toFixed(2)}</strong> total ÷ {ringsNeeded} = <strong>${(((parseFloat(partData._ringMaterialPerLength) || 0) * (ringCalc?.sticksNeeded || 0)) / (parseInt(ringsNeeded) || 1)).toFixed(2)}</strong>/ring
                         </div>
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
