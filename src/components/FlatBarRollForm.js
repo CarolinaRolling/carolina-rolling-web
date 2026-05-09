@@ -337,6 +337,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
           onFocus={(e) => e.target.select()} min="1" disabled={completeRings}
           style={completeRings ? { background: '#e8f5e9', fontWeight: 600 } : {}} />
         {completeRings && ringCalc && !ringCalc.error && (
+          <>
           <div style={{ fontSize: '0.75rem', color: '#2e7d32', marginTop: 2 }}>
             ⭕ {ringsNeeded} ring(s) — {ringCalc.sticksNeeded} stick(s) needed{!ringCalc.multiSegment ? ` (${ringCalc.ringsPerStick} rings/stick)` : ` (${ringCalc.segmentsPerRing} segments/ring)`}
           </div>
@@ -345,6 +346,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
               ⚠️ {ringCalc.sticksNeeded} lengths to make {ringsNeeded} complete ring(s) — {ringCalc.segmentsPerRing} pieces per ring
             </div>
           )}
+          </>
         )}
       </div>
 
