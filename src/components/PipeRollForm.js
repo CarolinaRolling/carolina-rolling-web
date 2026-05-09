@@ -134,7 +134,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
   const [completeRings, setCompleteRings] = useState(!!(partData._completeRings));
   const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
   const [tangentLength, setTangentLength] = useState(partData._tangentLength || '12');
-  const [kerfWidth, setKerfWidth] = useState(partData._kerfWidth || '0.125');
+  const kerfWidth = 0.125; // Standard saw blade kerf — hardcoded
 
   // Load admin settings
   useEffect(() => {
@@ -875,12 +875,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Saw Kerf (inches)</label>
-                  <input type="number" step="0.0625" className="form-input" value={kerfWidth}
-                    onFocus={(e) => e.target.select()} onChange={(e) => setKerfWidth(e.target.value)} />
-                  <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>Blade width lost per cut</div>
-                </div>
+
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label" style={{ color: '#888' }}>Stock Length</label>
                   <div style={{ padding: '8px 12px', background: '#f5f5f5', borderRadius: 6, fontWeight: 600 }}>{lengthInches}"  ({(lengthInches / 12).toFixed(1)}')</div>
