@@ -488,7 +488,7 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
                         </div>
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Labor Per Ring</label>
+                        <label className="form-label">Labor Per Ring / Segment</label>
                         <div style={{ position: 'relative' }}>
                           <input type="number" step="any" className="form-input" style={{ paddingLeft: 20 }}
                             value={partData._ringLaborPerUnit || ''}
@@ -561,10 +561,12 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
           <div className="form-group"><label className="form-label">Material Cost (each)</label>
             <input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onChange={(e) => setPartData({ ...partData, materialTotal: e.target.value })} placeholder="0.00" /></div>
           <div className="form-group"><label className="form-label">Markup %</label><input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onChange={(e) => setPartData({ ...partData, materialMarkupPercent: e.target.value })} placeholder="20" /></div>
-          <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input"
+          <div className="form-group"><label className="form-label">Labor (each){completeRings && ringCalc && !ringCalc.error && parseFloat(partData._ringLaborPerUnit) > 0 && <span style={{ marginLeft: 6, fontSize: '0.72rem', color: '#1976d2', fontWeight: 600 }}>auto from rings</span>}</label><input type="number" step="any" className="form-input"
               value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')}
+              readOnly={!!(completeRings && ringCalc && !ringCalc.error && parseFloat(partData._ringLaborPerUnit) > 0)}
+              style={completeRings && ringCalc && !ringCalc.error && parseFloat(partData._ringLaborPerUnit) > 0 ? { background: '#e8f5e9', color: '#2e7d32', cursor: 'not-allowed', fontWeight: 600 } : {}}
               onFocus={(e) => e.target.select()}
-              onChange={(e) => setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value })}
+              onChange={(e) => { if (!(completeRings && ringCalc && !ringCalc.error && parseFloat(partData._ringLaborPerUnit) > 0)) setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value }); }}
               placeholder="0.00" /></div>
         </div>
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
