@@ -33,7 +33,7 @@ import {
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
-  generateCOC, getWeldProcedures
+  generateCOC, getWeldProcedures, updateClient
 } from '../services/api';
 
 const PART_TYPES = {
@@ -4043,6 +4043,20 @@ function WorkOrderDetailsPage() {
                           const newExempt = e.target.checked;
                           const updates = { taxExempt: newExempt };
                           if (!newExempt) { updates.taxExemptReason = ''; updates.taxExemptCertNumber = ''; }
+
+                          // If checking tax exempt and client is not already resale — ask to update client account
+                          if (newExempt && order._clientObj?.taxStatus !== 'resale' && order._clientObj?.taxStatus !== 'exempt' && order.clientId) {
+                            const setClientResale = window.confirm(
+                              `Would you also like to set ${order.clientName}'s account to Resale/Tax Exempt?\n\nOK = Yes, update client account\nCancel = Apply to this order only`
+                            );
+                            if (setClientResale) {
+                              try {
+                                await updateClient(order.clientId, { taxStatus: 'resale' });
+                                showMessage('Client account set to Resale');
+                              } catch (err) { console.warn('Failed to update client tax status:', err); }
+                            }
+                          }
+
                           setEditData(prev => ({ ...prev, ...updates }));
                           try { await updateWorkOrder(id, updates); await loadOrder(); showMessage(newExempt ? 'Marked tax exempt' : 'Tax exemption removed'); } catch(err) { console.error('Tax save error:', err); }
                         }}
