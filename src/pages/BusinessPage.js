@@ -545,7 +545,7 @@ function BusinessPage() {
 
 
           {paymentModal && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setPaymentModal(null)}>
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ background: 'white', borderRadius: 12, maxWidth: 480, width: '95%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
                 <div style={{ background: '#2e7d32', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0' }}>
                   <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Record Payment</div>
@@ -554,7 +554,7 @@ function BusinessPage() {
                 <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Payment Type</label>
-                    <select className="form-select" value={paymentForm.paymentType} onChange={e => setPaymentForm(f => ({ ...f, paymentType: e.target.value }))}>
+                    <select className="form-select" value={paymentForm.paymentType} onChange={e => setPaymentForm(f => ({ ...f, paymentType: e.target.value, amount: e.target.value === 'partial' ? '' : f.amount }))}>
                       <option value="downpayment">Down Payment</option>
                       <option value="partial">Partial Payment</option>
                       <option value="full">Payment in Full</option>
