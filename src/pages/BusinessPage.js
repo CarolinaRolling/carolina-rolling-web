@@ -449,7 +449,7 @@ function BusinessPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
             {[
               { label: 'Outstanding', value: ledger.totalOutstanding, color: '#e65100', bg: '#fff3e0' },
-              { label: 'Collected', value: ledger.totalPaid, color: '#2e7d32', bg: '#e8f5e9' },
+              { label: 'Collected', value: ledger.totalCollected, color: '#2e7d32', bg: '#e8f5e9' },
               { label: 'Invoices', value: ledger.count, color: '#1565c0', bg: '#e3f2fd', isCnt: true }
             ].map(c => (
               <div key={c.label} style={{ background: c.bg, borderRadius: 8, padding: '14px 18px', border: `1px solid ${c.color}33` }}>
@@ -461,10 +461,15 @@ function BusinessPage() {
 
           {/* Filters */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            {['outstanding','paid','all'].map(f => (
-              <button key={f} onClick={() => { setLedgerFilter(f); loadLedger(); }}
-                style={{ padding: '6px 14px', border: '1px solid #ddd', borderRadius: 20, cursor: 'pointer', background: ledgerFilter === f ? '#1976d2' : 'white', color: ledgerFilter === f ? 'white' : '#555', fontWeight: ledgerFilter === f ? 700 : 400, fontSize: '0.85rem', textTransform: 'capitalize' }}>
-                {f === 'all' ? 'All' : f === 'outstanding' ? 'Outstanding' : 'Paid'}
+            {[
+              { key: 'outstanding', label: 'Outstanding' },
+              { key: 'paid', label: 'Paid' },
+              { key: 'needs_pricing', label: `⚠️ Needs Pricing${ledger.needsPricingCount > 0 ? ` (${ledger.needsPricingCount})` : ''}` },
+              { key: 'all', label: 'All' }
+            ].map(f => (
+              <button key={f.key} onClick={() => { setLedgerFilter(f.key); loadLedger(); }}
+                style={{ padding: '6px 14px', border: '1px solid #ddd', borderRadius: 20, cursor: 'pointer', background: ledgerFilter === f.key ? (f.key === 'needs_pricing' ? '#e65100' : '#1976d2') : 'white', color: ledgerFilter === f.key ? 'white' : (f.key === 'needs_pricing' ? '#e65100' : '#555'), fontWeight: ledgerFilter === f.key ? 700 : 400, fontSize: '0.85rem' }}>
+                {f.label}
               </button>
             ))}
             <input placeholder="Search client, DR#, invoice..." className="form-input" style={{ width: 240, marginLeft: 'auto' }}
@@ -489,8 +494,11 @@ function BusinessPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#1565c0' }}>{inv.drNumber ? 'DR-' + inv.drNumber : inv.orderNumber}</span>
                         {inv.invoiceNumber && <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#2e7d32', fontWeight: 600 }}>#{inv.invoiceNumber}</span>}
-                        {inv.isPaid ? <span style={{ fontSize: '0.75rem', background: '#2e7d32', color: 'white', borderRadius: 10, padding: '2px 8px', fontWeight: 700 }}>✓ PAID</span>
-                          : <span style={{ fontSize: '0.75rem', background: inv.daysOutstanding > 60 ? '#c62828' : inv.daysOutstanding > 30 ? '#e65100' : '#1565c0', color: 'white', borderRadius: 10, padding: '2px 8px', fontWeight: 700 }}>{inv.daysOutstanding}d</span>}
+                        {inv.isPaid
+                          ? <span style={{ fontSize: '0.75rem', background: '#2e7d32', color: 'white', borderRadius: 10, padding: '2px 8px', fontWeight: 700 }}>✓ PAID</span>
+                          : inv.needsPricing
+                            ? <span style={{ fontSize: '0.75rem', background: '#e65100', color: 'white', borderRadius: 10, padding: '2px 8px', fontWeight: 700 }}>⚠️ Set Pricing</span>
+                            : <span style={{ fontSize: '0.75rem', background: inv.daysOutstanding > 60 ? '#c62828' : inv.daysOutstanding > 30 ? '#e65100' : '#1565c0', color: 'white', borderRadius: 10, padding: '2px 8px', fontWeight: 700 }}>{inv.daysOutstanding}d</span>}
                       </div>
                       <div style={{ fontSize: '0.85rem', color: '#555' }}>{inv.clientName}{inv.clientPurchaseOrderNumber && ` — PO: ${inv.clientPurchaseOrderNumber}`}</div>
                       {/* Payment bar */}
