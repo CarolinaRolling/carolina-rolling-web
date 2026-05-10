@@ -32,7 +32,7 @@ import {
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
-  exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL,
+  exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment,
   generateCOC, getWeldProcedures
 } from '../services/api';
 
@@ -105,6 +105,9 @@ function WorkOrderDetailsPage() {
   const [pickupData, setPickupData] = useState({ pickedUpBy: '', type: null, items: {} });
   const [editShipmentModal, setEditShipmentModal] = useState(null); // { idx, entry } or null
   const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
+  const [paymentSaving, setPaymentSaving] = useState(false);
   const [showCocModal, setShowCocModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [cocWpsList, setCocWpsList] = useState([]);
@@ -2346,34 +2349,7 @@ function WorkOrderDetailsPage() {
                 
                 <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
                 
-                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>QuickBooks</div>
-                <button onClick={async () => {
-                  try {
-                    setShowPrintMenu(false);
-                    if (!order.invoiceNumber) {
-                      const assignRes = await assignInvoiceNumber(order.id);
-                      order.invoiceNumber = assignRes.data.data.invoiceNumber;
-                      showMessage(`Invoice #${order.invoiceNumber} assigned`);
-                    }
-                    const response = await exportWorkOrderIIF(order.id);
-                    const iifContent = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-                    const blob = new Blob([iifContent], { type: 'text/plain' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `invoice-${order.invoiceNumber || order.drNumber || order.orderNumber}-${(order.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.iif`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    a.remove();
-                    showMessage(`IIF exported — Invoice #${order.invoiceNumber}`);
-                    loadOrder();
-                  } catch (err) {
-                    setError(err.response?.data?.error?.message || 'Failed to export IIF');
-                  }
-                }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #2E7D32', background: 'white', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#2E7D32', textAlign: 'center', margin: '4px 0' }}>
-                  📗 Export Invoice (.iif)
-                </button>
+                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Invoicing</div>
                 <button onClick={async () => {
                   try {
                     setShowPrintMenu(false);
@@ -2391,6 +2367,13 @@ function WorkOrderDetailsPage() {
                 }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #1565C0', background: '#E3F2FD', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#1565C0', textAlign: 'center', margin: '4px 0' }}>
                   📄 Generate Invoice PDF
                 </button>
+                <button onClick={() => {
+                  setShowPrintMenu(false);
+                  setPaymentForm({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
+                  setShowPaymentModal(true);
+                }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #2e7d32', background: '#e8f5e9', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#2e7d32', textAlign: 'center', margin: '4px 0' }}>
+                  💵 Accept Payment
+                </button>
                 
                 <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
                 
@@ -2399,47 +2382,7 @@ function WorkOrderDetailsPage() {
                   📜 Certificate of Conformance (COC)
                 </button>
 
-                <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
-                
-                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Labels</div>
-                <button onClick={() => {
-                  setShowPrintMenu(false);
-                  const SERVICE_TYPES = ['fab_service', 'shop_rate', 'rush_service'];
-                  const labelParts = (order.parts || []).filter(p => !SERVICE_TYPES.includes(p.partType));
-                  if (labelParts.length === 0) { showMessage('No parts to label'); return; }
-                  const clientPO = order.clientPurchaseOrderNumber || '';
-                  const drLabel = order.drNumber ? `DR-${order.drNumber}` : (order.orderNumber || '');
-                  const totalLabels = labelParts.reduce((s, p) => s + (p.quantity || 1), 0);
-                  const printWindow = window.open('', '_blank');
-                  printWindow.document.write(`<!DOCTYPE html><html><head><title>Labels - ${drLabel}</title>
-                    <style>
-                      @page { size: 62mm 29mm; margin: 0; }
-                      body { margin: 0; padding: 0; }
-                      .label { width: 62mm; height: 29mm; padding: 2mm; box-sizing: border-box; font-family: Arial, sans-serif; page-break-after: always; display: flex; flex-direction: column; justify-content: center; }
-                      .label:last-child { page-break-after: auto; }
-                      .lg { font-size: 14pt; font-weight: bold; line-height: 1.2; }
-                      .sm { font-size: 9pt; color: #333; }
-                    </style></head><body>`);
-                  labelParts.forEach(part => {
-                    const qty = part.quantity || 1;
-                    const fd = part.formData && typeof part.formData === 'object' ? part.formData : {};
-                    const label1 = part.clientPartNumber || fd.clientPartNumber || `Part ${part.partNumber}`;
-                    for (let i = 0; i < qty; i++) {
-                      printWindow.document.write(`<div class="label">
-                        <div class="lg">${label1}</div>
-                        <div class="sm">${drLabel}</div>
-                        ${clientPO ? `<div class="sm">PO: ${clientPO}</div>` : ''}
-                        ${part.heatNumber ? `<div class="sm">Heat: ${part.heatNumber}</div>` : ''}
-                        <div class="sm">${i + 1} of ${qty}</div>
-                      </div>`);
-                    }
-                  });
-                  printWindow.document.write('</body></html>');
-                  printWindow.document.close();
-                  printWindow.onload = () => printWindow.print();
-                }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #795548', background: '#EFEBE9', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#795548', textAlign: 'center', margin: '4px 0' }}>
-                  🏷️ Print All Labels ({(order.parts || []).filter(p => !['fab_service', 'shop_rate', 'rush_service'].includes(p.partType)).reduce((s, p) => s + (p.quantity || 1), 0)})
-                </button>
+
 
                 <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
                 <button onClick={() => { setShowPrintMenu(false); }} style={{ display: 'block', width: '100%', padding: '10px 16px', border: 'none', background: '#f5f5f5', borderRadius: 8, cursor: 'pointer', color: '#666', fontSize: '0.9rem', textAlign: 'center', fontWeight: 600 }}>Cancel</button>
@@ -2456,8 +2399,69 @@ function WorkOrderDetailsPage() {
         </div>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
+      {/* Accept Payment Modal */}
+      {showPaymentModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', borderRadius: 12, maxWidth: 480, width: '95%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ background: '#2e7d32', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0' }}>
+              <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Accept Payment</div>
+              <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>{order.clientName} — {order.drNumber ? 'DR-' + order.drNumber : order.orderNumber}{order.invoiceNumber ? ` — Invoice #${order.invoiceNumber}` : ''}</div>
+            </div>
+            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Payment Type</label>
+                <select className="form-select" value={paymentForm.paymentType} onChange={e => setPaymentForm(f => ({ ...f, paymentType: e.target.value, amount: e.target.value === 'partial' ? '' : f.amount }))}>
+                  <option value="downpayment">Down Payment</option>
+                  <option value="partial">Partial Payment</option>
+                  <option value="full">Payment in Full</option>
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Amount *</label>
+                  <input type="number" step="0.01" className="form-input" placeholder="0.00" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Date *</label>
+                  <input type="date" className="form-input" value={paymentForm.paymentDate} onChange={e => setPaymentForm(f => ({ ...f, paymentDate: e.target.value }))} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Method</label>
+                  <select className="form-select" value={paymentForm.paymentMethod} onChange={e => setPaymentForm(f => ({ ...f, paymentMethod: e.target.value }))}>
+                    {['check','ach','wire','credit_card','cash','other'].map(m => <option key={m} value={m}>{m === 'ach' ? 'ACH' : m === 'credit_card' ? 'Credit Card' : m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Reference #</label>
+                  <input className="form-input" placeholder="Check #, wire ref..." value={paymentForm.paymentReference} onChange={e => setPaymentForm(f => ({ ...f, paymentReference: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Notes</label>
+                <input className="form-input" value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                <button disabled={paymentSaving} onClick={async () => {
+                  if (!paymentForm.amount || parseFloat(paymentForm.amount) <= 0) { setError('Amount required'); return; }
+                  try {
+                    setPaymentSaving(true);
+                    await recordLedgerPayment(order.id, paymentForm);
+                    showMessage('Payment recorded — invoice PDF regenerating...');
+                    setShowPaymentModal(false);
+                    loadOrder();
+                  } catch (err) { setError(err.response?.data?.error?.message || 'Failed to record payment'); }
+                  finally { setPaymentSaving(false); }
+                }} style={{ flex: 1, padding: '14px', background: '#2e7d32', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: paymentSaving ? 0.7 : 1 }}>
+                  {paymentSaving ? 'Saving...' : 'Record Payment'}
+                </button>
+                <button onClick={() => setShowPaymentModal(false)} style={{ padding: '14px 20px', background: 'none', border: '1px solid #ccc', borderRadius: 8, cursor: 'pointer', color: '#666' }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toggle for Shipping Details */}
       {shipment ? (
