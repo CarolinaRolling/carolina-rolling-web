@@ -444,7 +444,7 @@ function BusinessPage() {
 
           {/* ── ACCOUNTS RECEIVABLE ── */}
           {coaTab === 'ar' && (
-          <div>
+          <>
           {/* Summary cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
             {[
@@ -585,7 +585,7 @@ function BusinessPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </>
           )}
 
           {/* ── ACCOUNTS PAYABLE ── */}
