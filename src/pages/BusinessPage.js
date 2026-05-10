@@ -444,7 +444,7 @@ function BusinessPage() {
 
           {/* ── ACCOUNTS RECEIVABLE ── */}
           {coaTab === 'ar' && (
-          <>
+            <div>
           {/* Summary cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
             {[
@@ -535,7 +535,7 @@ function BusinessPage() {
             })}
           </div>
 
-          {/* Record Payment Modal */}
+
           {paymentModal && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setPaymentModal(null)}>
               <div style={{ background: 'white', borderRadius: 12, maxWidth: 480, width: '95%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
@@ -586,7 +586,7 @@ function BusinessPage() {
               </div>
             </div>
           )}
-          </>
+            </div>
           )}
 
           {/* ── ACCOUNTS PAYABLE ── */}
@@ -668,11 +668,9 @@ function BusinessPage() {
           </div>
           <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowBill(false)}>Cancel</button><button className="btn btn-primary" onClick={saveBill}>{editBill?'Update':'Add'}</button></div>
         </div></div>)}
-      </div>)}
-
+            </div>
+          )}
         </div>
-      )}
-
       )}
 
       {tab === 'employees' && (<div>
