@@ -499,7 +499,7 @@ function BusinessPage() {
                         <div style={{ marginTop: 6, height: 4, background: '#e0e0e0', borderRadius: 2, overflow: 'hidden', width: 200 }}>
                           <div style={{ height: '100%', width: paidPct + '%', background: '#43a047', borderRadius: 2 }} />
                         </div>
-                          </div>
+                      )}
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>${grandTotal.toFixed(2)}</div>
@@ -511,7 +511,7 @@ function BusinessPage() {
                         style={{ padding: '8px 14px', background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>
                         + Payment
                       </button>
-                        </div>
+                    )}
                   </div>
 
                   {isExpanded && (inv.payments || []).length > 0 && (
