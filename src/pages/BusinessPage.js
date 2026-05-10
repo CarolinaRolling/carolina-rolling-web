@@ -530,7 +530,7 @@ function BusinessPage() {
                         </div>
                       ))}
                     </div>
-                      </div>
+                  )}
                 </div>
               );
             })}
