@@ -149,7 +149,6 @@ function WorkOrderDetailsPage() {
   const [codAction, setCodAction] = useState(null); // 'checklist' or 'pickup'
   const [codShowOverride, setCodShowOverride] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [paymentForm, setPaymentForm] = useState({ date: new Date().toISOString().split('T')[0], method: '', reference: '' });
 
   useEffect(() => { 
     loadOrder(); loadLaborMinimums(); 
