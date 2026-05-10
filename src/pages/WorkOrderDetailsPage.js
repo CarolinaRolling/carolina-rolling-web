@@ -4202,10 +4202,17 @@ function WorkOrderDetailsPage() {
                     <button onClick={() => handleViewDocument(doc.id)} style={{ background: '#1976d2', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
                       <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
                     </button>
-                    <a href={doc.url} download={doc.originalName} target="_blank" rel="noopener noreferrer"
-                      style={{ background: '#f0f0f0', color: '#333', border: '1px solid #ddd', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <button onClick={async () => {
+                      try {
+                        const resp = await fetch(doc.url);
+                        const blob = await resp.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a'); a.href = url; a.download = doc.originalName || 'document.pdf';
+                        document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+                      } catch { window.open(doc.url, '_blank'); }
+                    }} style={{ background: '#f0f0f0', color: '#333', border: '1px solid #ddd', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                       <Download size={14} />Download
-                    </a>
+                    </button>
                     <button onClick={async () => {
                       try { await toggleDocumentPortal(id, doc.id, !doc.portalVisible); await loadOrder(); } catch {}
                     }} title={doc.portalVisible ? 'Visible on client portal' : 'Hidden from client portal'}
@@ -4631,12 +4638,19 @@ function WorkOrderDetailsPage() {
                     style={{ background: '#1976d2', color: 'white', border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Eye size={14} /> View
                   </button>
-                  <a href={order.documents.find(d => d.documentType === 'invoice').url}
-                    download={order.documents.find(d => d.documentType === 'invoice').originalName}
-                    target="_blank" rel="noopener noreferrer"
-                    style={{ background: '#f0f0f0', color: '#333', border: '1px solid #ddd', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <button onClick={async () => {
+                    const invDoc = order.documents.find(d => d.documentType === 'invoice');
+                    const filename = `Invoice-${order.invoiceNumber || order.drNumber}-${(order.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+                    try {
+                      const resp = await fetch(invDoc.url);
+                      const blob = await resp.blob();
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a'); a.href = url; a.download = filename;
+                      document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+                    } catch { window.open(invDoc.url, '_blank'); }
+                  }} style={{ background: '#f0f0f0', color: '#333', border: '1px solid #ddd', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <Download size={14} /> Download
-                  </a>
+                  </button>
                 </>)}
                 <button onClick={async () => {
                   try {
