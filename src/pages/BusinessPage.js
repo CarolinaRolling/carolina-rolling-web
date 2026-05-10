@@ -84,6 +84,7 @@ function BusinessPage() {
     if (tab === 'employees') { loadEmps(); loadPR(); loadPayrollEmail(); loadGmailAccounts(); }
     if (tab === 'health') loadHealth();
     if (tab === 'payments') loadPayments();
+    if (tab === 'ledger') loadLedger();
   }, [tab, liabF, liabCat]);
 
   const loadGmailAccounts = async () => {
@@ -108,6 +109,32 @@ function BusinessPage() {
   };
 
   const loadLiabs = async () => { try { setLiabLoad(true); const [a,b] = await Promise.all([getLiabilities({status:liabF,category:liabCat}),getLiabilitySummary()]); setLiabs(a.data.data||[]); setLiabSum(b.data.data); } catch{} finally{setLiabLoad(false);} };
+  const loadLedger = async () => {
+    try {
+      const r = await getLedger({ status: ledgerFilter, search: ledgerSearch });
+      setLedger(r.data.data);
+    } catch {}
+  };
+
+  const handleRecordPayment = async () => {
+    if (!paymentModal) return;
+    try {
+      await recordLedgerPayment(paymentModal.id, paymentForm);
+      showMsg('Payment recorded');
+      setPaymentModal(null);
+      loadLedger();
+    } catch (e) { setErr(e.response?.data?.error?.message || 'Failed to record payment'); }
+  };
+
+  const handleVoidPayment = async (paymentId) => {
+    if (!window.confirm('Void this payment?')) return;
+    try {
+      await voidLedgerPayment(paymentId);
+      showMsg('Payment voided');
+      loadLedger();
+    } catch { setErr('Failed to void payment'); }
+  };
+
   const loadPayments = async () => { try { setPayLoading(true); const [a,b] = await Promise.all([getOutstandingPayments(), getPaymentHistory()]); setOutstanding(a.data.data); setPayHistory(b.data.data); } catch{} finally{setPayLoading(false);} };
   const loadEmps = async () => { try { setEmpLoad(true); const r = await getEmployees({active:'all'}); setEmps(r.data.data||[]); } catch{} finally{setEmpLoad(false);} };
   const loadPR = async () => { try { const r = await getPayrolls(); setPayrolls(r.data.data||[]); } catch{} };
@@ -373,6 +400,7 @@ function BusinessPage() {
 
   const TABS = [
     {key:'invoicing',label:'Invoicing',icon:<FileText size={16}/>},
+    {key:'ledger',label:'AR Ledger',icon:<DollarSign size={16}/>},
     {key:'liabilities',label:'Bills & Liabilities',icon:<Receipt size={16}/>},
     {key:'payments',label:'Payment Center',icon:<DollarSign size={16}/>},
     {key:'employees',label:'Employees & Payroll',icon:<Users size={16}/>},
@@ -392,6 +420,152 @@ function BusinessPage() {
       </div>
 
       {tab === 'invoicing' && <InvoiceCenterPage embedded={true} />}
+
+      {tab === 'ledger' && (
+        <div>
+          {/* Summary cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
+            {[
+              { label: 'Outstanding', value: ledger.totalOutstanding, color: '#e65100', bg: '#fff3e0' },
+              { label: 'Collected', value: ledger.totalPaid, color: '#2e7d32', bg: '#e8f5e9' },
+              { label: 'Invoices', value: ledger.count, color: '#1565c0', bg: '#e3f2fd', isCnt: true }
+            ].map(c => (
+              <div key={c.label} style={{ background: c.bg, borderRadius: 8, padding: '14px 18px', border: `1px solid ${c.color}33` }}>
+                <div style={{ fontSize: '0.75rem', color: c.color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{c.label}</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: c.color }}>{c.isCnt ? ledger.count : ('$' + (parseFloat(c.value)||0).toLocaleString('en-US', { minimumFractionDigits: 2 }))}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Filters */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            {['outstanding','paid','all'].map(f => (
+              <button key={f} onClick={() => { setLedgerFilter(f); loadLedger(); }}
+                style={{ padding: '6px 14px', border: '1px solid #ddd', borderRadius: 20, cursor: 'pointer', background: ledgerFilter === f ? '#1976d2' : 'white', color: ledgerFilter === f ? 'white' : '#555', fontWeight: ledgerFilter === f ? 700 : 400, fontSize: '0.85rem', textTransform: 'capitalize' }}>
+                {f === 'all' ? 'All' : f === 'outstanding' ? 'Outstanding' : 'Paid'}
+              </button>
+            ))}
+            <input placeholder="Search client, DR#, invoice..." className="form-input" style={{ width: 240, marginLeft: 'auto' }}
+              value={ledgerSearch} onChange={e => setLedgerSearch(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && loadLedger()} />
+          </div>
+
+          {/* Ledger rows */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(ledger.invoices || []).length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>No invoices found.</div>}
+            {(ledger.invoices || []).map(inv => {
+              const isExpanded = ledgerExpanded === inv.id;
+              const balance = parseFloat(inv.balance) || 0;
+              const totalPaid = parseFloat(inv.totalPaid) || 0;
+              const grandTotal = parseFloat(inv.grandTotal) || 0;
+              const paidPct = grandTotal > 0 ? Math.min(100, Math.round(totalPaid / grandTotal * 100)) : 0;
+              return (
+                <div key={inv.id} style={{ background: 'white', borderRadius: 8, border: `1px solid ${inv.isPaid ? '#a5d6a7' : '#e0e0e0'}`, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: inv.isPaid ? '#f1f8f1' : 'white' }}
+                    onClick={() => setLedgerExpanded(isExpanded ? null : inv.id)}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#1565c0' }}>{inv.drNumber ? 'DR-' + inv.drNumber : inv.orderNumber}</span>
+                        {inv.invoiceNumber && <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#2e7d32', fontWeight: 600 }}>#{inv.invoiceNumber}</span>}
+                        {inv.isPaid ? <span style={{ fontSize: '0.75rem', background: '#2e7d32', color: 'white', borderRadius: 10, padding: '2px 8px', fontWeight: 700 }}>✓ PAID</span>
+                          : <span style={{ fontSize: '0.75rem', background: inv.daysOutstanding > 60 ? '#c62828' : inv.daysOutstanding > 30 ? '#e65100' : '#1565c0', color: 'white', borderRadius: 10, padding: '2px 8px', fontWeight: 700 }}>{inv.daysOutstanding}d</span>}
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: '#555' }}>{inv.clientName}{inv.clientPurchaseOrderNumber && ` — PO: ${inv.clientPurchaseOrderNumber}`}</div>
+                      {/* Payment bar */}
+                      {totalPaid > 0 && !inv.isPaid && (
+                        <div style={{ marginTop: 6, height: 4, background: '#e0e0e0', borderRadius: 2, overflow: 'hidden', width: 200 }}>
+                          <div style={{ height: '100%', width: paidPct + '%', background: '#43a047', borderRadius: 2 }} />
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>${grandTotal.toFixed(2)}</div>
+                      {!inv.isPaid && totalPaid > 0 && <div style={{ fontSize: '0.8rem', color: '#e65100', fontWeight: 600 }}>Balance: ${balance.toFixed(2)}</div>}
+                      {!inv.isPaid && totalPaid > 0 && <div style={{ fontSize: '0.75rem', color: '#2e7d32' }}>Paid: ${totalPaid.toFixed(2)}</div>}
+                    </div>
+                    {!inv.isPaid && (
+                      <button onClick={e => { e.stopPropagation(); setPaymentModal(inv); setPaymentForm({ paymentType: balance >= grandTotal - 0.01 ? 'full' : 'partial', amount: balance.toFixed(2), paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' }); }}
+                        style={{ padding: '8px 14px', background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>
+                        + Payment
+                      </button>
+                    )}
+                  </div>
+
+                  {isExpanded && (inv.payments || []).length > 0 && (
+                    <div style={{ borderTop: '1px solid #eee', background: '#fafafa', padding: '10px 16px' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#888', marginBottom: 8 }}>PAYMENT HISTORY</div>
+                      {inv.payments.map(pmt => (
+                        <div key={pmt.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                          <span style={{ fontSize: '0.8rem', color: '#666', minWidth: 90 }}>{new Date(pmt.paymentDate).toLocaleDateString()}</span>
+                          <span style={{ fontSize: '0.85rem', color: '#333', flex: 1 }}>
+                            {pmt.paymentType === 'downpayment' ? 'Down Payment' : pmt.paymentType === 'full' ? 'Paid in Full' : 'Partial Payment'}
+                            {pmt.paymentMethod && ` — ${pmt.paymentMethod}`}
+                            {pmt.paymentReference && ` #${pmt.paymentReference}`}
+                          </span>
+                          <span style={{ fontWeight: 700, color: '#2e7d32', fontSize: '0.95rem' }}>-${parseFloat(pmt.amount).toFixed(2)}</span>
+                          <button onClick={() => handleVoidPayment(pmt.id)} style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.8rem', padding: '2px 6px' }}>✕ Void</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Record Payment Modal */}
+          {paymentModal && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setPaymentModal(null)}>
+              <div style={{ background: 'white', borderRadius: 12, maxWidth: 480, width: '95%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+                <div style={{ background: '#2e7d32', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0' }}>
+                  <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Record Payment</div>
+                  <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>{paymentModal.clientName} — {paymentModal.drNumber ? 'DR-' + paymentModal.drNumber : paymentModal.orderNumber} — Balance: ${(parseFloat(paymentModal.balance)||0).toFixed(2)}</div>
+                </div>
+                <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Payment Type</label>
+                    <select className="form-select" value={paymentForm.paymentType} onChange={e => setPaymentForm(f => ({ ...f, paymentType: e.target.value }))}>
+                      <option value="downpayment">Down Payment</option>
+                      <option value="partial">Partial Payment</option>
+                      <option value="full">Payment in Full</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Amount *</label>
+                      <input type="number" step="0.01" className="form-input" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Date *</label>
+                      <input type="date" className="form-input" value={paymentForm.paymentDate} onChange={e => setPaymentForm(f => ({ ...f, paymentDate: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Method</label>
+                      <select className="form-select" value={paymentForm.paymentMethod} onChange={e => setPaymentForm(f => ({ ...f, paymentMethod: e.target.value }))}>
+                        {['check','ach','wire','credit_card','cash','other'].map(m => <option key={m} value={m}>{m === 'ach' ? 'ACH' : m === 'credit_card' ? 'Credit Card' : m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Reference #</label>
+                      <input className="form-input" placeholder="Check #, wire ref..." value={paymentForm.paymentReference} onChange={e => setPaymentForm(f => ({ ...f, paymentReference: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Notes</label>
+                    <input className="form-input" value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                    <button onClick={handleRecordPayment} style={{ flex: 1, padding: '14px', background: '#2e7d32', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}>Record Payment</button>
+                    <button onClick={() => setPaymentModal(null)} style={{ padding: '14px 20px', background: 'none', border: '1px solid #ccc', borderRadius: 8, cursor: 'pointer', color: '#666' }}>Cancel</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* LIABILITIES */}
       {tab === 'liabilities' && (<div>

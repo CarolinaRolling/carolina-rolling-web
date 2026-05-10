@@ -407,6 +407,12 @@ export const generateInvoicePDF = (id) => api.get(`/quickbooks/invoice-pdf/${id}
 export const previewIIF = (id) => api.get(`/quickbooks/preview/${id}`);
 export const exportCustomersIIF = () => api.post('/quickbooks/export-customers', {}, { responseType: 'blob' });
 
+// Payment Ledger
+export const getLedger = (params) => api.get('/business/ledger', { params });
+export const getWOPayments = (woId) => api.get(`/business/ledger/${woId}/payments`);
+export const recordLedgerPayment = (woId, data) => api.post(`/business/ledger/${woId}/payments`, data);
+export const voidLedgerPayment = (paymentId) => api.delete(`/business/ledger/payments/${paymentId}`);
+
 // Shop Supplies
 export const getShopSupplies = (params) => api.get('/shop-supplies', { params });
 export const getLowStockSupplies = () => api.get('/shop-supplies/low-stock');
