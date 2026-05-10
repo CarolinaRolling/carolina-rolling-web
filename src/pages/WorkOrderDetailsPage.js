@@ -4562,12 +4562,7 @@ function WorkOrderDetailsPage() {
                 </>)}
                 <button onClick={async () => {
                   try {
-                    const response = await generateInvoicePDF(order.id);
-                    const blob = new Blob([response.data], { type: 'application/pdf' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a'); a.href = url;
-                    a.download = `Invoice-${order.invoiceNumber || order.drNumber}-${(order.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-                    document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+                    await generateInvoicePDF(order.id);
                     showMessage('Invoice PDF regenerated');
                     loadOrder();
                     getWOPayments(order.id).then(r => setInvoicePayments(r.data.data || [])).catch(() => {});
@@ -4661,13 +4656,19 @@ function WorkOrderDetailsPage() {
                   setError('Generate the invoice PDF first before sending');
                   return;
                 }
+                // Open window immediately on user gesture to avoid popup blocker
+                const gmailWindow = window.open('about:blank', '_blank');
                 try {
                   setInvoiceEmailSending(true);
                   const res = await sendInvoiceEmail(order.id, { gmailAccountId: selectedGmailId, toEmail });
                   const { draftUrl } = res.data.data;
                   showMessage('Draft created — opening Gmail...');
-                  window.open(draftUrl, '_blank');
-                } catch (err) { setError(err.response?.data?.error?.message || 'Failed to create draft'); }
+                  if (gmailWindow) gmailWindow.location.href = draftUrl;
+                  else window.open(draftUrl, '_blank');
+                } catch (err) {
+                  if (gmailWindow) gmailWindow.close();
+                  setError(err.response?.data?.error?.message || 'Failed to create draft');
+                }
                 finally { setInvoiceEmailSending(false); }
               }} style={{ padding: '12px 24px', background: invoiceEmailSending ? '#ccc' : '#1976d2', color: 'white', border: 'none', borderRadius: 8, cursor: invoiceEmailSending ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 8, alignSelf: 'flex-start' }}>
                 {invoiceEmailSending ? '⏳ Creating draft...' : '📧 Create Draft in Gmail →'}
