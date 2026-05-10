@@ -32,7 +32,7 @@ import {
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
-  exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment,
+  exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments,
   generateCOC, getWeldProcedures
 } from '../services/api';
 
@@ -76,6 +76,17 @@ function WorkOrderDetailsPage() {
   const [order, setOrder] = useState(null);
   const [showAccountingContact, setShowAccountingContact] = useState(false);
   const [woTab, setWoTab] = useState('parts');
+
+  useEffect(() => {
+    if (woTab === 'invoice' && order?.id) {
+      getEmailAccounts().then(r => {
+        const accts = r.data.data || [];
+        setGmailAccounts(accts);
+        if (accts.length > 0) setSelectedGmailId(accts[0].id);
+      }).catch(() => {});
+      getWOPayments(order.id).then(r => setInvoicePayments(r.data.data || [])).catch(() => {});
+    }
+  }, [woTab, order?.id]);
   const [clientPaymentTerms, setClientPaymentTerms] = useState(null);
   const [shipment, setShipment] = useState(null);
   const [allShipments, setAllShipments] = useState([]);
@@ -108,6 +119,10 @@ function WorkOrderDetailsPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
   const [paymentSaving, setPaymentSaving] = useState(false);
+  const [invoicePayments, setInvoicePayments] = useState([]);
+  const [gmailAccounts, setGmailAccounts] = useState([]);
+  const [selectedGmailId, setSelectedGmailId] = useState('');
+  const [invoiceEmailSending, setInvoiceEmailSending] = useState(false);
   const [showCocModal, setShowCocModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [cocWpsList, setCocWpsList] = useState([]);
@@ -2356,7 +2371,7 @@ function WorkOrderDetailsPage() {
                     const blob = new Blob([response.data], { type: 'application/pdf' });
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a'); a.href = url;
-                    a.download = `invoice-${order.invoiceNumber || order.drNumber}-${(order.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+                    a.download = `Invoice-${order.invoiceNumber || order.drNumber}-${(order.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
                     document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
                     showMessage(`Invoice PDF generated${order.invoiceNumber ? ' — #' + order.invoiceNumber : ''}`);
                     loadOrder();
@@ -3034,7 +3049,8 @@ function WorkOrderDetailsPage() {
           { key: 'materials', label: '📋 Materials' },
           ...(((order.vendorIssues || []).filter(i => i.status !== 'resolved').length > 0) ? [{ key: 'vendor_issues', label: '⚠ Vendor Issues', count: (order.vendorIssues || []).filter(i => i.status !== 'resolved').length, urgent: true }] : []),
           { key: 'summary', label: '📊 Summary' },
-          { key: 'shipping', label: '🚚 Outbound', count: (order.pickupHistory || []).length || undefined, badge: (order.pickupHistory || []).length > 0 ? ((order.pickupHistory || []).some(e => e.type === 'full') ? 'FULL' : 'PARTIAL') : undefined }
+          { key: 'shipping', label: '🚚 Outbound', count: (order.pickupHistory || []).length || undefined, badge: (order.pickupHistory || []).length > 0 ? ((order.pickupHistory || []).some(e => e.type === 'full') ? 'FULL' : 'PARTIAL') : undefined },
+          { key: 'invoice', label: '🧾 Invoice', badge: order.invoiceNumber ? `#${order.invoiceNumber}` : undefined }
         ].map(tab => (
           <button key={tab.key} onClick={(e) => { e.preventDefault(); setWoTab(tab.key); setTimeout(() => document.getElementById('wo-tabs')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}
             style={{
@@ -4095,8 +4111,8 @@ function WorkOrderDetailsPage() {
             <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Customer POs, supplier quotes, drawings, COCs, etc.</p>
             {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc').length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr').map(doc => (
-                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: doc.portalVisible ? '#e8f5e9' : '#f5f5f5', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', border: doc.portalVisible ? '1px solid #a5d6a7' : '1px solid #eee' }}>
+                {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc').map(doc => (
+                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: doc.documentType === 'invoice' ? '#fff8f0' : doc.portalVisible ? '#e8f5e9' : '#f5f5f5', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', border: doc.documentType === 'invoice' ? '1px solid #e65100' : doc.portalVisible ? '1px solid #a5d6a7' : '1px solid #eee' }}>
                     <File size={16} color="#1976d2" />
                     <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
                     <span style={{ fontSize: '0.7rem', color: '#999' }}>
@@ -4104,9 +4120,14 @@ function WorkOrderDetailsPage() {
                     </span>
                     {doc.documentType === 'coc' && <span style={{ background: '#6a1b9a', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>COC</span>}
                     {doc.documentType === 'shipping_doc' && <span style={{ background: '#1565c0', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>SHIPPING</span>}
+                    {doc.documentType === 'invoice' && <span style={{ background: '#e65100', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>INVOICE</span>}
                     <button onClick={() => handleViewDocument(doc.id)} style={{ background: '#1976d2', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
                       <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
                     </button>
+                    <a href={doc.url} download={doc.originalName} target="_blank" rel="noopener noreferrer"
+                      style={{ background: '#f0f0f0', color: '#333', border: '1px solid #ddd', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Download size={14} />Download
+                    </a>
                     <button onClick={async () => {
                       try { await toggleDocumentPortal(id, doc.id, !doc.portalVisible); await loadOrder(); } catch {}
                     }} title={doc.portalVisible ? 'Visible on client portal' : 'Hidden from client portal'}
@@ -4502,6 +4523,158 @@ function WorkOrderDetailsPage() {
               })
             )}
           </div>
+        </div>
+      )}
+
+
+      {/* ===== INVOICE TAB ===== */}
+      {woTab === 'invoice' && (
+        <div style={{ marginTop: 0, display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 20 }}>
+
+          {/* Invoice Document Card */}
+          <div className="card" style={{ border: '2px solid #e65100', background: '#fff8f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '1.5rem' }}>🧾</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '1.05rem', color: '#e65100' }}>
+                      Invoice {order.invoiceNumber ? `#${order.invoiceNumber}` : '(No invoice number yet)'}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                      {order.invoiceDate ? `Dated: ${new Date(order.invoiceDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'No date set'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {order.documents?.find(d => d.documentType === 'invoice') && (<>
+                  <button onClick={() => handleViewDocument(order.documents.find(d => d.documentType === 'invoice').id)}
+                    style={{ background: '#1976d2', color: 'white', border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Eye size={14} /> View
+                  </button>
+                  <a href={order.documents.find(d => d.documentType === 'invoice').url}
+                    download={order.documents.find(d => d.documentType === 'invoice').originalName}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{ background: '#f0f0f0', color: '#333', border: '1px solid #ddd', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Download size={14} /> Download
+                  </a>
+                </>)}
+                <button onClick={async () => {
+                  try {
+                    const response = await generateInvoicePDF(order.id);
+                    const blob = new Blob([response.data], { type: 'application/pdf' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url;
+                    a.download = `Invoice-${order.invoiceNumber || order.drNumber}-${(order.clientName || '').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+                    document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+                    showMessage('Invoice PDF regenerated');
+                    loadOrder();
+                    getWOPayments(order.id).then(r => setInvoicePayments(r.data.data || [])).catch(() => {});
+                  } catch (err) { setError('Failed to generate invoice'); }
+                }} style={{ background: 'white', color: '#e65100', border: '2px solid #e65100', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  ↻ Regenerate
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment History */}
+          <div className="card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 className="card-title" style={{ margin: 0 }}>💵 Payment History</h3>
+              <button onClick={() => {
+                setPaymentForm({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
+                setShowPaymentModal(true);
+              }} style={{ background: '#2e7d32', color: 'white', border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600 }}>
+                + Add Payment
+              </button>
+            </div>
+            {invoicePayments.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 24, color: '#999', background: '#fafafa', borderRadius: 8 }}>No payments recorded yet</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {invoicePayments.map((pmt, i) => {
+                  const typeLabel = { downpayment: 'Down Payment', partial: 'Partial Payment', full: 'Payment in Full' };
+                  const methodLabel = { check: 'Check', ach: 'ACH', wire: 'Wire', credit_card: 'Credit Card', cash: 'Cash' };
+                  return (
+                    <div key={pmt.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: i < invoicePayments.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                      <div style={{ width: 90, fontSize: '0.85rem', color: '#666', flexShrink: 0 }}>
+                        {new Date(pmt.paymentDate + 'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontWeight: 600, color: '#333' }}>{typeLabel[pmt.paymentType] || 'Payment'}</span>
+                        {pmt.paymentMethod && <span style={{ color: '#888', fontSize: '0.85rem' }}> — {methodLabel[pmt.paymentMethod] || pmt.paymentMethod}</span>}
+                        {pmt.paymentReference && <span style={{ color: '#888', fontSize: '0.85rem' }}> #{pmt.paymentReference}</span>}
+                        {pmt.notes && <div style={{ fontSize: '0.8rem', color: '#999', marginTop: 2 }}>{pmt.notes}</div>}
+                      </div>
+                      <div style={{ fontWeight: 700, color: '#2e7d32', fontSize: '1rem', flexShrink: 0 }}>
+                        ${parseFloat(pmt.amount).toFixed(2)}
+                      </div>
+                      <button onClick={async () => {
+                        if (!window.confirm('Void this payment?')) return;
+                        try {
+                          await voidLedgerPayment(pmt.id);
+                          getWOPayments(order.id).then(r => setInvoicePayments(r.data.data || [])).catch(() => {});
+                          loadOrder();
+                          showMessage('Payment voided');
+                        } catch {}
+                      }} style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.8rem', padding: '4px 8px' }}>✕ Void</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Send Invoice */}
+          <div className="card">
+            <h3 className="card-title" style={{ marginBottom: 16 }}>📧 Send Invoice</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Send From</label>
+                  <select className="form-select" value={selectedGmailId} onChange={e => setSelectedGmailId(e.target.value)}>
+                    {gmailAccounts.length === 0 && <option value="">No Gmail accounts connected</option>}
+                    {gmailAccounts.map(a => <option key={a.id} value={a.id}>{a.email}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Send To (AP Email)</label>
+                  <input className="form-input"
+                    defaultValue={order.client?.apEmail || order.clientApEmail || ''}
+                    id="invoice-email-to"
+                    placeholder="accounting@client.com"
+                  />
+                  {!order.client?.apEmail && <div style={{ fontSize: '0.75rem', color: '#e65100', marginTop: 4 }}>⚠️ No AP email set on client profile</div>}
+                </div>
+              </div>
+              <div style={{ background: '#f5f5f5', borderRadius: 8, padding: 12, fontSize: '0.85rem', color: '#555' }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>Subject preview:</div>
+                Invoice {order.invoiceNumber ? `#${order.invoiceNumber}` : ''} — {order.clientName}{order.clientPurchaseOrderNumber ? ` — PO: ${order.clientPurchaseOrderNumber}` : ''}
+              </div>
+              <button disabled={invoiceEmailSending || !selectedGmailId} onClick={async () => {
+                const toEmail = document.getElementById('invoice-email-to')?.value?.trim();
+                if (!toEmail) { setError('Please enter a recipient email'); return; }
+                if (!selectedGmailId) { setError('Please select a Gmail account'); return; }
+                if (!order.documents?.find(d => d.documentType === 'invoice')) {
+                  setError('Generate the invoice PDF first before sending');
+                  return;
+                }
+                try {
+                  setInvoiceEmailSending(true);
+                  const res = await sendInvoiceEmail(order.id, { gmailAccountId: selectedGmailId, toEmail });
+                  const { draftUrl } = res.data.data;
+                  showMessage('Draft created — opening Gmail...');
+                  window.open(draftUrl, '_blank');
+                } catch (err) { setError(err.response?.data?.error?.message || 'Failed to create draft'); }
+                finally { setInvoiceEmailSending(false); }
+              }} style={{ padding: '12px 24px', background: invoiceEmailSending ? '#ccc' : '#1976d2', color: 'white', border: 'none', borderRadius: 8, cursor: invoiceEmailSending ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 8, alignSelf: 'flex-start' }}>
+                {invoiceEmailSending ? '⏳ Creating draft...' : '📧 Create Draft in Gmail →'}
+              </button>
+            </div>
+          </div>
+
         </div>
       )}
 

@@ -404,6 +404,7 @@ export const previewWorkOrderIIF = (id) => api.get(`/quickbooks/preview/${id}`);
 export const exportBatchIIF = (workOrderIds) => api.post('/quickbooks/export-batch', { workOrderIds }, { responseType: 'text', transformResponse: [(data) => data] });
 export const exportBatchWithReconciliation = (workOrderIds) => api.post('/quickbooks/export-batch-with-reconciliation', { workOrderIds });
 export const generateInvoicePDF = (id) => api.get(`/quickbooks/invoice-pdf/${id}`, { responseType: 'arraybuffer' });
+export const sendInvoiceEmail = (id, data) => api.post(`/quickbooks/invoice-email/${id}`, data);
 export const previewIIF = (id) => api.get(`/quickbooks/preview/${id}`);
 export const exportCustomersIIF = () => api.post('/quickbooks/export-customers', {}, { responseType: 'blob' });
 
