@@ -32,7 +32,7 @@ import {
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
-  exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments,
+  exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
   generateCOC, getWeldProcedures
 } from '../services/api';
 
@@ -76,17 +76,6 @@ function WorkOrderDetailsPage() {
   const [order, setOrder] = useState(null);
   const [showAccountingContact, setShowAccountingContact] = useState(false);
   const [woTab, setWoTab] = useState('parts');
-
-  useEffect(() => {
-    if (woTab === 'invoice' && order?.id) {
-      getEmailAccounts().then(r => {
-        const accts = r.data.data || [];
-        setGmailAccounts(accts);
-        if (accts.length > 0) setSelectedGmailId(accts[0].id);
-      }).catch(() => {});
-      getWOPayments(order.id).then(r => setInvoicePayments(r.data.data || [])).catch(() => {});
-    }
-  }, [woTab, order?.id]);
   const [clientPaymentTerms, setClientPaymentTerms] = useState(null);
   const [shipment, setShipment] = useState(null);
   const [allShipments, setAllShipments] = useState([]);
@@ -120,9 +109,26 @@ function WorkOrderDetailsPage() {
   const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [invoicePayments, setInvoicePayments] = useState([]);
+  const [invoiceSends, setInvoiceSends] = useState([]);
+  const [showManualSendLog, setShowManualSendLog] = useState(false);
+  const [manualSendForm, setManualSendForm] = useState({ sentAt: new Date().toISOString().slice(0,16), sentMethod: 'email', sentTo: '', sentFrom: '', notes: '' });
   const [gmailAccounts, setGmailAccounts] = useState([]);
   const [selectedGmailId, setSelectedGmailId] = useState('');
   const [invoiceEmailSending, setInvoiceEmailSending] = useState(false);
+
+  const loadInvoiceTabData = (orderId) => {
+    getEmailAccounts().then(r => {
+      const accts = r.data.data || [];
+      setGmailAccounts(accts);
+      if (accts.length > 0 && !selectedGmailId) setSelectedGmailId(accts[0].id);
+    }).catch(e => console.warn('[invoice tab] gmail accounts:', e.message));
+    getWOPayments(orderId).then(r => {
+      setInvoicePayments(r.data.data || []);
+    }).catch(e => console.warn('[invoice tab] payments:', e.message));
+    getInvoiceSends(orderId).then(r => {
+      setInvoiceSends(r.data.data || []);
+    }).catch(e => console.warn('[invoice tab] sends:', e.message));
+  };
   const [showCocModal, setShowCocModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [cocWpsList, setCocWpsList] = useState([]);
@@ -175,6 +181,12 @@ function WorkOrderDetailsPage() {
     const interval = setInterval(() => { loadOrder(); }, 30000);
     return () => clearInterval(interval);
   }, [id]);
+
+  useEffect(() => {
+    if (woTab === 'invoice' && id) {
+      loadInvoiceTabData(id);
+    }
+  }, [woTab, id]);
 
   const loadDefaultTaxRate = async () => {
     try {
@@ -2413,6 +2425,57 @@ function WorkOrderDetailsPage() {
         </div>
       </div>
 
+      {/* Manual Invoice Send Log Modal */}
+      {showManualSendLog && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', borderRadius: 12, maxWidth: 480, width: '95%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ background: '#1976d2', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0' }}>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>✏️ Log Invoice Send Manually</div>
+              <div style={{ fontSize: '0.82rem', opacity: 0.9 }}>Record that an invoice was sent outside the system</div>
+            </div>
+            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Date & Time *</label>
+                  <input type="datetime-local" className="form-input" value={manualSendForm.sentAt} onChange={e => setManualSendForm(f => ({ ...f, sentAt: e.target.value }))} />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Method</label>
+                  <select className="form-select" value={manualSendForm.sentMethod} onChange={e => setManualSendForm(f => ({ ...f, sentMethod: e.target.value }))}>
+                    <option value="email">Email</option>
+                    <option value="fax">Fax</option>
+                    <option value="mail">Mail</option>
+                    <option value="hand_delivered">Hand Delivered</option>
+                    <option value="manual">Other</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Sent To</label>
+                <input className="form-input" placeholder="email or address" value={manualSendForm.sentTo} onChange={e => setManualSendForm(f => ({ ...f, sentTo: e.target.value }))} />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Notes</label>
+                <input className="form-input" placeholder="e.g. Sent via client portal, confirmed receipt..." value={manualSendForm.notes} onChange={e => setManualSendForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                <button onClick={async () => {
+                  try {
+                    await logInvoiceSend(order.id, manualSendForm);
+                    showMessage('Send event logged');
+                    setShowManualSendLog(false);
+                    loadInvoiceTabData(order.id);
+                  } catch (err) { setError(err.response?.data?.error?.message || 'Failed to log send'); }
+                }} style={{ flex: 1, padding: '12px', background: '#1976d2', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}>
+                  Log Send Event
+                </button>
+                <button onClick={() => setShowManualSendLog(false)} style={{ padding: '12px 20px', background: 'none', border: '1px solid #ccc', borderRadius: 8, cursor: 'pointer', color: '#666' }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Accept Payment Modal */}
       {showPaymentModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2465,6 +2528,7 @@ function WorkOrderDetailsPage() {
                     showMessage('Payment recorded — invoice PDF regenerating...');
                     setShowPaymentModal(false);
                     loadOrder();
+                    if (woTab === 'invoice') loadInvoiceTabData(order.id);
                   } catch (err) { setError(err.response?.data?.error?.message || 'Failed to record payment'); }
                   finally { setPaymentSaving(false); }
                 }} style={{ flex: 1, padding: '14px', background: '#2e7d32', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '1rem', cursor: 'pointer', opacity: paymentSaving ? 0.7 : 1 }}>
@@ -4576,14 +4640,20 @@ function WorkOrderDetailsPage() {
 
           {/* Payment History */}
           <div className="card">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
               <h3 className="card-title" style={{ margin: 0 }}>💵 Payment History</h3>
-              <button onClick={() => {
-                setPaymentForm({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
-                setShowPaymentModal(true);
-              }} style={{ background: '#2e7d32', color: 'white', border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-                + Add Payment
-              </button>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <a href="/business?tab=coa" target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: '0.8rem', color: '#1976d2', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', border: '1px solid #1976d2', borderRadius: 6, fontWeight: 600 }}>
+                  📊 View in AR Ledger
+                </a>
+                <button onClick={() => {
+                  setPaymentForm({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
+                  setShowPaymentModal(true);
+                }} style={{ background: '#2e7d32', color: 'white', border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600 }}>
+                  + Add Payment
+                </button>
+              </div>
             </div>
             {invoicePayments.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 24, color: '#999', background: '#fafafa', borderRadius: 8 }}>No payments recorded yet</div>
@@ -4603,18 +4673,48 @@ function WorkOrderDetailsPage() {
                         {pmt.paymentReference && <span style={{ color: '#888', fontSize: '0.85rem' }}> #{pmt.paymentReference}</span>}
                         {pmt.notes && <div style={{ fontSize: '0.8rem', color: '#999', marginTop: 2 }}>{pmt.notes}</div>}
                       </div>
-                      <div style={{ fontWeight: 700, color: '#2e7d32', fontSize: '1rem', flexShrink: 0 }}>
-                        ${parseFloat(pmt.amount).toFixed(2)}
+                      <div style={{ fontWeight: 700, color: '#2e7d32', fontSize: '1rem', flexShrink: 0 }}>${parseFloat(pmt.amount).toFixed(2)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ marginTop: 12, fontSize: '0.8rem', color: '#999', fontStyle: 'italic' }}>
+              To void a payment, use the AR Ledger in Business Center → Chart of Accounts
+            </div>
+          </div>
+
+          {/* Invoice Send Log */}
+          <div className="card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+              <h3 className="card-title" style={{ margin: 0 }}>📬 Invoice Send History</h3>
+              <button onClick={() => {
+                setManualSendForm({ sentAt: new Date().toISOString().slice(0,16), sentMethod: 'email', sentTo: order.client?.apEmail || '', sentFrom: '', notes: '' });
+                setShowManualSendLog(true);
+              }} style={{ background: 'white', color: '#1976d2', border: '1px solid #1976d2', cursor: 'pointer', padding: '7px 14px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600 }}>
+                + Log Send Manually
+              </button>
+            </div>
+            {invoiceSends.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 20, color: '#999', background: '#fafafa', borderRadius: 8, fontSize: '0.85rem' }}>No send events recorded yet</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {invoiceSends.map((s, i) => {
+                  const methodLabel = { gmail_draft: '📧 Gmail Draft', email: '📧 Email', manual: '✏️ Manual', fax: '📠 Fax', mail: '📮 Mail', hand_delivered: '🤝 Hand Delivered' };
+                  const sentDate = new Date(s.sentAt);
+                  return (
+                    <div key={s.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: i < invoiceSends.length - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                      <div style={{ flexShrink: 0, textAlign: 'right', minWidth: 130 }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333' }}>{sentDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#888' }}>{sentDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
                       </div>
-                      <button onClick={async () => {
-                        if (!window.confirm('Void this payment?')) return;
-                        try {
-                          await voidLedgerPayment(pmt.id);
-                          getWOPayments(order.id).then(r => setInvoicePayments(r.data.data || [])).catch(() => {});
-                          loadOrder();
-                          showMessage('Payment voided');
-                        } catch {}
-                      }} style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.8rem', padding: '4px 8px' }}>✕ Void</button>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1976d2' }}>{methodLabel[s.sentMethod] || s.sentMethod || 'Sent'}</div>
+                        {s.sentTo && <div style={{ fontSize: '0.82rem', color: '#555' }}>To: {s.sentTo}</div>}
+                        {s.sentFrom && <div style={{ fontSize: '0.82rem', color: '#888' }}>From: {s.sentFrom}</div>}
+                        {s.notes && <div style={{ fontSize: '0.8rem', color: '#999', fontStyle: 'italic', marginTop: 2 }}>{s.notes}</div>}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#bbb', flexShrink: 0 }}>{s.recordedBy || ''}</div>
                     </div>
                   );
                 })}
@@ -4665,6 +4765,7 @@ function WorkOrderDetailsPage() {
                   showMessage('Draft created — opening Gmail...');
                   if (gmailWindow) gmailWindow.location.href = draftUrl;
                   else window.open(draftUrl, '_blank');
+                  loadInvoiceTabData(order.id);
                 } catch (err) {
                   if (gmailWindow) gmailWindow.close();
                   setError(err.response?.data?.error?.message || 'Failed to create draft');
