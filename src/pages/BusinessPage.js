@@ -672,6 +672,8 @@ function BusinessPage() {
         </div>
       )}
 
+      )}
+
       {tab === 'employees' && (<div>
         <div className="card" style={{marginBottom:16}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}><h3 style={{margin:0}}>👥 Employee Roster</h3><button className="btn btn-primary btn-sm" onClick={()=>{setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'ACH 100%',description:'',annualVacationDays:''});setShowEmp(true);}}><Plus size={16}/> Add Employee</button></div>
