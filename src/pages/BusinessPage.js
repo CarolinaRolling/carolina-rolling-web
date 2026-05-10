@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Receipt, Users, BarChart3, Plus, DollarSign } from 'lucide-react';
-import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, updateVacationLog, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, deletePayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment, reorderEmployees, sendPayrollEmail, getEmailAccounts, getSettings, updateSettings, previewPayrollPdf } from '../services/api';
+import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, updateVacationLog, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, deletePayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment, reorderEmployees, sendPayrollEmail, getEmailAccounts, getSettings, updateSettings, previewPayrollPdf, getLedger, recordLedgerPayment, voidLedgerPayment } from '../services/api';
 import InvoiceCenterPage from './InvoiceCenterPage';
 
 const LB_CATS = [
@@ -73,6 +73,12 @@ function BusinessPage() {
 
   // Payments
   const [outstanding, setOutstanding] = useState(null);
+  const [ledger, setLedger] = useState({ invoices: [], totalOutstanding: 0, totalPaid: 0, count: 0 });
+  const [ledgerFilter, setLedgerFilter] = useState('outstanding');
+  const [ledgerSearch, setLedgerSearch] = useState('');
+  const [ledgerExpanded, setLedgerExpanded] = useState(null);
+  const [paymentModal, setPaymentModal] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
   const [payHistory, setPayHistory] = useState(null);
   const [payTab, setPayTab] = useState('outstanding');
   const [payLoading, setPayLoading] = useState(false);
