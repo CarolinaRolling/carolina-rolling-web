@@ -492,7 +492,10 @@ function BusinessPage() {
                     onClick={() => setLedgerExpanded(isExpanded ? null : inv.id)}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#1565c0' }}>{inv.drNumber ? 'DR-' + inv.drNumber : inv.orderNumber}</span>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#1565c0', cursor: 'pointer', textDecoration: 'underline' }}
+                          onClick={e => { e.stopPropagation(); window.open(`/work-orders/${inv.id}`, '_blank'); }}>
+                          {inv.drNumber ? 'DR-' + inv.drNumber : inv.orderNumber}
+                        </span>
                         {inv.invoiceNumber && <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#2e7d32', fontWeight: 600 }}>#{inv.invoiceNumber}</span>}
                         {inv.isPaid
                           ? <span style={{ fontSize: '0.75rem', background: '#2e7d32', color: 'white', borderRadius: 10, padding: '2px 8px', fontWeight: 700 }}>✓ PAID</span>
