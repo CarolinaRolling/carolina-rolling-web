@@ -585,6 +585,7 @@ function BusinessPage() {
                 </div>
               </div>
             </div>
+          )}
           </>
           )}
 
