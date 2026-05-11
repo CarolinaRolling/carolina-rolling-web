@@ -33,7 +33,7 @@ import {
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
-  generateCOC, getWeldProcedures, updateClient
+  generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber
 } from '../services/api';
 
 const PART_TYPES = {
@@ -106,6 +106,8 @@ function WorkOrderDetailsPage() {
   const [editShipmentModal, setEditShipmentModal] = useState(null); // { idx, entry } or null
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [editingInvoiceNum, setEditingInvoiceNum] = useState(false);
+  const [invoiceNumInput, setInvoiceNumInput] = useState('');
   const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [invoicePayments, setInvoicePayments] = useState([]);
@@ -4623,10 +4625,34 @@ function WorkOrderDetailsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: '1.5rem' }}>🧾</span>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: '1.05rem', color: '#e65100' }}>
-                      Invoice {order.invoiceNumber ? `#${order.invoiceNumber}` : '(No invoice number yet)'}
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                    {editingInvoiceNum ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 600, color: '#e65100' }}>#</span>
+                        <input value={invoiceNumInput} onChange={e => setInvoiceNumInput(e.target.value)}
+                          onKeyDown={async e => {
+                            if (e.key === 'Enter') {
+                              try { await updateInvoiceNumber(order.id, invoiceNumInput); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput}`); loadOrder(); }
+                              catch (err) { setError(err.response?.data?.error?.message || 'Failed to update invoice number'); }
+                            }
+                            if (e.key === 'Escape') setEditingInvoiceNum(false);
+                          }}
+                          autoFocus
+                          style={{ width: 100, fontFamily: 'Courier New, monospace', fontSize: '1rem', fontWeight: 700, padding: '4px 8px', border: '2px solid #e65100', borderRadius: 6, textAlign: 'center' }} />
+                        <button style={{ padding: '4px 8px', background: '#e65100', border: 'none', borderRadius: 4, cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center' }} onClick={async () => {
+                          try { await updateInvoiceNumber(order.id, invoiceNumInput); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput}`); loadOrder(); }
+                          catch (err) { setError(err.response?.data?.error?.message || 'Failed to update invoice number'); }
+                        }}><Check size={14} /></button>
+                        <button style={{ padding: '4px 8px', background: 'white', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={() => setEditingInvoiceNum(false)}><X size={14} /></button>
+                      </div>
+                    ) : (
+                      <div style={{ fontWeight: 700, fontSize: '1.05rem', color: '#e65100', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                        onClick={() => { setInvoiceNumInput(order.invoiceNumber || ''); setEditingInvoiceNum(true); }}
+                        title="Click to edit invoice number">
+                        Invoice {order.invoiceNumber ? `#${order.invoiceNumber}` : '(No number — click to set)'}
+                        <Edit size={13} style={{ opacity: 0.45 }} />
+                      </div>
+                    )}
+                    <div style={{ fontSize: '0.8rem', color: '#888', marginTop: 2 }}>
                       {order.invoiceDate ? `Dated: ${new Date(order.invoiceDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'No date set'}
                     </div>
                   </div>
