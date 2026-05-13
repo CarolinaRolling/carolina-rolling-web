@@ -2484,27 +2484,32 @@ function WorkOrderDetailsPage() {
                 <button disabled={usmcaGenerating} onClick={async () => {
                   try {
                     setUsmcaGenerating(true);
-                    const response = await generateUSMCA(order.id, {
-                      format: document.getElementById('usmca-format')?.value,
+                    const baseP = {
                       htsCode: document.getElementById('usmca-hts')?.value,
                       blanketFrom: document.getElementById('usmca-from')?.value,
                       blanketTo: document.getElementById('usmca-to')?.value,
                       importerName: document.getElementById('usmca-importer-name')?.value,
                       importerAddress: document.getElementById('usmca-importer-addr')?.value,
                       goodsDescription: document.getElementById('usmca-goods')?.value,
-                    });
-                    const blob = new Blob([response.data], { type: 'application/pdf' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a'); a.href = url;
-                    a.download = `USMCA-COO-${order.drNumber || order.orderNumber}-${new Date().getFullYear()}.pdf`;
-                    document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
-                    showMessage('USMCA Certificate generated & saved to documents');
+                    };
+                    const dr2 = order.drNumber || order.orderNumber;
+                    const yr2 = new Date().getFullYear();
+                    for (const [fmt, suffix] of [['format1','Standard'],['format2','Table']]) {
+                      const response = await generateUSMCA(order.id, { ...baseP, format: fmt });
+                      const blob = new Blob([response.data], { type: 'application/pdf' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a'); a.href = url;
+                      a.download = `USMCA-COO-${dr2}-${yr2}-${suffix}.pdf`;
+                      document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+                      await new Promise(r => setTimeout(r, 300));
+                    }
+                    showMessage('USMCA Standard & Table certificates generated & saved to documents');
                     setShowUSMCAModal(false);
                     loadOrder();
                   } catch (err) { setError(err.response?.data?.error?.message || 'Failed to generate USMCA'); }
                   finally { setUsmcaGenerating(false); }
                 }} style={{ flex: 1, padding: '12px', background: '#1565c0', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', opacity: usmcaGenerating ? 0.7 : 1 }}>
-                  {usmcaGenerating ? '⏳ Generating...' : '🌎 Generate Certificate'}
+                  {usmcaGenerating ? '⏳ Generating...' : '🌎 Generate Both (Standard + Table)'}
                 </button>
                 <button onClick={() => setShowUSMCAModal(false)} style={{ padding: '12px 20px', background: 'none', border: '1px solid #ccc', borderRadius: 8, cursor: 'pointer', color: '#666' }}>Cancel</button>
               </div>
@@ -4766,21 +4771,27 @@ function WorkOrderDetailsPage() {
         <button onClick={async () => {
           try {
             setUsmcaGenerating(true);
-            const response = await generateUSMCA(order.id, {
-              format: order._clientObj?.usmcaFormat || 'format1',
+            const baseParams = {
               htsCode: order._clientObj?.usmcaHtsCode || (items[0]?.htsCode || '7215.50'),
               blanketFrom: '01/01/' + new Date().getFullYear(),
               blanketTo: '12/31/' + new Date().getFullYear(),
               importerName: order._clientObj?.usmcaImporterName || order.clientName,
               importerAddress: order._clientObj?.usmcaImporterAddress || '',
               lineItems: items
-            });
-            const blob = new Blob([response.data], { type: 'application/pdf' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url;
-            a.download = 'USMCA-COO-' + (order.drNumber||order.orderNumber) + '-' + new Date().getFullYear() + '.pdf';
-            document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
-            showMessage('USMCA Certificate generated & saved to documents');
+            };
+            const dr = order.drNumber || order.orderNumber;
+            const yr = new Date().getFullYear();
+            // Generate both formats
+            for (const [fmt, suffix] of [['format1','Standard'],['format2','Table']]) {
+              const response = await generateUSMCA(order.id, { ...baseParams, format: fmt });
+              const blob = new Blob([response.data], { type: 'application/pdf' });
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a'); a.href = url;
+              a.download = `USMCA-COO-${dr}-${yr}-${suffix}.pdf`;
+              document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+              await new Promise(r => setTimeout(r, 300)); // slight delay between downloads
+            }
+            showMessage('USMCA Standard & Table certificates generated & saved to documents');
             loadOrder();
           } catch (err) { setError('Failed to generate USMCA'); }
           finally { setUsmcaGenerating(false); }

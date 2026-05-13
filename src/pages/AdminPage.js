@@ -130,6 +130,8 @@ function AdminPage({ section = 'users-logs' }) {
   const [showGeneralNotes, setShowGeneralNotes] = useState(false);
   const [generalNotes, setGeneralNotes] = useState('');
   const [codOverridePasswordAdmin, setCodOverridePasswordAdmin] = useState('');
+  const [certifierSignatureUrl, setCertifierSignatureUrl] = useState('');
+  const [signatureUploading, setSignatureUploading] = useState(false);
 
   // Two-Factor Auth
   const [twoFAState, setTwoFAState] = useState({ enabled: false, setupData: null, verifyCode: '', disablePassword: '' });
@@ -173,6 +175,9 @@ function AdminPage({ section = 'users-logs' }) {
       }).catch(() => {});
       getSettings('cod_override_password').then(resp => {
         if (resp.data.data?.value) setCodOverridePasswordAdmin(resp.data.data.value);
+      }).catch(() => {});
+      getSettings('certifier_signature_url').then(resp => {
+        if (resp.data.data?.value) setCertifierSignatureUrl(resp.data.data.value);
       }).catch(() => {});
       setLoading(false);
     } else if (activeTab === 'apikeys') {
@@ -2062,6 +2067,53 @@ function AdminPage({ section = 'users-logs' }) {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Certifier Signature */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3 style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              ✍️ Certifier Signature
+            </h3>
+            <p style={{ color: '#666', marginBottom: 12, fontSize: '0.85rem' }}>
+              Upload a signature image to be included on USMCA Certificates of Origin and COC documents.
+              Use a transparent PNG of Jason Thornton's signature, ideally 400×100px or similar.
+            </p>
+            {certifierSignatureUrl && (
+              <div style={{ marginBottom: 12, padding: 12, background: '#f5f5f5', borderRadius: 8, display: 'inline-block' }}>
+                <img src={certifierSignatureUrl} alt="Certifier signature" style={{ maxHeight: 60, maxWidth: 300, display: 'block' }} />
+                <div style={{ fontSize: '0.75rem', color: '#888', marginTop: 4 }}>Current signature</div>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input type="file" accept="image/png,image/jpeg,image/gif"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setSignatureUploading(true);
+                  try {
+                    // Convert to base64 data URL and save in settings
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                      const dataUrl = ev.target.result;
+                      await updateSettings('certifier_signature_url', dataUrl);
+                      setCertifierSignatureUrl(dataUrl);
+                      setSuccess('Signature saved');
+                      setSignatureUploading(false);
+                    };
+                    reader.readAsDataURL(file);
+                  } catch { setError('Failed to save signature'); setSignatureUploading(false); }
+                }}
+                style={{ fontSize: '0.85rem' }} />
+              {signatureUploading && <span style={{ color: '#888', fontSize: '0.85rem' }}>Saving...</span>}
+              {certifierSignatureUrl && (
+                <button className="btn btn-sm" style={{ background: 'none', border: '1px solid #c62828', color: '#c62828', padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: '0.8rem' }}
+                  onClick={async () => {
+                    await updateSettings('certifier_signature_url', '');
+                    setCertifierSignatureUrl('');
+                    setSuccess('Signature removed');
+                  }}>Remove</button>
+              )}
+            </div>
           </div>
 
           {/* COD Override Password */}
