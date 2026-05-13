@@ -1057,6 +1057,49 @@ const ClientsVendorsPage = () => {
                   </div>
                 )}
               </div>
+              {/* USMCA Auto-Generate */}
+              <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={!!formData.autoGenerateUSMCA} style={{ width: 18, height: 18, accentColor: '#1565c0', marginTop: 2 }}
+                    onChange={e => setFormData({...formData, autoGenerateUSMCA: e.target.checked})} />
+                  <div>
+                    <div style={{ fontWeight: 600, color: formData.autoGenerateUSMCA ? '#1565c0' : '#333' }}>🌎 Auto-generate USMCA Certificate of Origin on shipment</div>
+                    <div style={{ fontSize: '0.78rem', color: '#888', marginTop: 2 }}>Automatically generates and saves a USMCA COO to shipping documents when an order is shipped</div>
+                  </div>
+                </label>
+                {formData.autoGenerateUSMCA && (
+                  <div style={{ marginTop: 12, padding: 12, background: '#e3f2fd', borderRadius: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Certificate Format</label>
+                      <select className="form-select" style={{ fontSize: '0.85rem' }} value={formData.usmcaFormat || 'format1'} onChange={e => setFormData({...formData, usmcaFormat: e.target.value})}>
+                        <option value="format1">Format 1 — Numbered Fields</option>
+                        <option value="format2">Format 2 — Table Style</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Default HS Tariff Code</label>
+                      <input className="form-input" style={{ fontSize: '0.85rem' }} value={formData.usmcaHtsCode || ''} onChange={e => setFormData({...formData, usmcaHtsCode: e.target.value})} placeholder="e.g. 7215, 7222, 7222.40" />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Importer Name (if different from client)</label>
+                      <input className="form-input" style={{ fontSize: '0.85rem' }} value={formData.usmcaImporterName || ''} onChange={e => setFormData({...formData, usmcaImporterName: e.target.value})} placeholder="Importing entity" />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Origin Criteria</label>
+                      <select className="form-select" style={{ fontSize: '0.85rem' }} value={formData.usmcaOriginCriteria || 'A'} onChange={e => setFormData({...formData, usmcaOriginCriteria: e.target.value})}>
+                        <option value="A">A — Wholly obtained/produced in US</option>
+                        <option value="B">B — Tariff classification change</option>
+                        <option value="C">C — Regional value content</option>
+                        <option value="D">D — Produced exclusively in USMCA territory</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ margin: 0, gridColumn: 'span 2' }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Importer Address</label>
+                      <textarea className="form-input" rows={2} style={{ fontSize: '0.85rem', resize: 'vertical' }} value={formData.usmcaImporterAddress || ''} onChange={e => setFormData({...formData, usmcaImporterAddress: e.target.value})} placeholder={'Street Address\nCity, State ZIP'} />
+                    </div>
+                  </div>
+                )}
+              </div>
               <div style={{ gridColumn: 'span 2', borderTop: '1px solid #e0e0e0', paddingTop: 12, marginTop: 8 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                   <input type="checkbox" checked={!!formData.requiresCoc} style={{ width: 18, height: 18, accentColor: '#E65100' }}

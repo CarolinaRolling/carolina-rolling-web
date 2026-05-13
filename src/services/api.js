@@ -555,6 +555,7 @@ export const deleteWeldProcedure = (id) => api.delete(`/business/wps/${id}`);
 
 // Certificate of Conformance
 export const generateCOC = (workOrderId, data) => api.post(`/workorders/${workOrderId}/coc`, data, { responseType: 'blob' });
+export const generateUSMCA = (workOrderId, data) => api.post(`/workorders/${workOrderId}/usmca`, data, { responseType: 'arraybuffer' });
 // Calendar
 export const getCalendarEvents = (params) => api.get('/business/calendar', { params });
 export const getUpcomingEvents = () => api.get('/business/calendar/upcoming');
