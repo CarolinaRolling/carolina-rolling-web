@@ -4698,6 +4698,7 @@ function WorkOrderDetailsPage() {
 
       {/* ===== OUTBOUND SHIPPING TAB ===== */}
       {woTab === 'shipping' && (
+        <>
         <div style={{ marginTop: 0, minHeight: '70vh' }}>
           {/* Remaining Balance Overview */}
           {(() => {
@@ -4956,6 +4957,7 @@ function WorkOrderDetailsPage() {
             </div>
           );
         })()}
+        </>
       )}
 
 
