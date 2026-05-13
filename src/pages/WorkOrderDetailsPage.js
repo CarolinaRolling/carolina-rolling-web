@@ -2550,7 +2550,6 @@ function WorkOrderDetailsPage() {
                 }}>
                   {usmcaGenerating ? '⏳ Saving...' : '💾 Save & Regenerate'}
                 </button>
-                </button>
               </div>
             </div>
           </div>
