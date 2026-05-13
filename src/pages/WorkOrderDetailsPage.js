@@ -2524,41 +2524,32 @@ function WorkOrderDetailsPage() {
               <div className="modal-footer">
                 <button className="btn btn-outline" onClick={() => setUsmcaEditModal(null)}>Cancel</button>
                 <button className="btn btn-primary" disabled={usmcaGenerating} onClick={async () => {
+                  console.log('[USMCA] Save button clicked, order.id:', order?.id, 'modal:', usmcaEditModal);
+                  setUsmcaGenerating(true);
                   try {
-                    setUsmcaGenerating(true);
-                    // Save USMCA info to this work order (per-order, not client profile)
                     const current = usmcaEditModal;
+                    // Save to work order
                     await saveWOUsmcaInfo(order.id, {
                       usmcaImporterName: current.importerName,
                       usmcaImporterAddress: current.importerAddress,
                       usmcaHtsCode: current.htsCode,
                       usmcaOriginCriteria: current.originCriteria,
                     });
-                    // Regenerate both formats silently (saves to documents, no download)
-                    for (const fmt of ['format1', 'format2']) {
-                      const resp = await generateUSMCA(order.id, { ...current, format: fmt });
-                      // Check if response is actually an error (arraybuffer containing JSON error)
-                      if (resp.data?.byteLength < 500) {
-                        try {
-                          const text = new TextDecoder().decode(resp.data);
-                          const parsed = JSON.parse(text);
-                          if (parsed.error) throw new Error(parsed.error.message || 'Generation failed');
-                        } catch (decodeErr) {
-                          if (decodeErr.message !== 'Generation failed') { /* not JSON, real PDF */ }
-                          else throw decodeErr;
-                        }
-                      }
-                    }
-                    showMessage('USMCA certificates updated & saved to documents');
+                    // Regenerate both formats
+                    await generateUSMCA(order.id, { ...current, format: 'format1' });
+                    await generateUSMCA(order.id, { ...current, format: 'format2' });
+                    setUsmcaGenerating(false);
                     setUsmcaEditModal(null);
+                    showMessage('USMCA certificates saved');
                     loadOrder();
                   } catch (err) {
-                    console.error('[USMCA save]', err);
-                    setError('Failed to save USMCA: ' + (err.response?.data ? (() => { try { return JSON.parse(new TextDecoder().decode(err.response.data))?.error?.message; } catch { return err.message; } })() : err.message));
+                    setUsmcaGenerating(false);
+                    const msg = err?.response?.data?.error?.message || err?.message || 'Unknown error';
+                    alert('USMCA save failed: ' + msg);
                   }
-                  finally { setUsmcaGenerating(false); }
                 }}>
                   {usmcaGenerating ? '⏳ Saving...' : '💾 Save & Regenerate'}
+                </button>
                 </button>
               </div>
             </div>
@@ -5038,35 +5029,16 @@ function WorkOrderDetailsPage() {
           <h3 className="card-title" style={{ margin: 0, color: '#1565c0' }}>🌎 USMCA Certificate of Origin</h3>
           <div style={{ fontSize: '0.8rem', color: '#888', marginTop: 2 }}>Auto-enabled for {order.clientName}. Review tariff codes before generating.</div>
         </div>
-        <button onClick={async () => {
-          try {
-            setUsmcaGenerating(true);
-            const baseParams = {
-              htsCode: order._clientObj?.usmcaHtsCode || (items[0]?.htsCode || '7215.50'),
-              blanketFrom: '01/01/' + new Date().getFullYear(),
-              blanketTo: '12/31/' + new Date().getFullYear(),
-              importerName: order._clientObj?.usmcaImporterName || order.clientName,
-              importerAddress: order._clientObj?.usmcaImporterAddress || '',
-              lineItems: items
-            };
-            const dr = order.drNumber || order.orderNumber;
-            const yr = new Date().getFullYear();
-            // Generate both formats
-            for (const [fmt, suffix] of [['format1','Standard'],['format2','Table']]) {
-              const response = await generateUSMCA(order.id, { ...baseParams, format: fmt });
-              const blob = new Blob([response.data], { type: 'application/pdf' });
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement('a'); a.href = url;
-              a.download = `USMCA-COO-${dr}-${yr}-${suffix}.pdf`;
-              document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
-              await new Promise(r => setTimeout(r, 300)); // slight delay between downloads
-            }
-            showMessage('USMCA Standard & Table certificates generated & saved to documents');
-            loadOrder();
-          } catch (err) { setError('Failed to generate USMCA'); }
-          finally { setUsmcaGenerating(false); }
-        }} style={{ background: usmcaGenerating ? '#ccc' : '#1565c0', color: 'white', border: 'none', borderRadius: 8, padding: '10px 20px', fontWeight: 700, fontSize: '0.9rem', cursor: usmcaGenerating ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-          {usmcaGenerating ? '⏳ Generating...' : '🌎 Generate Certificate'}
+        <button onClick={() => setUsmcaEditModal({
+            htsCode: order.usmcaHtsCode || order._clientObj?.usmcaHtsCode || '7215.50',
+            blanketFrom: `01/01/${new Date().getFullYear()}`,
+            blanketTo: `12/31/${new Date().getFullYear()}`,
+            importerName: order.usmcaImporterName || order._clientObj?.usmcaImporterName || order.clientName || '',
+            importerAddress: order.usmcaImporterAddress || order._clientObj?.usmcaImporterAddress || '',
+            goodsDescription: '',
+            originCriteria: order.usmcaOriginCriteria || order._clientObj?.usmcaOriginCriteria || 'A',
+          })} style={{ background: '#1565c0', color: 'white', border: 'none', borderRadius: 8, padding: '10px 20px', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+          🌎 Edit & Generate
         </button>
       </div>
       
