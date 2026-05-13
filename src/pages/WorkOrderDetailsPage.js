@@ -33,7 +33,7 @@ import {
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
-  generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA
+  generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo
 } from '../services/api';
 
 const PART_TYPES = {
@@ -2526,24 +2526,24 @@ function WorkOrderDetailsPage() {
                 <button className="btn btn-primary" disabled={usmcaGenerating} onClick={async () => {
                   try {
                     setUsmcaGenerating(true);
-                    const dr = order.drNumber || order.orderNumber;
-                    const yr = new Date().getFullYear();
-                    for (const [fmt, suffix] of [['format1','Standard'],['format2','Table']]) {
-                      const response = await generateUSMCA(order.id, { ...f, format: fmt });
-                      const blob = new Blob([response.data], { type: 'application/pdf' });
-                      const url = window.URL.createObjectURL(blob);
-                      const a = document.createElement('a'); a.href = url;
-                      a.download = `USMCA-COO-${dr}-${yr}-${suffix}.pdf`;
-                      document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
-                      await new Promise(r => setTimeout(r, 300));
+                    // Save USMCA info to this work order (per-order, not client profile)
+                    await saveWOUsmcaInfo(order.id, {
+                      usmcaImporterName: f.importerName,
+                      usmcaImporterAddress: f.importerAddress,
+                      usmcaHtsCode: f.htsCode,
+                      usmcaOriginCriteria: f.originCriteria,
+                    });
+                    // Regenerate both formats silently (saves to documents, no download)
+                    for (const fmt of ['format1', 'format2']) {
+                      await generateUSMCA(order.id, { ...f, format: fmt });
                     }
-                    showMessage('USMCA certificates updated');
+                    showMessage('USMCA certificates updated & saved to documents');
                     setUsmcaEditModal(null);
                     loadOrder();
                   } catch (err) { setError('Failed to regenerate USMCA'); }
                   finally { setUsmcaGenerating(false); }
                 }}>
-                  {usmcaGenerating ? '⏳ Regenerating...' : '🌎 Save & Regenerate Both'}
+                  {usmcaGenerating ? '⏳ Saving...' : '💾 Save & Regenerate'}
                 </button>
               </div>
             </div>
@@ -4465,13 +4465,13 @@ function WorkOrderDetailsPage() {
                     {doc.documentType === 'usmca' && <span style={{ background: '#1565c0', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>USMCA</span>}
                     {doc.documentType === 'usmca' && (
                       <button onClick={() => setUsmcaEditModal({
-                        htsCode: order.client?.usmcaHtsCode || '7215.50',
+                        htsCode: order.usmcaHtsCode || order.client?.usmcaHtsCode || '7215.50',
                         blanketFrom: `01/01/${new Date().getFullYear()}`,
                         blanketTo: `12/31/${new Date().getFullYear()}`,
-                        importerName: order.client?.usmcaImporterName || order.clientName || '',
-                        importerAddress: order.client?.usmcaImporterAddress || '',
+                        importerName: order.usmcaImporterName || order.client?.usmcaImporterName || order.clientName || '',
+                        importerAddress: order.usmcaImporterAddress || order.client?.usmcaImporterAddress || '',
                         goodsDescription: '',
-                        originCriteria: order.client?.usmcaOriginCriteria || 'A',
+                        originCriteria: order.usmcaOriginCriteria || order.client?.usmcaOriginCriteria || 'A',
                       })} style={{ background: '#1565c0', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                         <Edit size={12} />Edit
                       </button>
@@ -4915,13 +4915,13 @@ function WorkOrderDetailsPage() {
                   </div>
                 </div>
                 <button onClick={() => setUsmcaEditModal({
-                  htsCode: order.client?.usmcaHtsCode || '7215.50',
+                  htsCode: order.usmcaHtsCode || order.client?.usmcaHtsCode || '7215.50',
                   blanketFrom: `01/01/${new Date().getFullYear()}`,
                   blanketTo: `12/31/${new Date().getFullYear()}`,
-                  importerName: order.client?.usmcaImporterName || order.clientName || '',
-                  importerAddress: order.client?.usmcaImporterAddress || '',
+                  importerName: order.usmcaImporterName || order.client?.usmcaImporterName || order.clientName || '',
+                  importerAddress: order.usmcaImporterAddress || order.client?.usmcaImporterAddress || '',
                   goodsDescription: '',
-                  originCriteria: order.client?.usmcaOriginCriteria || 'A',
+                  originCriteria: order.usmcaOriginCriteria || order.client?.usmcaOriginCriteria || 'A',
                 })} style={{ background: '#1565c0', color: 'white', border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Edit size={14} />{hasUSMCA ? 'Edit & Regenerate' : 'Generate'}
                 </button>
