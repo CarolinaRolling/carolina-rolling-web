@@ -110,7 +110,8 @@ function WorkOrderDetailsPage() {
   const [invoiceNumInput, setInvoiceNumInput] = useState('');
   const [showUSMCAModal, setShowUSMCAModal] = useState(false);
   const [usmcaGenerating, setUsmcaGenerating] = useState(false);
-  const [usmcaLineItems, setUsmcaLineItems] = useState(null); // edited line items in outbound tab
+  const [usmcaLineItems, setUsmcaLineItems] = useState(null);
+  const [usmcaEditModal, setUsmcaEditModal] = useState(null); // { htsCode, blanketFrom, blanketTo, importerName, importerAddress, goodsDescription }
   const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [invoicePayments, setInvoicePayments] = useState([]);
@@ -2433,15 +2434,148 @@ function WorkOrderDetailsPage() {
         </div>
       </div>
 
+      {/* USMCA Edit Modal */}
+      {usmcaEditModal && (() => {
+        const HTS_REF = [
+          { code: '7215.50', desc: 'Cold-formed carbon/mild steel bars & rods', examples: 'Flat bar, round bar, square bar — A36, A513, 1018' },
+          { code: '7216.91', desc: 'Carbon steel L-sections / angles, cold-formed <80mm', examples: 'Rolled angle rings — leg under ~3"' },
+          { code: '7216.99', desc: 'Carbon steel angles, shapes & sections, cold-formed (other)', examples: 'Larger angle rings — leg 3" and over' },
+          { code: '7216.50', desc: 'Carbon steel channels, cold-formed', examples: 'Rolled channel rings' },
+          { code: '7216.61', desc: 'Carbon steel structural beams & sections', examples: 'Rolled I-beam, H-beam, wide flange' },
+          { code: '7222.20', desc: 'Stainless steel bars & rods, cold-formed', examples: 'Flat bar, round bar — 304, 316 S/S' },
+          { code: '7222.40', desc: 'Stainless steel angles, shapes & sections', examples: 'Rolled stainless angle, channel, tee — 304, 316' },
+          { code: '7228.30', desc: 'Alloy steel bars & rods, cold-formed', examples: '4130, 4140, 4340, chrome-moly' },
+          { code: '7304.31', desc: 'Seamless carbon steel pipe & tube', examples: 'Rolled pipe coils — A53, A106, Schedule 40/80' },
+          { code: '7304.41', desc: 'Seamless stainless steel pipe & tube', examples: 'Rolled stainless pipe — 304, 316 S/S' },
+          { code: '7211.23', desc: 'Flat-rolled carbon steel (cold-rolled)', examples: 'Rolled plate rings, flat stock' },
+          { code: '7219.32', desc: 'Flat-rolled stainless steel (cold-rolled)', examples: 'Rolled stainless plate rings' },
+        ];
+        const f = usmcaEditModal;
+        const set = (k, v) => setUsmcaEditModal(prev => ({ ...prev, [k]: v }));
+        return (
+          <div className="modal-overlay" onClick={() => setUsmcaEditModal(null)}>
+            <div className="modal" style={{ maxWidth: 580, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">✏️ Edit USMCA Certificate of Origin</h3>
+                <button className="btn-icon" onClick={() => setUsmcaEditModal(null)}><X size={20} /></button>
+              </div>
+              <div className="modal-body" style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Blanket Period From</label>
+                    <input className="form-input" value={f.blanketFrom} onChange={e => set('blanketFrom', e.target.value)} />
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Blanket Period To</label>
+                    <input className="form-input" value={f.blanketTo} onChange={e => set('blanketTo', e.target.value)} />
+                  </div>
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Default HS Tariff Code</label>
+                  <input className="form-input" value={f.htsCode} onChange={e => set('htsCode', e.target.value)} placeholder="e.g. 7215.50, 7222.20" />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Importer Name</label>
+                    <input className="form-input" value={f.importerName} onChange={e => set('importerName', e.target.value)} />
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Origin Criteria</label>
+                    <select className="form-select" value={f.originCriteria} onChange={e => set('originCriteria', e.target.value)}>
+                      <option value="A">A — Wholly obtained in US</option>
+                      <option value="B">B — Tariff classification change</option>
+                      <option value="C">C — Regional value content</option>
+                      <option value="D">D — Produced in USMCA territory</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Importer Address</label>
+                  <textarea className="form-input" rows={2} value={f.importerAddress} onChange={e => set('importerAddress', e.target.value)} style={{ resize: 'vertical' }} />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Goods Description <span style={{ color: '#888', fontWeight: 400 }}>(leave blank to use part descriptions)</span></label>
+                  <input className="form-input" value={f.goodsDescription} onChange={e => set('goodsDescription', e.target.value)} placeholder="e.g. Cold-formed stainless steel rings" />
+                </div>
+
+                {/* HTS Reference */}
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#555', marginBottom: 8 }}>📋 HS Tariff Code Reference — click to use</div>
+                  <div style={{ border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden' }}>
+                    {HTS_REF.map((h, i) => {
+                      const isActive = h.code === f.htsCode;
+                      return (
+                        <div key={h.code} onClick={() => set('htsCode', h.code)}
+                          style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '7px 12px', cursor: 'pointer', borderBottom: i < HTS_REF.length - 1 ? '1px solid #f0f0f0' : 'none', background: isActive ? '#e3f2fd' : i % 2 === 0 ? '#fafafa' : 'white' }}>
+                          <div style={{ flexShrink: 0, width: 72 }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.85rem', color: isActive ? '#1565c0' : '#333', background: isActive ? '#bbdefb' : 'none', padding: isActive ? '1px 5px' : 0, borderRadius: 4 }}>{h.code}</span>
+                            {isActive && <div style={{ fontSize: '0.62rem', color: '#1565c0', fontWeight: 700, marginTop: 1 }}>● SELECTED</div>}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: isActive ? 700 : 500, color: isActive ? '#1565c0' : '#333' }}>{h.desc}</div>
+                            <div style={{ fontSize: '0.72rem', color: '#999' }}>{h.examples}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-outline" onClick={() => setUsmcaEditModal(null)}>Cancel</button>
+                <button className="btn btn-primary" disabled={usmcaGenerating} onClick={async () => {
+                  try {
+                    setUsmcaGenerating(true);
+                    const dr = order.drNumber || order.orderNumber;
+                    const yr = new Date().getFullYear();
+                    for (const [fmt, suffix] of [['format1','Standard'],['format2','Table']]) {
+                      const response = await generateUSMCA(order.id, { ...f, format: fmt });
+                      const blob = new Blob([response.data], { type: 'application/pdf' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a'); a.href = url;
+                      a.download = `USMCA-COO-${dr}-${yr}-${suffix}.pdf`;
+                      document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+                      await new Promise(r => setTimeout(r, 300));
+                    }
+                    showMessage('USMCA certificates updated');
+                    setUsmcaEditModal(null);
+                    loadOrder();
+                  } catch (err) { setError('Failed to regenerate USMCA'); }
+                  finally { setUsmcaGenerating(false); }
+                }}>
+                  {usmcaGenerating ? '⏳ Regenerating...' : '🌎 Save & Regenerate Both'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* USMCA Certificate of Origin Modal */}
-      {showUSMCAModal && (
+      {showUSMCAModal && (() => {
+        const HTS_REF = [
+          { code: '7215.50', desc: 'Cold-formed carbon/mild steel bars & rods', examples: 'Flat bar, round bar, square bar — A36, A513, 1018, 1020' },
+          { code: '7216.91', desc: 'Carbon steel L-sections / angles, cold-formed <80mm', examples: 'Rolled angle rings — leg under ~3"' },
+          { code: '7216.99', desc: 'Carbon steel angles, shapes & sections, cold-formed (other)', examples: 'Larger angle rings — leg 3" and over' },
+          { code: '7216.50', desc: 'Carbon steel channels, cold-formed', examples: 'Rolled channel rings — C-channel, MC-channel' },
+          { code: '7216.61', desc: 'Carbon steel structural beams & sections', examples: 'Rolled I-beam, H-beam, wide flange rings' },
+          { code: '7222.20', desc: 'Stainless steel bars & rods, cold-formed', examples: 'Flat bar, round bar — 304, 316, 321 S/S' },
+          { code: '7222.40', desc: 'Stainless steel angles, shapes & sections', examples: 'Rolled stainless angle, channel, tee rings — 304, 316' },
+          { code: '7228.30', desc: 'Alloy steel bars & rods, cold-formed', examples: '4130, 4140, 4340, chrome-moly' },
+          { code: '7304.31', desc: 'Seamless carbon steel pipe & tube', examples: 'Rolled pipe coils — A53, A106, Schedule 40/80' },
+          { code: '7304.41', desc: 'Seamless stainless steel pipe & tube', examples: 'Rolled stainless pipe — 304, 316 S/S' },
+          { code: '7211.23', desc: 'Flat-rolled carbon steel (cold-rolled)', examples: 'Rolled plate rings, flat stock' },
+          { code: '7219.32', desc: 'Flat-rolled stainless steel (cold-rolled)', examples: 'Rolled stainless plate rings' },
+        ];
+        const activeCode = order.client?.usmcaHtsCode || '7215.50';
+        return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'white', borderRadius: 12, maxWidth: 520, width: '95%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <div style={{ background: '#1565c0', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0' }}>
+          <div style={{ background: 'white', borderRadius: 12, maxWidth: 620, width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ background: '#1565c0', color: 'white', padding: '16px 24px', borderRadius: '12px 12px 0 0', flexShrink: 0 }}>
               <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>🌎 USMCA Certificate of Origin</div>
               <div style={{ fontSize: '0.82rem', opacity: 0.9 }}>{order.clientName} — {order.drNumber ? 'DR-' + order.drNumber : order.orderNumber}</div>
             </div>
-            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
               <div style={{ background: '#e3f2fd', borderRadius: 8, padding: 12, fontSize: '0.83rem', color: '#1565c0' }}>
                 Generates both <strong>Standard</strong> (numbered fields) and <strong>Table</strong> formats and saves both to WO documents.
                 For mixed orders (e.g. carbon steel + stainless), use the <strong>Outbound tab</strong> to assign per-part HS codes — each part gets its own row on the certificate.
@@ -2482,6 +2616,39 @@ function WorkOrderDetailsPage() {
                 <label className="form-label">Goods Description (leave blank to use part descriptions)</label>
                 <input className="form-input" id="usmca-goods" placeholder="e.g. Cold-formed stainless steel rings" />
               </div>
+
+              {/* HTS Code Reference Table */}
+              <div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#555', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  📋 HS Tariff Code Reference
+                  <span style={{ fontWeight: 400, color: '#888' }}>— click any row to use that code</span>
+                </div>
+                <div style={{ border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden' }}>
+                  {HTS_REF.map((h, i) => {
+                    const isActive = h.code === activeCode;
+                    return (
+                      <div key={h.code} onClick={() => {
+                        const input = document.getElementById('usmca-hts');
+                        if (input) input.value = h.code;
+                      }} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', cursor: 'pointer', borderBottom: i < HTS_REF.length - 1 ? '1px solid #f0f0f0' : 'none', background: isActive ? '#e3f2fd' : i % 2 === 0 ? '#fafafa' : 'white', transition: 'background 0.15s' }}
+                        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#f5f5f5'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = isActive ? '#e3f2fd' : i % 2 === 0 ? '#fafafa' : 'white'; }}>
+                        <div style={{ flexShrink: 0, width: 72 }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.88rem', color: isActive ? '#1565c0' : '#333', background: isActive ? '#bbdefb' : 'none', padding: isActive ? '1px 5px' : 0, borderRadius: 4 }}>
+                            {h.code}
+                          </span>
+                          {isActive && <div style={{ fontSize: '0.65rem', color: '#1565c0', fontWeight: 700, marginTop: 1 }}>● ACTIVE</div>}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: isActive ? 700 : 500, color: isActive ? '#1565c0' : '#333' }}>{h.desc}</div>
+                          <div style={{ fontSize: '0.74rem', color: '#888', marginTop: 1 }}>{h.examples}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                 <button disabled={usmcaGenerating} onClick={async () => {
                   try {
@@ -2518,7 +2685,8 @@ function WorkOrderDetailsPage() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Manual Invoice Send Log Modal */}
       {showManualSendLog && (
@@ -3204,7 +3372,7 @@ function WorkOrderDetailsPage() {
       <div id="wo-tabs" style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e0e0e0', marginTop: 20, marginBottom: 0 }}>
         {[
           { key: 'parts', label: '📦 Parts', count: order.parts?.length || 0 },
-          { key: 'documents', label: '📄 Documents', count: (order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po').length || 0) || undefined },
+          { key: 'documents', label: '📄 Documents', count: (order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'usmca').length || 0) || undefined },
           { key: 'materials', label: '📋 Materials' },
           ...(((order.vendorIssues || []).filter(i => i.status !== 'resolved').length > 0) ? [{ key: 'vendor_issues', label: '⚠ Vendor Issues', count: (order.vendorIssues || []).filter(i => i.status !== 'resolved').length, urgent: true }] : []),
           { key: 'summary', label: '📊 Summary' },
@@ -4272,7 +4440,7 @@ function WorkOrderDetailsPage() {
           {/* Order Documents */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header">
-              <h3 className="card-title"><File size={20} style={{ marginRight: 8 }} />Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc').length || 0})</h3>
+              <h3 className="card-title"><File size={20} style={{ marginRight: 8 }} />Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc' && d.documentType !== 'usmca').length || 0})</h3>
               <div>
                 <button className="btn btn-sm btn-outline" onClick={() => docInputRef.current?.click()} disabled={uploadingDocs}>
                   <Upload size={14} />{uploadingDocs ? 'Uploading...' : 'Upload'}
@@ -4282,9 +4450,9 @@ function WorkOrderDetailsPage() {
               </div>
             </div>
             <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Customer POs, supplier quotes, drawings, COCs, etc.</p>
-            {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc').length > 0 ? (
+            {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc' && d.documentType !== 'usmca').length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc').map(doc => (
+                {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc' && d.documentType !== 'usmca').map(doc => (
                   <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: doc.documentType === 'invoice' ? '#fff8f0' : doc.portalVisible ? '#e8f5e9' : '#f5f5f5', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', border: doc.documentType === 'invoice' ? '1px solid #e65100' : doc.portalVisible ? '1px solid #a5d6a7' : '1px solid #eee' }}>
                     <File size={16} color="#1976d2" />
                     <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
@@ -4295,6 +4463,19 @@ function WorkOrderDetailsPage() {
                     {doc.documentType === 'shipping_doc' && <span style={{ background: '#1565c0', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>SHIPPING</span>}
                     {doc.documentType === 'invoice' && <span style={{ background: '#e65100', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>INVOICE</span>}
                     {doc.documentType === 'usmca' && <span style={{ background: '#1565c0', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>USMCA</span>}
+                    {doc.documentType === 'usmca' && (
+                      <button onClick={() => setUsmcaEditModal({
+                        htsCode: order.client?.usmcaHtsCode || '7215.50',
+                        blanketFrom: `01/01/${new Date().getFullYear()}`,
+                        blanketTo: `12/31/${new Date().getFullYear()}`,
+                        importerName: order.client?.usmcaImporterName || order.clientName || '',
+                        importerAddress: order.client?.usmcaImporterAddress || '',
+                        goodsDescription: '',
+                        originCriteria: order.client?.usmcaOriginCriteria || 'A',
+                      })} style={{ background: '#1565c0', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        <Edit size={12} />Edit
+                      </button>
+                    )}
                     <button onClick={() => handleViewDocument(doc.id)} style={{ background: '#1976d2', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
                       <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
                     </button>
@@ -4323,6 +4504,8 @@ function WorkOrderDetailsPage() {
               <div style={{ background: '#fafafa', padding: 20, borderRadius: 8, textAlign: 'center', color: '#999' }}>No documents uploaded yet</div>
             )}
           </div>
+
+
 
 
           {/* MTR Section */}
@@ -4705,6 +4888,74 @@ function WorkOrderDetailsPage() {
             )}
           </div>
         </div>
+
+        {/* USMCA Certificate of Origin */}
+        {(() => {
+          const standardDoc = (order.documents||[]).find(d => d.documentType==='usmca' && d.originalName?.includes('-Standard'));
+          const tableDoc = (order.documents||[]).find(d => d.documentType==='usmca' && d.originalName?.includes('-Table'));
+          const hasUSMCA = standardDoc || tableDoc;
+          const clientUSMCA = order._clientObj?.autoGenerateUSMCA || order.client?.autoGenerateUSMCA;
+          if (!hasUSMCA && !clientUSMCA) return null;
+          return (
+            <div className="card" style={{ marginTop: 16, border: hasUSMCA ? '2px solid #1565c0' : '1px solid #c5d8f5', background: hasUSMCA ? 'white' : '#f8fbff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '1.3rem' }}>🌎</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '1rem', color: '#1565c0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      USMCA Certificate of Origin
+                      {hasUSMCA && <span style={{ fontSize: '0.7rem', background: '#1565c0', color: 'white', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>✓ On File</span>}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#888', marginTop: 1 }}>
+                      {hasUSMCA
+                        ? `Standard & Table — last updated ${standardDoc?.createdAt ? new Date(standardDoc.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}`
+                        : 'Auto-generate enabled for this client'}
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => setUsmcaEditModal({
+                  htsCode: order.client?.usmcaHtsCode || '7215.50',
+                  blanketFrom: `01/01/${new Date().getFullYear()}`,
+                  blanketTo: `12/31/${new Date().getFullYear()}`,
+                  importerName: order.client?.usmcaImporterName || order.clientName || '',
+                  importerAddress: order.client?.usmcaImporterAddress || '',
+                  goodsDescription: '',
+                  originCriteria: order.client?.usmcaOriginCriteria || 'A',
+                })} style={{ background: '#1565c0', color: 'white', border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Edit size={14} />{hasUSMCA ? 'Edit & Regenerate' : 'Generate'}
+                </button>
+              </div>
+
+              {hasUSMCA && (
+                <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+                  {[standardDoc && { doc: standardDoc, label: '📋 Standard', sublabel: 'Numbered Fields' },
+                    tableDoc && { doc: tableDoc, label: '📊 Table', sublabel: 'Table Style' }
+                  ].filter(Boolean).map(({ doc, label, sublabel }) => (
+                    <div key={doc.id} style={{ flex: 1, minWidth: 180, background: '#e3f2fd', borderRadius: 8, padding: '10px 14px', border: '1px solid #bbdefb' }}>
+                      <div style={{ fontWeight: 700, color: '#1565c0', fontSize: '0.9rem', marginBottom: 6 }}>{label} <span style={{ fontWeight: 400, fontSize: '0.78rem', color: '#888' }}>— {sublabel}</span></div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => handleViewDocument(doc.id)}
+                          style={{ flex: 1, background: '#1565c0', color: 'white', border: 'none', cursor: 'pointer', padding: '5px 0', borderRadius: 5, fontSize: '0.78rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                          <Eye size={12} />View
+                        </button>
+                        <button onClick={async () => {
+                          try {
+                            const resp = await fetch(doc.url); const blob = await resp.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a'); a.href = url; a.download = doc.originalName;
+                            document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+                          } catch { window.open(doc.url, '_blank'); }
+                        }} style={{ flex: 1, background: 'white', color: '#1565c0', border: '1px solid #bbdefb', cursor: 'pointer', padding: '5px 0', borderRadius: 5, fontSize: '0.78rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                          <Download size={12} />Download
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       )}
 
 
