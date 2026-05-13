@@ -109,6 +109,52 @@ function WorkOrderDetailsPage() {
   const [editingInvoiceNum, setEditingInvoiceNum] = useState(false);
   const [invoiceNumInput, setInvoiceNumInput] = useState('');
   const [usmcaGenerating, setUsmcaGenerating] = useState(false);
+
+  const HTS_REF = [
+    { code: '7215.50', desc: 'Cold-formed carbon/mild steel bars & rods', examples: 'Flat bar, round bar, square bar — A36, A513, 1018' },
+    { code: '7216.91', desc: 'Carbon steel L-sections / angles, cold-formed <80mm', examples: 'Rolled angle rings — leg under ~3"' },
+    { code: '7216.99', desc: 'Carbon steel angles, shapes & sections, cold-formed (other)', examples: 'Larger angle rings — leg 3" and over' },
+    { code: '7216.50', desc: 'Carbon steel channels, cold-formed', examples: 'Rolled channel rings' },
+    { code: '7216.61', desc: 'Carbon steel structural beams & sections', examples: 'Rolled I-beam, H-beam, wide flange' },
+    { code: '7222.20', desc: 'Stainless steel bars & rods, cold-formed', examples: 'Flat bar, round bar — 304, 316 S/S' },
+    { code: '7222.40', desc: 'Stainless steel angles, shapes & sections', examples: 'Rolled stainless angle, channel, tee — 304, 316' },
+    { code: '7228.30', desc: 'Alloy steel bars & rods, cold-formed', examples: '4130, 4140, 4340, chrome-moly' },
+    { code: '7304.31', desc: 'Seamless carbon steel pipe & tube', examples: 'Rolled pipe coils — A53, A106, Schedule 40/80' },
+    { code: '7304.41', desc: 'Seamless stainless steel pipe & tube', examples: 'Rolled stainless pipe — 304, 316 S/S' },
+    { code: '7211.23', desc: 'Flat-rolled carbon steel', examples: 'Rolled plate rings, flat stock' },
+    { code: '7219.32', desc: 'Flat-rolled stainless steel', examples: 'Rolled stainless plate rings' },
+  ];
+  const guessHTS = (part) => {
+    const fd = (part.formData && typeof part.formData === 'object') ? part.formData : {};
+    const text = ((part._materialDescription || fd._materialDescription || part.materialDescription || '') + ' ' + (part.partType || '')).toLowerCase();
+    const isStainless = /stainless|304|316|321|347|s\/s|ss/.test(text);
+    const isAngle = /angle|l-section/.test(text);
+    const isChannel = /channel/.test(text);
+    const isPipe = /pipe|tube/.test(text);
+    const isPlate = /plate|flat.?bar|flat.?stock/.test(text);
+    const isBeam = /beam|i-beam|h-beam|wide.?flange/.test(text);
+    const isAlloy = /alloy|4130|4140|4340|chrome.?moly|moly/.test(text);
+    if (isBeam) return '7216.61';
+    if (isAlloy) return '7228.30';
+    if (isStainless && isPipe) return '7304.41';
+    if (!isStainless && isPipe) return '7304.31';
+    if (isStainless && isPlate) return '7219.32';
+    if (!isStainless && isPlate) return '7211.23';
+    if (isStainless && isChannel) return '7222.40';
+    if (!isStainless && isChannel) return '7216.50';
+    if (isStainless && isAngle) return '7222.40';
+    if (!isStainless && isAngle) return '7216.91';
+    if (isStainless) return '7222.20';
+    return '7215.50';
+  };
+  const buildLineItems = (ord) => {
+    const pts = (ord.parts || []).filter(p => !['fab_service', 'shop_rate', 'rush_service'].includes(p.partType));
+    return pts.map(p => {
+      const fd = (p.formData && typeof p.formData === 'object') ? p.formData : {};
+      const mat = (p._materialDescription || fd._materialDescription || p.materialDescription || '').replace(/^\d+pc:\s*/i, '');
+      return { partId: p.id, partNumber: p.clientPartNumber || String(p.partNumber || ''), description: mat, qty: p.quantity || 1, htsCode: guessHTS(p) };
+    });
+  };
   const [usmcaEditModal, setUsmcaEditModal] = useState(null); // { htsCode, blanketFrom, blanketTo, importerName, importerAddress, goodsDescription }
   const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
   const [paymentSaving, setPaymentSaving] = useState(false);
