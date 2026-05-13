@@ -911,10 +911,10 @@ function WorkOrderDetailsPage() {
           let cutNotes = '';
           if (cutType === 'cut_to_ring') {
             cutNotes = `Cut to ring — ${numRings} ring(s) from ${sticksNeeded} length(s)` +
-              (circ ? ` — CL circumference: ${circ.toFixed(3)}" (π × ${clDia}")` : '');
+              (circ ? ` — CL Circumference: ${circ.toFixed(3)}" (pi x ${clDia}")` : '');
           } else if (cutType === 'cut_to_ring_overlap') {
             cutNotes = `Cut to ring with overlap — ${numRings} ring(s) from ${sticksNeeded} length(s)` +
-              (circ ? ` — CL circumference: ${circ.toFixed(3)}" (π × ${clDia}")` : '');
+              (circ ? ` — CL Circumference: ${circ.toFixed(3)}" (pi x ${clDia}")` : '');
           } else if (cutType === 'cut_to_size') {
             cutNotes = `Cut to size — ${sticksNeeded} lengths to make ${numRings} complete ring(s), ${segmentsPerRing} segments/ring` +
               (segLength ? ` — each segment: ${segLength}" (${circ.toFixed(3)}" ÷ ${segmentsPerRing})` : '');

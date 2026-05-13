@@ -650,7 +650,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
                           <div>
                             <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1565c0' }}>Cut to ring</div>
                             <div style={{ fontSize: '0.75rem', color: '#888' }}>
-                              CL dia: {ringCalc.circumference ? (ringCalc.circumference / Math.PI).toFixed(3) : '?'}" (ID + OD) — CL circumference: {ringCalc.circumference?.toFixed(3)}" (π × CL dia) — {ringCalc.ringsPerStick} ring(s)/length
+                              CL dia: {ringCalc.circumference ? (ringCalc.circumference / Math.PI).toFixed(3) : '?'}" (ID + OD) — CL Circumference: {ringCalc.circumference?.toFixed(3)}" (pi x CL dia) — {ringCalc.ringsPerStick} ring(s)/length
                             </div>
                           </div>
                         </label>
@@ -659,7 +659,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
                           <div>
                             <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1565c0' }}>Cut to ring with overlap</div>
                             <div style={{ fontSize: '0.75rem', color: '#888' }}>
-                              CL dia: {ringCalc.circumference ? (ringCalc.circumference / Math.PI).toFixed(3) : '?'}" (ID + OD) — CL circumference: {ringCalc.circumference?.toFixed(3)}" (π × CL dia) — with weld overlap
+                              CL dia: {ringCalc.circumference ? (ringCalc.circumference / Math.PI).toFixed(3) : '?'}" (ID + OD) — CL Circumference: {ringCalc.circumference?.toFixed(3)}" (pi x CL dia) — with weld overlap
                             </div>
                           </div>
                         </label>
@@ -677,7 +677,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
                           <div>
                             <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#e65100' }}>Cut to size</div>
                             <div style={{ fontSize: '0.75rem', color: '#888' }}>
-                              CL dia: {ringCalc.circumference ? (ringCalc.circumference / Math.PI).toFixed(3) : '?'}" (ID + OD) — CL circ: {ringCalc.circumference?.toFixed(3)}" — {ringCalc.segmentsPerRing} segments/ring — each: {ringCalc.circumference ? (ringCalc.circumference / ringCalc.segmentsPerRing).toFixed(3) : '?'}" ({ringCalc.circumference?.toFixed(3)}" ÷ {ringCalc.segmentsPerRing})
+                              CL dia: {ringCalc.circumference ? (ringCalc.circumference / Math.PI).toFixed(3) : '?'}" (ID + OD) — CL Circ: {ringCalc.circumference?.toFixed(3)}" — {ringCalc.segmentsPerRing} segments/ring — each: {ringCalc.circumference ? (ringCalc.circumference / ringCalc.segmentsPerRing).toFixed(3) : '?'}" ({ringCalc.circumference?.toFixed(3)}" ÷ {ringCalc.segmentsPerRing})
                             </div>
                           </div>
                         </label>

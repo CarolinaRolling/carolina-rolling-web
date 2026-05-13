@@ -1194,11 +1194,11 @@ function EstimateDetailsPage() {
 
             let cutNotes = '';
             if (cutType === 'cut_to_ring') {
-              cutNotes = `Cut to ring — ${ringCount} ring(s) from ${sticksNeeded} length(s)` + (circ ? ` — CL circumference: ${circ.toFixed(3)}" (π × ${clDia}")` : '');
+              cutNotes = `Cut to ring — ${ringCount} ring(s) from ${sticksNeeded} length(s)` + (circ ? ` — CL Circumference: ${circ.toFixed(3)}" (pi x ${clDia}")` : '');
             } else if (cutType === 'cut_to_ring_overlap') {
-              cutNotes = `Cut to ring with overlap — ${ringCount} ring(s) from ${sticksNeeded} length(s)` + (circ ? ` — CL circumference: ${circ.toFixed(3)}" (π × ${clDia}")` : '');
+              cutNotes = `Cut to ring with overlap — ${ringCount} ring(s) from ${sticksNeeded} length(s)` + (circ ? ` — CL Circumference: ${circ.toFixed(3)}" (pi x ${clDia}")` : '');
             } else if (cutType === 'cut_to_size') {
-              cutNotes = `Cut to size — ${sticksNeeded} lengths to make ${ringCount} complete ring(s), ${segs} segments/ring` + (segLength ? ` — each segment: ${segLength}" (${circ.toFixed(3)}" ÷ ${segs})` : '');
+              cutNotes = `Cut to size — ${sticksNeeded} lengths to make ${ringCount} complete ring(s), ${segs} segments/ring` + (segLength ? ` — each segment: ${segLength}" (${circ.toFixed(3)}" / ${segs})` : '');
             }
 
             if (cutNotes) {

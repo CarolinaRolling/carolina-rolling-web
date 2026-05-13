@@ -170,7 +170,7 @@ function BusinessPage() {
     if(!activePR)return; 
     try{
       const res = await updatePayrollEntry(activePR.id,entry.id,upd);
-      const updated = res.data.data;
+      const updated = { ...res.data.data, grossPay: parseFloat(res.data.data?.grossPay) || 0 };
       // Update in-place instead of refetching everything
       setActivePR(prev => {
         if (!prev) return prev;
