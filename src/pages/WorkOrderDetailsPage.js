@@ -2527,20 +2527,35 @@ function WorkOrderDetailsPage() {
                   try {
                     setUsmcaGenerating(true);
                     // Save USMCA info to this work order (per-order, not client profile)
+                    const current = usmcaEditModal;
                     await saveWOUsmcaInfo(order.id, {
-                      usmcaImporterName: f.importerName,
-                      usmcaImporterAddress: f.importerAddress,
-                      usmcaHtsCode: f.htsCode,
-                      usmcaOriginCriteria: f.originCriteria,
+                      usmcaImporterName: current.importerName,
+                      usmcaImporterAddress: current.importerAddress,
+                      usmcaHtsCode: current.htsCode,
+                      usmcaOriginCriteria: current.originCriteria,
                     });
                     // Regenerate both formats silently (saves to documents, no download)
                     for (const fmt of ['format1', 'format2']) {
-                      await generateUSMCA(order.id, { ...f, format: fmt });
+                      const resp = await generateUSMCA(order.id, { ...current, format: fmt });
+                      // Check if response is actually an error (arraybuffer containing JSON error)
+                      if (resp.data?.byteLength < 500) {
+                        try {
+                          const text = new TextDecoder().decode(resp.data);
+                          const parsed = JSON.parse(text);
+                          if (parsed.error) throw new Error(parsed.error.message || 'Generation failed');
+                        } catch (decodeErr) {
+                          if (decodeErr.message !== 'Generation failed') { /* not JSON, real PDF */ }
+                          else throw decodeErr;
+                        }
+                      }
                     }
                     showMessage('USMCA certificates updated & saved to documents');
                     setUsmcaEditModal(null);
                     loadOrder();
-                  } catch (err) { setError('Failed to regenerate USMCA'); }
+                  } catch (err) {
+                    console.error('[USMCA save]', err);
+                    setError('Failed to save USMCA: ' + (err.response?.data ? (() => { try { return JSON.parse(new TextDecoder().decode(err.response.data))?.error?.message; } catch { return err.message; } })() : err.message));
+                  }
                   finally { setUsmcaGenerating(false); }
                 }}>
                   {usmcaGenerating ? '⏳ Saving...' : '💾 Save & Regenerate'}
