@@ -574,7 +574,7 @@ function EstimatesPage() {
                   <div style={{
                     position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
                     background: 'white', border: '1px solid #ddd', borderRadius: 4,
-                    maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                    maxHeight: 320, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                   }}>
                     {clientSuggestions.map(client => (
                       <div

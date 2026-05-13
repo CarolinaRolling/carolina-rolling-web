@@ -2518,7 +2518,7 @@ function WorkOrderDetailsPage() {
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Importer Address</label>
-                  <textarea className="form-input" rows={2} value={f.importerAddress||''} onChange={e => set('importerAddress', e.target.value)} style={{ resize: 'vertical' }} />
+                  <textarea className="form-input" rows={4} value={f.importerAddress||''} onChange={e => set('importerAddress', e.target.value)} style={{ resize: 'vertical' }} />
                 </div>
                 {/* Line items table */}
                 <div>
