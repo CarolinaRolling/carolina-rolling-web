@@ -2443,19 +2443,21 @@ function WorkOrderDetailsPage() {
             </div>
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ background: '#e3f2fd', borderRadius: 8, padding: 12, fontSize: '0.83rem', color: '#1565c0' }}>
-                <strong>Format:</strong> Select which certificate layout to use — Format 1 (numbered fields, like a numbered form) or Format 2 (Excel table style).
+                Generates both <strong>Standard</strong> (numbered fields) and <strong>Table</strong> formats and saves both to WO documents.
+                For mixed orders (e.g. carbon steel + stainless), use the <strong>Outbound tab</strong> to assign per-part HS codes — each part gets its own row on the certificate.
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Format</label>
                   <select className="form-select" id="usmca-format">
-                    <option value="format1">Format 1 — Numbered Fields</option>
+                    <option value="format1">Format 1 — Numbered Fields (Standard)</option>
                     <option value="format2">Format 2 — Table Style</option>
                   </select>
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">HS Tariff Code</label>
-                  <input className="form-input" id="usmca-hts" defaultValue={order.client?.usmcaHtsCode || '7215'} placeholder="e.g. 7215, 7222, 7222.40" />
+                  <label className="form-label">Default HS Tariff Code</label>
+                  <input className="form-input" id="usmca-hts" defaultValue={order.client?.usmcaHtsCode || '7215.50'} placeholder="e.g. 7215.50, 7222.20" />
+                  <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 3 }}>Used if parts don't have individual codes assigned in the Outbound tab</div>
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
