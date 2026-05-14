@@ -162,6 +162,8 @@ function WorkOrderDetailsPage() {
   const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [invoicePayments, setInvoicePayments] = useState([]);
+  const [invoiceGenerating, setInvoiceGenerating] = useState(false);
+  const [invoicePdfPreviewUrl, setInvoicePdfPreviewUrl] = useState(null);
   const [invoiceSends, setInvoiceSends] = useState([]);
   const [showManualSendLog, setShowManualSendLog] = useState(false);
   const [manualSendForm, setManualSendForm] = useState({ sentAt: new Date().toISOString().slice(0,16), sentMethod: 'email', sentTo: '', sentFrom: '', notes: '' });
@@ -4979,18 +4981,63 @@ function WorkOrderDetailsPage() {
                   </button>
                 </>)}
                 <button onClick={async () => {
+                  setInvoiceGenerating(true);
                   try {
-                    await generateInvoicePDF(order.id);
+                    const response = await generateInvoicePDF(order.id);
+                    const blob = new Blob([response.data], { type: 'application/pdf' });
+                    if (invoicePdfPreviewUrl) window.URL.revokeObjectURL(invoicePdfPreviewUrl);
+                    setInvoicePdfPreviewUrl(window.URL.createObjectURL(blob));
                     showMessage('Invoice PDF regenerated');
                     loadOrder();
                     getWOPayments(order.id).then(r => setInvoicePayments(r.data.data || [])).catch(() => {});
                   } catch (err) { setError('Failed to generate invoice'); }
-                }} style={{ background: 'white', color: '#e65100', border: '2px solid #e65100', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  ↻ Regenerate
+                  finally { setInvoiceGenerating(false); }
+                }} disabled={invoiceGenerating} style={{ background: 'white', color: '#e65100', border: '2px solid #e65100', cursor: invoiceGenerating ? 'not-allowed' : 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, opacity: invoiceGenerating ? 0.7 : 1 }}>
+                  {invoiceGenerating ? '⏳ Generating...' : '↻ Regenerate'}
                 </button>
               </div>
             </div>
           </div>
+
+          {/* Invoice PDF Preview */}
+          {invoicePdfPreviewUrl && (
+            <div style={{ marginBottom: 16, border: '2px solid #e65100', borderRadius: 12, overflow: 'hidden', background: '#f5f5f5' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', background: '#e65100', color: 'white' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: '0.9rem' }}>
+                  📄 Invoice Preview
+                  {invoiceGenerating && <span style={{ fontSize: '0.8rem', opacity: 0.8 }}> — Regenerating...</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={async () => {
+                    setInvoiceGenerating(true);
+                    try {
+                      const response = await generateInvoicePDF(order.id);
+                      const blob = new Blob([response.data], { type: 'application/pdf' });
+                      if (invoicePdfPreviewUrl) window.URL.revokeObjectURL(invoicePdfPreviewUrl);
+                      setInvoicePdfPreviewUrl(window.URL.createObjectURL(blob));
+                      loadOrder();
+                    } catch (err) { setError('Failed to regenerate'); }
+                    finally { setInvoiceGenerating(false); }
+                  }} disabled={invoiceGenerating} style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                    ↻ Refresh
+                  </button>
+                  <button onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = invoicePdfPreviewUrl;
+                    a.download = `Invoice-${order.invoiceNumber || order.drNumber}.pdf`;
+                    a.click();
+                  }} style={{ background: 'white', color: '#e65100', border: 'none', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                    ⬇ Download
+                  </button>
+                  <button onClick={() => { window.URL.revokeObjectURL(invoicePdfPreviewUrl); setInvoicePdfPreviewUrl(null); }}
+                    style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <iframe src={invoicePdfPreviewUrl} style={{ width: '100%', height: '80vh', border: 'none', display: 'block' }} title="Invoice PDF Preview" />
+            </div>
+          )}
 
           {/* Payment History */}
           <div className="card">
