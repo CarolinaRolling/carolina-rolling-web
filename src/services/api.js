@@ -557,6 +557,16 @@ export const deleteWeldProcedure = (id) => api.delete(`/business/wps/${id}`);
 export const generateCOC = (workOrderId, data) => api.post(`/workorders/${workOrderId}/coc`, data, { responseType: 'blob' });
 export const generateUSMCA = (workOrderId, data) => api.post(`/workorders/${workOrderId}/usmca`, data, { responseType: 'arraybuffer' });
 export const saveWOUsmcaInfo = (workOrderId, data) => api.patch(`/workorders/${workOrderId}/usmca-info`, data);
+
+// Shipment Charges
+export const getWOShipmentCharges = (workOrderId) => api.get(`/workorders/${workOrderId}/shipment-charges`);
+export const addWOShipmentCharge = (workOrderId, data) => api.post(`/workorders/${workOrderId}/shipment-charges`, data);
+export const updateWOShipmentCharge = (workOrderId, chargeId, data) => api.put(`/workorders/${workOrderId}/shipment-charges/${chargeId}`, data);
+export const deleteWOShipmentCharge = (workOrderId, chargeId) => api.delete(`/workorders/${workOrderId}/shipment-charges/${chargeId}`);
+export const getEstimateShipmentCharges = (estimateId) => api.get(`/estimates/${estimateId}/shipment-charges`);
+export const addEstimateShipmentCharge = (estimateId, data) => api.post(`/estimates/${estimateId}/shipment-charges`, data);
+export const updateEstimateShipmentCharge = (estimateId, chargeId, data) => api.put(`/estimates/${estimateId}/shipment-charges/${chargeId}`, data);
+export const deleteEstimateShipmentCharge = (estimateId, chargeId) => api.delete(`/estimates/${estimateId}/shipment-charges/${chargeId}`);
 // Calendar
 export const getCalendarEvents = (params) => api.get('/business/calendar', { params });
 export const getUpcomingEvents = () => api.get('/business/calendar/upcoming');

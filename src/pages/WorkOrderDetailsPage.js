@@ -20,6 +20,7 @@ import FlatStockForm from '../components/FlatStockForm';
 import FabServiceForm from '../components/FabServiceForm';
 import ShopRateForm from '../components/ShopRateForm';
 import HeatNumberInput from '../components/HeatNumberInput';
+import ShipmentChargesSection from '../components/ShipmentChargesSection';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart, reorderWorkOrderParts,
@@ -33,7 +34,8 @@ import {
   searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
-  generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo
+  generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo,
+  addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge
 } from '../services/api';
 
 const PART_TYPES = {
@@ -4892,6 +4894,14 @@ function WorkOrderDetailsPage() {
 
 
 
+
+        {/* Shipping & Handling Charges */}
+        <ShipmentChargesSection
+          charges={order.shipmentCharges || []}
+          onAdd={async (data) => { await addWOShipmentCharge(order.id, data); loadOrder(); }}
+          onUpdate={async (chargeId, data) => { await updateWOShipmentCharge(order.id, chargeId, data); loadOrder(); }}
+          onDelete={async (chargeId) => { await deleteWOShipmentCharge(order.id, chargeId); loadOrder(); }}
+        />
 
       {/* ===== INVOICE TAB ===== */}
       {woTab === 'invoice' && (

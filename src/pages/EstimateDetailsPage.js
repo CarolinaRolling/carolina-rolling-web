@@ -9,8 +9,10 @@ import {
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile, toggleEstimateFilePortal,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
   getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
-  sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument
+  sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument,
+  addEstimateShipmentCharge, updateEstimateShipmentCharge, deleteEstimateShipmentCharge
 } from '../services/api';
+import ShipmentChargesSection from '../components/ShipmentChargesSection';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
 import FlatStockForm from '../components/FlatStockForm';
@@ -3220,6 +3222,13 @@ function EstimateDetailsPage() {
                 </div>
               </div>
             )}
+
+            <ShipmentChargesSection
+              charges={estimate?.shipmentCharges || []}
+              onAdd={async (data) => { await addEstimateShipmentCharge(estimate.id, data); loadEstimate(); }}
+              onUpdate={async (chargeId, data) => { await updateEstimateShipmentCharge(estimate.id, chargeId, data); loadEstimate(); }}
+              onDelete={async (chargeId) => { await deleteEstimateShipmentCharge(estimate.id, chargeId); loadEstimate(); }}
+            />
 
             <div style={{ background: '#f0f7ff', borderRadius: 8, padding: 16 }}>
               {/* Show labor/material breakdown when minimum applies */}
