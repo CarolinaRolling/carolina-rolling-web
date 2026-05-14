@@ -244,6 +244,13 @@ function WorkOrderDetailsPage() {
     }
   }, [woTab, id]);
 
+  // Also reload charges when order data loads (handles initial load on shipping tab)
+  useEffect(() => {
+    if (woTab === 'shipping' && order?.id) {
+      getWOShipmentCharges(order.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => {});
+    }
+  }, [order?.id, woTab]);
+
   const loadDefaultTaxRate = async () => {
     try {
       const res = await getSettings('tax_settings');
