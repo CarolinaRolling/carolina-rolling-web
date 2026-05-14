@@ -10,7 +10,7 @@ import {
   searchClients, searchVendors, getSettings, resetEstimateConversion,
   getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
   sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument,
-  addEstimateShipmentCharge, updateEstimateShipmentCharge, deleteEstimateShipmentCharge
+  addEstimateShipmentCharge, updateEstimateShipmentCharge, deleteEstimateShipmentCharge, getEstimateShipmentCharges
 } from '../services/api';
 import ShipmentChargesSection from '../components/ShipmentChargesSection';
 import PlateRollForm from '../components/PlateRollForm';
@@ -79,6 +79,7 @@ function EstimateDetailsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [estimateTab, setEstimateTab] = useState('parts'); // parts | materials | summary
+  const [shipmentCharges, setShipmentCharges] = useState([]);
   const [partFormError, setPartFormError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
@@ -274,6 +275,10 @@ function EstimateDetailsPage() {
       });
       setParts((data.parts || []).sort((a, b) => a.partNumber - b.partNumber));
       setFiles(data.files || []);
+      // Load shipment charges separately (not included in main estimate GET)
+      if (!isNew && data.id) {
+        getEstimateShipmentCharges(data.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => setShipmentCharges([]));
+      }
       // Load client payment terms and auto-detect tax exempt
       if (data.clientName) {
         try {
@@ -3224,10 +3229,10 @@ function EstimateDetailsPage() {
             )}
 
             <ShipmentChargesSection
-              charges={estimate?.shipmentCharges || []}
-              onAdd={async (data) => { await addEstimateShipmentCharge(estimate.id, data); loadEstimate(); }}
-              onUpdate={async (chargeId, data) => { await updateEstimateShipmentCharge(estimate.id, chargeId, data); loadEstimate(); }}
-              onDelete={async (chargeId) => { await deleteEstimateShipmentCharge(estimate.id, chargeId); loadEstimate(); }}
+              charges={shipmentCharges}
+              onAdd={async (data) => { await addEstimateShipmentCharge(estimate.id, data); getEstimateShipmentCharges(estimate.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => {}); }}
+              onUpdate={async (chargeId, data) => { await updateEstimateShipmentCharge(estimate.id, chargeId, data); getEstimateShipmentCharges(estimate.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => {}); }}
+              onDelete={async (chargeId) => { await deleteEstimateShipmentCharge(estimate.id, chargeId); getEstimateShipmentCharges(estimate.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => {}); }}
             />
 
             <div style={{ background: '#f0f7ff', borderRadius: 8, padding: 16 }}>
