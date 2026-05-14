@@ -35,7 +35,7 @@ import {
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
   generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo,
-  addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge
+  addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge, getWOShipmentCharges
 } from '../services/api';
 
 const PART_TYPES = {
@@ -78,6 +78,7 @@ function WorkOrderDetailsPage() {
   const [order, setOrder] = useState(null);
   const [showAccountingContact, setShowAccountingContact] = useState(false);
   const [woTab, setWoTab] = useState('parts');
+  const [shipmentCharges, setShipmentCharges] = useState([]);
   const [clientPaymentTerms, setClientPaymentTerms] = useState(null);
   const [shipment, setShipment] = useState(null);
   const [allShipments, setAllShipments] = useState([]);
@@ -237,6 +238,9 @@ function WorkOrderDetailsPage() {
   useEffect(() => {
     if (woTab === 'invoice' && id) {
       loadInvoiceTabData(id);
+    }
+    if (woTab === 'shipping' && id) {
+      getWOShipmentCharges(id).then(r => setShipmentCharges(r.data.data || [])).catch(() => setShipmentCharges([]));
     }
   }, [woTab, id]);
 
@@ -4897,10 +4901,10 @@ function WorkOrderDetailsPage() {
 
         {/* Shipping & Handling Charges */}
         <ShipmentChargesSection
-          charges={order.shipmentCharges || []}
-          onAdd={async (data) => { await addWOShipmentCharge(order.id, data); loadOrder(); }}
-          onUpdate={async (chargeId, data) => { await updateWOShipmentCharge(order.id, chargeId, data); loadOrder(); }}
-          onDelete={async (chargeId) => { await deleteWOShipmentCharge(order.id, chargeId); loadOrder(); }}
+          charges={shipmentCharges}
+          onAdd={async (data) => { await addWOShipmentCharge(order.id, data); const r = await getWOShipmentCharges(order.id); setShipmentCharges(r.data.data || []); }}
+          onUpdate={async (chargeId, data) => { await updateWOShipmentCharge(order.id, chargeId, data); const r = await getWOShipmentCharges(order.id); setShipmentCharges(r.data.data || []); }}
+          onDelete={async (chargeId) => { await deleteWOShipmentCharge(order.id, chargeId); const r = await getWOShipmentCharges(order.id); setShipmentCharges(r.data.data || []); }}
         />
 
       {/* ===== INVOICE TAB ===== */}
