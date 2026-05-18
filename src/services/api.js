@@ -367,6 +367,7 @@ export const checkClientNoTag = (name) => api.get('/clients/check-notag', { para
 export const getClient = (id) => api.get(`/clients/${id}`);
 export const createClient = (data) => api.post('/clients', data);
 export const updateClient = (id, data) => api.put(`/clients/${id}`, data);
+export const mergeClient = (targetId, sourceId) => api.post(`/clients/${targetId}/merge`, { sourceId });
 export const deleteClient = (id) => api.delete(`/clients/${id}`);
 
 // Vendors

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, Users, Building2, Search, Check, X } from 'lucide-react';
-import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit, startBatchVerification, getBatchStatus, downloadResaleReport, getWorkOrders, getEstimates, getVendorHistory } from '../services/api';
+import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit, startBatchVerification, getBatchStatus, downloadResaleReport, getWorkOrders, getEstimates, getVendorHistory, mergeClient } from '../services/api';
 
 const formatPhone = (val) => {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -38,6 +38,9 @@ const ClientsVendorsPage = () => {
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState({});
   const [saving, setSaving] = useState(false);
+  const [mergeModal, setMergeModal] = useState(null); // { target: client }
+  const [mergeSourceId, setMergeSourceId] = useState('');
+  const [merging, setMerging] = useState(false);
   const [verifying, setVerifying] = useState(false);
   
   // Selected item for detail view
@@ -450,6 +453,9 @@ const ClientsVendorsPage = () => {
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="btn btn-sm btn-outline" onClick={() => activeTab === 'clients' ? openClientModal(selectedItem) : openVendorModal(selectedItem)}><Edit size={14} /> Edit</button>
+                      {activeTab === 'clients' && (
+                        <button className="btn btn-sm" onClick={() => { setMergeSourceId(''); setMergeModal({ target: selectedItem }); }} style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80' }}>⇄ Merge</button>
+                      )}
                       {selectedItem.isActive ? (
                         <button className="btn btn-sm" onClick={() => activeTab === 'clients' ? handleDeleteClient(selectedItem) : handleDeleteVendor(selectedItem)} style={{ background: '#ffebee', color: '#c62828', border: '1px solid #ef9a9a' }}><X size={14} /> Deactivate</button>
                       ) : (
@@ -1416,6 +1422,56 @@ const ClientsVendorsPage = () => {
                 </table>
               );
             })()}
+          </div>
+        </div>
+      )}
+      {/* Merge Client Modal */}
+      {mergeModal && (
+        <div className="modal-overlay" onClick={() => setMergeModal(null)}>
+          <div className="modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">⇄ Merge Duplicate Client</h3>
+              <button className="btn-icon" onClick={() => setMergeModal(null)}><X size={20} /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, padding: '10px 14px', fontSize: '0.85rem', color: '#5d4037' }}>
+                All work orders, estimates, and liabilities from the <strong>duplicate</strong> will be moved to <strong>{mergeModal.target.name}</strong>. The duplicate will be permanently deleted.
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Duplicate to merge INTO <strong>{mergeModal.target.name}</strong></label>
+                <select className="form-select" value={mergeSourceId} onChange={e => setMergeSourceId(e.target.value)}>
+                  <option value="">— Select duplicate client —</option>
+                  {clients.filter(c => c.id !== mergeModal.target.id).sort((a, b) => a.name.localeCompare(b.name)).map(c => (
+                    <option key={c.id} value={c.id}>{c.name}{!c.isActive ? ' (inactive)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+              {mergeSourceId && (
+                <div style={{ background: '#fce4ec', border: '1px solid #f48fb1', borderRadius: 8, padding: '10px 14px', fontSize: '0.85rem' }}>
+                  <strong style={{ color: '#b71c1c' }}>⚠ This cannot be undone.</strong>{' '}
+                  "{clients.find(c => c.id === mergeSourceId)?.name}" will be permanently deleted after all records are transferred.
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setMergeModal(null)}>Cancel</button>
+              <button className="btn btn-primary" disabled={!mergeSourceId || merging}
+                style={{ background: '#e65100', borderColor: '#e65100' }}
+                onClick={async () => {
+                  if (!window.confirm(`Merge "${clients.find(c => c.id === mergeSourceId)?.name}" into "${mergeModal.target.name}"? This cannot be undone.`)) return;
+                  setMerging(true);
+                  try {
+                    const r = await mergeClient(mergeModal.target.id, mergeSourceId);
+                    showMessage(r.data.message || 'Clients merged successfully');
+                    setMergeModal(null);
+                    loadData();
+                  } catch (err) {
+                    setError('Merge failed: ' + (err.response?.data?.error?.message || err.message));
+                  } finally { setMerging(false); }
+                }}>
+                {merging ? '⏳ Merging...' : '⇄ Merge Clients'}
+              </button>
+            </div>
           </div>
         </div>
       )}

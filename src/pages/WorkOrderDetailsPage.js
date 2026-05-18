@@ -767,7 +767,14 @@ function WorkOrderDetailsPage() {
       if (shape === 'custom' && !partData._customDescription) warnings.push('Shape description is required');
     }
     if (selectedPartType === 'flat_stock') {
-      if (!partData.thickness) warnings.push('Thickness is required');
+      const stockType = partData._stockType || '';
+      const isRoundTube = stockType === 'round_tube';
+      if (isRoundTube) {
+        if (!partData._roundTubeSelection && !partData.outerDiameter) warnings.push('Pipe/tube size or OD is required');
+        if (!partData.wallThickness && !partData.thickness) warnings.push('Wall thickness or schedule is required');
+      } else {
+        if (!partData.thickness) warnings.push('Thickness is required');
+      }
     }
     if (selectedPartType === 'angle_roll') {
       if (!partData._angleSize) warnings.push('Angle size is required');
