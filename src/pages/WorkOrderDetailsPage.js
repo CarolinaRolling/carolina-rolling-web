@@ -2146,6 +2146,17 @@ function WorkOrderDetailsPage() {
     return groups;
   };
 
+  // All orderable parts grouped by supplier (regardless of selection) — used in the PO modal
+  const getAllSupplierGroups = () => {
+    const groups = {};
+    getOrderableParts().forEach(part => {
+      const supplier = part.vendor?.name || part.supplierName || 'Unknown Supplier';
+      if (!groups[supplier]) groups[supplier] = [];
+      groups[supplier].push(part);
+    });
+    return groups;
+  };
+
   const openOrderModal = async () => {
     // Debug: show all parts and their orderable status
     console.log('All parts:', order?.parts?.map(p => ({
@@ -6397,32 +6408,41 @@ function WorkOrderDetailsPage() {
               </div>
 
               <h4 style={{ marginBottom: 12 }}>Select Materials to Order:</h4>
-              {Object.entries(getSupplierGroups()).map(([supplier, supplierParts], idx) => (
+              {Object.entries(getAllSupplierGroups()).map(([supplier, supplierParts], idx) => {
+                const selectedInGroup = supplierParts.filter(p => selectedPartIds.includes(p.id));
+                return (
                 <div key={supplier} style={{ border: '1px solid #e0e0e0', borderRadius: 8, padding: 12, marginBottom: 12, background: '#f9f9f9' }}>
                   <div style={{ fontWeight: 600, marginBottom: 8, color: '#e65100' }}>🏭 {supplier}</div>
-                  {supplierParts.map(part => (
-                    <label key={part.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 8, cursor: 'pointer', background: 'white', borderRadius: 4, marginBottom: 4 }}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedPartIds.includes(part.id)}
+                  {supplierParts.map(part => {
+                    const isSelected = selectedPartIds.includes(part.id);
+                    return (
+                    <label key={part.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 8, cursor: 'pointer', borderRadius: 4, marginBottom: 4, background: isSelected ? '#e8f5e9' : 'white', border: isSelected ? '1px solid #a5d6a7' : '1px solid transparent', transition: 'all 0.15s' }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
                         onChange={(e) => {
                           if (e.target.checked) setSelectedPartIds([...selectedPartIds, part.id]);
                           else setSelectedPartIds(selectedPartIds.filter(pid => pid !== part.id));
                         }}
-                        style={{ marginTop: 4 }} 
+                        style={{ marginTop: 4 }}
                       />
                       <div style={{ flex: 1 }}>
-                        <div><strong>Part #{part.partNumber}:</strong> {part.materialDescription || part.partType}</div>
-                        <div style={{ fontSize: '0.8rem', color: '#666' }}>Qty: {(part.formData || {})?._stockLengthsNeeded || part.quantity}{(part.formData || {})?._stockLengthsNeeded ? ` lengths (${part.quantity} rings)` : ''}</div>
+                        <div style={{ color: isSelected ? '#1b5e20' : '#555' }}><strong style={{ color: isSelected ? '#2e7d32' : '#333' }}>Part #{part.partNumber}:</strong> {part.materialDescription || part.partType}</div>
+                        <div style={{ fontSize: '0.8rem', color: isSelected ? '#388e3c' : '#888' }}>Qty: {(part.formData || {})?._stockLengthsNeeded || part.quantity}{(part.formData || {})?._stockLengthsNeeded ? ` lengths (${part.quantity} rings)` : ''}</div>
                       </div>
+                      {isSelected && <span style={{ fontSize: '0.75rem', color: '#2e7d32', fontWeight: 600, marginTop: 2 }}>✓ Selected</span>}
                     </label>
-                  ))}
+                    );
+                  })}
+                  {selectedInGroup.length > 0 && (
                   <div style={{ background: '#e3f2fd', borderRadius: 4, padding: 8, marginTop: 8 }}>
-                    <strong style={{ color: '#1976d2' }}>PO{parseInt(orderPONumber) + idx}</strong>
-                    <span style={{ marginLeft: 12, fontSize: '0.8rem', color: '#388e3c' }}>→ Creates Inbound + Purchase Order</span>
+                    <strong style={{ color: '#1976d2' }}>PO{parseInt(orderPONumber) + Object.entries(getAllSupplierGroups()).filter(([s]) => s !== supplier && getAllSupplierGroups()[s].some(p => selectedPartIds.includes(p.id))).length}</strong>
+                    <span style={{ marginLeft: 12, fontSize: '0.8rem', color: '#388e3c' }}>→ Creates Inbound + Purchase Order ({selectedInGroup.length} part{selectedInGroup.length !== 1 ? 's' : ''})</span>
                   </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="modal-footer">
