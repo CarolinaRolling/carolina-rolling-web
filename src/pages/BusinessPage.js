@@ -424,7 +424,6 @@ function BusinessPage() {
   const [coaTab, setCoaTab] = useState('ar');
 
   return (
-    <>
     <div className="page-container">
       <div className="page-header" style={{marginBottom:0}}><h1 className="page-title">💼 Business Center</h1></div>
       {err && <div className="alert alert-error" style={{marginBottom:12}}>{err} <button onClick={()=>setErr(null)} style={{float:'right',background:'none',border:'none',cursor:'pointer'}}>✕</button></div>}
@@ -1184,28 +1183,27 @@ function BusinessPage() {
           </div>
         </div>}
       </div>)}
-    </div>
 
-    {/* New Payment System Modals */}
-    {showTakePayment && (
-      <TakePaymentModal
-        onClose={() => setShowTakePayment(false)}
-        onSaved={() => { loadLedger(); getCreditMemos().then(r => setCreditMemos(r.data.data||[])).catch(()=>{}); }}
-      />
-    )}
-    {showCreditMemo && (
-      <CreditMemoModal
-        onClose={() => setShowCreditMemo(false)}
-        onSaved={() => getCreditMemos().then(r => setCreditMemos(r.data.data||[])).catch(()=>{})}
-      />
-    )}
-    {showRefund && (
-      <RefundModal
-        onClose={() => setShowRefund(false)}
-        onSaved={() => getRefunds().then(r => setRefunds(r.data.data||[])).catch(()=>{})}
-      />
-    )}
-  </>
+      {/* New Payment System Modals */}
+      {showTakePayment && (
+        <TakePaymentModal
+          onClose={() => setShowTakePayment(false)}
+          onSaved={() => { loadLedger(); getCreditMemos().then(r => setCreditMemos(r.data.data||[])).catch(()=>{}); }}
+        />
+      )}
+      {showCreditMemo && (
+        <CreditMemoModal
+          onClose={() => setShowCreditMemo(false)}
+          onSaved={() => getCreditMemos().then(r => setCreditMemos(r.data.data||[])).catch(()=>{})}
+        />
+      )}
+      {showRefund && (
+        <RefundModal
+          onClose={() => setShowRefund(false)}
+          onSaved={() => getRefunds().then(r => setRefunds(r.data.data||[])).catch(()=>{})}
+        />
+      )}
+    </div>
   );
 }
 
