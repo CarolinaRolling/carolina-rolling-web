@@ -3009,7 +3009,6 @@ function EstimateDetailsPage() {
                 {(() => {
                   const materialParts = parts.filter(p => !['fab_service', 'shop_rate', 'rush_service'].includes(p.partType));
                   
-                  // Material costs (our cost vs what client pays)
                   let totalMaterialCost = 0;
                   let totalMaterialBilled = 0;
                   let totalLaborInHouse = 0;
@@ -3028,10 +3027,7 @@ function EstimateDetailsPage() {
 
                     const ops = p.outsideProcessing || [];
                     const opEnabled = ops.length > 0;
-                    // In-house labor only applies if part is NOT outsourced.
-                    // For OP parts, the saved laborTotal is just the OP markup (profit), which is already counted in totalOutsideBilled.
                     if (!opEnabled) {
-                      // Use base labor (the user-entered in-house rate). Falls back to laborTotal if no shadow field.
                       const baseLabor = (() => {
                         const stored = parseFloat((p.formData || {})._baseLaborTotal);
                         if (!isNaN(stored)) return stored;
@@ -3042,7 +3038,6 @@ function EstimateDetailsPage() {
                       totalLaborInHouse += baseLabor * qty;
                     }
 
-                    // Outside processing (vendor work only — transport is order-level)
                     ops.forEach(op => {
                       const opCostPerPart = parseFloat(op.costPerPart) || 0;
                       const opExpedite = parseFloat(op.expediteCost) || 0;
@@ -3053,17 +3048,31 @@ function EstimateDetailsPage() {
                     });
                   });
 
-                  // Services (fab, shop rate)
                   let totalServicesCost = 0;
                   parts.filter(p => ['fab_service', 'shop_rate'].includes(p.partType)).forEach(p => {
                     totalServicesCost += parseFloat(p.partTotal) || 0;
                   });
 
+                  // Shipping charges — contracted cost is a real expense; both types billed to client
+                  let shippingExpense = 0;   // what we pay (contracted truckers only)
+                  let shippingBilled = 0;    // what client pays (all shipments, with markup)
+                  shipmentCharges.forEach(sc => {
+                    const sCost = parseFloat(sc.shippingCost) || 0;
+                    const sMkup = parseFloat(sc.shippingMarkup) || 0;
+                    const mCost = parseFloat(sc.materialsCost) || 0;
+                    const mMkup = parseFloat(sc.materialsMarkup) || 0;
+                    const billed = sCost * (1 + sMkup / 100) + mCost * (1 + mMkup / 100);
+                    shippingBilled += billed;
+                    if (sc.carrierType === 'contracted') {
+                      shippingExpense += sCost + mCost; // raw cost before markup = what we pay the trucker
+                    }
+                  });
+
                   const trucking = parseFloat(formData.truckingCost) || 0;
                   const totalOurCost = totalMaterialCost + totalOutsideCost + totalTransportCost;
                   const totalMarkupProfit = (totalMaterialBilled - totalMaterialCost) + (totalOutsideBilled - totalOutsideCost) + (totalTransportBilled - totalTransportCost);
-                  const totalRevenue = totals.grandTotal;
-                  const totalExpenses = totalOurCost + trucking;
+                  const totalRevenue = totals.grandTotal + shippingBilled;
+                  const totalExpenses = totalOurCost + trucking + shippingExpense;
                   const grossProfit = totalRevenue - totalExpenses;
                   const margin = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 100) : 0;
 
@@ -3076,6 +3085,46 @@ function EstimateDetailsPage() {
 
                   return (
                     <div>
+                      {/* Pricing Summary Box — moved from sidebar */}
+                      <div style={{ background: '#f0f7ff', borderRadius: 8, padding: 16, marginBottom: 24 }}>
+                        <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pricing Summary</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem' }}>
+                          <span style={{ color: '#555' }}>Parts Subtotal</span>
+                          <span>{formatCurrency(totals.partsSubtotal)}</span>
+                        </div>
+                        {shippingBilled > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem' }}>
+                            <span style={{ color: '#555' }}>Shipping & Handling</span>
+                            <span>{formatCurrency(shippingBilled)}</span>
+                          </div>
+                        )}
+                        {totals.discountAmt > 0 && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#c62828' }}>
+                            <span>Discount</span>
+                            <span>-{formatCurrency(totals.discountAmt)}</span>
+                          </div>
+                        )}
+                        {formData.taxExempt ? (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#c62828', fontWeight: 600 }}>
+                            <span>Tax</span><span>EXEMPT</span>
+                          </div>
+                        ) : totals.taxAmount > 0 ? (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}>
+                            <span>Tax ({formData.taxRate || 0}%)</span>
+                            <span>{formatCurrency(totals.taxAmount)}</span>
+                          </div>
+                        ) : null}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0 4px', fontSize: '1.1rem', fontWeight: 700, color: '#1565c0', borderTop: '2px solid #bbdefb', marginTop: 6 }}>
+                          <span>Grand Total</span>
+                          <span>{formatCurrency(totalRevenue)}</span>
+                        </div>
+                        {totals.ccFeeInPerson > 0 && (
+                          <div style={{ marginTop: 8, fontSize: '0.78rem', color: '#888', textAlign: 'right' }}>
+                            In-Person CC: {formatCurrency(totals.ccFeeInPerson)} &nbsp;|&nbsp; Manual: {formatCurrency(totals.ccFeeManual)}
+                          </div>
+                        )}
+                      </div>
+
                       {/* Cost Breakdown */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
                         {/* Our Costs */}
@@ -3085,6 +3134,7 @@ function EstimateDetailsPage() {
                           {totalOutsideCost > 0 && row('Outside Processing', totalOutsideCost)}
                           {totalTransportCost > 0 && row('Transport (outside)', totalTransportCost)}
                           {trucking > 0 && row('Trucking to Client', trucking)}
+                          {shippingExpense > 0 && row('Contracted Shipping', shippingExpense, { color: '#bf360c' })}
                           {row('Total Expenses', totalExpenses, { bold: true, border: true, color: '#c62828' })}
                         </div>
 
@@ -3097,9 +3147,10 @@ function EstimateDetailsPage() {
                           {totalTransportBilled > 0 && row('Transport (marked up)', totalTransportBilled)}
                           {totalServicesCost > 0 && row('Fab Services / Shop Rate', totalServicesCost)}
                           {trucking > 0 && row('Trucking', trucking)}
+                          {shippingBilled > 0 && row('Shipping & Handling', shippingBilled, { color: '#1565c0' })}
                           {totals.discountAmt > 0 && row('Discount', -totals.discountAmt, { color: '#c62828' })}
                           {totals.taxAmount > 0 && row('Tax', totals.taxAmount, { color: '#888' })}
-                          {row('Grand Total', totals.grandTotal, { bold: true, border: true, color: '#2e7d32' })}
+                          {row('Grand Total', totalRevenue, { bold: true, border: true, color: '#2e7d32' })}
                         </div>
                       </div>
 
@@ -3112,7 +3163,7 @@ function EstimateDetailsPage() {
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 8 }}>
                           <div>
                             <div style={{ fontSize: '0.75rem', color: '#888' }}>Markup Profit</div>
-                            <div style={{ fontWeight: 700, color: '#2e7d32' }}>{formatCurrency(totalMarkupProfit)}</div>
+                            <div style={{ fontWeight: 700, color: '#2e7d32' }}>{formatCurrency(totalMarkupProfit + (shippingBilled - shippingExpense))}</div>
                           </div>
                           <div>
                             <div style={{ fontSize: '0.75rem', color: '#888' }}>Labor Revenue</div>
@@ -3123,6 +3174,11 @@ function EstimateDetailsPage() {
                             <div style={{ fontWeight: 700, color: grossProfit >= 0 ? '#2e7d32' : '#c62828' }}>{formatCurrency(grossProfit)}</div>
                           </div>
                         </div>
+                        {shippingExpense > 0 && (
+                          <div style={{ marginTop: 10, fontSize: '0.78rem', color: '#888' }}>
+                            Contracted shipping cost of {formatCurrency(shippingExpense)} deducted from margin
+                          </div>
+                        )}
                       </div>
 
                       {/* Per-Part Breakdown Table */}
@@ -3150,7 +3206,6 @@ function EstimateDetailsPage() {
                                   const matMk = parseFloat(p.materialMarkupPercent) || 0;
                                   const matBilled = Math.round(mat * (1 + matMk / 100) * 100) / 100;
                                   const labor = parseFloat(p.laborTotal) || 0;
-                                  // Read OP from JSONB (Fab Service parts only — rolling parts no longer have OP)
                                   const ops = p.outsideProcessing || [];
                                   let opBilledLot = 0;
                                   ops.forEach(op => {
@@ -3332,7 +3387,7 @@ function EstimateDetailsPage() {
               </div>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontSize: '1.25rem', fontWeight: 700, color: '#1976d2' }}>
-                <span>Grand Total</span><span>{formatCurrency(totals.grandTotal)}</span>
+                <span>Grand Total</span><span>{formatCurrency(totals.grandTotal + shipmentCharges.reduce((s, c) => s + (parseFloat(c.shippingCost)||0)*(1+(parseFloat(c.shippingMarkup)||0)/100) + (parseFloat(c.materialsCost)||0)*(1+(parseFloat(c.materialsMarkup)||0)/100), 0))}</span>
               </div>
               
               {/* Credit Card Total */}

@@ -4975,6 +4975,29 @@ function WorkOrderDetailsPage() {
                     <div style={{ fontSize: '0.8rem', color: '#888', marginTop: 2 }}>
                       {order.invoiceDate ? `Dated: ${new Date(order.invoiceDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'No date set'}
                     </div>
+                    {order.invoiceDate && clientPaymentTerms && (() => {
+                      const t = clientPaymentTerms.toUpperCase();
+                      let days = null;
+                      if (t === 'C.O.D.' || t === 'COD') days = 0;
+                      else { const m = t.match(/NET\s*(\d+)/); if (m) days = parseInt(m[1]); else { const m2 = t.match(/^(\d+)\s*DAYS?$/); if (m2) days = parseInt(m2[1]); } }
+                      if (days === null) return null;
+                      if (days === 0) return <div style={{ fontSize: '0.8rem', color: '#e65100', marginTop: 2, fontWeight: 600 }}>Terms: C.O.D. — due upon receipt</div>;
+                      const dueDate = new Date(new Date(order.invoiceDate).getTime() + days * 86400000);
+                      const daysLeft = Math.floor((dueDate - Date.now()) / 86400000);
+                      const isPaid = !!order.paymentDate;
+                      if (isPaid) return <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>✓ Paid — was due {dueDate.toLocaleDateString()}</div>;
+                      const isOverdue = daysLeft < 0;
+                      return (
+                        <div style={{ fontSize: '0.82rem', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ color: isOverdue ? '#c62828' : '#333', fontWeight: 500 }}>
+                            Due: {dueDate.toLocaleDateString()}
+                          </span>
+                          <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: '0.75rem', fontWeight: 700, background: isOverdue ? '#ffebee' : daysLeft <= 7 ? '#fff8e1' : '#e8f5e9', color: isOverdue ? '#c62828' : daysLeft <= 7 ? '#f57f17' : '#2e7d32' }}>
+                            {isOverdue ? `${Math.abs(daysLeft)}d OVERDUE` : `${daysLeft}d remaining`}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

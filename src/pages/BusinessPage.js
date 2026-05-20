@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FileText, Receipt, Users, BarChart3, Plus, DollarSign } from 'lucide-react';
-import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, updateVacationLog, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, deletePayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment, reorderEmployees, sendPayrollEmail, getEmailAccounts, getSettings, updateSettings, previewPayrollPdf, getLedger, recordLedgerPayment, voidLedgerPayment } from '../services/api';
+import { getLiabilities, getLiabilitySummary, createLiability, updateLiability, payLiability, deleteLiability, uploadBillFile, approveBill, rejectBill, getEmployees, createEmployee, updateEmployee, deleteEmployee, updateVacationLog, getPayrolls, createPayroll, updatePayrollEntry, updatePayrollWeek, submitPayroll, deletePayroll, getWorkOrders, getOutstandingPayments, getPaymentHistory, recordBusinessPayment, clearBusinessPayment, reorderEmployees, sendPayrollEmail, getEmailAccounts, getSettings, updateSettings, previewPayrollPdf, getLedger, recordLedgerPayment, voidLedgerPayment, getCreditMemos, getRefunds, voidCreditMemo, voidRefund } from '../services/api';
 import InvoiceCenterPage from './InvoiceCenterPage';
+import TakePaymentModal from '../components/TakePaymentModal';
+import CreditMemoModal from '../components/CreditMemoModal';
+import RefundModal from '../components/RefundModal';
 
 const LB_CATS = [
   { key: 'materials', label: 'Materials', icon: '🧱', color: '#E65100' },
@@ -82,11 +85,21 @@ function BusinessPage() {
   const [payHistory, setPayHistory] = useState(null);
   const [payTab, setPayTab] = useState('outstanding');
   const [payLoading, setPayLoading] = useState(false);
-  const [showRecordPay, setShowRecordPay] = useState(null); // WO id
+  const [showRecordPay, setShowRecordPay] = useState(null);
   const [payForm, setPayForm] = useState({ paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '' });
+  // New payment modals
+  const [showTakePayment, setShowTakePayment] = useState(false);
+  const [showCreditMemo, setShowCreditMemo] = useState(false);
+  const [showRefund, setShowRefund] = useState(false);
+  const [creditMemos, setCreditMemos] = useState([]);
+  const [refunds, setRefunds] = useState([]);
+  const [coaSubTab, setCoaSubTab] = useState('ar'); // ar | credits | refunds
 
   useEffect(() => {
-    if (tab === 'coa') { loadLedger(); loadLiabs(); loadPayments(); }
+    if (tab === 'coa') { loadLedger(); loadLiabs(); loadPayments();
+      getCreditMemos().then(r => setCreditMemos(r.data.data || [])).catch(() => {});
+      getRefunds().then(r => setRefunds(r.data.data || [])).catch(() => {});
+    }
     if (tab === 'employees') { loadEmps(); loadPR(); loadPayrollEmail(); loadGmailAccounts(); }
     if (tab === 'health') loadHealth();
 
@@ -445,6 +458,21 @@ function BusinessPage() {
           {/* ── ACCOUNTS RECEIVABLE ── */}
           {coaTab === 'ar' && (
             <div>
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+            <button onClick={() => setShowTakePayment(true)}
+              style={{ padding: '10px 20px', background: '#2e7d32', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+              💵 Take Payment
+            </button>
+            <button onClick={() => setShowCreditMemo(true)}
+              style={{ padding: '10px 16px', background: '#1565c0', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+              📋 Credit Memo
+            </button>
+            <button onClick={() => setShowRefund(true)}
+              style={{ padding: '10px 16px', background: '#b71c1c', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+              ↩ Refund
+            </button>
+          </div>
           {/* Summary cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
             {[
@@ -1159,6 +1187,26 @@ function BusinessPage() {
         </div>}
       </div>)}
     </div>
+
+    {/* New Payment System Modals */}
+    {showTakePayment && (
+      <TakePaymentModal
+        onClose={() => setShowTakePayment(false)}
+        onSaved={() => { loadLedger(); getCreditMemos().then(r => setCreditMemos(r.data.data||[])).catch(()=>{}); }}
+      />
+    )}
+    {showCreditMemo && (
+      <CreditMemoModal
+        onClose={() => setShowCreditMemo(false)}
+        onSaved={() => getCreditMemos().then(r => setCreditMemos(r.data.data||[])).catch(()=>{})}
+      />
+    )}
+    {showRefund && (
+      <RefundModal
+        onClose={() => setShowRefund(false)}
+        onSaved={() => getRefunds().then(r => setRefunds(r.data.data||[])).catch(()=>{})}
+      />
+    )}
   );
 }
 

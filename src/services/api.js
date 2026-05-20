@@ -368,6 +368,8 @@ export const getClient = (id) => api.get(`/clients/${id}`);
 export const createClient = (data) => api.post('/clients', data);
 export const updateClient = (id, data) => api.put(`/clients/${id}`, data);
 export const mergeClient = (targetId, sourceId) => api.post(`/clients/${targetId}/merge`, { sourceId });
+export const getClientHistory = (clientId) => api.get(`/clients/${clientId}/history`);
+export const getClientStatementPdf = (clientId) => api.get(`/clients/${clientId}/statement-pdf`, { responseType: 'arraybuffer' });
 export const deleteClient = (id) => api.delete(`/clients/${id}`);
 
 // Vendors
@@ -558,6 +560,17 @@ export const deleteWeldProcedure = (id) => api.delete(`/business/wps/${id}`);
 export const generateCOC = (workOrderId, data) => api.post(`/workorders/${workOrderId}/coc`, data, { responseType: 'blob' });
 export const generateUSMCA = (workOrderId, data) => api.post(`/workorders/${workOrderId}/usmca`, data, { responseType: 'arraybuffer' });
 export const saveWOUsmcaInfo = (workOrderId, data) => api.patch(`/workorders/${workOrderId}/usmca-info`, data);
+
+// New payment system
+export const getClientOpenInvoices = (clientId) => api.get(`/business/client-open-invoices/${clientId}`);
+export const recordClientPayment = (data) => api.post('/business/client-payments', data);
+export const getClientPayments = (params) => api.get('/business/client-payments', { params });
+export const getCreditMemos = (params) => api.get('/business/credit-memos', { params });
+export const createCreditMemo = (data) => api.post('/business/credit-memos', data);
+export const voidCreditMemo = (id) => api.delete(`/business/credit-memos/${id}`);
+export const getRefunds = (params) => api.get('/business/refunds', { params });
+export const createRefund = (data) => api.post('/business/refunds', data);
+export const voidRefund = (id) => api.delete(`/business/refunds/${id}`);
 
 // Shipment Charges
 export const getWOShipmentCharges = (workOrderId) => api.get(`/workorders/${workOrderId}/shipment-charges`);
