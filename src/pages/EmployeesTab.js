@@ -1,28 +1,201 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
+import {
+  getEmployees, createEmployee, updateEmployee, deleteEmployee,
+  reorderEmployees, getPayrolls, createPayroll, updatePayrollEntry,
+  updatePayrollWeek, submitPayroll, deletePayroll, sendPayrollEmail,
+  previewPayrollPdfLocalPdf, updateVacationLog, getSettings, updateSettings,
+  getEmailAccounts,
+} from '../services/api';
 
 const OT_INC = [0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,7,8,9,10,12];
+const fmt = (v) => '$' + (parseFloat(v)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const formatPhone = (p) => { if(!p)return ''; const d=p.replace(/\D/g,''); return d.length===10?`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`:p; };
+const daysUntil = (d) => d ? Math.ceil((new Date(d) - new Date()) / 86400000) : null;
 
-export default function EmployeesTab({
-  emps, empLoad, showEmp, setShowEmp, editEmp, setEditEmp, ef, setEf, loadEmps,
-  vacEmp, setVacEmp, vacLog, setVacLog, vacNewDate, setVacNewDate,
-  vacNewHours, setVacNewHours, vacNewNote, setVacNewNote,
-  payrolls, activePR, setActivePR, showNewPR, setShowNewPR, prDates, setPrDates,
-  otEntry, setOtEntry, otList, setOtList, otNewDate, setOtNewDate, otNewHrs, setOtNewHrs,
-  showExtHrs, setShowExtHrs, extHrsEmps, setExtHrsEmps,
-  vacEntryList, setVacEntryList, vacEntryEmp, setVacEntryEmp,
-  vacEntryNewDate, setVacEntryNewDate, vacEntryNewHours, setVacEntryNewHours,
-  gmailAccounts, payrollSenderAccountId, setPayrollSenderAccountId,
-  sendingPayroll, payrollEmail, payrollEmailEdit, setPayrollEmailEdit,
-  handleSaveEmp, handleDeleteEmp, handleReactivateEmp, handleMoveEmp,
-  handleSavePR, handleDeletePR, handleSubmitPR, handleUpdateEntry,
-  handleSendPayroll, handleSaveOt, saveOt, saveVacEntry, saveVacLog: saveVacEntry2,
-  printPayrollSummary, printPayrollCsv, previewPayroll,
-  vacEntryHoursUsed, annualVacationDays: getAnnualDays,
-  fmt, formatPhone, daysUntil,
-  showMsg, setErr,
-}) {
-  return (
+export default function EmployeesTab({ showMsg, setErr }) {
+  // State
+  const [emps, setEmps] = useState([]);
+  const [empLoad, setEmpLoad] = useState(false);
+  const [showEmp, setShowEmp] = useState(false);
+  const [editEmp, setEditEmp] = useState(null);
+  const [ef, setEf] = useState({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'ACH 100%',description:'',annualVacationDays:''});
+  const [payrolls, setPayrolls] = useState([]);
+  const [activePR, setActivePR] = useState(null);
+  const [showNewPR, setShowNewPR] = useState(false);
+  const [prDates, setPrDates] = useState({weekStart:'',weekEnd:''});
+  const [otEntry, setOtEntry] = useState(null);
+  const [otList, setOtList] = useState([]);
+  const [otNewDate, setOtNewDate] = useState('');
+  const [otNewHrs, setOtNewHrs] = useState(1.5);
+  const [showExtHrs, setShowExtHrs] = useState(false);
+  const [extHrsEmps, setExtHrsEmps] = useState([]);
+  const [extHrsDates, setExtHrsDates] = useState([]);
+  const [extHrsHours, setExtHrsHours] = useState(1.5);
+  const [extHrsSaving, setExtHrsSaving] = useState(false);
+  const [vacEmp, setVacEmp] = useState(null);
+  const [vacLog, setVacLog] = useState([]);
+  const [vacNewDate, setVacNewDate] = useState('');
+  const [vacNewHours, setVacNewHours] = useState('8');
+  const [vacNewNote, setVacNewNote] = useState('');
+  const [vacEntry, setVacEntry] = useState(null);
+  const [vacEntryList, setVacEntryList] = useState([]);
+  const [vacEntryNewDate, setVacEntryNewDate] = useState('');
+  const [vacEntryNewHrs, setVacEntryNewHrs] = useState(8);
+  const [gmailAccounts, setGmailAccounts] = useState([]);
+  const [payrollSenderAccountId, setPayrollSenderAccountId] = useState('');
+  const [sendingPayroll, setSendingPayroll] = useState(false);
+  const [payrollEmail, setPayrollEmail] = useState('');
+  const [payrollEmailEdit, setPayrollEmailEdit] = useState(false);
+  const [payrollEmailSaving, setPayrollEmailSaving] = useState(false);
+
+  useEffect(() => {
+    loadEmps();
+    loadPR();
+    loadGmailAccounts();
+    getSettings('payroll_sender_account').then(r => setPayrollSenderAccountId(r.data?.data?.value || '')).catch(()=>{});
+    getSettings('payroll_email').then(r => setPayrollEmail(r.data?.data?.value || '')).catch(()=>{});
+  }, []);
+
+  const loadEmps = async () => { try { setEmpLoad(true); const r = await getEmployees({active:'all'}); setEmps(r.data.data||[]); } catch{} finally{setEmpLoad(false);} };
+  const loadPR = async () => { try { const r = await getPayrolls(); setPayrolls(r.data.data||[]); } catch{} };
+  const loadGmailAccounts = async () => { try { const r = await getEmailAccounts(); setGmailAccounts(r.data?.data||[]); } catch{} };
+
+  const saveEmp = async () => {
+    if(!ef.name||!ef.hourlyRate){setErr('Name & rate required');return;}
+    try {
+      const data={...ef};
+      if(!data.annualVacationDays||data.annualVacationDays==='')data.annualVacationDays=0;
+      if(!data.hourlyRate||data.hourlyRate==='')data.hourlyRate=0;
+      if(!data.deductions)data.deductions='ACH 100%';
+      if(editEmp)await updateEmployee(editEmp.id,data);else await createEmployee(data);
+      setShowEmp(false);setEditEmp(null);
+      setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'ACH 100%',description:'',annualVacationDays:''});
+      showMsg(editEmp?'Updated':'Added');await loadEmps();
+    }catch(e){setErr(e.response?.data?.error?.message||'Failed to save');}
+  };
+
+  const createPR = async () => {
+    if(!prDates.weekStart||!prDates.weekEnd){setErr('Select dates');return;}
+    try{const r=await createPayroll(prDates);setActivePR(r.data.data);setShowNewPR(false);showMsg('Created');await loadPR();}
+    catch(e){setErr(e.response?.data?.error?.message||'Failed');}
+  };
+
+  const updateEntry = async (entry, upd) => {
+    if(!activePR)return;
+    try{
+      const res=await updatePayrollEntry(activePR.id,entry.id,upd);
+      const updated={...res.data.data,grossPay:parseFloat(res.data.data?.grossPay)||0};
+      setActivePR(prev=>{
+        if(!prev)return prev;
+        const entries=(prev.entries||[]).map(e=>e.id===entry.id?{...e,...updated}:e);
+        const totalGross=entries.reduce((s,e)=>s+(parseFloat(e.grossPay)||0),0);
+        return{...prev,entries,totalGross};
+      });
+    }catch{setErr('Failed');}
+  };
+
+  const openOtEditor = (en) => { setOtEntry(en);setOtList([...(en.overtimeDetails||[])]);setOtNewDate('');setOtNewHrs(1.5); };
+  const openVacEntryEditor = (en) => { setVacEntry(en);setVacEntryList([...(en.vacationDetails||[])]);setVacEntryNewDate('');setVacEntryNewHrs(8); };
+
+  const saveOt = async () => {
+    if(!otEntry)return;
+    const totalOtHours=otList.reduce((s,x)=>s+(parseFloat(x.hours)||0),0);
+    await updateEntry(otEntry,{overtimeDetails:otList,overtimeHours:totalOtHours});
+    setOtEntry(null);setOtList([]);
+  };
+
+  const saveVacEntry = async () => {
+    if(!vacEntry)return;
+    const totalVacHours=vacEntryList.reduce((s,x)=>s+(parseFloat(x.hours)||0),0);
+    await updateEntry(vacEntry,{vacationDetails:vacEntryList,vacationHours:totalVacHours});
+    setVacEntry(null);setVacEntryList([]);
+  };
+
+  const applyExtHrs = async () => {
+    if(extHrsEmps.length===0||extHrsDates.length===0){setErr('Select at least one employee and one date');return;}
+    setExtHrsSaving(true);
+    try{
+      for(const entryId of extHrsEmps){
+        const entry=(activePR?.entries||[]).find(e=>e.id===entryId);
+        if(!entry)continue;
+        const existing=[...(entry.overtimeDetails||[])];
+        for(const date of extHrsDates){
+          const idx=existing.findIndex(x=>x.date===date);
+          if(idx>=0)existing[idx]={...existing[idx],hours:existing[idx].hours+extHrsHours};
+          else existing.push({date,hours:extHrsHours});
+        }
+        existing.sort((a,b)=>a.date.localeCompare(b.date));
+        const totalOt=existing.reduce((s,x)=>s+x.hours,0);
+        await updateEntry(entry,{overtimeDetails:existing,overtimeHours:totalOt});
+      }
+      await loadPR();setShowExtHrs(false);
+      showMsg(`Extended hours applied to ${extHrsEmps.length} employee(s) across ${extHrsDates.length} day(s)`);
+    }catch{setErr('Failed to apply extended hours');}
+    finally{setExtHrsSaving(false);}
+  };
+
+  const savePayrollEmail = async (email) => {
+    setPayrollEmailSaving(true);
+    try{await updateSettings('payroll_email',email);setPayrollEmail(email);setPayrollEmailEdit(false);showMsg('Saved');}
+    catch{setErr('Failed');}finally{setPayrollEmailSaving(false);}
+  };
+
+  const savePayrollSenderAccount = async (id) => {
+    try{await updateSettings('payroll_sender_account',id);setPayrollSenderAccountId(id);showMsg('Saved');}
+    catch{setErr('Failed');}
+  };
+
+  const printPayrollService = (pr) => {
+    const w=window.open('','_blank');if(!w)return;
+    const sd=pr.weekStart?new Date(pr.weekStart+'T12:00:00').toLocaleDateString():'';
+    const ed=pr.weekEnd?new Date(pr.weekEnd+'T12:00:00').toLocaleDateString():'';
+    const css='.body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto}.hdr{display:flex;align-items:center;gap:12px;border-bottom:2px solid #1976d2;padding-bottom:12px;margin-bottom:16px}.co{font-size:1.1rem;font-weight:700}.dt{font-size:0.9rem;color:#555}.dr{text-align:center;font-size:1.1rem;font-weight:600;margin-bottom:20px;color:#333}.emp{padding:12px;margin-bottom:12px;border:1px solid #e0e0e0;border-radius:6px}.en{font-size:1rem;font-weight:700;margin-bottom:6px}.r{display:flex;justify-content:space-between;padding:2px 0;font-size:0.9rem}.l{color:#666}.v{font-weight:600}.gp{display:flex;justify-content:space-between;padding:8px 0 0;border-top:1px solid #eee;font-size:1rem;font-weight:700;color:#1976d2}.tot{margin-top:16px;padding:12px;background:#e3f2fd;border-radius:6px;font-size:1.1rem;font-weight:700;text-align:center;color:#1565c0}.ft{margin-top:20px;padding-top:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:0.75rem;color:#888}';
+    const entries=pr.entries||[];
+    const cards=entries.map(en=>{const reg=parseFloat(en.regularHours)||0;const ot=parseFloat(en.overtimeHours)||0;const vac=parseFloat(en.vacationHours)||0;const rate=parseFloat(en.hourlyRate)||0;const bonus=parseFloat(en.bonusAmount)||0;const regPay=reg*rate;const otPay=ot*rate*1.5;const vacPay=vac*rate;const gross=parseFloat(en.grossPay)||0;const annual=parseFloat(en.annualVacationDays)||10;const totalVacH=(entries.filter(e=>e.employeeId===en.employeeId).reduce((s,e)=>s+(parseFloat(e.vacationHours)||0),0));const vacRem=(totalVacH/8);let h=`<div class="emp"><div class="en">${en.employeeName||'Unknown'}</div>`;if(reg>0)h+=`<div class="r"><span class="l">Regular (${reg}h @ ${fmt(rate)}/h)</span><span class="v">${fmt(regPay)}</span></div>`;if(ot>0)h+=`<div class="r"><span class="l">Overtime (${ot}h @ ${fmt(rate*1.5)}/h)</span><span class="v">${fmt(otPay)}</span></div>`;if(vac>0)h+=`<div class="r"><span class="l">Vacation (${vac}h @ ${fmt(rate)}/h)</span><span class="v">${fmt(vacPay)}</span></div>`;if(annual>0)h+=`<div class="bal">Vacation balance: ${vacRem.toFixed(1)} / ${parseFloat(annual).toFixed(1)} days</div>`;if(bonus>0)h+=`<div class="r"><span class="l">Bonus${en.bonusNotes?' — '+en.bonusNotes:''}</span><span class="v">${fmt(bonus)}</span></div>`;h+=`<div class="gp"><span>Gross Pay</span><span>${fmt(gross)}</span></div></div>`;return h;}).join('');
+    const now=new Date();
+    w.document.write('<html><head><title>Payroll</title><style>'+css+'</style></head><body><div class="hdr"><img src="/logo.png" onerror="this.style.display='none'"/><div><div class="co">Carolina Rolling Co., Inc.</div><div class="dt">Payroll Summary</div></div></div><div class="dr">'+sd+' — '+ed+'</div>'+cards+'<div class="tot">Total Gross Payroll: '+fmt(pr.totalGross)+'</div><div class="ft"><span>Generated: '+now.toLocaleDateString()+' '+now.toLocaleTimeString()+'</span><span>CONFIDENTIAL</span></div></body></html>');
+    w.document.close();w.print();
+  };
+
+  const printPayrollDetailed = printPayrollService;
+
+  const previewPayrollPdfLocalPdfLocal = async (pr) => {
+    try{const r=await previewPayrollPdfLocalPdf(pr.id);const blob=new Blob([r.data],{type:'application/pdf'});window.open(URL.createObjectURL(blob),'_blank');}
+    catch{setErr('Preview failed');}
+  };
+
+  // Local wrappers
+  const handleSendPayrollLocal = async (pr, accountId) => {
+    if(!accountId){setErr('Select a Gmail account first');return;}
+    setSendingPayroll(true);
+    try{await sendPayrollEmail(pr.id,{accountId});showMsg('Payroll sent!');}
+    catch(e){setErr(e.response?.data?.error?.message||'Failed to send');}
+    finally{setSendingPayroll(false);}
+  };
+  const handleSubmitPRLocal = async (pr) => {
+    try{await submitPayroll(pr.id);showMsg('Submitted');await loadPR();}
+    catch{setErr('Failed to submit');}
+  };
+  const handleDeletePRLocal = async (pr) => {
+    if(!window.confirm('Delete this payroll?'))return;
+    try{await deletePayroll(pr.id);showMsg('Deleted');await loadPR();if(activePR?.id===pr.id)setActivePR(null);}
+    catch{setErr('Failed');}
+  };
+  const handleDeleteEmpLocal = async (emp) => {
+    if(!window.confirm(`Deactivate ${emp.name}?`))return;
+    try{await deleteEmployee(emp.id);await loadEmps();}catch{}
+  };
+  const handleReactivateEmpLocal = async (emp) => {
+    try{await updateEmployee(emp.id,{isActive:true});showMsg('Reactivated');await loadEmps();}
+    catch{setErr('Failed');}
+  };
+  const handleMoveEmpLocal = async (updatedEmps) => {
+    setEmps(updatedEmps);
+    try{await reorderEmployees(updatedEmps.map((x,i)=>({id:x.id,sortOrder:i})));}catch{}
+  };
+
+    return (
     <div>
     <div className="card" style={{marginBottom:16}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}><h3 style={{margin:0}}>👥 Employee Roster</h3><button className="btn btn-primary btn-sm" onClick={()=>{setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'ACH 100%',description:'',annualVacationDays:''});setShowEmp(true);}}><Plus size={16}/> Add Employee</button></div>
@@ -121,7 +294,7 @@ export default function EmployeesTab({
           <div style={{display:'flex',gap:8}}>
             {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{
               try {
-                const res = await previewPayrollPdf(activePR.id);
+                const res = await previewPayrollPdfLocalPdfLocal(activePR);
                 const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
                 window.open(url, '_blank');
               } catch { setErr('Failed to generate preview'); }
@@ -485,3 +658,4 @@ export default function EmployeesTab({
     </div>
   );
 }
+

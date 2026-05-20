@@ -509,44 +509,7 @@ function BusinessPage() {
       )}
 
       {tab === 'employees' && (
-        <EmployeesTab
-          emps={emps} empLoad={empLoad} showEmp={showEmp} setShowEmp={setShowEmp}
-          editEmp={editEmp} setEditEmp={setEditEmp} ef={ef} setEf={setEf}
-          loadEmps={loadEmps}
-          vacEmp={vacEmp} setVacEmp={setVacEmp} vacLog={vacLog} setVacLog={setVacLog}
-          vacNewDate={vacNewDate} setVacNewDate={setVacNewDate}
-          vacNewHours={vacNewHours} setVacNewHours={setVacNewHours}
-          vacNewNote={vacNewNote} setVacNewNote={setVacNewNote}
-          payrolls={payrolls} activePR={activePR} setActivePR={setActivePR}
-          showNewPR={showNewPR} setShowNewPR={setShowNewPR}
-          prDates={prDates} setPrDates={setPrDates}
-          otEntry={otEntry} setOtEntry={setOtEntry}
-          otList={otList} setOtList={setOtList}
-          otNewDate={otNewDate} setOtNewDate={setOtNewDate}
-          otNewHrs={otNewHrs} setOtNewHrs={setOtNewHrs}
-          showExtHrs={showExtHrs} setShowExtHrs={setShowExtHrs}
-          extHrsEmps={extHrsEmps} setExtHrsEmps={setExtHrsEmps}
-          vacEntryList={vacEntryList} setVacEntryList={setVacEntryList}
-          vacEntryEmp={vacEntry} setVacEntryEmp={setVacEntry}
-          vacEntryNewDate={vacEntryNewDate} setVacEntryNewDate={setVacEntryNewDate}
-          vacEntryNewHours={vacEntryNewHrs} setVacEntryNewHours={setVacEntryNewHrs}
-          gmailAccounts={gmailAccounts}
-          payrollSenderAccountId={payrollSenderAccountId}
-          setPayrollSenderAccountId={setPayrollSenderAccountId}
-          sendingPayroll={sendingPayroll}
-          payrollEmail={payrollEmail}
-          payrollEmailEdit={payrollEmailEdit} setPayrollEmailEdit={setPayrollEmailEdit}
-          handleSaveEmp={handleSaveEmp} handleDeleteEmp={handleDeleteEmp}
-          handleReactivateEmp={handleReactivateEmp} handleMoveEmp={handleMoveEmp}
-          handleSavePR={handleSavePR} handleDeletePR={handleDeletePR}
-          handleSubmitPR={handleSubmitPR} handleUpdateEntry={handleUpdateEntry}
-          handleSendPayroll={handleSendPayroll}
-          saveOt={saveOt} saveVacEntry={saveVacEntry}
-          printPayrollSummary={printPayrollSummary} printPayrollCsv={printPayrollCsv}
-          previewPayroll={previewPayroll}
-          fmt={fmt} formatPhone={formatPhone} daysUntil={daysUntil}
-          showMsg={showMsg} setErr={setErr}
-        />
+        <EmployeesTab showMsg={showMsg} setErr={setErr} />
       )}
 
       {tab === 'health' && (
