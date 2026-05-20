@@ -457,21 +457,21 @@ function BusinessPage() {
           {/* ── ACCOUNTS RECEIVABLE ── */}
           {coaTab === 'ar' && (
             <div>
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-            <button onClick={() => setShowTakePayment(true)}
-              style={{ padding: '10px 20px', background: '#2e7d32', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-              💵 Take Payment
-            </button>
-            <button onClick={() => setShowCreditMemo(true)}
-              style={{ padding: '10px 16px', background: '#1565c0', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-              📋 Credit Memo
-            </button>
-            <button onClick={() => setShowRefund(true)}
-              style={{ padding: '10px 16px', background: '#b71c1c', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-              ↩ Refund
-            </button>
-          </div>
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                <button onClick={() => setShowTakePayment(true)}
+                  style={{ padding: '10px 20px', background: '#2e7d32', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  💵 Take Payment
+                </button>
+                <button onClick={() => setShowCreditMemo(true)}
+                  style={{ padding: '10px 16px', background: '#1565c0', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  📋 Credit Memo
+                </button>
+                <button onClick={() => setShowRefund(true)}
+                  style={{ padding: '10px 16px', background: '#b71c1c', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  ↩ Refund
+                </button>
+              </div>
           {/* Summary cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
             {[
@@ -624,7 +624,7 @@ function BusinessPage() {
               </div>
             </div>
           </div>
-        </div>
+            </div>
           )}
 
           {/* ── ACCOUNTS PAYABLE ── */}
