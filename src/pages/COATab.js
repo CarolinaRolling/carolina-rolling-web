@@ -217,8 +217,6 @@ export default function COATab({
             </div>
           </div>
         </div>
-          </div>
-        </div>
       )}
 
       {/* ── ACCOUNTS PAYABLE ── */}
@@ -300,10 +298,10 @@ export default function COATab({
       </div>
       <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowBill(false)}>Cancel</button><button className="btn btn-primary" onClick={saveBill}>{editBill?'Update':'Add'}</button></div>
     </div></div>)}
-        </div>
-      )}
+      </div>
     </div>
-  )}
+  </div>
+  </div>
 
   );
 }

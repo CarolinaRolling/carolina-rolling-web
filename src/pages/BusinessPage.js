@@ -418,6 +418,44 @@ function BusinessPage() {
     finally { setExtHrsSaving(false); }
   };
 
+
+  // ── Function aliases & missing helpers for tab components ──
+  const [uploadingBill, setUploadingBill] = React.useState(false);
+  const handleBillFileUpload = async (e) => {
+    const file = e.target.files?.[0]; if (!file || !editBill) return;
+    setUploadingBill(true);
+    try { const r = await uploadBillFile(editBill.id, file); setEditBill(r.data.data); showMsg('File uploaded'); }
+    catch { setErr('Upload failed'); } finally { setUploadingBill(false); }
+  };
+  const handleSaveBill = saveBill;
+  const handlePayBill = async (bill) => { try { await payLiability(bill.id, { paidAt: new Date().toISOString() }); showMsg('Marked paid'); await loadLiabs(); } catch { setErr('Failed'); } };
+  const handleRejectBill = async (bill) => { try { await rejectBill(bill.id); showMsg('Rejected'); await loadLiabs(); } catch { setErr('Failed'); } };
+  const handleApproveBill = async (bill) => { try { await approveBill(bill.id); showMsg('Approved'); await loadLiabs(); } catch { setErr('Failed'); } };
+  const handleDeleteBill = async (bill) => { if (!window.confirm('Delete this bill?')) return; try { await deleteLiability(bill.id); showMsg('Deleted'); await loadLiabs(); } catch { setErr('Failed'); } };
+
+  const handleSaveEmp = saveEmp;
+  const handleDeleteEmp = async (emp) => { if (!window.confirm(`Deactivate ${emp.name}?`)) return; try { await deleteEmployee(emp.id); await loadEmps(); } catch {} };
+  const handleReactivateEmp = async (emp) => { try { await updateEmployee(emp.id, { isActive: true }); showMsg('Reactivated'); await loadEmps(); } catch { setErr('Failed'); } };
+  const handleMoveEmp = async (updatedEmps) => { setEmps(updatedEmps); try { await reorderEmployees(updatedEmps.map((x,i) => ({ id:x.id, sortOrder:i }))); } catch {} };
+  const handleSavePR = createPR;
+  const handleDeletePR = async (pr) => { if (!window.confirm('Delete this payroll?')) return; try { await deletePayroll(pr.id); showMsg('Deleted'); await loadPR(); if (activePR?.id === pr.id) setActivePR(null); } catch { setErr('Failed'); } };
+  const handleSubmitPR = async (pr) => { try { await submitPayroll(pr.id); showMsg('Submitted'); await loadPR(); } catch { setErr('Failed to submit'); } };
+  const handleUpdateEntry = updateEntry;
+  const handleSendPayroll = async (pr, accountId) => {
+    if (!accountId) { setErr('Select a Gmail account first'); return; }
+    setSendingPayroll(true);
+    try { await sendPayrollEmail(pr.id, { accountId }); showMsg('Payroll sent!'); }
+    catch (e) { setErr(e.response?.data?.error?.message || 'Failed to send'); }
+    finally { setSendingPayroll(false); }
+  };
+  const printPayrollSummary = printPayrollService;
+  const printPayrollCsv = printPayrollDetailed;
+  const previewPayroll = async (pr) => {
+    try { const r = await previewPayrollPdf(pr.id); const blob = new Blob([r.data], { type:'application/pdf' }); window.open(URL.createObjectURL(blob), '_blank'); }
+    catch { setErr('Preview failed'); }
+  };
+  const formatPhone = (p) => { if (!p) return ''; const d = p.replace(/\D/g,''); return d.length===10 ? `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}` : p; };
+
   const TABS = [
     {key:'invoicing',label:'Invoicing',icon:<FileText size={16}/>},
     {key:'coa',label:'Chart of Accounts',icon:<DollarSign size={16}/>},
