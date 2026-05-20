@@ -1209,5 +1209,6 @@ function BusinessPage() {
     )}
   </div>
   );
+}
 
 export default BusinessPage;
