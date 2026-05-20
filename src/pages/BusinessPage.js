@@ -427,7 +427,6 @@ function BusinessPage() {
   const [coaTab, setCoaTab] = useState('ar');
 
   return (
-  return (
     <div className="page-container">
       <div className="page-header" style={{marginBottom:0}}><h1 className="page-title">💼 Business Center</h1></div>
       {err && <div className="alert alert-error" style={{marginBottom:12}}>{err} <button onClick={()=>setErr(null)} style={{float:'right',background:'none',border:'none',cursor:'pointer'}}>✕</button></div>}
