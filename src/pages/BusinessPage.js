@@ -1207,7 +1207,7 @@ function BusinessPage() {
         onSaved={() => getRefunds().then(r => setRefunds(r.data.data||[])).catch(()=>{})}
       />
     )}
+  </div>
   );
-}
 
 export default BusinessPage;
