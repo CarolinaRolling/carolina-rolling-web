@@ -624,7 +624,7 @@ function BusinessPage() {
               </div>
             </div>
           </div>
-          </div>
+        </div>
           )}
 
           {/* ── ACCOUNTS PAYABLE ── */}
