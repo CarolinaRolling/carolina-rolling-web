@@ -504,7 +504,7 @@ function BusinessPage() {
           showRefund={showRefund} setShowRefund={setShowRefund}
           getCreditMemos={getCreditMemos} setCreditMemos={setCreditMemos}
           getRefunds={getRefunds} setRefunds={setRefunds}
-          fmt={fmt}
+          fmt={fmt} showMsg={showMsg} setErr={setErr}
         />
       )}
 

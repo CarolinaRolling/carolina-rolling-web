@@ -4,7 +4,7 @@ import {
   getEmployees, createEmployee, updateEmployee, deleteEmployee,
   reorderEmployees, getPayrolls, createPayroll, updatePayrollEntry,
   updatePayrollWeek, submitPayroll, deletePayroll, sendPayrollEmail,
-  previewPayrollPdfLocalPdf, updateVacationLog, getSettings, updateSettings,
+  previewPayrollPdf, updateVacationLog, getSettings, updateSettings,
   getEmailAccounts,
 } from '../services/api';
 
@@ -160,8 +160,8 @@ export default function EmployeesTab({ showMsg, setErr }) {
 
   const printPayrollDetailed = printPayrollService;
 
-  const previewPayrollPdfLocalPdfLocal = async (pr) => {
-    try{const r=await previewPayrollPdfLocalPdf(pr.id);const blob=new Blob([r.data],{type:'application/pdf'});window.open(URL.createObjectURL(blob),'_blank');}
+  const previewPayrollPdfLocal = async (pr) => {
+    try{const r=await previewPayrollPdf(pr.id);const blob=new Blob([r.data],{type:'application/pdf'});window.open(URL.createObjectURL(blob),'_blank');}
     catch{setErr('Preview failed');}
   };
 
@@ -195,7 +195,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
     try{await reorderEmployees(updatedEmps.map((x,i)=>({id:x.id,sortOrder:i})));}catch{}
   };
 
-    return (
+  return (
     <div>
     <div className="card" style={{marginBottom:16}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}><h3 style={{margin:0}}>👥 Employee Roster</h3><button className="btn btn-primary btn-sm" onClick={()=>{setEditEmp(null);setEf({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'ACH 100%',description:'',annualVacationDays:''});setShowEmp(true);}}><Plus size={16}/> Add Employee</button></div>
@@ -294,7 +294,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
           <div style={{display:'flex',gap:8}}>
             {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{
               try {
-                const res = await previewPayrollPdfLocalPdfLocal(activePR);
+                const res = await previewPayrollPdfLocal(activePR);
                 const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
                 window.open(url, '_blank');
               } catch { setErr('Failed to generate preview'); }
