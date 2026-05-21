@@ -163,6 +163,11 @@ export default function COATab({
                 </div>
               )}
             </div>
+    </div>
+    </div>
+    </div>
+    </div>
+    </div>
           );
         })}
       </div>
@@ -294,14 +299,14 @@ export default function COATab({
               try { showMsg('Uploading...'); await uploadBillFile(editBill.id, file); showMsg('File attached'); await loadLiabs(); } catch { setErr('Upload failed'); }
             }} />
           </div>
+            </div>
+            </div>
+            </div>
+            </div>
         )}
       </div>
       <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowBill(false)}>Cancel</button><button className="btn btn-primary" onClick={saveBill}>{editBill?'Update':'Add'}</button></div>
     </div></div>)}
-      </div>
-    </div>
-  </div>
-  </div>
 
   );
 }
