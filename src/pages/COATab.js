@@ -163,10 +163,10 @@ export default function COATab({
                 </div>
               )}
             </div>
-    </div>
-    </div>
-    </div>
-    </div>
+              </div>
+            </div>
+      </div>
+        </div>
     </div>
           );
         })}
