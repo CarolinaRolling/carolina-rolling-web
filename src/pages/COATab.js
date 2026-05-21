@@ -1,6 +1,7 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
-import { uploadBillFile, approveBill, rejectBill, payLiability, deleteLiability } from '../services/api';
+import { useState, useEffect } from 'react';
+import { uploadBillFile, approveBill, rejectBill, payLiability, deleteLiability, getGeneralLedger } from '../services/api';
 import TakePaymentModal from '../components/TakePaymentModal';
 import CreditMemoModal from '../components/CreditMemoModal';
 import RefundModal from '../components/RefundModal';
@@ -31,6 +32,22 @@ export default function COATab({
   fmt, showMsg, setErr,
 }) {
   const saveBill = handleSaveBill;
+  const [gl, setGl] = useState(null);
+  const [glLoading, setGlLoading] = useState(false);
+  const [glType, setGlType] = useState('all');
+  const [glStart, setGlStart] = useState('');
+  const [glEnd, setGlEnd] = useState('');
+
+  const loadGl = async () => {
+    setGlLoading(true);
+    try {
+      const r = await getGeneralLedger({ type: glType !== 'all' ? glType : undefined, startDate: glStart || undefined, endDate: glEnd || undefined });
+      setGl(r.data.data);
+    } catch(e) { if(setErr) setErr('Failed to load ledger'); }
+    finally { setGlLoading(false); }
+  };
+
+  useEffect(() => { if (coaTab === 'ledger') loadGl(); }, [coaTab]);
 
   return (
     <div>
@@ -39,6 +56,7 @@ export default function COATab({
         {[
           { key:'ar', label:'📥 Accounts Receivable', color:'#1565c0' },
           { key:'ap', label:'📤 Accounts Payable', color:'#6a1b9a' },
+          { key:'ledger', label:'📒 General Ledger', color:'#00695c' },
         ].map(t => (
           <button key={t.key} onClick={() => setCoaTab(t.key)}
             style={{ padding:'10px 20px', border:'none', cursor:'pointer', fontWeight:coaTab===t.key?700:500, fontSize:'0.9rem',
@@ -478,6 +496,135 @@ export default function COATab({
                   <button className="btn btn-primary" onClick={saveBill}>{editBill?'Update':'Add'}</button>
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+      {/* ── GENERAL LEDGER ── */}
+      {coaTab === 'ledger' && (
+        <div>
+          {/* Summary row */}
+          {gl && (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 }}>
+              {[
+                { label:'Total Revenue', value:gl.totalRevenue, color:'#2e7d32', bg:'#e8f5e9' },
+                { label:'Total Expenses', value:gl.totalExpenses, color:'#c62828', bg:'#ffebee' },
+                { label:'Refunds Out', value:gl.totalRefunds, color:'#e65100', bg:'#fff3e0' },
+                { label:'Net Income', value:gl.netIncome, color:gl.netIncome>=0?'#1565c0':'#c62828', bg:gl.netIncome>=0?'#e3f2fd':'#ffebee' },
+              ].map(c => (
+                <div key={c.label} style={{ background:c.bg, borderRadius:8, padding:'14px 18px', border:`1px solid ${c.color}33` }}>
+                  <div style={{ fontSize:'0.75rem', color:c.color, fontWeight:700, textTransform:'uppercase', letterSpacing:0.5 }}>{c.label}</div>
+                  <div style={{ fontSize:'1.4rem', fontWeight:800, color:c.color }}>
+                    {c.value < 0 ? '-' : ''}{fmt(Math.abs(c.value))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Filters */}
+          <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap', alignItems:'flex-end' }}>
+            <div>
+              <div style={{ fontSize:'0.75rem', color:'#888', marginBottom:4 }}>Type</div>
+              <div style={{ display:'flex', gap:4 }}>
+                {[
+                  { key:'all', label:'All' },
+                  { key:'payment', label:'💵 Payments' },
+                  { key:'expense', label:'💸 Expenses' },
+                  { key:'refund', label:'↩ Refunds' },
+                ].map(f => (
+                  <button key={f.key} onClick={() => { setGlType(f.key); }}
+                    style={{ padding:'5px 12px', border:'1px solid #ddd', borderRadius:16, cursor:'pointer', fontSize:'0.82rem',
+                      background:glType===f.key?'#00695c':'white', color:glType===f.key?'white':'#555', fontWeight:glType===f.key?700:400 }}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize:'0.75rem', color:'#888', marginBottom:4 }}>From</div>
+              <input type="date" className="form-input" value={glStart} onChange={e => setGlStart(e.target.value)} style={{ width:150 }} />
+            </div>
+            <div>
+              <div style={{ fontSize:'0.75rem', color:'#888', marginBottom:4 }}>To</div>
+              <input type="date" className="form-input" value={glEnd} onChange={e => setGlEnd(e.target.value)} style={{ width:150 }} />
+            </div>
+            <button onClick={loadGl} disabled={glLoading}
+              style={{ padding:'8px 18px', background:'#00695c', color:'white', border:'none', borderRadius:6, cursor:'pointer', fontWeight:600, alignSelf:'flex-end' }}>
+              {glLoading ? '⏳ Loading...' : '🔍 Search'}
+            </button>
+          </div>
+
+          {/* Ledger table */}
+          {glLoading ? (
+            <div style={{ textAlign:'center', padding:40, color:'#888' }}>Loading ledger...</div>
+          ) : !gl ? null : gl.entries.length === 0 ? (
+            <div style={{ textAlign:'center', padding:40, color:'#888' }}>No transactions found for the selected filters.</div>
+          ) : (
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'0.85rem' }}>
+                <thead>
+                  <tr style={{ background:'#00695c', color:'white' }}>
+                    <th style={{ padding:'10px 12px', textAlign:'left', width:100 }}>Date</th>
+                    <th style={{ padding:'10px 12px', textAlign:'left' }}>Description</th>
+                    <th style={{ padding:'10px 12px', textAlign:'left', width:120 }}>Category</th>
+                    <th style={{ padding:'10px 12px', textAlign:'right', width:110 }}>Debit (Out)</th>
+                    <th style={{ padding:'10px 12px', textAlign:'right', width:110 }}>Credit (In)</th>
+                    <th style={{ padding:'10px 12px', textAlign:'right', width:120 }}>Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gl.entries.map((e, idx) => {
+                    const isCredit = e.credit > 0;
+                    const isDebit = e.debit > 0;
+                    const catColors = {
+                      Revenue: '#2e7d32', payroll: '#880e4f', materials: '#1565c0',
+                      insurance: '#6a1b9a', supplies: '#e65100', utilities: '#f57f17',
+                      rent: '#2e7d32', equipment: '#37474f', shipping: '#0277bd',
+                      Refund: '#c62828', other: '#616161',
+                    };
+                    const catColor = catColors[e.category] || '#555';
+                    const typeIcons = { payment:'💵', expense:'💸', refund:'↩', payroll:'👥', shipping:'🚚' };
+                    const icon = typeIcons[e.source] || typeIcons[e.type] || '📋';
+                    return (
+                      <tr key={e.id + '-' + e.source + '-' + idx}
+                        style={{ borderBottom:'1px solid #f0f0f0', background:idx%2===0?'white':'#fafafa',
+                          borderLeft:`3px solid ${isCredit ? '#2e7d32' : '#e65100'}` }}>
+                        <td style={{ padding:'9px 12px', color:'#888', whiteSpace:'nowrap' }}>
+                          {e.date ? new Date(e.date.includes('T') ? e.date : e.date + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'}
+                        </td>
+                        <td style={{ padding:'9px 12px' }}>
+                          <div style={{ fontWeight:500, color:'#333' }}>{icon} {e.description}</div>
+                          {e.detail && <div style={{ fontSize:'0.75rem', color:'#888', marginTop:1 }}>{e.detail}</div>}
+                        </td>
+                        <td style={{ padding:'9px 12px' }}>
+                          <span style={{ fontSize:'0.75rem', padding:'2px 8px', borderRadius:10, background:catColor+'18', color:catColor, fontWeight:600 }}>
+                            {e.category}
+                          </span>
+                        </td>
+                        <td style={{ padding:'9px 12px', textAlign:'right', fontWeight:isDebit?700:400, color:isDebit?'#c62828':'#ccc' }}>
+                          {isDebit ? fmt(e.debit) : '—'}
+                        </td>
+                        <td style={{ padding:'9px 12px', textAlign:'right', fontWeight:isCredit?700:400, color:isCredit?'#2e7d32':'#ccc' }}>
+                          {isCredit ? fmt(e.credit) : '—'}
+                        </td>
+                        <td style={{ padding:'9px 12px', textAlign:'right', fontWeight:600,
+                          color:e.runningBalance>=0?'#1565c0':'#c62828' }}>
+                          {e.runningBalance !== undefined ? fmt(Math.abs(e.runningBalance)) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background:'#f5f5f5', fontWeight:700, borderTop:'2px solid #ddd' }}>
+                    <td colSpan={3} style={{ padding:'10px 12px', textAlign:'right', color:'#555' }}>Totals</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', color:'#c62828' }}>{fmt(gl.totalExpenses + gl.totalRefunds)}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', color:'#2e7d32' }}>{fmt(gl.totalRevenue)}</td>
+                    <td style={{ padding:'10px 12px', textAlign:'right', color:gl.netIncome>=0?'#1565c0':'#c62828' }}>{fmt(gl.netIncome)}</td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           )}
         </div>

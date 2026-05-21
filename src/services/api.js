@@ -416,6 +416,7 @@ export const exportCustomersIIF = () => api.post('/quickbooks/export-customers',
 
 // Payment Ledger
 export const getLedger = (params) => api.get('/business/ledger', { params });
+export const getGeneralLedger = (params) => api.get('/business/general-ledger', { params });
 export const getWOPayments = (woId) => api.get(`/business/ledger/${woId}/payments`);
 export const recordLedgerPayment = (woId, data) => api.post(`/business/ledger/${woId}/payments`, data);
 export const voidLedgerPayment = (paymentId) => api.delete(`/business/ledger/payments/${paymentId}`);
