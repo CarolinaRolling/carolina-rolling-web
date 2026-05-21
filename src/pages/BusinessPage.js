@@ -462,7 +462,7 @@ function BusinessPage() {
     {key:'employees',label:'Employees & Payroll',icon:<Users size={16}/>},
     {key:'health',label:'Company Health',icon:<BarChart3 size={16}/>}
   ];
-  const [coaTab, setCoaTab] = useState('ar');
+  const [coaTab, setCoaTab] = useState('ledger');
 
   return (
     <div className="page-container">

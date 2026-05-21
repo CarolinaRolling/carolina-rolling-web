@@ -54,9 +54,9 @@ export default function COATab({
       {/* Sub-tab bar */}
       <div style={{ display:'flex', gap:0, borderBottom:'2px solid #e0e0e0', marginBottom:20 }}>
         {[
+          { key:'ledger', label:'📒 General Ledger', color:'#00695c' },
           { key:'ar', label:'📥 Accounts Receivable', color:'#1565c0' },
           { key:'ap', label:'📤 Accounts Payable', color:'#6a1b9a' },
-          { key:'ledger', label:'📒 General Ledger', color:'#00695c' },
         ].map(t => (
           <button key={t.key} onClick={() => setCoaTab(t.key)}
             style={{ padding:'10px 20px', border:'none', cursor:'pointer', fontWeight:coaTab===t.key?700:500, fontSize:'0.9rem',
