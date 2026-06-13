@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap, CheckCircle, Clock } from 'lucide-react';
-import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage } from '../services/api';
+import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage, reclassifyComm } from '../services/api';
 
 const CATEGORIES = [
   { key: 'all',            label: 'All',            color: '#555',    bg: '#f5f5f5', icon: '✉️' },
@@ -60,6 +60,7 @@ export default function CommunicationCenterPage() {
   const [coverage, setCoverage] = useState([]);
   const [coverageAwaiting, setCoverageAwaiting] = useState(0);
   const [coverageScanning, setCoverageScanning] = useState(false);
+  const [reclassifying, setReclassifying] = useState(false);
   const [showCoverage, setShowCoverage] = useState(true);
   const logsRef = React.useRef(null);
   const userScrolledUp = React.useRef(false);
@@ -84,6 +85,16 @@ export default function CommunicationCenterPage() {
       setCoverage((prev) => prev.map((e) => e.id === id ? { ...e, commResponded: true, commHandledManually: true } : e));
       setCoverageAwaiting((n) => Math.max(n - 1, 0));
     } catch {}
+  };
+
+  const handleReclassify = async () => {
+    if (!window.confirm('Re-sort recent emails with the latest classifier? This runs in the background and takes a minute or two.')) return;
+    setReclassifying(true);
+    try {
+      await reclassifyComm();
+      setMessage('Re-sorting in the background — click Refresh in a minute to see updated categories.');
+    } catch { setError('Failed to start re-sort'); }
+    finally { setReclassifying(false); }
   };
 
   const loadEmails = useCallback(async () => {
@@ -191,6 +202,10 @@ export default function CommunicationCenterPage() {
           </label>
           <button onClick={loadEmails} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'white', color: '#555', border: '1px solid #ddd', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
             <RefreshCw size={13} /> Refresh
+          </button>
+          <button onClick={handleReclassify} disabled={reclassifying} title="Re-run categorization on recent emails"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'white', color: '#6a1b9a', border: '1px solid #ce93d8', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
+            <Tag size={13} /> {reclassifying ? 'Starting…' : 'Re-sort'}
           </button>
           {scanning ? (
             <button onClick={async () => { await cancelCommScan().catch(() => {}); setScanning(false); setMessage('Scan cancelled'); }}

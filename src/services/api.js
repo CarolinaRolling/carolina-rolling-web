@@ -593,6 +593,7 @@ export const deleteCalendarEvent = (id) => api.delete(`/business/calendar/${id}`
 // Communication Center
 export const getCommEmails = (params) => api.get('/com-center/emails', { params });
 export const getCommCoverage = (params) => api.get('/com-center/coverage', { params });
+export const reclassifyComm = () => api.post('/com-center/reclassify');
 export const markCommHandled = (id, handled = true) => api.patch(`/com-center/emails/${id}/handled`, { handled });
 export const scanCommCoverage = () => api.post('/com-center/coverage/scan');
 export const archiveCommEmail = (id) => api.patch(`/com-center/emails/${id}/archive`);
