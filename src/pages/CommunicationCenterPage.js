@@ -360,7 +360,7 @@ export default function CommunicationCenterPage() {
         </div>
       )}
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minWidth: 0 }}>
         {/* Sidebar */}
         <div style={{ width: 190, borderRight: '1px solid #e8e8e8', background: '#fafafa', flexShrink: 0, overflowY: 'auto' }}>
           {SIDEBAR_CATEGORIES.map(cat => (
@@ -384,7 +384,7 @@ export default function CommunicationCenterPage() {
         </div>
 
         {/* List */}
-        <div style={{ flex: 1, overflowY: 'auto', background: '#f4f6f8' }}>
+        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden', background: '#f4f6f8' }}>
           {/* Client Inquiry sub-tabs */}
           {activeCategory === 'client_inquiry' && (
             <div style={{ display: 'flex', gap: 8, padding: '12px 16px 0' }}>
@@ -421,7 +421,7 @@ export default function CommunicationCenterPage() {
                       <span style={{ fontSize: '0.72rem', color: '#bbb' }}>{email.fromEmail}</span>
                       <CategoryBadge category={email.commCategory} />
                     </div>
-                    <div style={{ fontWeight: 600, fontSize: '0.83rem', color: '#222', marginBottom: 2 }}>{email.subject}</div>
+                    <div style={{ fontWeight: 600, fontSize: '0.83rem', color: '#222', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.subject}</div>
                     {email.commSnippet && <div style={{ fontSize: '0.76rem', color: '#aaa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.commSnippet}</div>}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
