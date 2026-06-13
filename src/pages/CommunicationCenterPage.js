@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap, CheckCircle, Clock } from 'lucide-react';
-import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage, reclassifyComm } from '../services/api';
+import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap, CheckCircle, Clock, CheckCheck } from 'lucide-react';
+import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage, reclassifyComm, getCommGmailUrl, cleanupStaleComm } from '../services/api';
 
 const CATEGORIES = [
   { key: 'all',            label: 'All',            color: '#555',    bg: '#f5f5f5', icon: '✉️' },
@@ -61,6 +61,7 @@ export default function CommunicationCenterPage() {
   const [coverageAwaiting, setCoverageAwaiting] = useState(0);
   const [coverageScanning, setCoverageScanning] = useState(false);
   const [reclassifying, setReclassifying] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
   const [showCoverage, setShowCoverage] = useState(true);
   const logsRef = React.useRef(null);
   const userScrolledUp = React.useRef(false);
@@ -85,6 +86,32 @@ export default function CommunicationCenterPage() {
       setCoverage((prev) => prev.map((e) => e.id === id ? { ...e, commResponded: true, commHandledManually: true } : e));
       setCoverageAwaiting((n) => Math.max(n - 1, 0));
     } catch {}
+  };
+
+  const handleOpenEmail = async (e, id, fallback) => {
+    if (e) e.preventDefault();
+    // Open a blank tab synchronously (avoids popup blockers), then point it at the resolved URL
+    const win = window.open('about:blank', '_blank');
+    try {
+      const res = await getCommGmailUrl(id);
+      const url = (res.data && res.data.data && res.data.data.url) || fallback;
+      if (win) win.location.href = url; else window.open(url, '_blank');
+    } catch {
+      if (win) win.location.href = fallback; else window.open(fallback, '_blank');
+    }
+  };
+
+  const handleCleanupStale = async () => {
+    if (!window.confirm('Mark every conversation with no activity in the last 3 weeks as responded? This clears out old, closed-out threads.')) return;
+    setCleaning(true);
+    try {
+      const res = await cleanupStaleComm(21);
+      const n = (res.data && res.data.data && res.data.data.updated) || 0;
+      setMessage(`Cleaned up ${n} stale conversation${n === 1 ? '' : 's'}.`);
+      await loadEmails();
+      await loadCoverage();
+    } catch { setError('Cleanup failed'); }
+    finally { setCleaning(false); }
   };
 
   const handleReclassify = async () => {
@@ -207,6 +234,10 @@ export default function CommunicationCenterPage() {
             style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'white', color: '#6a1b9a', border: '1px solid #ce93d8', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
             <Tag size={13} /> {reclassifying ? 'Starting…' : 'Re-sort'}
           </button>
+          <button onClick={handleCleanupStale} disabled={cleaning} title="Mark conversations idle for 3+ weeks as responded"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'white', color: '#00838f', border: '1px solid #80deea', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
+            <CheckCheck size={13} /> {cleaning ? 'Cleaning…' : 'Clean up'}
+          </button>
           {scanning ? (
             <button onClick={async () => { await cancelCommScan().catch(() => {}); setScanning(false); setMessage('Scan cancelled'); }}
               style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', background: '#c62828', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 700 }}>
@@ -284,7 +315,7 @@ export default function CommunicationCenterPage() {
                     </div>
                   </div>
                   {e.gmailLink && (
-                    <a href={e.gmailLink} target="_blank" rel="noopener noreferrer"
+                    <a href={e.gmailLink} onClick={(ev) => handleOpenEmail(ev, e.id, e.gmailLink)} target="_blank" rel="noopener noreferrer"
                       style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#1565c0', fontSize: '0.75rem', textDecoration: 'none', flexShrink: 0 }}>
                       <ExternalLink size={13} /> Open
                     </a>
@@ -427,7 +458,7 @@ export default function CommunicationCenterPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                     <span style={{ fontSize: '0.72rem', color: '#ccc', minWidth: 52, textAlign: 'right' }}>{formatDate(email.receivedAt)}</span>
                     {email.gmailLink && (
-                      <a href={email.gmailLink} target="_blank" rel="noopener noreferrer"
+                      <a href={email.gmailLink} onClick={(ev) => handleOpenEmail(ev, email.id, email.gmailLink)} target="_blank" rel="noopener noreferrer"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '4px 10px', background: '#f0f4ff', border: '1px solid #c5cae9', borderRadius: 5, fontSize: '0.74rem', color: '#3949ab', textDecoration: 'none', fontWeight: 600 }}>
                         <ExternalLink size={11} /> Open
                       </a>
