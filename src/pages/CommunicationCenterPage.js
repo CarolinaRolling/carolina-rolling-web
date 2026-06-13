@@ -5,13 +5,15 @@ import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, 
 const CATEGORIES = [
   { key: 'all',            label: 'All',            color: '#555',    bg: '#f5f5f5', icon: '✉️' },
   { key: 'client_inquiry', label: 'Client Inquiry', color: '#1565c0', bg: '#e3f2fd', icon: '👤' },
-  { key: 'vendor',         label: 'Vendor',         color: '#E65100', bg: '#fff3e0', icon: '🏭' },
+  { key: 'vendor',         label: 'Vendors',        color: '#E65100', bg: '#fff3e0', icon: '🏭' },
   { key: 'bill',           label: 'Bills',          color: '#6a1b9a', bg: '#f3e5f5', icon: '💵' },
   { key: 'general',        label: 'General',        color: '#2e7d32', bg: '#e8f5e9', icon: '💬' },
   { key: 'marketing',      label: 'Marketing',      color: '#f57c00', bg: '#fff8e1', icon: '📣' },
   { key: 'spam',           label: 'Spam',           color: '#c62828', bg: '#ffebee', icon: '🚫' },
 ];
 const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));
+// Only these three appear as tabs in the sidebar
+const SIDEBAR_CATEGORIES = CATEGORIES.filter(c => ['client_inquiry', 'vendor', 'bill'].includes(c.key));
 
 function CategoryBadge({ category }) {
   const cat = CAT_MAP[category] || CAT_MAP['general'];
@@ -32,6 +34,15 @@ function formatDate(dt) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
 }
 
+function subTabStyle(active, color) {
+  return {
+    padding: '5px 14px', borderRadius: 99, cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700,
+    border: `1px solid ${active ? color : '#ddd'}`,
+    background: active ? color : 'white',
+    color: active ? 'white' : '#666',
+  };
+}
+
 export default function CommunicationCenterPage() {
   const [emails, setEmails] = useState([]);
   const [total, setTotal] = useState(0);
@@ -41,7 +52,8 @@ export default function CommunicationCenterPage() {
   const [showLogs, setShowLogs] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeCategory, setActiveCategory] = useState('all');
+  const [activeCategory, setActiveCategory] = useState('client_inquiry');
+  const [clientSubTab, setClientSubTab] = useState('all'); // 'all' | 'respond_to'
   const [showArchived, setShowArchived] = useState(false);
   const [message, setMessage] = useState(null);
   const [categoryMenuId, setCategoryMenuId] = useState(null);
@@ -149,15 +161,31 @@ export default function CommunicationCenterPage() {
 
   const counts = {}; emails.forEach(e => { counts[e.commCategory] = (counts[e.commCategory] || 0) + 1; }); counts['all'] = emails.length;
 
+  // Show only the most recent email per conversation (thread)
+  const dedupedEmails = (() => {
+    const byThread = new Map();
+    for (const e of emails) {
+      const key = e.gmailThreadId || e.id;
+      const prev = byThread.get(key);
+      if (!prev || new Date(e.receivedAt) > new Date(prev.receivedAt)) byThread.set(key, e);
+    }
+    return [...byThread.values()];
+  })();
+  const isResponded = (e) => e.commResponded || e.commHandledManually;
+  const respondToCount = dedupedEmails.filter(e => !isResponded(e)).length;
+  const displayEmails = (activeCategory === 'client_inquiry' && clientSubTab === 'respond_to')
+    ? dedupedEmails.filter(e => !isResponded(e))
+    : dedupedEmails;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden', width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
       {/* Header */}
-      <div style={{ padding: '14px 24px', borderBottom: '1px solid #e0e0e0', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+      <div style={{ padding: '14px 24px', borderBottom: '1px solid #e0e0e0', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 700 }}>💬 Communication Center</h1>
           <p style={{ margin: '2px 0 0', color: '#888', fontSize: '0.78rem' }}>All incoming emails — scanned every 30 min · {total} total</p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', cursor: 'pointer', color: '#666' }}>
             <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> Show archived
           </label>
@@ -320,8 +348,8 @@ export default function CommunicationCenterPage() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Sidebar */}
         <div style={{ width: 190, borderRight: '1px solid #e8e8e8', background: '#fafafa', flexShrink: 0, overflowY: 'auto' }}>
-          {CATEGORIES.map(cat => (
-            <button key={cat.key} onClick={() => setActiveCategory(cat.key)} style={{
+          {SIDEBAR_CATEGORIES.map(cat => (
+            <button key={cat.key} onClick={() => { setActiveCategory(cat.key); if (cat.key !== 'client_inquiry') setClientSubTab('all'); }} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
               padding: '10px 16px', border: 'none', cursor: 'pointer', textAlign: 'left',
               borderLeft: activeCategory === cat.key ? '3px solid ' + cat.color : '3px solid transparent',
@@ -342,18 +370,36 @@ export default function CommunicationCenterPage() {
 
         {/* List */}
         <div style={{ flex: 1, overflowY: 'auto', background: '#f4f6f8' }}>
+          {/* Client Inquiry sub-tabs */}
+          {activeCategory === 'client_inquiry' && (
+            <div style={{ display: 'flex', gap: 8, padding: '12px 16px 0' }}>
+              <button onClick={() => setClientSubTab('all')} style={subTabStyle(clientSubTab === 'all', '#1565c0')}>All</button>
+              <button onClick={() => setClientSubTab('respond_to')} style={subTabStyle(clientSubTab === 'respond_to', '#e65100')}>
+                Respond To{respondToCount > 0 ? ` (${respondToCount})` : ''}
+              </button>
+            </div>
+          )}
           {loading ? (
             <div style={{ textAlign: 'center', padding: 80, color: '#bbb' }}>Loading emails...</div>
-          ) : emails.length === 0 ? (
+          ) : displayEmails.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 80, color: '#bbb' }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>{showArchived ? 'No archived emails' : 'No emails in this category'}</div>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>{activeCategory === 'client_inquiry' && clientSubTab === 'respond_to' ? '✅' : '💬'}</div>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{
+                showArchived ? 'No archived emails'
+                : (activeCategory === 'client_inquiry' && clientSubTab === 'respond_to') ? 'All caught up — every inquiry answered'
+                : 'No emails in this category'
+              }</div>
               <div style={{ fontSize: '0.8rem' }}>Runs every 30 min · click Scan Now to check immediately</div>
             </div>
           ) : (
             <div style={{ background: 'white', margin: 16, borderRadius: 10, border: '1px solid #e4e4e4', overflow: 'hidden' }}>
-              {emails.map((email, idx) => (
-                <div key={email.id} style={{ padding: '12px 16px', borderBottom: idx < emails.length - 1 ? '1px solid #f2f2f2' : 'none', display: 'flex', gap: 12, alignItems: 'center', background: email.commArchived ? '#fafafa' : 'white', opacity: email.commArchived ? 0.6 : 1 }}>
+              {displayEmails.map((email, idx) => (
+                <div key={email.id} style={{ padding: '12px 16px', borderBottom: idx < displayEmails.length - 1 ? '1px solid #f2f2f2' : 'none', display: 'flex', gap: 12, alignItems: 'center', background: email.commArchived ? '#fafafa' : 'white', opacity: email.commArchived ? 0.6 : 1 }}>
+                  {email.commCategory === 'client_inquiry' && (
+                    <div title={isResponded(email) ? 'Responded' : 'Awaiting your reply'} style={{ flexShrink: 0, display: 'flex' }}>
+                      <CheckCircle size={30} color={isResponded(email) ? '#2e7d32' : '#d4d4d4'} />
+                    </div>
+                  )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 700, fontSize: '0.87rem', color: '#111' }}>{email.fromName || email.fromEmail}</span>
