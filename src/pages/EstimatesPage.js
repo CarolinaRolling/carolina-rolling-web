@@ -530,7 +530,7 @@ function EstimatesPage() {
       {/* New Estimate Modal */}
       {showNewModal && (
         <div className="modal-overlay" onClick={() => { setShowNewModal(false); setSelectedNewClient(null); setShowAddContact(false); setNewContact({ name: '', phone: '', email: '', extension: '', role: '' }); }}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 550 }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1100 }}>
             <div className="modal-header">
               <h3 className="modal-title">New Estimate</h3>
               <button className="modal-close" onClick={() => setShowNewModal(false)}>&times;</button>

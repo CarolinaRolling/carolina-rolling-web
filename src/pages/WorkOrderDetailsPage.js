@@ -21,6 +21,7 @@ import FabServiceForm from '../components/FabServiceForm';
 import ShopRateForm from '../components/ShopRateForm';
 import HeatNumberInput from '../components/HeatNumberInput';
 import ShipmentChargesSection from '../components/ShipmentChargesSection';
+import InspectionPanel from '../components/InspectionPanel';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart, reorderWorkOrderParts,
@@ -4658,6 +4659,16 @@ function WorkOrderDetailsPage() {
           </div>
         </div>
       )}
+
+      {/* Inspection panels — show for any inspection service part */}
+      {woTab === 'parts' && (order.parts||[]).filter(p => p.partType==='inspection').map(inspPart => {
+        // Find linked part (via formData.linkedPartId or first non-service part)
+        const linkedPartId = inspPart.formData?.linkedPartId ||
+          (order.parts||[]).find(p => !['fab_service','shop_rate','rush_service','inspection'].includes(p.partType))?.id;
+        return linkedPartId ? (
+          <InspectionPanel key={inspPart.id} order={order} inspectionPart={inspPart} linkedPartId={linkedPartId} />
+        ) : null;
+      })}
 
       {/* ===== OUTBOUND SHIPPING TAB ===== */}
       {woTab === 'shipping' && (
