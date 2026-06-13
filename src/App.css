@@ -87,9 +87,12 @@ body {
 
 .main-content {
   flex: 1;
+  min-width: 0;
   margin-left: 240px;
   padding: 24px;
   min-height: 100vh;
+  max-width: calc(100vw - 240px);
+  box-sizing: border-box;
 }
 
 /* Cards */
@@ -331,6 +334,7 @@ body {
   .main-content {
     margin-left: 60px;
     padding: 16px;
+    max-width: calc(100vw - 60px);
   }
   
   .grid-2, .grid-3, .grid-4 {
