@@ -210,6 +210,13 @@ export default function CommunicationCenterPage() {
     return [...byThread.values()];
   })();
   const isResponded = (e) => e.commResponded || e.commHandledManually;
+
+  // Quote Coverage order: awaiting replies first, oldest waiting at the very top
+  const sortedCoverage = [...coverage].sort((a, b) => {
+    const aAns = isResponded(a), bAns = isResponded(b);
+    if (aAns !== bAns) return aAns ? 1 : -1;
+    return new Date(a.commLastMessageAt || a.receivedAt) - new Date(b.commLastMessageAt || b.receivedAt);
+  });
   const respondToCount = dedupedEmails.filter(e => !isResponded(e)).length;
   const displayEmails = (activeCategory === 'client_inquiry' && clientSubTab === 'respond_to')
     ? dedupedEmails.filter(e => !isResponded(e))
@@ -296,7 +303,7 @@ export default function CommunicationCenterPage() {
           <div style={{ maxHeight: '32vh', overflowY: 'auto', padding: '0 24px 12px' }}>
             {coverage.length === 0 ? (
               <div style={{ padding: '8px 0 14px', color: '#999', fontSize: '0.85rem' }}>No quote requests in the last 45 days.</div>
-            ) : coverage.map((e) => {
+            ) : sortedCoverage.map((e) => {
               const answered = e.commResponded || e.commHandledManually;
               return (
                 <div key={e.id} style={{
