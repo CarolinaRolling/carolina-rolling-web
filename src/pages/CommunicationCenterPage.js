@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap } from 'lucide-react';
-import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan } from '../services/api';
+import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap, CheckCircle, Clock } from 'lucide-react';
+import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage } from '../services/api';
 
 const CATEGORIES = [
   { key: 'all',            label: 'All',            color: '#555',    bg: '#f5f5f5', icon: '✉️' },
@@ -45,8 +45,34 @@ export default function CommunicationCenterPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [message, setMessage] = useState(null);
   const [categoryMenuId, setCategoryMenuId] = useState(null);
+  const [coverage, setCoverage] = useState([]);
+  const [coverageAwaiting, setCoverageAwaiting] = useState(0);
+  const [coverageScanning, setCoverageScanning] = useState(false);
+  const [showCoverage, setShowCoverage] = useState(true);
   const logsRef = React.useRef(null);
   const userScrolledUp = React.useRef(false);
+
+  const loadCoverage = useCallback(async () => {
+    try {
+      const res = await getCommCoverage({ quotesOnly: true });
+      setCoverage(res.data.data || []);
+      setCoverageAwaiting(res.data.awaiting || 0);
+    } catch { /* quiet */ }
+  }, []);
+
+  const handleRescanCoverage = async () => {
+    setCoverageScanning(true);
+    try { await scanCommCoverage(); await loadCoverage(); }
+    catch {} finally { setCoverageScanning(false); }
+  };
+
+  const handleMarkHandled = async (id) => {
+    try {
+      await markCommHandled(id, true);
+      setCoverage((prev) => prev.map((e) => e.id === id ? { ...e, commResponded: true, commHandledManually: true } : e));
+      setCoverageAwaiting((n) => Math.max(n - 1, 0));
+    } catch {}
+  };
 
   const loadEmails = useCallback(async () => {
     setLoading(true); setError(null);
@@ -59,6 +85,7 @@ export default function CommunicationCenterPage() {
   }, [activeCategory, showArchived]);
 
   useEffect(() => { loadEmails(); }, [loadEmails]);
+  useEffect(() => { loadCoverage(); }, [loadCoverage]);
   useEffect(() => { if (message) { const t = setTimeout(() => setMessage(null), 4000); return () => clearTimeout(t); } }, [message]);
 
   const fetchLogs = async () => {
@@ -172,6 +199,66 @@ export default function CommunicationCenterPage() {
 
       {message && <div style={{ padding: '7px 24px', background: '#e8f5e9', borderBottom: '1px solid #a5d6a7', color: '#2e7d32', fontSize: '0.82rem', fontWeight: 600, flexShrink: 0 }}>{message}</div>}
       {error && <div style={{ padding: '7px 24px', background: '#ffebee', borderBottom: '1px solid #ef9a9a', color: '#c62828', fontSize: '0.82rem', flexShrink: 0 }}>{error}</div>}
+
+      {/* Quote Coverage — did every quote request get answered? */}
+      <div style={{ flexShrink: 0, borderBottom: '1px solid #e0e0e0', background: '#fff' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 24px', cursor: 'pointer' }}
+          onClick={() => setShowCoverage(v => !v)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700, fontSize: '0.95rem' }}>
+            📋 Quote Coverage
+            {coverageAwaiting > 0
+              ? <span style={{ background: '#fff3e0', color: '#e65100', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>{coverageAwaiting} awaiting reply</span>
+              : <span style={{ background: '#e8f5e9', color: '#2e7d32', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>All answered</span>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={(e) => { e.stopPropagation(); handleRescanCoverage(); }} disabled={coverageScanning}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid #1976d2', color: '#1976d2', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.78rem' }}>
+              <RefreshCw size={13} className={coverageScanning ? 'spin' : ''} /> {coverageScanning ? 'Checking…' : 'Re-check'}
+            </button>
+            <span style={{ color: '#999', fontSize: '0.8rem' }}>{showCoverage ? '▾' : '▸'}</span>
+          </div>
+        </div>
+        {showCoverage && (
+          <div style={{ maxHeight: '32vh', overflowY: 'auto', padding: '0 24px 12px' }}>
+            {coverage.length === 0 ? (
+              <div style={{ padding: '8px 0 14px', color: '#999', fontSize: '0.85rem' }}>No quote requests in the last 45 days.</div>
+            ) : coverage.map((e) => {
+              const answered = e.commResponded || e.commHandledManually;
+              return (
+                <div key={e.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', marginBottom: 6,
+                  borderRadius: 8, background: answered ? '#f1f8f1' : '#fff8ec',
+                  border: `1px solid ${answered ? '#c8e6c9' : '#ffe0b2'}`,
+                }}>
+                  {answered
+                    ? <CheckCircle size={18} style={{ color: '#2e7d32', flexShrink: 0 }} />
+                    : <Clock size={18} style={{ color: '#e65100', flexShrink: 0 }} />}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.86rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.subject || '(no subject)'}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#777' }}>
+                      {e.fromName || e.fromEmail} · {formatDate(e.commLastMessageAt || e.receivedAt)}
+                      {!answered && <span style={{ color: '#e65100', fontWeight: 600 }}> · awaiting your reply</span>}
+                    </div>
+                  </div>
+                  {e.gmailLink && (
+                    <a href={e.gmailLink} target="_blank" rel="noopener noreferrer"
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#1565c0', fontSize: '0.75rem', textDecoration: 'none', flexShrink: 0 }}>
+                      <ExternalLink size={13} /> Open
+                    </a>
+                  )}
+                  {!answered && (
+                    <button onClick={() => handleMarkHandled(e.id)}
+                      style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 600, flexShrink: 0 }}>
+                      Mark handled
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
 
       {/* Scan Logs Panel */}
       {showLogs && (
