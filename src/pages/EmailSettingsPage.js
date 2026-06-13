@@ -278,7 +278,7 @@ function EmailSettingsPage() {
             }}>
               <div style={{ borderBottom: '1px solid #ddd', paddingBottom: 12, marginBottom: 12 }}>
                 <strong>To:</strong> {settings.recipient}<br/>
-                <strong>Subject:</strong> Carolina Rolling Daily Update - {new Date().toLocaleDateString()}
+                <strong>Subject:</strong> Carolina Rolling Daily Update - {new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
               </div>
               <div>
                 {settings.includeEstimates && <div>💰 ESTIMATES - Recent activity</div>}

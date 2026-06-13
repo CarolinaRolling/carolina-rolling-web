@@ -148,13 +148,13 @@ export default function EmployeesTab({ showMsg, setErr }) {
 
   const printPayrollService = (pr) => {
     const w=window.open('','_blank');if(!w)return;
-    const sd=pr.weekStart?new Date(pr.weekStart+'T12:00:00').toLocaleDateString():'';
-    const ed=pr.weekEnd?new Date(pr.weekEnd+'T12:00:00').toLocaleDateString():'';
+    const sd=pr.weekStart?new Date(pr.weekStart+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }):'';
+    const ed=pr.weekEnd?new Date(pr.weekEnd+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }):'';
     const css='.body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto}.hdr{display:flex;align-items:center;gap:12px;border-bottom:2px solid #1976d2;padding-bottom:12px;margin-bottom:16px}.co{font-size:1.1rem;font-weight:700}.dt{font-size:0.9rem;color:#555}.dr{text-align:center;font-size:1.1rem;font-weight:600;margin-bottom:20px;color:#333}.emp{padding:12px;margin-bottom:12px;border:1px solid #e0e0e0;border-radius:6px}.en{font-size:1rem;font-weight:700;margin-bottom:6px}.r{display:flex;justify-content:space-between;padding:2px 0;font-size:0.9rem}.l{color:#666}.v{font-weight:600}.gp{display:flex;justify-content:space-between;padding:8px 0 0;border-top:1px solid #eee;font-size:1rem;font-weight:700;color:#1976d2}.tot{margin-top:16px;padding:12px;background:#e3f2fd;border-radius:6px;font-size:1.1rem;font-weight:700;text-align:center;color:#1565c0}.ft{margin-top:20px;padding-top:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:0.75rem;color:#888}';
     const entries=pr.entries||[];
     const cards=entries.map(en=>{const reg=parseFloat(en.regularHours)||0;const ot=parseFloat(en.overtimeHours)||0;const vac=parseFloat(en.vacationHours)||0;const rate=parseFloat(en.hourlyRate)||0;const bonus=parseFloat(en.bonusAmount)||0;const regPay=reg*rate;const otPay=ot*rate*1.5;const vacPay=vac*rate;const gross=parseFloat(en.grossPay)||0;const annual=parseFloat(en.annualVacationDays)||10;const totalVacH=(entries.filter(e=>e.employeeId===en.employeeId).reduce((s,e)=>s+(parseFloat(e.vacationHours)||0),0));const vacRem=(totalVacH/8);let h=`<div class="emp"><div class="en">${en.employeeName||'Unknown'}</div>`;if(reg>0)h+=`<div class="r"><span class="l">Regular (${reg}h @ ${fmt(rate)}/h)</span><span class="v">${fmt(regPay)}</span></div>`;if(ot>0)h+=`<div class="r"><span class="l">Overtime (${ot}h @ ${fmt(rate*1.5)}/h)</span><span class="v">${fmt(otPay)}</span></div>`;if(vac>0)h+=`<div class="r"><span class="l">Vacation (${vac}h @ ${fmt(rate)}/h)</span><span class="v">${fmt(vacPay)}</span></div>`;if(annual>0)h+=`<div class="bal">Vacation balance: ${vacRem.toFixed(1)} / ${parseFloat(annual).toFixed(1)} days</div>`;if(bonus>0)h+=`<div class="r"><span class="l">Bonus${en.bonusNotes?' — '+en.bonusNotes:''}</span><span class="v">${fmt(bonus)}</span></div>`;h+=`<div class="gp"><span>Gross Pay</span><span>${fmt(gross)}</span></div></div>`;return h;}).join('');
     const now=new Date();
-    w.document.write(`<html><head><title>Payroll</title><style>${css}</style></head><body><div class="hdr"><img src="/logo.png" onerror="this.style.display='none'"/><div><div class="co">Carolina Rolling Co., Inc.</div><div class="dt">Payroll Summary</div></div></div><div class="dr">${sd} — ${ed}</div>${cards}<div class="tot">Total Gross Payroll: ${fmt(pr.totalGross)}</div><div class="ft"><span>Generated: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}</span><span>CONFIDENTIAL</span></div></body></html>`);
+    w.document.write(`<html><head><title>Payroll</title><style>${css}</style></head><body><div class="hdr"><img src="/logo.png" onerror="this.style.display='none'"/><div><div class="co">Carolina Rolling Co., Inc.</div><div class="dt">Payroll Summary</div></div></div><div class="dr">${sd} — ${ed}</div>${cards}<div class="tot">Total Gross Payroll: ${fmt(pr.totalGross)}</div><div class="ft"><span>Generated: ${now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} ${now.toLocaleTimeString()}</span><span>CONFIDENTIAL</span></div></body></html>`);
     w.document.close();w.print();
   };
 
@@ -219,7 +219,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
             {e.controlNumber&&<div style={{color:'#1565c0'}}>Control#: {e.controlNumber}</div>}
             {e.description&&<div style={{color:'#666',fontSize:'0.8rem'}}>{e.description}</div>}
             {e.deductions&&<div style={{color:'#888',fontSize:'0.8rem'}}>{e.deductions}</div>}
-            {e.startDate&&<div>Started: {new Date(e.startDate+'T12:00:00').toLocaleDateString()}</div>}
+            {e.startDate&&<div>Started: {new Date(e.startDate+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</div>}
             {parseFloat(e.annualVacationDays)>0&&<div style={{marginTop:4}}>
               <div style={{display:'flex',alignItems:'center',gap:6}}>
                 <span style={{padding:'3px 8px',background:'#e3f2fd',borderRadius:4,fontSize:'0.8rem'}}>🏖️ {(parseFloat(e.annualVacationDays)-(parseFloat(e.vacationDaysUsed)||0)).toFixed(1)} / {parseFloat(e.annualVacationDays).toFixed(1)} days left</span>
@@ -287,7 +287,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
                 <input type="date" className="form-input" defaultValue={activePR.weekEnd} onBlur={async(e)=>{const s=e.target.value;if(s&&s!==activePR.weekEnd){try{const r=await updatePayrollWeek(activePR.id,{weekEnd:s});setActivePR(r.data.data);await loadPR();}catch{}}}} style={{width:150,padding:'4px 8px',fontWeight:600}}/>
               </>
             ):(
-              <span style={{fontWeight:700,fontSize:'1rem'}}>{new Date(activePR.weekStart+'T12:00:00').toLocaleDateString()} — {new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString()}</span>
+              <span style={{fontWeight:700,fontSize:'1rem'}}>{new Date(activePR.weekStart+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} — {new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
             )}
             <span style={{padding:'2px 8px',borderRadius:4,fontSize:'0.8rem',fontWeight:600,background:activePR.status==='submitted'?'#c8e6c9':'#fff3e0',color:activePR.status==='submitted'?'#2e7d32':'#E65100'}}>{activePR.status==='submitted'?'✓ Submitted':'Draft'}</span>
           </div>
@@ -346,7 +346,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
       </div>)}
       {payrolls.length>0&&<div><h4 style={{marginBottom:8,color:'#555'}}>Payroll History</h4><div style={{display:'flex',flexDirection:'column',gap:6}}>{payrolls.map(p=>(
         <div key={p.id} onClick={()=>setActivePR(p)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 16px',borderRadius:8,border:'1px solid #e0e0e0',cursor:'pointer',background:activePR?.id===p.id?'#e3f2fd':'white'}}>
-          <div><span style={{fontWeight:600}}>{new Date(p.weekStart+'T12:00:00').toLocaleDateString()} — {new Date(p.weekEnd+'T12:00:00').toLocaleDateString()}</span><span style={{marginLeft:8,padding:'1px 8px',borderRadius:4,fontSize:'0.75rem',fontWeight:600,background:p.status==='submitted'?'#c8e6c9':'#fff3e0',color:p.status==='submitted'?'#2e7d32':'#E65100'}}>{p.status}</span></div>
+          <div><span style={{fontWeight:600}}>{new Date(p.weekStart+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} — {new Date(p.weekEnd+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span><span style={{marginLeft:8,padding:'1px 8px',borderRadius:4,fontSize:'0.75rem',fontWeight:600,background:p.status==='submitted'?'#c8e6c9':'#fff3e0',color:p.status==='submitted'?'#2e7d32':'#E65100'}}>{p.status}</span></div>
           <div style={{fontWeight:700}}>{fmt(p.totalGross)}</div>
         </div>))}</div></div>}
     </div>
@@ -393,7 +393,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
         <button className="modal-close" onClick={()=>setOtEntry(null)}>&times;</button>
       </div>
       <div style={{padding:'4px 20px 0',fontSize:'0.85rem',color:'#666'}}>
-        Pay period: {activePR?new Date(activePR.weekStart+'T12:00:00').toLocaleDateString()+' — '+new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString():''}
+        Pay period: {activePR?new Date(activePR.weekStart+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })+' — '+new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }):''}
         &nbsp;|&nbsp; Rate: ${parseFloat(otEntry.hourlyRate).toFixed(2)} × 1.5 = <strong>${(parseFloat(otEntry.hourlyRate)*1.5).toFixed(2)}/hr OT</strong>
       </div>
       <div style={{padding:20}}>
@@ -452,7 +452,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
         <button className="modal-close" onClick={()=>setShowExtHrs(false)}>&times;</button>
       </div>
       <div style={{padding:'4px 20px 4px',fontSize:'0.85rem',color:'#666'}}>
-        Pay period: {new Date(activePR.weekStart+'T12:00:00').toLocaleDateString()} — {new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString()}
+        Pay period: {new Date(activePR.weekStart+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} — {new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
       </div>
       <div style={{padding:'16px 20px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
         {/* Employee checkboxes */}
@@ -520,7 +520,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
         <button className="modal-close" onClick={()=>setVacEntry(null)}>&times;</button>
       </div>
       <div style={{padding:'4px 20px 0',fontSize:'0.85rem',color:'#666'}}>
-        Pay period: {activePR?new Date(activePR.weekStart+'T12:00:00').toLocaleDateString()+' — '+new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString():''}
+        Pay period: {activePR?new Date(activePR.weekStart+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })+' — '+new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }):''}
         &nbsp;|&nbsp; Rate: ${parseFloat(vacEntry.hourlyRate).toFixed(2)}/hr
       </div>
       <div style={{padding:20}}>

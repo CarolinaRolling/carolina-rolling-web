@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, DollarSign, Database, Hash, ShoppingCart, FileCode, Truck, Users, Wrench, FileText, Briefcase, MessageSquare } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
+import GingerAssistant from './GingerAssistant';
 import TodoBar from './TodoBar';
 import { getScrapPending, confirmScrapPickup, getPendingOrders, getEmailNotifications, dismissEmailNotification } from '../services/api';
 
@@ -131,6 +132,7 @@ function Layout({ children }) {
       </aside>
       <main className="main-content">
         <WalterJoke />
+        <GingerAssistant />
         <TodoBar />
         {scrapPending.length > 0 && (
           <div style={{ margin: '0 0 12px 0' }}>

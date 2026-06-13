@@ -669,7 +669,7 @@ function InventoryPage() {
                     </span>
                   )}
                   <div style={{ fontSize: '0.8rem', color: '#999', marginTop: 2 }}>
-                    Received {new Date(s.receivedAt || s.createdAt).toLocaleDateString()}
+                    Received {new Date(s.receivedAt || s.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                     {s.location && ` • ${s.location}`}
                     {s.receivedBy && ` • by ${s.receivedBy}`}
                   </div>
@@ -890,7 +890,7 @@ function InventoryPage() {
                       marginBottom: 6,
                       fontWeight: 600
                     }}>
-                      ✅ Shop Complete — {new Date(order.completedAt).toLocaleDateString()}
+                      ✅ Shop Complete — {new Date(order.completedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                     </div>
                   )}
 

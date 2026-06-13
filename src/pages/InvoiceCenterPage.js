@@ -319,7 +319,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
                             <td style={{ fontSize: '0.85rem' }}>
                               {wo.invoiceDate ? (
                                 <span style={{ color: '#2E7D32', fontWeight: 500, cursor: 'pointer' }} onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date(wo.invoiceDate).toISOString().split('T')[0]); }} title="Click to edit date">
-                                  {new Date(wo.invoiceDate).toLocaleDateString()}
+                                  {new Date(wo.invoiceDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                                 </span>
                               ) : (
                                 <button className="btn btn-sm" style={{ fontSize: '0.75rem', padding: '4px 10px', background: '#E65100', color: 'white', border: 'none', fontWeight: 600, borderRadius: 4 }}
@@ -330,7 +330,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
                             </td>
                             <td style={{ fontSize: '0.8rem' }}>
                               {wo.iifExportedAt
-                                ? <span style={{ color: '#2E7D32', fontWeight: 500 }} title={`Batch: ${wo.iifBatchId || '—'}`}>✓ {new Date(wo.iifExportedAt).toLocaleDateString()}</span>
+                                ? <span style={{ color: '#2E7D32', fontWeight: 500 }} title={`Batch: ${wo.iifBatchId || '—'}`}>✓ {new Date(wo.iifExportedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
                                 : <span style={{ color: '#999' }}>Not exported</span>}
                             </td>
                             <td>{wo.invoicePdfUrl ? <a href={wo.invoicePdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 600, fontSize: '0.85rem' }}>View</a> : <button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={() => { setPdfUploadWO(wo); setPdfFile(null); }}>Upload</button>}</td>
@@ -364,7 +364,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
                               </div>
                               <div style={{ fontSize: '0.8rem', color: '#888' }}>
                                 {wo.invoiceSkippedBy && <span>by {wo.invoiceSkippedBy}</span>}
-                                {wo.invoiceSkippedAt && <span> on {new Date(wo.invoiceSkippedAt).toLocaleDateString()}</span>}
+                                {wo.invoiceSkippedAt && <span> on {new Date(wo.invoiceSkippedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>}
                               </div>
                               <button className="btn btn-outline" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={() => handleRestore(wo)}>Restore to Queue</button>
                             </div>

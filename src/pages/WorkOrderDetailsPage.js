@@ -22,6 +22,7 @@ import ShopRateForm from '../components/ShopRateForm';
 import HeatNumberInput from '../components/HeatNumberInput';
 import ShipmentChargesSection from '../components/ShipmentChargesSection';
 import InspectionPanel from '../components/InspectionPanel';
+import WorkOrderLifecycleBar from '../components/WorkOrderLifecycleBar';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart, reorderWorkOrderParts,
@@ -1567,7 +1568,7 @@ function WorkOrderDetailsPage() {
   ${isCODClient ? `
   <div style="background:#c62828;color:white;padding:10px 16px;text-align:center;font-weight:900;font-size:16px;letter-spacing:2px;border:3px solid #b71c1c;border-radius:4px;margin-bottom:8px">
     💰 COD — COLLECT PAYMENT BEFORE RELEASING ORDER 💰
-    ${codPaid ? '<div style="font-size:12px;font-weight:600;margin-top:4px;color:#a5d6a7">✅ PAYMENT RECORDED — ' + (order.paymentMethod || '').toUpperCase() + (order.paymentReference ? ' #' + order.paymentReference : '') + ' on ' + (order.paymentDate ? new Date(order.paymentDate).toLocaleDateString() : 'N/A') + '</div>' : '<div style="font-size:12px;font-weight:600;margin-top:4px;color:#ffcdd2">⚠️ PAYMENT NOT YET CONFIRMED</div>'}
+    ${codPaid ? '<div style="font-size:12px;font-weight:600;margin-top:4px;color:#a5d6a7">✅ PAYMENT RECORDED — ' + (order.paymentMethod || '').toUpperCase() + (order.paymentReference ? ' #' + order.paymentReference : '') + ' on ' + (order.paymentDate ? new Date(order.paymentDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'N/A') + '</div>' : '<div style="font-size:12px;font-weight:600;margin-top:4px;color:#ffcdd2">⚠️ PAYMENT NOT YET CONFIRMED</div>'}
   </div>
   ` : ''}
 
@@ -1575,7 +1576,7 @@ function WorkOrderDetailsPage() {
     <div class="info-item"><label>Client</label><span>${order.clientName}</span></div>
     ${clientPO ? `<div class="info-item"><label>Client PO#</label><span>${clientPO}</span></div>` : ''}
     ${order.storageLocation ? `<div class="info-item"><label>Storage</label><span>${order.storageLocation}</span></div>` : ''}
-    ${includePricing && order.promisedDate ? `<div class="info-item"><label>Promised</label><span>${new Date(order.promisedDate + 'T12:00:00').toLocaleDateString()}</span></div>` : ''}
+    ${includePricing && order.promisedDate ? `<div class="info-item"><label>Promised</label><span>${new Date(order.promisedDate + 'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span></div>` : ''}
     ${includePricing && order.contactName ? `<div class="info-item"><label>Contact</label><span>${order.contactName}${order.contactPhone ? ' — ' + order.contactPhone : ''}</span></div>` : ''}
     ${includePricing && clientPaymentTerms ? `<div class="info-item"><label>Payment Terms</label><span style="color:#1565c0">${clientPaymentTerms}</span></div>` : ''}
   </div>
@@ -2264,7 +2265,7 @@ function WorkOrderDetailsPage() {
                   <div style={{ fontSize: '0.85rem', color: '#555' }}>
                     {order.paymentMethod && <span style={{ background: '#C8E6C9', padding: '2px 8px', borderRadius: 4, fontWeight: 600, marginRight: 8 }}>{order.paymentMethod}</span>}
                     {order.paymentReference && <span style={{ marginRight: 8 }}>Ref: <strong>{order.paymentReference}</strong></span>}
-                    {order.paymentDate && <span>on {new Date(order.paymentDate).toLocaleDateString()}</span>}
+                    {order.paymentDate && <span>on {new Date(order.paymentDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>}
                     {order.paymentRecordedBy && <span style={{ color: '#888', marginLeft: 8 }}> — by {order.paymentRecordedBy}</span>}
                   </div>
                 </div>
@@ -2360,7 +2361,7 @@ function WorkOrderDetailsPage() {
               {order.voidReason && <div style={{ color: '#c62828', fontSize: '0.9rem' }}>{order.voidReason}</div>}
               {order.voidedBy && order.voidedAt && (
                 <div style={{ color: '#e57373', fontSize: '0.8rem' }}>
-                  by {order.voidedBy} on {new Date(order.voidedAt).toLocaleDateString()}
+                  by {order.voidedBy} on {new Date(order.voidedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                 </div>
               )}
               <div style={{ color: '#888', fontSize: '0.75rem', marginTop: 4 }}>
@@ -2768,47 +2769,28 @@ function WorkOrderDetailsPage() {
         </div>
       )}
 
-      {/* Toggle for Shipping Details */}
-      {shipment ? (
-        <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button 
-            className={`btn ${showReceivingInfo ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setShowReceivingInfo(!showReceivingInfo)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-          >
-            <Truck size={18} />
-            {showReceivingInfo ? 'Hide Inbound Details' : 'Inbound Shipment Details'}
-            {shipment.photos?.length > 0 && <span style={{ background: '#4caf50', color: 'white', borderRadius: 10, padding: '2px 6px', fontSize: '0.7rem' }}>{shipment.photos.length} 📷</span>}
-            {(order?.pickupHistory || []).length > 0 && <span style={{ background: '#1976d2', color: 'white', borderRadius: 10, padding: '2px 6px', fontSize: '0.7rem' }}>{(order?.pickupHistory || []).length} shipment{(order?.pickupHistory || []).length > 1 ? 's' : ''}</span>}
-          </button>
-          <button
-            className="btn btn-outline"
-            onClick={handleUnlinkShipment}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, borderColor: '#d32f2f', color: '#d32f2f', fontSize: '0.85rem' }}
-            title="Unlink this shipment from the work order"
-          >
-            <X size={16} /> Unlink
-          </button>
-        </div>
-      ) : (
-        <div style={{ marginBottom: 16 }}>
-          <button 
-            className="btn btn-outline"
-            onClick={openLinkShipmentModal}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, borderColor: '#ff9800', color: '#e65100' }}
-          >
-            <Truck size={18} />
-            Link Shipment
-            <span style={{ fontSize: '0.75rem', color: '#888' }}>(No shipment linked)</span>
-          </button>
-        </div>
-      )}
+      {/* Lifecycle bar: Estimate → Inbound → Ship → Invoice → Payment */}
+      <WorkOrderLifecycleBar
+        order={order}
+        shipment={shipment}
+        inboundOpen={showReceivingInfo}
+        onToggleInbound={() => setShowReceivingInfo(!showReceivingInfo)}
+        onLinkShipment={openLinkShipmentModal}
+        showMessage={showMessage}
+      />
 
       {/* Shipping Details Panel */}
       {showReceivingInfo && allShipments.length > 0 && (
         <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid #4caf50' }}>
-          <div className="card-header">
+          <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h3 className="card-title"><Truck size={20} style={{ marginRight: 8 }} />Inbound Shipment Details</h3>
+            <button
+              onClick={handleUnlinkShipment}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid #d32f2f', color: '#d32f2f', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem' }}
+              title="Unlink this shipment from the work order"
+            >
+              <X size={14} /> Unlink
+            </button>
           </div>
           
           {/* Shipment tabs when multiple */}
@@ -4996,12 +4978,12 @@ function WorkOrderDetailsPage() {
                       const dueDate = new Date(new Date(order.invoiceDate).getTime() + days * 86400000);
                       const daysLeft = Math.floor((dueDate - Date.now()) / 86400000);
                       const isPaid = !!order.paymentDate;
-                      if (isPaid) return <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>✓ Paid — was due {dueDate.toLocaleDateString()}</div>;
+                      if (isPaid) return <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>✓ Paid — was due {dueDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</div>;
                       const isOverdue = daysLeft < 0;
                       return (
                         <div style={{ fontSize: '0.82rem', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <span style={{ color: isOverdue ? '#c62828' : '#333', fontWeight: 500 }}>
-                            Due: {dueDate.toLocaleDateString()}
+                            Due: {dueDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                           </span>
                           <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: '0.75rem', fontWeight: 700, background: isOverdue ? '#ffebee' : daysLeft <= 7 ? '#fff8e1' : '#e8f5e9', color: isOverdue ? '#c62828' : daysLeft <= 7 ? '#f57f17' : '#2e7d32' }}>
                             {isOverdue ? `${Math.abs(daysLeft)}d OVERDUE` : `${daysLeft}d remaining`}
@@ -6556,7 +6538,7 @@ function WorkOrderDetailsPage() {
                           {est.grandTotal ? `$${parseFloat(est.grandTotal).toFixed(2)}` : '-'}
                         </div>
                         <div style={{ fontSize: '0.8rem', color: '#666' }}>{est.partCount} part(s)</div>
-                        <div style={{ fontSize: '0.8rem', color: '#999' }}>{new Date(est.createdAt).toLocaleDateString()}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#999' }}>{new Date(est.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</div>
                       </div>
                     </div>
                   </div>
@@ -6630,7 +6612,7 @@ function WorkOrderDetailsPage() {
                         {s.jobNumber && <span> · Job: {s.jobNumber}</span>}
                         {s.clientPurchaseOrderNumber && <span> · PO: {s.clientPurchaseOrderNumber}</span>}
                         {s.location && <span> · 📍 {s.location}</span>}
-                        {s.receivedAt && <span> · {new Date(s.receivedAt).toLocaleDateString()}</span>}
+                        {s.receivedAt && <span> · {new Date(s.receivedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>}
                       </div>
                       {s.description && (
                         <div style={{ fontSize: '0.75rem', color: '#555', marginTop: 2, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

@@ -604,7 +604,7 @@ const ClientsVendorsPage = () => {
                                         {wo.drNumber ? `DR-${wo.drNumber}` : wo.orderNumber}
                                       </a>
                                       {wo.invoiceNumber && <div style={{ fontSize: '0.72rem', color: '#2e7d32' }}>#{wo.invoiceNumber}</div>}
-                                      <div style={{ fontSize: '0.72rem', color: '#aaa' }}>{wo.createdAt ? new Date(wo.createdAt).toLocaleDateString() : ''}</div>
+                                      <div style={{ fontSize: '0.72rem', color: '#aaa' }}>{wo.createdAt ? new Date(wo.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : ''}</div>
                                     </td>
                                     <td style={{ padding: '8px 8px' }}>
                                       <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600,
@@ -620,7 +620,7 @@ const ClientsVendorsPage = () => {
                                       {wo.dueDate ? (
                                         <div>
                                           <div style={{ fontSize: '0.8rem', color: isOverdue ? '#c62828' : '#333', fontWeight: isOverdue ? 700 : 400 }}>
-                                            {new Date(wo.dueDate + 'T00:00:00').toLocaleDateString()}
+                                            {new Date(wo.dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                                           </div>
                                           {isOverdue && balance > 0.01 && (
                                             <div style={{ fontSize: '0.7rem', color: '#c62828', fontWeight: 700 }}>
@@ -678,7 +678,7 @@ const ClientsVendorsPage = () => {
                             <tbody>
                               {pmts.map(pmt => (
                                 <tr key={pmt.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                                  <td style={{ padding: '8px 12px' }}>{pmt.paymentDate ? new Date(pmt.paymentDate+'T00:00:00').toLocaleDateString() : '—'}</td>
+                                  <td style={{ padding: '8px 12px' }}>{pmt.paymentDate ? new Date(pmt.paymentDate+'T00:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—'}</td>
                                   <td style={{ padding: '8px 12px', textTransform: 'capitalize' }}>{pmt.method?.replace('_',' ')}</td>
                                   <td style={{ padding: '8px 12px', color: '#888' }}>{pmt.reference || '—'}</td>
                                   <td style={{ padding: '8px 12px', fontSize: '0.78rem', color: '#555' }}>
@@ -709,7 +709,7 @@ const ClientsVendorsPage = () => {
                             <tbody>
                               {cms.map(cm => (
                                 <tr key={cm.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                                  <td style={{ padding: '8px 12px' }}>{cm.date ? new Date(cm.date+'T00:00:00').toLocaleDateString() : '—'}</td>
+                                  <td style={{ padding: '8px 12px' }}>{cm.date ? new Date(cm.date+'T00:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—'}</td>
                                   <td style={{ padding: '8px 12px', color: '#555' }}>{cm.reason || '—'}</td>
                                   <td style={{ padding: '8px 12px', textAlign: 'right', color: '#1565c0' }}>${parseFloat(cm.amount).toFixed(2)}</td>
                                   <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: parseFloat(cm.remainingAmount) > 0 ? '#2e7d32' : '#888' }}>
@@ -739,7 +739,7 @@ const ClientsVendorsPage = () => {
                             <tbody>
                               {refs.map(r => (
                                 <tr key={r.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                                  <td style={{ padding: '8px 12px' }}>{r.date ? new Date(r.date+'T00:00:00').toLocaleDateString() : '—'}</td>
+                                  <td style={{ padding: '8px 12px' }}>{r.date ? new Date(r.date+'T00:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—'}</td>
                                   <td style={{ padding: '8px 12px', textTransform: 'capitalize' }}>{r.method?.replace('_',' ')}</td>
                                   <td style={{ padding: '8px 12px', color: '#555' }}>{r.reason || '—'}</td>
                                   <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#c62828' }}>-${parseFloat(r.amount).toFixed(2)}</td>
@@ -809,7 +809,7 @@ const ClientsVendorsPage = () => {
                                 <tbody>{(vendorHistory.poNumbers || []).map(po => (
                                   <tr key={po.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                                     <td style={{ padding: '6px 10px', fontWeight: 600 }}>PO-{po.poNumber}</td>
-                                    <td style={{ padding: '6px 10px', color: '#666' }}>{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : '—'}</td>
+                                    <td style={{ padding: '6px 10px', color: '#666' }}>{po.createdAt ? new Date(po.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—'}</td>
                                     <td style={{ padding: '6px 10px', color: '#555' }}>{po.description || '—'}</td>
                                   </tr>
                                 ))}</tbody>
@@ -845,7 +845,7 @@ const ClientsVendorsPage = () => {
                                       {wo.invoiceNumber ? <span style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.8rem' }}>✅ {wo.invoiceNumber}</span> : <span style={{ color: '#ccc' }}>—</span>}
                                     </td>
                                     <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                                      {wo.paymentDate ? <span style={{ color: '#2e7d32', fontSize: '0.8rem' }}>💰 {new Date(wo.paymentDate).toLocaleDateString()}</span> : wo.invoiceNumber ? <span style={{ color: '#E65100', fontSize: '0.8rem' }}>⏳</span> : <span style={{ color: '#ccc' }}>—</span>}
+                                      {wo.paymentDate ? <span style={{ color: '#2e7d32', fontSize: '0.8rem' }}>💰 {new Date(wo.paymentDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span> : wo.invoiceNumber ? <span style={{ color: '#E65100', fontSize: '0.8rem' }}>⏳</span> : <span style={{ color: '#ccc' }}>—</span>}
                                     </td>
                                     <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{wo.grandTotal ? '$' + parseFloat(wo.grandTotal).toFixed(2) : '—'}</td>
                                   </tr>
@@ -870,9 +870,9 @@ const ClientsVendorsPage = () => {
                                   <tr key={l.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                                     <td style={{ padding: '6px 10px', fontWeight: 500 }}>{l.name}</td>
                                     <td style={{ padding: '6px 10px', color: '#666' }}>{l.category}</td>
-                                    <td style={{ padding: '6px 10px', color: '#666' }}>{l.dueDate ? new Date(l.dueDate + 'T12:00:00').toLocaleDateString() : '—'}</td>
+                                    <td style={{ padding: '6px 10px', color: '#666' }}>{l.dueDate ? new Date(l.dueDate + 'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—'}</td>
                                     <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                                      {l.status === 'paid' ? <span style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.8rem' }}>✅ Paid{l.paidAt ? ` ${new Date(l.paidAt).toLocaleDateString()}` : ''}</span> : <span style={{ color: '#E65100', fontWeight: 600, fontSize: '0.8rem' }}>⏳ Unpaid</span>}
+                                      {l.status === 'paid' ? <span style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.8rem' }}>✅ Paid{l.paidAt ? ` ${new Date(l.paidAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}` : ''}</span> : <span style={{ color: '#E65100', fontWeight: 600, fontSize: '0.8rem' }}>⏳ Unpaid</span>}
                                     </td>
                                     <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>${parseFloat(l.amount).toFixed(2)}</td>
                                   </tr>
@@ -894,7 +894,7 @@ const ClientsVendorsPage = () => {
                                 <tbody>{(vendorHistory.inboundOrders || []).map(o => (
                                   <tr key={o.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                                     <td style={{ padding: '6px 10px' }}>{o.description || o.materialDescription || 'Inbound order'}</td>
-                                    <td style={{ padding: '6px 10px', color: '#666' }}>{new Date(o.createdAt).toLocaleDateString()}</td>
+                                    <td style={{ padding: '6px 10px', color: '#666' }}>{new Date(o.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</td>
                                     <td style={{ padding: '6px 10px', textAlign: 'center' }}>
                                       <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: o.status === 'received' ? '#e8f5e9' : '#fff3e0', color: o.status === 'received' ? '#2e7d32' : '#E65100' }}>{o.status || 'pending'}</span>
                                     </td>
@@ -1134,7 +1134,7 @@ const ClientsVendorsPage = () => {
                         {(!formData.permitStatus || formData.permitStatus === 'unverified') && <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 600, background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80' }}>Never verified</span>}
                         {formData.permitLastVerified && (
                           <span style={{ fontSize: '0.75rem', color: '#888' }}>
-                            Last verified: {new Date(formData.permitLastVerified).toLocaleDateString()}
+                            Last verified: {new Date(formData.permitLastVerified).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                           </span>
                         )}
                       </div>
@@ -1561,7 +1561,7 @@ const ClientsVendorsPage = () => {
                             {c.permitDbaName && <div style={{ fontSize: '0.75rem', color: '#888' }}>DBA: {c.permitDbaName}</div>}
                           </td>
                           <td style={{ fontSize: '0.85rem', color: '#666' }}>
-                            {c.permitLastVerified ? new Date(c.permitLastVerified).toLocaleDateString() : 'Never'}
+                            {c.permitLastVerified ? new Date(c.permitLastVerified).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'Never'}
                           </td>
                           <td>
                             {nameMismatch && (

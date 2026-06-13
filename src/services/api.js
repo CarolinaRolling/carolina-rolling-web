@@ -605,6 +605,11 @@ export const cancelCommScan = () => api.post('/com-center/cancel-scan');
 export const getBlankShipper = () => api.get('/workorders/blank-shipper', { responseType: 'blob' });
 export const previewPayrollPdf = (payrollId) => api.get(`/business/payroll/${payrollId}/preview-pdf`, { responseType: 'blob' });
 
+// Ginger — scheduling/priority assistant
+export const getGingerFindings = () => api.get('/ginger/findings');
+export const markGingerFindingsRead = () => api.post('/ginger/findings/read');
+export const runGingerScan = () => api.post('/ginger/scan');
+
 // Inspection
 export const getInspectionJobs = (workOrderId) => api.get(`/inspections/job/${workOrderId}`);
 export const createInspectionJob = (data) => api.post('/inspections/job', data);

@@ -186,7 +186,7 @@ export default function COATab({
                       <div style={{ fontSize:'0.8rem', fontWeight:700, color:'#888', marginBottom:8 }}>PAYMENT HISTORY</div>
                       {inv.payments.map(pmt => (
                         <div key={pmt.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 0', borderBottom:'1px solid #f0f0f0' }}>
-                          <span style={{ fontSize:'0.8rem', color:'#666', minWidth:90 }}>{new Date(pmt.paymentDate).toLocaleDateString()}</span>
+                          <span style={{ fontSize:'0.8rem', color:'#666', minWidth:90 }}>{new Date(pmt.paymentDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
                           <span style={{ fontSize:'0.85rem', color:'#333', flex:1 }}>
                             {pmt.paymentType==='downpayment'?'Down Payment':pmt.paymentType==='full'?'Paid in Full':'Partial Payment'}
                             {pmt.paymentMethod&&` — ${pmt.paymentMethod}`}
@@ -359,13 +359,13 @@ export default function COATab({
                         {b.vendor && <span>{b.vendor}</span>}
                         {b.vendorInvoiceNumber && <span>Inv: {b.vendorInvoiceNumber}</span>}
                         {b.poNumber && <span style={{ color:'#1565c0', fontWeight:500 }}>PO: {b.poNumber}</span>}
-                        {b.dueDate && <span>Due: {new Date(b.dueDate+'T12:00:00').toLocaleDateString()}</span>}
+                        {b.dueDate && <span>Due: {new Date(b.dueDate+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>}
                         {d!==null && b.status==='unpaid' && (
                           <span style={{ color:od?'#c62828':ds?'#E65100':'#888', fontWeight:od||ds?600:400 }}>
                             {od?`${Math.abs(d)}d overdue`:d===0?'Due today':`${d}d left`}
                           </span>
                         )}
-                        {b.status==='paid' && b.paidAt && <span style={{ color:'#2e7d32' }}>Paid {new Date(b.paidAt).toLocaleDateString()}</span>}
+                        {b.status==='paid' && b.paidAt && <span style={{ color:'#2e7d32' }}>Paid {new Date(b.paidAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>}
                         {b.invoiceFileUrl && <a href={b.invoiceFileUrl} target="_blank" rel="noopener noreferrer" style={{ color:'#1976d2', textDecoration:'none' }}>📄 PDF</a>}
                       </div>
                     </div>

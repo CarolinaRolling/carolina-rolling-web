@@ -1702,7 +1702,7 @@ function EstimateDetailsPage() {
         <span class="doc-title">ESTIMATE</span>
         <div class="doc-right">
           <div class="doc-num">${estimate?.estimateNumber}</div>
-          <div class="doc-date">Date: ${new Date(estimate?.createdAt).toLocaleDateString()}</div>
+          <div class="doc-date">Date: ${new Date(estimate?.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</div>
         </div>
       </div>
       ${formData.taxExempt ? '<div style="color:#c62828;font-weight:700;font-size:11px;text-align:right;margin-top:-4px;">TAX EXEMPT</div>' : ''}
@@ -1958,7 +1958,7 @@ function EstimateDetailsPage() {
                   </div>
                   {ts && (isPast || isActive) && (
                     <div style={{ fontSize: '0.7rem', color: '#888' }}>
-                      {new Date(ts).toLocaleDateString()} {new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(ts).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} {new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   )}
                 </div>

@@ -273,7 +273,7 @@ function BusinessPage() {
       if (parseFloat(en.bonus) > 0) op.push('Bonus: $' + parseFloat(en.bonus).toFixed(2));
       return '<tr><td>' + (en.controlNumber||'') + '</td><td style="font-weight:600">' + en.employeeName + '</td><td>' + (en.deductions||'') + '</td><td>' + (en.description||'') + '</td><td class="c">$' + parseFloat(en.hourlyRate).toFixed(2) + '</td><td class="c" style="font-weight:600">' + en.regularHours + '</td><td class="c" style="font-weight:600;color:' + (parseFloat(en.overtimeHours)>0?'#c62828':'#888') + '">' + en.overtimeHours + '</td><td>' + op.join(', ') + '</td></tr>';
     }).join('');
-    const html = '<html><head><title>Payroll</title><style>' + css + '</style></head><body><div class="header"><div><div class="company-name">Carolina Rolling Co., Inc.</div><div class="doc-title">Weekly Payroll Report</div></div></div><div class="date-range">Pay Period: ' + sd + ' — ' + ed + '</div><table><thead><tr><th>Control #</th><th>Employee Name</th><th>Deductions</th><th>Description</th><th style="text-align:center">Rate</th><th style="text-align:center">Reg Hours</th><th style="text-align:center">OT</th><th>Other Pay</th></tr></thead><tbody>' + rows + '</tbody></table><div class="foot"><span>Generated: ' + new Date().toLocaleDateString() + '</span><span>Carolina Rolling Co., Inc.</span></div></body></html>';
+    const html = '<html><head><title>Payroll</title><style>' + css + '</style></head><body><div class="header"><div><div class="company-name">Carolina Rolling Co., Inc.</div><div class="doc-title">Weekly Payroll Report</div></div></div><div class="date-range">Pay Period: ' + sd + ' — ' + ed + '</div><table><thead><tr><th>Control #</th><th>Employee Name</th><th>Deductions</th><th>Description</th><th style="text-align:center">Rate</th><th style="text-align:center">Reg Hours</th><th style="text-align:center">OT</th><th>Other Pay</th></tr></thead><tbody>' + rows + '</tbody></table><div class="foot"><span>Generated: ' + new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) + '</span><span>Carolina Rolling Co., Inc.</span></div></body></html>';
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -321,7 +321,7 @@ function BusinessPage() {
       '<div class="header"><img src="/logo.png" onerror="this.style.display=\'none\'"/><div><div class="company-name">Carolina Rolling Co., Inc.</div><div class="doc-title">Weekly Payroll Report</div></div></div>' +
       '<div class="date-range">Pay Period: ' + sd + ' \u2014 ' + ed + '</div>' +
       '<table><thead><tr><th>Control #</th><th>Employee Name</th><th>Deductions</th><th>Description</th><th style="text-align:center">Rate</th><th style="text-align:center">Reg Hours</th><th style="text-align:center">OT</th><th>Other Pay</th><th>Notes</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      '<div class="foot"><span>Generated: ' + now.toLocaleDateString() + ' at ' + now.toLocaleTimeString() + '</span><span>Carolina Rolling Co., Inc.</span></div>' +
+      '<div class="foot"><span>Generated: ' + now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) + ' at ' + now.toLocaleTimeString() + '</span><span>Carolina Rolling Co., Inc.</span></div>' +
       '</body></html>');
     w.document.close();
     w.print();
@@ -388,7 +388,7 @@ function BusinessPage() {
       '<div class="dr">' + sd + ' \u2014 ' + ed + '</div>' +
       cards +
       '<div class="tot">Total Gross Payroll: $' + parseFloat(pr.totalGross).toFixed(2) + '</div>' +
-      '<div class="ft"><span>Generated: ' + now.toLocaleDateString() + ' ' + now.toLocaleTimeString() + '</span><span>CONFIDENTIAL \u2014 Carolina Rolling Co., Inc.</span></div>' +
+      '<div class="ft"><span>Generated: ' + now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) + ' ' + now.toLocaleTimeString() + '</span><span>CONFIDENTIAL \u2014 Carolina Rolling Co., Inc.</span></div>' +
       '</body></html>');
     w.document.close();
     w.print();

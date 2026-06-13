@@ -420,7 +420,7 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
                     )}
                   </td>
                   <td style={{ fontSize: '0.85rem', color: '#666' }}>
-                    {new Date(inv.createdAt).toLocaleDateString()}
+                    {new Date(inv.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                   </td>
                   <td>
                     {inv.status === 'active' && (

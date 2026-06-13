@@ -295,7 +295,7 @@ function EstimatesPage() {
                         {est.estimateNumber} — {est.clientName}
                       </div>
                       <div style={{ fontSize: '0.8rem', color: '#888' }}>
-                        Trashed {new Date(est.trashedAt).toLocaleDateString()} by {est.trashedBy || 'admin'}
+                        Trashed {new Date(est.trashedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} by {est.trashedBy || 'admin'}
                         <span style={{ marginLeft: 8, color: daysLeft <= 7 ? '#c62828' : '#888' }}>
                           ({daysLeft} days until permanent deletion)
                         </span>

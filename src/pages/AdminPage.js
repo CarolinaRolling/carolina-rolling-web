@@ -2411,7 +2411,7 @@ function AdminPage({ section = 'users-logs' }) {
                       <div style={{ fontWeight: 700, color: '#E65100', fontSize: '0.9rem', marginBottom: 4 }}>⏳ Pickup Requested</div>
                       <div style={{ fontSize: '0.8rem', color: '#666' }}>
                         {pending.requestedBy && <span>By: <strong>{pending.requestedBy}</strong></span>}
-                        {pending.requestedAt && <span> on {new Date(pending.requestedAt).toLocaleDateString()}</span>}
+                        {pending.requestedAt && <span> on {new Date(pending.requestedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>}
                       </div>
                       <button className="btn" style={{ marginTop: 8, background: '#388E3C', color: 'white', border: 'none', fontWeight: 700, width: '100%', padding: '10px' }} onClick={async () => {
                         if (!window.confirm(`Confirm ${bin.label} has been picked up?`)) return;
@@ -2899,7 +2899,7 @@ function AdminPage({ section = 'users-logs' }) {
                         {key.revokedReason && <div style={{ fontSize: '0.7rem', color: '#c62828', marginTop: 2 }}>{key.revokedReason}</div>}
                       </td>
                       <td style={{ fontSize: '0.8rem', color: '#666' }}>
-                        {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : 'Never'}
+                        {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'Never'}
                         {key.lastIP && <div style={{ fontSize: '0.7rem', color: '#999' }}>{key.lastIP}</div>}
                       </td>
                       <td>

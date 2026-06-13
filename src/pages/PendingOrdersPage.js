@@ -268,7 +268,7 @@ function PendingOrdersPage() {
                               style={{ marginLeft: 8, fontSize: '0.8rem', color: '#1565c0', textDecoration: 'none' }}>📧</a>
                           )}
                           <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#888' }}>
-                            {order.approvedBy || order.rejectedBy} · {new Date(order.approvedAt || order.rejectedAt || order.updatedAt).toLocaleDateString()}
+                            {order.approvedBy || order.rejectedBy} · {new Date(order.approvedAt || order.rejectedAt || order.updatedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                           </span>
                         </div>
                         <button onClick={() => handleDelete(order)}

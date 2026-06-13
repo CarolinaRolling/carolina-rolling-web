@@ -40,10 +40,8 @@ function TodoBar() {
     return true;
   });
 
-  // Auto-expand when there are tasks
-  useEffect(() => {
-    if (visibleTodos.length > 0 && !expanded) setExpanded(true);
-  }, [visibleTodos.length]);
+  // Default collapsed — the header already shows a live count + urgent badge, so a flood of
+  // scanner tasks never takes over the screen. The user expands the list when they want it.
 
   const handleAdd = async () => {
     if (!newTitle.trim()) return;
@@ -146,6 +144,12 @@ function TodoBar() {
   const urgentCount = visibleTodos.filter(t => t.priority === 'urgent').length;
   const reviewCount = visibleTodos.filter(t => t.type === 'estimate_review').length;
 
+  // Show most important first: urgent → high → normal → low
+  const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 };
+  const sortedTodos = [...visibleTodos].sort((a, b) =>
+    (PRIORITY_ORDER[a.priority] ?? 2) - (PRIORITY_ORDER[b.priority] ?? 2)
+  );
+
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{
@@ -194,7 +198,8 @@ function TodoBar() {
             </div>
           )}
 
-          {visibleTodos.map(todo => {
+          <div style={{ maxHeight: '42vh', overflowY: 'auto' }}>
+          {sortedTodos.map(todo => {
             const colors = priorityColors[todo.priority] || priorityColors.normal;
             const isEstimateReview = todo.type === 'estimate_review';
             return (
@@ -251,7 +256,7 @@ function TodoBar() {
                     <div style={{ fontSize: '0.7rem', color: '#999', marginTop: 2 }}>
                       {todo.createdBy && `by ${todo.createdBy}`}
                       {todo.assignedTo && ` → ${todo.assignedTo}`}
-                      {' · '}{new Date(todo.createdAt).toLocaleDateString()}
+                      {' · '}{new Date(todo.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                     </div>
                   </div>
                 )}
@@ -300,6 +305,7 @@ function TodoBar() {
               </div>
             );
           })}
+          </div>
         </div>
       )}
     </div>

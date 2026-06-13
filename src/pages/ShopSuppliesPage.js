@@ -460,10 +460,10 @@ function ShopSuppliesPage() {
                     <td style={{ textAlign: 'center', color: '#888' }}>{item.minQuantity}</td>
                     <td style={{ fontSize: '0.8rem', color: '#666' }}>
                       {item.lastConsumedAt && (
-                        <div>Used: {new Date(item.lastConsumedAt).toLocaleDateString()} by {item.lastConsumedBy}</div>
+                        <div>Used: {new Date(item.lastConsumedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} by {item.lastConsumedBy}</div>
                       )}
                       {item.lastRefilledAt && (
-                        <div>Filled: {new Date(item.lastRefilledAt).toLocaleDateString()} by {item.lastRefilledBy}</div>
+                        <div>Filled: {new Date(item.lastRefilledAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} by {item.lastRefilledBy}</div>
                       )}
                     </td>
                     <td>
@@ -641,7 +641,7 @@ function ShopSuppliesPage() {
                       {log.notes && <div style={{ fontSize: '0.8rem', color: '#888', marginTop: 2 }}>{log.notes}</div>}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#999', whiteSpace: 'nowrap' }}>
-                      <div>{new Date(log.createdAt).toLocaleDateString()}</div>
+                      <div>{new Date(log.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</div>
                       <div>{new Date(log.createdAt).toLocaleTimeString()}</div>
                       <div style={{ textAlign: 'right', color: '#666' }}>→ {log.quantityAfter}</div>
                     </div>
