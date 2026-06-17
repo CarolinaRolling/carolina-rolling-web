@@ -6,7 +6,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import SectionSizesPage from './SectionSizesPage';
 import SettingsPage from './SettingsPage';
@@ -123,6 +123,8 @@ function AdminPage({ section = 'users-logs' }) {
   const [scrapConfig, setScrapConfig] = useState({ scrapEmail: '', shopAddress: '', shopName: 'Carolina Rolling Co. Inc.' });
   const [scrapLog, setScrapLog] = useState([]);
   const [scannerStatus, setScannerStatus] = useState(null);
+  const [aiModels, setAiModelsState] = useState({ parsingModel: '', triageModel: '', defaults: {} });
+  const [aiModelsSaving, setAiModelsSaving] = useState(false);
   const [scannerAccounts, setScannerAccounts] = useState([]);
   const [scannerHistory, setScannerHistory] = useState([]);
   const [monitoredClients, setMonitoredClients] = useState([]);
@@ -188,6 +190,7 @@ function AdminPage({ section = 'users-logs' }) {
       loadScrapConfig();
     } else if (activeTab === 'emailscanner') {
       loadEmailScanner();
+      loadAiModels();
     } else if (activeTab === 'sectionsizes') {
       setLoading(false);
     } else if (activeTab === 'general') {
@@ -647,6 +650,24 @@ function AdminPage({ section = 'users-logs' }) {
   };
 
   // Email Scanner functions
+  const loadAiModels = async () => {
+    try {
+      const res = await getAiModelSettings();
+      setAiModelsState({ parsingModel: res.data.data.parsingModel || '', triageModel: res.data.data.triageModel || '', defaults: res.data.data.defaults || {} });
+    } catch { /* quiet */ }
+  };
+
+  const saveAiModels = async () => {
+    if (!aiModels.parsingModel.trim() || !aiModels.triageModel.trim()) { setError('Both model names are required'); return; }
+    setAiModelsSaving(true);
+    try {
+      const res = await updateAiModelSettings({ parsingModel: aiModels.parsingModel.trim(), triageModel: aiModels.triageModel.trim() });
+      setAiModelsState((p) => ({ ...p, ...res.data.data }));
+      setSuccess('AI models updated — changes apply immediately.');
+    } catch (e) { setError(e.response?.data?.error?.message || 'Failed to save AI models'); }
+    finally { setAiModelsSaving(false); }
+  };
+
   const loadEmailScanner = async () => {
     try {
       setLoading(true);
@@ -2530,6 +2551,53 @@ function AdminPage({ section = 'users-logs' }) {
                 <div style={{ fontSize: '0.75rem', color: '#888', fontWeight: 600 }}>{card.label}</div>
               </div>
             ))}
+          </div>
+
+          {/* AI Model configuration */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 4 }}>🤖 AI Models</h3>
+            <p style={{ fontSize: '0.82rem', color: '#777', marginTop: 0 }}>
+              If a model is retired and scanning starts failing, update the name here — changes apply right away, no redeploy.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>
+                  Parsing / extraction model
+                </label>
+                <input type="text" value={aiModels.parsingModel}
+                  onChange={(e) => setAiModelsState((p) => ({ ...p, parsingModel: e.target.value }))}
+                  placeholder={aiModels.defaults?.parsingModel || 'claude-sonnet-4-6'}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #ccc', borderRadius: 6, fontSize: '0.85rem', fontFamily: 'monospace' }} />
+                <div style={{ fontSize: '0.72rem', color: '#999', marginTop: 4 }}>
+                  RFQ/estimate parsing, document &amp; invoice (vision) extraction, Ginger.
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>
+                  Triage model (Comm Center)
+                </label>
+                <input type="text" value={aiModels.triageModel}
+                  onChange={(e) => setAiModelsState((p) => ({ ...p, triageModel: e.target.value }))}
+                  placeholder={aiModels.defaults?.triageModel || 'claude-haiku-4-5-20251001'}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #ccc', borderRadius: 6, fontSize: '0.85rem', fontFamily: 'monospace' }} />
+                <div style={{ fontSize: '0.72rem', color: '#999', marginTop: 4 }}>
+                  High-volume email categorization (kept on a cheaper model).
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" onClick={saveAiModels} disabled={aiModelsSaving}>
+                {aiModelsSaving ? 'Saving…' : 'Save AI Models'}
+              </button>
+              {aiModels.defaults?.parsingModel && (
+                <button className="btn btn-outline" onClick={() => setAiModelsState((p) => ({ ...p, parsingModel: p.defaults.parsingModel, triageModel: p.defaults.triageModel }))}>
+                  Reset to defaults
+                </button>
+              )}
+              <span style={{ fontSize: '0.72rem', color: '#aaa' }}>
+                Current defaults: {aiModels.defaults?.parsingModel} · {aiModels.defaults?.triageModel}
+              </span>
+            </div>
           </div>
 
           {/* Config warnings */}

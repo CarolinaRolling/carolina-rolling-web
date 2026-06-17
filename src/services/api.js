@@ -331,6 +331,8 @@ export const releasePONumber = (poNumber) => api.delete(`/po-numbers/${poNumber}
 export const reassignPONumber = (oldPoNumber, newPoNumber) => api.put(`/po-numbers/${oldPoNumber}/reassign`, { newPoNumber });
 
 // Daily Email Settings
+export const getAiModelSettings = () => api.get('/settings/ai-models');
+export const updateAiModelSettings = (data) => api.put('/settings/ai-models', data);
 export const getDailyEmailSettings = () => api.get('/email/settings');
 export const updateDailyEmailSettings = (settings) => api.put('/email/settings', settings);
 export const getDailyEmailActivities = (params) => api.get('/email/activities', { params });
@@ -595,6 +597,9 @@ export const getCommEmails = (params) => api.get('/com-center/emails', { params 
 export const getCommCoverage = (params) => api.get('/com-center/coverage', { params });
 export const getCommGmailUrl = (id) => api.get(`/com-center/emails/${id}/gmail-url`);
 export const cleanupStaleComm = (days = 21) => api.post('/com-center/cleanup-stale', { days });
+export const getCommBills = () => api.get('/com-center/bills');
+export const updateBillStatus = (id, status) => api.patch(`/com-center/bills/${id}/status`, { status });
+export const scanCommBills = () => api.post('/com-center/bills/scan');
 export const reclassifyComm = () => api.post('/com-center/reclassify');
 export const markCommHandled = (id, handled = true) => api.patch(`/com-center/emails/${id}/handled`, { handled });
 export const scanCommCoverage = () => api.post('/com-center/coverage/scan');

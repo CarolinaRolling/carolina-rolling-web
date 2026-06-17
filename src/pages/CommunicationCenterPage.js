@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap, CheckCircle, Clock, CheckCheck } from 'lucide-react';
-import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage, reclassifyComm, getCommGmailUrl, cleanupStaleComm } from '../services/api';
+import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage, reclassifyComm, getCommGmailUrl, cleanupStaleComm, getCommBills, updateBillStatus, scanCommBills } from '../services/api';
 
 const CATEGORIES = [
   { key: 'all',            label: 'All',            color: '#555',    bg: '#f5f5f5', icon: '✉️' },
@@ -34,6 +34,74 @@ function formatDate(dt) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
 }
 
+const ghostBtn = { background: 'white', border: '1px solid #ddd', color: '#555', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 };
+const solidBtn = { color: 'white', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 };
+
+function BillField({ label, value, strong }) {
+  return (<div><span style={{ color: '#999', fontSize: '0.72rem' }}>{label}: </span><span style={{ fontWeight: strong ? 700 : 500 }}>{value || '—'}</span></div>);
+}
+
+function BillsView({ bills, pending, scanning, onScan, onReload, onStatus, onOpen }) {
+  const money = (v, c) => v == null ? '—' : `${(!c || c === 'USD') ? '$' : c + ' '}${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return (
+    <div style={{ padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ fontSize: '0.85rem', color: '#555', fontWeight: 600 }}>{pending} awaiting review · {bills.length} total</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onReload} style={ghostBtn}>Refresh</button>
+          <button onClick={onScan} disabled={scanning} style={{ ...ghostBtn, color: '#6a1b9a', borderColor: '#ce93d8' }}>{scanning ? 'Reading…' : 'Read new invoices'}</button>
+        </div>
+      </div>
+      {bills.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, color: '#bbb' }}>
+          <div style={{ fontSize: 36, marginBottom: 10 }}>🧾</div>
+          <div style={{ fontWeight: 600 }}>No bills yet</div>
+          <div style={{ fontSize: '0.8rem' }}>Invoices land here once a bill email with a PDF is scanned.</div>
+        </div>
+      ) : bills.map((b) => {
+        const d = b.billData || {};
+        const status = b.billStatus || 'pending';
+        const err = d.error;
+        const accent = status === 'approved' ? '#2e7d32' : status === 'rejected' ? '#c62828' : '#6a1b9a';
+        return (
+          <div key={b.id} style={{ background: 'white', border: '1px solid #e4e4e4', borderRadius: 10, padding: 14, marginBottom: 10, borderLeft: `4px solid ${accent}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{d.vendorName || b.fromName || b.fromEmail}</div>
+                <div style={{ fontSize: '0.78rem', color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.subject}</div>
+              </div>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 10px', borderRadius: 99, alignSelf: 'flex-start',
+                background: status === 'approved' ? '#e8f5e9' : status === 'rejected' ? '#ffebee' : '#f3e5f5', color: accent }}>
+                {status === 'pending' ? 'Needs review' : status.charAt(0).toUpperCase() + status.slice(1)}
+              </span>
+            </div>
+            {err ? (
+              <div style={{ fontSize: '0.8rem', color: '#c62828', marginTop: 8 }}>
+                {err === 'no_pdf' ? 'No PDF invoice found on this email — open it to check.' : 'Could not read this invoice automatically — open it to review.'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 24px', marginTop: 10, fontSize: '0.82rem' }}>
+                <BillField label="Invoice #" value={d.invoiceNumber} />
+                <BillField label="Amount" value={money(d.amount, d.currency)} strong />
+                <BillField label="Invoice date" value={d.invoiceDate} />
+                <BillField label="Due" value={d.dueDate} />
+                {d.poNumber && <BillField label="PO" value={d.poNumber} />}
+              </div>
+            )}
+            {d.summary && !err && <div style={{ fontSize: '0.78rem', color: '#777', marginTop: 8 }}>{d.summary}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              {status !== 'approved' && <button onClick={() => onStatus(b.id, 'approved')} style={{ ...solidBtn, background: '#2e7d32' }}>✓ Approve</button>}
+              {status !== 'rejected' && <button onClick={() => onStatus(b.id, 'rejected')} style={{ ...solidBtn, background: '#c62828' }}>✕ Reject</button>}
+              {status !== 'pending' && <button onClick={() => onStatus(b.id, 'pending')} style={ghostBtn}>Reset</button>}
+              <a href={b.gmailLink} onClick={(ev) => onOpen(ev, b.id, b.gmailLink)} target="_blank" rel="noopener noreferrer" style={{ ...ghostBtn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ExternalLink size={12} /> Open email</a>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function subTabStyle(active, color) {
   return {
     padding: '5px 14px', borderRadius: 99, cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700,
@@ -62,6 +130,9 @@ export default function CommunicationCenterPage() {
   const [coverageScanning, setCoverageScanning] = useState(false);
   const [reclassifying, setReclassifying] = useState(false);
   const [cleaning, setCleaning] = useState(false);
+  const [bills, setBills] = useState([]);
+  const [billsPending, setBillsPending] = useState(0);
+  const [billsScanning, setBillsScanning] = useState(false);
   const [showCoverage, setShowCoverage] = useState(true);
   const logsRef = React.useRef(null);
   const userScrolledUp = React.useRef(false);
@@ -80,11 +151,41 @@ export default function CommunicationCenterPage() {
     catch {} finally { setCoverageScanning(false); }
   };
 
-  const handleMarkHandled = async (id) => {
+  const handleMarkHandled = async (id, threadId) => {
     try {
       await markCommHandled(id, true);
-      setCoverage((prev) => prev.map((e) => e.id === id ? { ...e, commResponded: true, commHandledManually: true } : e));
-      setCoverageAwaiting((n) => Math.max(n - 1, 0));
+      const match = (e) => e.id === id || (threadId && e.gmailThreadId === threadId);
+      const patch = (e) => (match(e) ? { ...e, commResponded: true, commHandledManually: true } : e);
+      const wasAwaiting = coverage.some(e => match(e) && !(e.commResponded || e.commHandledManually));
+      setEmails((prev) => prev.map(patch));
+      setCoverage((prev) => prev.map(patch));
+      if (wasAwaiting) setCoverageAwaiting((n) => Math.max(n - 1, 0));
+    } catch {}
+  };
+
+  const loadBills = useCallback(async () => {
+    try {
+      const res = await getCommBills();
+      setBills(res.data.data || []);
+      setBillsPending(res.data.pending || 0);
+    } catch { /* quiet */ }
+  }, []);
+
+  const handleScanBills = async () => {
+    setBillsScanning(true);
+    try { await scanCommBills(); setMessage('Reading invoices in the background — click Refresh in a minute.'); }
+    catch { setError('Bill scan failed to start'); }
+    finally { setBillsScanning(false); }
+  };
+
+  const handleBillStatus = async (id, status) => {
+    try {
+      await updateBillStatus(id, status);
+      setBills((prev) => {
+        const next = prev.map((b) => b.id === id ? { ...b, billStatus: status } : b);
+        setBillsPending(next.filter((b) => (b.billStatus || 'pending') === 'pending').length);
+        return next;
+      });
     } catch {}
   };
 
@@ -136,6 +237,7 @@ export default function CommunicationCenterPage() {
 
   useEffect(() => { loadEmails(); }, [loadEmails]);
   useEffect(() => { loadCoverage(); }, [loadCoverage]);
+  useEffect(() => { if (activeCategory === 'bill') loadBills(); }, [activeCategory, loadBills]);
   useEffect(() => { if (message) { const t = setTimeout(() => setMessage(null), 4000); return () => clearTimeout(t); } }, [message]);
 
   const fetchLogs = async () => {
@@ -328,7 +430,7 @@ export default function CommunicationCenterPage() {
                     </a>
                   )}
                   {!answered && (
-                    <button onClick={() => handleMarkHandled(e.id)}
+                    <button onClick={() => handleMarkHandled(e.id, e.gmailThreadId)}
                       style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 600, flexShrink: 0 }}>
                       Mark handled
                     </button>
@@ -423,6 +525,10 @@ export default function CommunicationCenterPage() {
 
         {/* List */}
         <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden', background: '#f4f6f8' }}>
+          {activeCategory === 'bill' && (
+            <BillsView bills={bills} pending={billsPending} scanning={billsScanning}
+              onScan={handleScanBills} onReload={loadBills} onStatus={handleBillStatus} onOpen={handleOpenEmail} />
+          )}
           {/* Client Inquiry sub-tabs */}
           {activeCategory === 'client_inquiry' && (
             <div style={{ display: 'flex', gap: 8, padding: '12px 16px 0' }}>
@@ -432,7 +538,7 @@ export default function CommunicationCenterPage() {
               </button>
             </div>
           )}
-          {loading ? (
+          {activeCategory !== 'bill' && (loading ? (
             <div style={{ textAlign: 'center', padding: 80, color: '#bbb' }}>Loading emails...</div>
           ) : displayEmails.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 80, color: '#bbb' }}>
@@ -464,6 +570,12 @@ export default function CommunicationCenterPage() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                     <span style={{ fontSize: '0.72rem', color: '#ccc', minWidth: 52, textAlign: 'right' }}>{formatDate(email.receivedAt)}</span>
+                    {email.commCategory === 'client_inquiry' && !isResponded(email) && (
+                      <button onClick={() => handleMarkHandled(email.id, email.gmailThreadId)} title="Mark this inquiry as handled"
+                        style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontSize: '0.73rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        ✓ Handled
+                      </button>
+                    )}
                     {email.gmailLink && (
                       <a href={email.gmailLink} onClick={(ev) => handleOpenEmail(ev, email.id, email.gmailLink)} target="_blank" rel="noopener noreferrer"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '4px 10px', background: '#f0f4ff', border: '1px solid #c5cae9', borderRadius: 5, fontSize: '0.74rem', color: '#3949ab', textDecoration: 'none', fontWeight: 600 }}>
@@ -494,7 +606,7 @@ export default function CommunicationCenterPage() {
                 </div>
               ))}
             </div>
-          )}
+          ))}
         </div>
       </div>
     </div>
