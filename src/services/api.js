@@ -333,6 +333,18 @@ export const reassignPONumber = (oldPoNumber, newPoNumber) => api.put(`/po-numbe
 // Daily Email Settings
 export const getAiModelSettings = () => api.get('/settings/ai-models');
 export const getProductionWeek = (start) => api.get('/operations/production', { params: start ? { start } : {} });
+export const getOperators = () => api.get('/operations/operators');
+export const getAssignableWorkOrders = (q) => api.get('/operations/workorders', { params: q ? { q } : {} });
+export const getAssignments = (operator) => api.get('/operations/assignments', { params: operator ? { operator } : {} });
+export const assignWorkOrder = (workOrderId, operator) => api.post('/operations/assign', { workOrderId, operator });
+export const reorderAssignments = (operator, orderedIds) => api.post('/operations/assign/reorder', { operator, orderedIds });
+export const unassignWorkOrder = (workOrderId) => api.delete(`/operations/assign/${workOrderId}`);
+export const getMyQueue = (operator) => api.get('/operations/my-queue', { params: operator ? { operator } : {} });
+export const updatePartCompletedBy = (partId, completedBy) => api.patch(`/operations/parts/${partId}/completed-by`, { completedBy });
+export const getOperatorTasks = (operator) => api.get('/operations/tasks', { params: operator ? { operator } : {} });
+export const addOperatorTask = (operator, text) => api.post('/operations/tasks', { operator, text });
+export const updateOperatorTask = (id, data) => api.patch(`/operations/tasks/${id}`, data);
+export const deleteOperatorTask = (id) => api.delete(`/operations/tasks/${id}`);
 export const updateAiModelSettings = (data) => api.put('/settings/ai-models', data);
 export const getDailyEmailSettings = () => api.get('/email/settings');
 export const updateDailyEmailSettings = (settings) => api.put('/email/settings', settings);
