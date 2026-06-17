@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getGingerFindings, markGingerFindingsRead, runGingerScan } from '../services/api';
 
 const SEVERITY = {
@@ -9,9 +10,16 @@ const SEVERITY = {
 };
 
 function GingerAssistant() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
+
+  const goToWorkOrder = (id) => {
+    if (!id) return;
+    setOpen(false);
+    navigate(`/workorders/${id}`);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -69,30 +77,35 @@ function GingerAssistant() {
           right: 76,
           width: 48,
           height: 48,
-          borderRadius: '50%',
-          overflow: 'hidden',
           cursor: 'pointer',
           zIndex: 1100,
-          border: `3px solid ${unread ? '#c62828' : '#e67e22'}`,
-          boxShadow: unread ? '0 0 0 0 rgba(198,40,40,0.6)' : '0 2px 8px rgba(0,0,0,0.3)',
-          animation: unread ? 'gingerPulse 1.6s infinite' : 'none',
           transition: 'transform 0.2s',
         }}
         onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.15)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
       >
-        <img
-          src={unread ? '/ginger-alert.jpg' : '/ginger.jpg'}
-          alt="Ginger"
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-        />
-        {unread && (
+        {/* Round photo (clipped) */}
+        <div style={{
+          width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', boxSizing: 'border-box',
+          border: `3px solid ${unread ? '#c62828' : '#e67e22'}`,
+          boxShadow: unread ? '0 0 0 0 rgba(198,40,40,0.6)' : '0 2px 8px rgba(0,0,0,0.3)',
+          animation: unread ? 'gingerPulse 1.6s infinite' : 'none',
+        }}>
+          <img
+            src={unread ? '/ginger-alert.jpg' : '/ginger.jpg'}
+            alt="Ginger"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        </div>
+        {/* Count badge — overlaid on top of the icon, never clipped */}
+        {unread && total > 0 && (
           <div style={{
-            position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18,
-            background: '#c62828', color: 'white', borderRadius: 9, fontSize: 11,
+            position: 'absolute', top: -6, right: -6, minWidth: 20, height: 20,
+            background: '#c62828', color: 'white', borderRadius: 10, fontSize: 11,
             fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '0 4px', border: '2px solid white',
-          }}>{total}</div>
+            padding: '0 5px', border: '2px solid white', boxSizing: 'border-box',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.35)', lineHeight: 1, zIndex: 2,
+          }}>{total > 99 ? '99+' : total}</div>
         )}
       </div>
 
@@ -144,7 +157,15 @@ function GingerAssistant() {
                         <div style={{ fontSize: '0.88rem', color: '#333', lineHeight: 1.4 }}>{f.gingerSays}</div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '0.68rem', fontWeight: 700, color: sev.color, background: `${sev.color}15`, padding: '1px 6px', borderRadius: 4 }}>{sev.label}</span>
-                          <span style={{ fontSize: '0.72rem', color: '#888' }}>DR {f.drNumber} · {f.clientName}</span>
+                          <span style={{ fontSize: '0.72rem', color: '#888' }}>
+                            <button
+                              onClick={() => goToWorkOrder(f.workOrderId)}
+                              disabled={!f.workOrderId}
+                              title={f.workOrderId ? 'Open this work order' : ''}
+                              style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontSize: '0.72rem', fontWeight: 700, color: f.workOrderId ? '#1565c0' : '#888', textDecoration: f.workOrderId ? 'underline' : 'none', cursor: f.workOrderId ? 'pointer' : 'default' }}
+                            >DR {f.drNumber}</button>
+                            {' · '}{f.clientName}
+                          </span>
                         </div>
                       </div>
                     </div>
