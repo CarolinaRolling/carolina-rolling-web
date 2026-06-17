@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, DollarSign, Database, Hash, ShoppingCart, FileCode, Truck, Users, Wrench, FileText, Briefcase, MessageSquare } from 'lucide-react';
+import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, DollarSign, Database, Hash, ShoppingCart, FileCode, Truck, Users, Wrench, FileText, Briefcase, MessageSquare, Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
 import GingerAssistant from './GingerAssistant';
@@ -75,6 +75,7 @@ function Layout({ children }) {
                   Admin
                 </li>
                 <li><NavLink to="/admin/business" className={({ isActive }) => isActive ? 'active' : ''}><Briefcase size={20} /><span>Business Center</span></NavLink></li>
+                <li><NavLink to="/admin/operations" className={({ isActive }) => isActive ? 'active' : ''}><Activity size={20} /><span>Operations</span></NavLink></li>
                 <li><NavLink to="/admin/tracking" className={({ isActive }) => isActive ? 'active' : ''}><Hash size={20} /><span>Tracking</span></NavLink></li>
                 <li><NavLink to="/admin/users-logs" className={({ isActive }) => isActive ? 'active' : ''}><Shield size={20} /><span>Users & Logs</span></NavLink></li>
                 <li><NavLink to="/admin/settings" className={({ isActive }) => isActive ? 'active' : ''}><Settings size={20} /><span>Settings</span></NavLink></li>

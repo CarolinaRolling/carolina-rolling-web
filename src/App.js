@@ -32,6 +32,7 @@ import ShopSuppliesPage from './pages/ShopSuppliesPage';
 import InvoiceCenterPage from './pages/InvoiceCenterPage';
 import BusinessPage from './pages/BusinessPage';
 import TrackingPage from './pages/TrackingPage';
+import OperationsPage from './pages/OperationsPage';
 import SectionSizesPage from './pages/SectionSizesPage';
 import './App.css';
 
@@ -218,6 +219,12 @@ function AppRoutes() {
       <Route path="/admin/tracking" element={
         <AdminRoute>
           <Layout><TrackingPage /></Layout>
+        </AdminRoute>
+      } />
+
+      <Route path="/admin/operations" element={
+        <AdminRoute>
+          <Layout><OperationsPage /></Layout>
         </AdminRoute>
       } />
       

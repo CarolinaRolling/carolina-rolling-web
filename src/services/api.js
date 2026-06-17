@@ -332,6 +332,7 @@ export const reassignPONumber = (oldPoNumber, newPoNumber) => api.put(`/po-numbe
 
 // Daily Email Settings
 export const getAiModelSettings = () => api.get('/settings/ai-models');
+export const getProductionWeek = (start) => api.get('/operations/production', { params: start ? { start } : {} });
 export const updateAiModelSettings = (data) => api.put('/settings/ai-models', data);
 export const getDailyEmailSettings = () => api.get('/email/settings');
 export const updateDailyEmailSettings = (settings) => api.put('/email/settings', settings);
