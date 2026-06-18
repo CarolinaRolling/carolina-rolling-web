@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Activity, Clock, Users, ClipboardList, Arrow
 import {
   getProductionWeek, getOperators, getAssignments, getAssignableWorkOrders,
   assignWorkOrder, reorderAssignments, unassignWorkOrder, updatePartCompletedBy,
-  getOperatorTasks, addOperatorTask, updateOperatorTask, deleteOperatorTask,
+  getOperatorTasks, addOperatorTask, updateOperatorTask, deleteOperatorTask, reorderOperatorTasks,
 } from '../services/api';
 import { formatDate } from '../utils/dates';
 
@@ -238,15 +238,75 @@ function AssignmentsView() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [tileOp, setTileOp] = useState({});
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState('');
   const [taskBusy, setTaskBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [ops, asg] = await Promise.all([getOperators(), getAssignments()]);
+      setOperators(ops.data.data || []);
+      setAssignments(asg.data.data || []);
+    } catch { setOperators([]); setAssignments([]); } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
   const loadTasks = useCallback(async (op) => {
     if (!op) { setTasks([]); return; }
     try { const r = await getOperatorTasks(op); setTasks(r.data.data || []); } catch { setTasks([]); }
   }, []);
   useEffect(() => { loadTasks(selected); }, [selected, loadTasks]);
+
+  const refreshAssignments = async () => {
+    try { const asg = await getAssignments(); setAssignments(asg.data.data || []); } catch {}
+  };
+
+  const countFor = (name) => assignments.filter(a => a.assignedOperator === name).length;
+  const firstAvailable = () => {
+    if (operators.length === 0) return null;
+    let best = operators[0].operatorName, bestN = countFor(best);
+    for (const o of operators) { const n = countFor(o.operatorName); if (n < bestN) { best = o.operatorName; bestN = n; } }
+    return best;
+  };
+  const faName = firstAvailable();
+  const queue = selected
+    ? assignments.filter(a => a.assignedOperator === selected).sort((a, b) => (a.assignedSequence ?? 0) - (b.assignedSequence ?? 0))
+    : [];
+
+  const runSearch = async () => {
+    setSearching(true);
+    try { const res = await getAssignableWorkOrders(query.trim()); setResults(res.data.data || []); }
+    catch { setResults([]); } finally { setSearching(false); }
+  };
+
+  const addJob = async (woId, operator) => {
+    if (!operator) return;
+    setBusy(true);
+    try { await assignWorkOrder(woId, operator); await refreshAssignments(); setResults(rs => rs.filter(r => r.id !== woId)); }
+    catch {} finally { setBusy(false); }
+  };
+  const reassignJob = async (woId, newOp) => {
+    if (!newOp || newOp === selected) return;
+    setBusy(true);
+    try { await assignWorkOrder(woId, newOp); await refreshAssignments(); }
+    catch {} finally { setBusy(false); }
+  };
+  const handleRemove = async (woId) => {
+    setBusy(true);
+    try { await unassignWorkOrder(woId); await refreshAssignments(); }
+    catch {} finally { setBusy(false); }
+  };
+  const move = async (idx, dir) => {
+    const ids = queue.map(q => q.id);
+    const j = idx + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[idx], ids[j]] = [ids[j], ids[idx]];
+    setBusy(true);
+    try { await reorderAssignments(selected, ids); await refreshAssignments(); }
+    catch {} finally { setBusy(false); }
+  };
 
   const addTask = async () => {
     const text = newTask.trim();
@@ -265,61 +325,30 @@ function AssignmentsView() {
     try { await deleteOperatorTask(id); await loadTasks(selected); }
     catch {} finally { setTaskBusy(false); }
   };
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [ops, asg] = await Promise.all([getOperators(), getAssignments()]);
-      setOperators(ops.data.data || []);
-      setAssignments(asg.data.data || []);
-    } catch { setOperators([]); setAssignments([]); } finally { setLoading(false); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
-  const refreshAssignments = async () => {
-    try { const asg = await getAssignments(); setAssignments(asg.data.data || []); } catch {}
-  };
-
-  const countFor = (name) => assignments.filter(a => a.assignedOperator === name).length;
-  const queue = selected
-    ? assignments.filter(a => a.assignedOperator === selected).sort((a, b) => (a.assignedSequence ?? 0) - (b.assignedSequence ?? 0))
-    : [];
-
-  const runSearch = async () => {
-    setSearching(true);
-    try { const res = await getAssignableWorkOrders(query.trim()); setResults(res.data.data || []); }
-    catch { setResults([]); } finally { setSearching(false); }
-  };
-
-  const handleAssign = async (woId) => {
-    if (!selected) return;
-    setBusy(true);
-    try { await assignWorkOrder(woId, selected); await refreshAssignments(); setResults(rs => rs.filter(r => r.id !== woId)); }
-    catch {} finally { setBusy(false); }
-  };
-
-  const handleRemove = async (woId) => {
-    setBusy(true);
-    try { await unassignWorkOrder(woId); await refreshAssignments(); }
-    catch {} finally { setBusy(false); }
-  };
-
-  const move = async (idx, dir) => {
-    const ids = queue.map(q => q.id);
+  const moveTask = async (idx, dir) => {
+    const ids = tasks.map(t => t.id);
     const j = idx + dir;
     if (j < 0 || j >= ids.length) return;
     [ids[idx], ids[j]] = [ids[j], ids[idx]];
-    setBusy(true);
-    try { await reorderAssignments(selected, ids); await refreshAssignments(); }
-    catch {} finally { setBusy(false); }
+    setTaskBusy(true);
+    try { await reorderOperatorTasks(selected, ids); await loadTasks(selected); }
+    catch {} finally { setTaskBusy(false); }
   };
 
   if (loading) return <div style={{ textAlign: 'center', padding: 60, color: '#bbb' }}>Loading…</div>;
 
+  const opSelect = (value, onChange, opts = {}) => (
+    <select value={value} onChange={e => onChange(e.target.value)} disabled={opts.disabled}
+      style={{ fontSize: '0.78rem', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 6, maxWidth: 150 }}>
+      {opts.firstAvailable && <option value="">First available{faName ? ` — ${faName}` : ''}</option>}
+      {operators.map(o => <option key={o.operatorName} value={o.operatorName}>{o.operatorName}</option>)}
+    </select>
+  );
+
   return (
     <>
       <p style={{ color: '#777', marginTop: 0, fontSize: '0.9rem' }}>
-        Manage each employee's schedule: assign work orders in the order they should be done, and add free-text reminders. Everything here shows up on that operator's tablet. Operators come from the tablet API keys (Users &amp; Logs).
+        Build each operator's schedule — drag jobs into order, add tasks, and reassign work to whoever's free. Everything here shows up on that operator's tablet. Operators come from the tablet API keys (Users &amp; Logs).
       </p>
 
       {operators.length === 0 ? (
@@ -329,7 +358,7 @@ function AssignmentsView() {
           <div style={{ fontSize: '0.82rem' }}>Set an operator name on each tablet's API key under Users &amp; Logs, then they'll show up here.</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '230px 1fr', gap: 16, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 16, alignItems: 'start' }}>
           {/* Operator list */}
           <div className="card" style={{ padding: 8 }}>
             <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#999', padding: '6px 8px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Operators</div>
@@ -337,7 +366,7 @@ function AssignmentsView() {
               const n = countFor(op.operatorName);
               const active = selected === op.operatorName;
               return (
-                <button key={op.operatorName} onClick={() => { setSelected(op.operatorName); setResults([]); setQuery(''); }}
+                <button key={op.operatorName} onClick={() => { setSelected(op.operatorName); }}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', textAlign: 'left',
                     border: 'none', cursor: 'pointer', padding: '9px 10px', borderRadius: 8, marginBottom: 2,
@@ -353,93 +382,102 @@ function AssignmentsView() {
             })}
           </div>
 
-          {/* Queue + add */}
+          {/* Right side */}
           <div>
+            {/* QUEUE (top) */}
             {!selected ? (
-              <div className="card" style={{ textAlign: 'center', padding: 50, color: '#999' }}>
-                <ClipboardList size={30} style={{ marginBottom: 8 }} />
-                <div style={{ fontWeight: 600 }}>Pick an operator</div>
-                <div style={{ fontSize: '0.82rem' }}>Select someone on the left to see and build their job queue.</div>
+              <div className="card" style={{ textAlign: 'center', padding: 40, color: '#999', marginBottom: 16 }}>
+                <ClipboardList size={28} style={{ marginBottom: 8 }} />
+                <div style={{ fontWeight: 600 }}>Pick an operator to see their queue</div>
+                <div style={{ fontSize: '0.82rem' }}>Or just search jobs below and assign them to whoever's available.</div>
               </div>
             ) : (
-              <>
-                <div className="card" style={{ padding: 0, marginBottom: 16 }}>
-                  <div style={{ padding: '12px 14px', borderBottom: '1px solid #f0f0f0', fontWeight: 700, color: '#333' }}>
-                    {selected}'s queue <span style={{ color: '#999', fontWeight: 500 }}>· {queue.length} job{queue.length === 1 ? '' : 's'}</span>
-                  </div>
-                  {queue.length === 0 ? (
-                    <div style={{ padding: 24, textAlign: 'center', color: '#aaa', fontSize: '0.85rem' }}>No jobs assigned yet. Add one below.</div>
-                  ) : queue.map((q, idx) => (
-                    <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: idx < queue.length - 1 ? '1px solid #f4f4f4' : 'none' }}>
-                      <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#1565c0', color: 'white', fontWeight: 700, fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{idx + 1}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>DR {q.dr || '—'} <span style={{ color: '#888', fontWeight: 400 }}>· {q.clientName || ''}</span></div>
-                        <div style={{ fontSize: '0.72rem', color: '#aaa' }}>{q.status}{q.promisedDate ? ` · due ${formatDate(q.promisedDate)}` : ''}</div>
-                      </div>
-                      <button title="Open work order" onClick={() => navigate(`/workorders/${q.id}`)} style={iconBtn}><ExternalLink size={15} /></button>
-                      <button title="Move up" disabled={idx === 0 || busy} onClick={() => move(idx, -1)} style={iconBtn}><ArrowUp size={15} /></button>
-                      <button title="Move down" disabled={idx === queue.length - 1 || busy} onClick={() => move(idx, 1)} style={iconBtn}><ArrowDown size={15} /></button>
-                      <button title="Remove" disabled={busy} onClick={() => handleRemove(q.id)} style={{ ...iconBtn, color: '#c62828' }}><X size={15} /></button>
-                    </div>
-                  ))}
+              <div className="card" style={{ padding: 0, marginBottom: 16 }}>
+                <div style={{ padding: '12px 14px', borderBottom: '1px solid #f0f0f0', fontWeight: 700, color: '#333' }}>
+                  {selected}'s queue
+                  <span style={{ color: '#999', fontWeight: 500 }}> · {queue.length} job{queue.length === 1 ? '' : 's'} · {tasks.filter(t => !t.done).length} task{tasks.filter(t => !t.done).length === 1 ? '' : 's'}</span>
                 </div>
 
-                {/* Add a job */}
-                <div className="card" style={{ padding: 14 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 8, fontSize: '0.9rem' }}>Add a job to {selected}</div>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                    <div style={{ position: 'relative', flex: 1 }}>
-                      <Search size={15} style={{ position: 'absolute', left: 10, top: 10, color: '#bbb' }} />
-                      <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && runSearch()}
-                        placeholder="Search by DR # or client…"
-                        style={{ width: '100%', padding: '8px 10px 8px 32px', border: '1px solid #ddd', borderRadius: 8, fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                {/* Jobs */}
+                <div style={{ padding: '8px 14px 4px', fontSize: '0.7rem', fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5 }}>Jobs</div>
+                {queue.length === 0 ? (
+                  <div style={{ padding: '4px 14px 12px', color: '#aaa', fontSize: '0.84rem' }}>No jobs yet — add one below.</div>
+                ) : queue.map((q, idx) => (
+                  <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderTop: '1px solid #f6f6f6' }}>
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#1565c0', color: 'white', fontWeight: 700, fontSize: '0.72rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{idx + 1}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.86rem' }}>DR {q.dr || '—'} <span style={{ color: '#888', fontWeight: 400 }}>· {q.clientName || ''}</span></div>
+                      <div style={{ fontSize: '0.7rem', color: '#aaa' }}>{q.status}{q.promisedDate ? ` · due ${formatDate(q.promisedDate)}` : ''}</div>
                     </div>
-                    <button className="btn btn-primary" onClick={runSearch} disabled={searching}>{searching ? '…' : 'Search'}</button>
+                    {opSelect(selected, (v) => reassignJob(q.id, v), { disabled: busy })}
+                    <button title="Move up" disabled={idx === 0 || busy} onClick={() => move(idx, -1)} style={iconBtn}><ArrowUp size={14} /></button>
+                    <button title="Move down" disabled={idx === queue.length - 1 || busy} onClick={() => move(idx, 1)} style={iconBtn}><ArrowDown size={14} /></button>
+                    <button title="Open work order" onClick={() => navigate(`/workorders/${q.id}`)} style={iconBtn}><ExternalLink size={14} /></button>
+                    <button title="Remove" disabled={busy} onClick={() => handleRemove(q.id)} style={{ ...iconBtn, color: '#c62828' }}><X size={14} /></button>
                   </div>
-                  {results.length > 0 && (
-                    <div style={{ border: '1px solid #eee', borderRadius: 8, overflow: 'hidden' }}>
-                      {results.map(r => (
-                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '8px 12px', borderBottom: '1px solid #f4f4f4', fontSize: '0.84rem' }}>
-                          <span style={{ minWidth: 0 }}>
-                            <strong>DR {r.dr || '—'}</strong> <span style={{ color: '#888' }}>· {r.clientName || ''}</span>
-                            <span style={{ color: '#bbb' }}> · {r.status}</span>
-                            {r.assignedOperator && <span style={{ color: '#e65100', fontSize: '0.72rem' }}> · already on {r.assignedOperator}</span>}
-                          </span>
-                          <button className="btn btn-outline" disabled={busy} onClick={() => handleAssign(r.id)} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}><Plus size={14} /> Add</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {!searching && query && results.length === 0 && <div style={{ color: '#aaa', fontSize: '0.82rem' }}>No matching active work orders.</div>}
-                </div>
+                ))}
 
-                {/* Reminders & tasks */}
-                <div className="card" style={{ padding: 14, marginTop: 16 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 8, fontSize: '0.9rem' }}>Reminders &amp; tasks for {selected}</div>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                    <input value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTask()}
-                      placeholder='e.g. "Take out trash" or "Move the Simmons skid before Thursday"'
-                      style={{ flex: 1, padding: '8px 10px', border: '1px solid #ddd', borderRadius: 8, fontSize: '0.85rem', boxSizing: 'border-box' }} />
-                    <button className="btn btn-primary" onClick={addTask} disabled={taskBusy || !newTask.trim()}>Add</button>
+                {/* Tasks */}
+                <div style={{ padding: '12px 14px 4px', fontSize: '0.7rem', fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, borderTop: '1px solid #f0f0f0', marginTop: 6 }}>Tasks</div>
+                {tasks.map((t, idx) => (
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderTop: '1px solid #f6f6f6' }}>
+                    <button title={t.done ? 'Mark not done' : 'Mark done'} disabled={taskBusy} onClick={() => toggleTask(t)} style={{ ...iconBtn, padding: 3, color: t.done ? '#2e7d32' : '#999' }}>
+                      {t.done ? <CheckSquare size={16} /> : <Square size={16} />}
+                    </button>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: '0.85rem', color: t.done ? '#aaa' : '#333', textDecoration: t.done ? 'line-through' : 'none' }}>{t.text}</span>
+                    <button title="Move up" disabled={idx === 0 || taskBusy} onClick={() => moveTask(idx, -1)} style={iconBtn}><ArrowUp size={14} /></button>
+                    <button title="Move down" disabled={idx === tasks.length - 1 || taskBusy} onClick={() => moveTask(idx, 1)} style={iconBtn}><ArrowDown size={14} /></button>
+                    <button title="Delete" disabled={taskBusy} onClick={() => removeTask(t.id)} style={{ ...iconBtn, padding: 3, color: '#c62828' }}><Trash2 size={14} /></button>
                   </div>
-                  {tasks.length === 0 ? (
-                    <div style={{ color: '#aaa', fontSize: '0.82rem' }}>No reminders yet. Add a quick note above — it shows up on {selected}'s tablet.</div>
-                  ) : (
-                    <div style={{ border: '1px solid #eee', borderRadius: 8, overflow: 'hidden' }}>
-                      {tasks.map(t => (
-                        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: '1px solid #f4f4f4', fontSize: '0.85rem' }}>
-                          <button title={t.done ? 'Mark not done' : 'Mark done'} disabled={taskBusy} onClick={() => toggleTask(t)} style={{ ...iconBtn, padding: 3, color: t.done ? '#2e7d32' : '#999' }}>
-                            {t.done ? <CheckSquare size={16} /> : <Square size={16} />}
-                          </button>
-                          <span style={{ flex: 1, minWidth: 0, color: t.done ? '#aaa' : '#333', textDecoration: t.done ? 'line-through' : 'none' }}>{t.text}</span>
-                          <button title="Delete" disabled={taskBusy} onClick={() => removeTask(t.id)} style={{ ...iconBtn, padding: 3, color: '#c62828' }}><Trash2 size={14} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                ))}
+                <div style={{ display: 'flex', gap: 8, padding: '10px 14px 14px' }}>
+                  <input value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTask()}
+                    placeholder='Add a task — e.g. "Take out trash"'
+                    style={{ flex: 1, padding: '7px 10px', border: '1px solid #ddd', borderRadius: 8, fontSize: '0.84rem', boxSizing: 'border-box' }} />
+                  <button className="btn btn-primary" onClick={addTask} disabled={taskBusy || !newTask.trim()}>Add task</button>
                 </div>
-              </>
+              </div>
             )}
+
+            {/* ADD A JOB — tiles */}
+            <div className="card" style={{ padding: 14 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8, fontSize: '0.9rem' }}>Find &amp; assign jobs</div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <Search size={15} style={{ position: 'absolute', left: 10, top: 10, color: '#bbb' }} />
+                  <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && runSearch()}
+                    placeholder="Search by DR # or client…"
+                    style={{ width: '100%', padding: '8px 10px 8px 32px', border: '1px solid #ddd', borderRadius: 8, fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                </div>
+                <button className="btn btn-primary" onClick={runSearch} disabled={searching}>{searching ? '…' : 'Search'}</button>
+              </div>
+              {results.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10 }}>
+                  {results.map(r => {
+                    const chosen = tileOp[r.id] !== undefined ? tileOp[r.id] : (selected || '');
+                    return (
+                      <div key={r.id} style={{ border: '1px solid #e6e6e6', borderRadius: 10, padding: 10, background: '#fafbfc' }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>DR {r.dr || '—'}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.clientName || ''}</div>
+                        <div style={{ fontSize: '0.72rem', color: '#aaa', marginBottom: 8 }}>{r.status}{r.assignedOperator ? ` · on ${r.assignedOperator}` : ''}</div>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <select value={chosen} onChange={e => setTileOp(m => ({ ...m, [r.id]: e.target.value }))}
+                            style={{ flex: 1, fontSize: '0.78rem', padding: '5px 6px', border: '1px solid #ddd', borderRadius: 6, minWidth: 0 }}>
+                            <option value="">Unassigned — pick operator</option>
+                            {operators.map(o => <option key={o.operatorName} value={o.operatorName}>{o.operatorName}</option>)}
+                          </select>
+                          <button className="btn btn-primary" disabled={busy || !chosen} onClick={() => addJob(r.id, chosen)} style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, padding: '5px 10px' }}><Plus size={14} /> Add</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (!searching && query) ? (
+                <div style={{ color: '#aaa', fontSize: '0.82rem' }}>No matching active work orders.</div>
+              ) : (
+                <div style={{ color: '#bbb', fontSize: '0.82rem' }}>Search a DR # or client to see job tiles you can assign.</div>
+              )}
+            </div>
           </div>
         </div>
       )}

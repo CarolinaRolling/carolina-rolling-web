@@ -344,6 +344,7 @@ export const updatePartCompletedBy = (partId, completedBy) => api.patch(`/operat
 export const getOperatorTasks = (operator) => api.get('/operations/tasks', { params: operator ? { operator } : {} });
 export const addOperatorTask = (operator, text) => api.post('/operations/tasks', { operator, text });
 export const updateOperatorTask = (id, data) => api.patch(`/operations/tasks/${id}`, data);
+export const reorderOperatorTasks = (operator, orderedIds) => api.post('/operations/tasks/reorder', { operator, orderedIds });
 export const deleteOperatorTask = (id) => api.delete(`/operations/tasks/${id}`);
 export const updateAiModelSettings = (data) => api.put('/settings/ai-models', data);
 export const getDailyEmailSettings = () => api.get('/email/settings');
