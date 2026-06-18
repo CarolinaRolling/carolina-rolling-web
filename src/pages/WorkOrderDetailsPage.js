@@ -1034,6 +1034,28 @@ function WorkOrderDetailsPage() {
     }
   };
 
+  const hasInspection = (partId) => (order?.parts || []).some(p =>
+    p.partType === 'inspection' &&
+    String(p._linkedPartId || p.formData?._linkedPartId || p.formData?.linkedPartId || '') === String(partId)
+  );
+
+  const handleAddInspection = async (part) => {
+    try {
+      await addWorkOrderPart(id, {
+        partType: 'inspection',
+        quantity: parseInt(part.quantity) || 1,
+        _linkedPartId: part.id,
+        description: 'Inspection',
+        materialSource: 'customer_supplied',
+        status: 'pending',
+      });
+      await loadOrder();
+      showMessage('Inspection added');
+    } catch (err) {
+      setError('Failed to add inspection');
+    }
+  };
+
   const handleDeletePart = async (partId) => {
     const part = order?.parts?.find(p => p.id === partId);
     const fd = part?.formData || {};
@@ -3630,6 +3652,9 @@ function WorkOrderDetailsPage() {
                       <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>
                     </select>
                     <button className="btn btn-sm btn-outline" onClick={() => printPartLabel(part)} title="Print Label"><Tag size={14} /></button>
+                    {!['fab_service', 'shop_rate', 'rush_service', 'inspection'].includes(part.partType) && !hasInspection(part.id) && (
+                      <button className="btn btn-sm btn-outline" onClick={() => handleAddInspection(part)} title="Add inspection to this part" style={{ color: '#6a1b9a' }}>🔎 Inspect</button>
+                    )}
                     <button className="btn btn-sm btn-outline" onClick={() => openEditPartModal(part)}><Edit size={14} /></button>
                     <button className="btn btn-sm btn-outline" onClick={() => handleDuplicatePart(part)} title="Duplicate part" style={{ color: '#546e7a' }}>📋</button>
                     <button className="btn btn-sm btn-danger" onClick={() => handleDeletePart(part.id)}><Trash2 size={14} /></button>
@@ -4644,8 +4669,8 @@ function WorkOrderDetailsPage() {
 
       {/* Inspection panels — show for any inspection service part */}
       {woTab === 'parts' && (order.parts||[]).filter(p => p.partType==='inspection').map(inspPart => {
-        // Find linked part (via formData.linkedPartId or first non-service part)
-        const linkedPartId = inspPart.formData?.linkedPartId ||
+        // Find linked part (via formData.linkedPartId / _linkedPartId, or first non-service part)
+        const linkedPartId = inspPart._linkedPartId || inspPart.formData?._linkedPartId || inspPart.formData?.linkedPartId ||
           (order.parts||[]).find(p => !['fab_service','shop_rate','rush_service','inspection'].includes(p.partType))?.id;
         return linkedPartId ? (
           <InspectionPanel key={inspPart.id} order={order} inspectionPart={inspPart} linkedPartId={linkedPartId} />
