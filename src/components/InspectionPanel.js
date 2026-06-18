@@ -95,7 +95,7 @@ function CylinderTab({ unit, onSave, onPrintLabel }) {
   const oos = Math.abs((parseFloat(pr.diagA)||0) - (parseFloat(pr.diagB)||0));
   const oosWarn = oos > TOLERANCE_OOS;
 
-  const diamVals = [parseFloat(po.diamSeam)||0, parseFloat(po.diam45)||0, parseFloat(po.diamNeg45)||0].filter(v=>v>0);
+  const diamVals = [parseFloat(po.diamSeam)||0, parseFloat(po.diam90)||0, parseFloat(po.diam45)||0, parseFloat(po.diamNeg45)||0].filter(v=>v>0);
   const diamVar = diamVals.length >= 2 ? Math.max(...diamVals) - Math.min(...diamVals) : 0;
   const diamFail = diamVar > TOLERANCE_DIAM;
 
@@ -107,7 +107,7 @@ function CylinderTab({ unit, onSave, onPrintLabel }) {
 
   const preRollDone = pr.thickness && pr.gradeConfirmed && pr.heatNumberConfirmed &&
     pr.widthEnd1 && pr.widthEnd2 && pr.lengthEnd1 && pr.lengthEnd2 && pr.diagA && pr.diagB;
-  const postRollDone = po.circumEnd1 && po.circumEnd2 && po.diamSeam && po.diam45 && po.diamNeg45;
+  const postRollDone = po.circumEnd1 && po.circumEnd2 && po.diamSeam && po.diam90 && po.diam45 && po.diamNeg45;
 
   return (
     <div>
@@ -179,6 +179,7 @@ function CylinderTab({ unit, onSave, onPrintLabel }) {
             <MeasField label="Circumference — End 1" value={po.circumEnd1} onChange={v => setPo({...po, circumEnd1:v})} />
             <MeasField label="Circumference — End 2" value={po.circumEnd2} onChange={v => setPo({...po, circumEnd2:v})} />
             <MeasField label="Diameter at Seam (0°)" value={po.diamSeam} onChange={v => setPo({...po, diamSeam:v})} error={diamFail} />
+            <MeasField label="Diameter at 90°" value={po.diam90} onChange={v => setPo({...po, diam90:v})} error={diamFail} />
           </div>
           <div>
             <MeasField label="Diameter at 45°" value={po.diam45} onChange={v => setPo({...po, diam45:v})} error={diamFail} />
@@ -323,7 +324,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
           const pr = u.preRoll || {};
           const po = u.postRoll || {};
           const oosWarn = Math.abs((parseFloat(pr.diagA)||0)-(parseFloat(pr.diagB)||0)) > TOLERANCE_OOS;
-          const diamVals = [parseFloat(po.diamSeam)||0,parseFloat(po.diam45)||0,parseFloat(po.diamNeg45)||0].filter(v=>v>0);
+          const diamVals = [parseFloat(po.diamSeam)||0,parseFloat(po.diam90)||0,parseFloat(po.diam45)||0,parseFloat(po.diamNeg45)||0].filter(v=>v>0);
           const diamFail = diamVals.length>=2 && (Math.max(...diamVals)-Math.min(...diamVals)) > TOLERANCE_DIAM;
           return (
             <button key={u.id} onClick={() => setActiveUnit(idx)}
