@@ -4094,6 +4094,11 @@ function WorkOrderDetailsPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Inspection tabs for this part (appear at the bottom of the part card) */}
+                {(order.parts||[]).filter(ip => ip.partType==='inspection' && String(ip._linkedPartId||ip.formData?._linkedPartId||ip.formData?.linkedPartId||'')===String(part.id)).map(inspPart => (
+                  <InspectionPanel key={inspPart.id} order={order} inspectionPart={inspPart} linkedPartId={part.id} />
+                ))}
               </div>
             ); })}
           </div>
@@ -4668,14 +4673,7 @@ function WorkOrderDetailsPage() {
       )}
 
       {/* Inspection panels — show for any inspection service part */}
-      {woTab === 'parts' && (order.parts||[]).filter(p => p.partType==='inspection').map(inspPart => {
-        // Find linked part (via formData.linkedPartId / _linkedPartId, or first non-service part)
-        const linkedPartId = inspPart._linkedPartId || inspPart.formData?._linkedPartId || inspPart.formData?.linkedPartId ||
-          (order.parts||[]).find(p => !['fab_service','shop_rate','rush_service','inspection'].includes(p.partType))?.id;
-        return linkedPartId ? (
-          <InspectionPanel key={inspPart.id} order={order} inspectionPart={inspPart} linkedPartId={linkedPartId} />
-        ) : null;
-      })}
+      {/* Inspection panels now render nested under each part card (see parts list above) */}
 
       {/* ===== OUTBOUND SHIPPING TAB ===== */}
       {woTab === 'shipping' && (

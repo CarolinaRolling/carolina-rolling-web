@@ -178,12 +178,12 @@ function CylinderTab({ unit, onSave, onPrintLabel }) {
           <div>
             <MeasField label="Circumference — End 1" value={po.circumEnd1} onChange={v => setPo({...po, circumEnd1:v})} />
             <MeasField label="Circumference — End 2" value={po.circumEnd2} onChange={v => setPo({...po, circumEnd2:v})} />
-            <MeasField label="Diameter at Seam (0°)" value={po.diamSeam} onChange={v => setPo({...po, diamSeam:v})} error={diamFail} />
-            <MeasField label="Diameter at 90°" value={po.diam90} onChange={v => setPo({...po, diam90:v})} error={diamFail} />
+            <MeasField label="Diameter A (at seam)" value={po.diamSeam} onChange={v => setPo({...po, diamSeam:v})} error={diamFail} />
+            <MeasField label="Diameter B (90°)" value={po.diam90} onChange={v => setPo({...po, diam90:v})} error={diamFail} />
           </div>
           <div>
-            <MeasField label="Diameter at 45°" value={po.diam45} onChange={v => setPo({...po, diam45:v})} error={diamFail} />
-            <MeasField label="Diameter at -45°" value={po.diamNeg45} onChange={v => setPo({...po, diamNeg45:v})} error={diamFail} />
+            <MeasField label="Diameter C (45°)" value={po.diam45} onChange={v => setPo({...po, diam45:v})} error={diamFail} />
+            <MeasField label="Diameter D (-45°)" value={po.diamNeg45} onChange={v => setPo({...po, diamNeg45:v})} error={diamFail} />
             {diamVals.length >= 2 && (
               <div style={{ background:diamFail?'#ffebee':'#e8f5e9', border:`1px solid ${diamFail?'#ef9a9a':'#a5d6a7'}`, borderRadius:6, padding:'8px 12px', marginTop:8 }}>
                 <div style={{ fontSize:'0.8rem', fontWeight:700, color:diamFail?'#c62828':'#2e7d32' }}>
@@ -227,6 +227,7 @@ function CylinderTab({ unit, onSave, onPrintLabel }) {
 export default function InspectionPanel({ order, inspectionPart, linkedPartId }) {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeUnit, setActiveUnit] = useState(0);
   const [reportLoading, setReportLoading] = useState(false);
 
@@ -236,6 +237,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
 
   const loadJob = async () => {
     setLoading(true);
+    setError(null);
     try {
       const r = await getInspectionJobs(order.id);
       const jobs = r.data.data || [];
@@ -254,7 +256,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
         });
         setJob(create.data.data);
       }
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error(e); setError(e?.response?.data?.error?.message || e.message || 'Failed to load inspection'); }
     finally { setLoading(false); }
   };
 
@@ -289,8 +291,16 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
     finally { setReportLoading(false); }
   };
 
-  if (loading) return <div style={{ padding:20, textAlign:'center', color:'#888' }}>Loading inspection data...</div>;
-  if (!job) return null;
+  if (loading) return <div style={{ padding:16, marginTop:12, textAlign:'center', color:'#888', border:'2px solid #1565c0', borderRadius:10 }}>Loading inspection…</div>;
+  if (error || !job) return (
+    <div style={{ marginTop:12, border:'2px solid #c62828', borderRadius:10, padding:16, background:'#fff5f5' }}>
+      <div style={{ fontWeight:700, color:'#c62828', display:'flex', alignItems:'center', gap:6 }}>
+        <AlertTriangle size={16} /> Inspection couldn't load
+      </div>
+      <div style={{ fontSize:'0.82rem', color:'#666', margin:'6px 0 10px' }}>{error || 'No inspection job was created for this part.'}</div>
+      <button onClick={loadJob} style={{ padding:'8px 14px', background:'#1565c0', color:'white', border:'none', borderRadius:6, fontWeight:600, cursor:'pointer' }}>Retry</button>
+    </div>
+  );
 
   const units = job.units || [];
   const completedCount = units.filter(u => u.preRollComplete && u.postRollComplete).length;
@@ -334,7 +344,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
                 borderBottom:activeUnit===idx?'2px solid #1565c0':'2px solid transparent',
                 display:'flex', alignItems:'center', gap:5 }}>
               {done ? <Check size={13} style={{ color:'#2e7d32' }} /> : (oosWarn || diamFail) ? <AlertTriangle size={13} /> : null}
-              {UNIT_LETTERS[idx]}
+              {u.unitId || UNIT_LETTERS[idx]}
             </button>
           );
         })}
