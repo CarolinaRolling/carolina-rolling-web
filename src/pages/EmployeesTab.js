@@ -322,6 +322,18 @@ export default function EmployeesTab({ showMsg, setErr }) {
             }} disabled={sendingPayroll} style={{background:'#2e7d32',color:'white'}}>
               {sendingPayroll?'Sending...':'📤 Submit & Email'}
             </button>}
+            {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{
+              if(!window.confirm('Submit this payroll WITHOUT emailing it? It will be marked submitted and vacation balances will update, but no email will be sent.'))return;
+              setSendingPayroll(true);
+              try{
+                await submitPayroll(activePR.id);
+                showMsg('✅ Payroll submitted (no email sent)');
+                setActivePR(null);await loadPR();await loadEmps();
+              }catch(e){setErr('Failed to submit: '+(e.response?.data?.error?.message||e.message));}
+              finally{setSendingPayroll(false);}
+            }} disabled={sendingPayroll} style={{background:'#455a64',color:'white'}}>
+              {sendingPayroll?'Submitting...':'✓ Submit (No Email)'}
+            </button>}
             {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{if(!window.confirm('Delete this payroll draft? All entries will be lost.'))return;try{await deletePayroll(activePR.id);showMsg('Draft deleted');setActivePR(null);await loadPR();}catch{setErr('Failed to delete');}}} style={{background:'#c62828',color:'white'}}>🗑️ Delete Draft</button>}
             {activePR.status==='draft'&&<button className="btn btn-sm" onClick={()=>{setExtHrsEmps([]);setExtHrsDates([]);setExtHrsHours(1.5);setShowExtHrs(true);}} style={{background:'#E65100',color:'white'}}>⏱️ Extended Hours</button>}
             <button className="btn btn-sm" onClick={()=>printPayrollService(activePR)} style={{background:'#1565c0',color:'white'}}>🖨️ Payroll Sheet</button>

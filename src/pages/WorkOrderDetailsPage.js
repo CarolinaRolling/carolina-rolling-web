@@ -21,7 +21,7 @@ import FabServiceForm from '../components/FabServiceForm';
 import ShopRateForm from '../components/ShopRateForm';
 import HeatNumberInput from '../components/HeatNumberInput';
 import ShipmentChargesSection from '../components/ShipmentChargesSection';
-import InspectionPanel from '../components/InspectionPanel';
+import InspectionPanel, { specIssues } from '../components/InspectionPanel';
 import WorkOrderLifecycleBar from '../components/WorkOrderLifecycleBar';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
@@ -37,7 +37,7 @@ import {
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
   generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo,
-  addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge, getWOShipmentCharges
+  addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge, getWOShipmentCharges, getInspectionJobs
 } from '../services/api';
 
 const PART_TYPES = {
@@ -78,6 +78,7 @@ function WorkOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const [inspectionJobs, setInspectionJobs] = useState([]);
   const [showAccountingContact, setShowAccountingContact] = useState(false);
   const [woTab, setWoTab] = useState('parts');
   const [shipmentCharges, setShipmentCharges] = useState([]);
@@ -227,6 +228,14 @@ function WorkOrderDetailsPage() {
   const [codAction, setCodAction] = useState(null); // 'checklist' or 'pickup'
   const [codShowOverride, setCodShowOverride] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    const loadInsp = () => getInspectionJobs(id).then(r => setInspectionJobs(r.data.data || [])).catch(() => {});
+    loadInsp();
+    const it = setInterval(loadInsp, 15000);
+    return () => clearInterval(it);
+  }, [id]);
 
   useEffect(() => { 
     loadOrder(); loadLaborMinimums(); 
@@ -471,6 +480,22 @@ function WorkOrderDetailsPage() {
     return value;
   };
 
+  // Per-part base labor/material readers — MUST match the part-card display logic.
+  // Labor may live in formData._baseLaborTotal before a part has been re-saved, which is
+  // why the part card/modal show a price but the summary read 0 until an edit+save.
+  const basePartLabor = (part) => {
+    const stored = parseFloat((part.formData || {})._baseLaborTotal);
+    if (!isNaN(stored) && stored > 0) return stored;
+    return parseFloat(part.laborTotal) || parseFloat((part.formData || {}).laborTotal) || 0;
+  };
+  const basePartMaterialEach = (part) => {
+    const matCost = parseFloat(part.materialTotal) || parseFloat((part.formData || {}).materialTotal) || 0;
+    const raw = parseFloat(part.materialMarkupPercent);
+    const markup = isNaN(raw) ? 20 : raw;
+    const rounding = part._materialRounding || (part.formData || {})._materialRounding;
+    return roundUpMaterial(matCost * (1 + markup / 100), rounding);
+  };
+
   const getMinimumInfo = () => {
     let totalLabor = 0, totalMaterial = 0, highestMinimum = 0, highestMinRule = null;
     const EA_PRICED = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
@@ -478,10 +503,8 @@ function WorkOrderDetailsPage() {
 
     parts.forEach(part => {
       if (!EA_PRICED.includes(part.partType)) return;
-      const laborEach = parseFloat(part.laborTotal) || 0;
-      const materialCost = parseFloat(part.materialTotal) || 0;
-      const materialMarkup = parseFloat(part.materialMarkupPercent) || (part.formData?.materialMarkupPercent ? parseFloat(part.formData.materialMarkupPercent) : 0);
-      const materialEach = roundUpMaterial(materialCost * (1 + materialMarkup / 100), part.formData?._materialRounding);
+      const laborEach = basePartLabor(part);
+      const materialEach = basePartMaterialEach(part);
       const qty = parseInt(part.quantity) || 1;
       totalLabor += laborEach * qty;
       totalMaterial += materialEach * qty;
@@ -1479,11 +1502,12 @@ function WorkOrderDetailsPage() {
 
       // Pricing calculations (always calculate, only display if includePricing)
       const matCost = parseFloat(part.materialTotal) || 0;
-      const matMarkup = parseFloat(part.materialMarkupPercent) || 0;
+      const matMarkupRaw = parseFloat(part.materialMarkupPercent);
+      const matMarkup = isNaN(matMarkupRaw) ? (matCost > 0 ? 20 : 0) : matMarkupRaw;
       const matRounding = part.formData?._materialRounding;
       const matEachRaw = matCost * (1 + matMarkup / 100);
       const matEach = matRounding === 'dollar' ? Math.ceil(matEachRaw) : matRounding === 'five' ? Math.ceil(matEachRaw / 5) * 5 : matEachRaw;
-      const labEach = parseFloat(part.laborTotal) || 0;
+      const labEach = basePartLabor(part);
       const unitPrice = matEach + labEach;
       const qty = parseInt(part.quantity) || 1;
       const partTotal = unitPrice * qty;
@@ -1515,10 +1539,11 @@ function WorkOrderDetailsPage() {
             ${part.partType === 'press_brake' && part._pressBrakeFileName ? `<div style="margin-top:2px;font-size:9px;color:#1565c0">🗂️ Brake File: ${part._pressBrakeFileName}</div>` : ''}
             ${includePricing && pricingHtml ? `<div class="pr-pricing">${(() => {
               const matCost2 = parseFloat(part.materialTotal) || 0;
-              const matMarkup2 = parseFloat(part.materialMarkupPercent) || 0;
+              const matMarkup2Raw = parseFloat(part.materialMarkupPercent);
+              const matMarkup2 = isNaN(matMarkup2Raw) ? (matCost2 > 0 ? 20 : 0) : matMarkup2Raw;
               const matEach2Raw = matCost2 * (1 + matMarkup2 / 100);
               const matEach2 = matRounding === 'dollar' ? Math.ceil(matEach2Raw) : matRounding === 'five' ? Math.ceil(matEach2Raw / 5) * 5 : matEach2Raw;
-              const labEach2 = parseFloat(part.laborTotal) || 0;
+              const labEach2 = basePartLabor(part);
               return `${matCost2 ? `<span>Material: ${formatCurrency(matCost2)}${matMarkup2 > 0 ? ' +' + matMarkup2 + '%' : ''}</span>` : ''}${labEach2 ? `<span>Labor: ${formatCurrency(labEach2)}</span>` : ''}`;
             })()}</div>` : ''}
           </div>
@@ -2053,13 +2078,9 @@ function WorkOrderDetailsPage() {
       // Fall back to formData.partTotal, then recalculate from labor+material if both are null
       let total = parseFloat(p.partTotal) || parseFloat((p.formData || {}).partTotal) || 0;
       if (!total) {
-        // Recalculate from components
+        // Recalculate from components (matches the part-card display so the summary agrees pre-save)
         const qty = parseInt(p.quantity) || 1;
-        const matCost = parseFloat(p.materialTotal) || parseFloat((p.formData || {}).materialTotal) || 0;
-        const matMarkup = parseFloat(p.materialMarkupPercent) ?? 20;
-        const matEach = matCost * (1 + matMarkup / 100);
-        const lab = parseFloat(p.laborTotal) || parseFloat((p.formData || {}).laborTotal) || 0;
-        total = (matEach + lab) * qty;
+        total = (basePartMaterialEach(p) + basePartLabor(p)) * qty;
       }
       if (EA_PRICED.includes(p.partType)) {
         eaPricedTotal += total;
@@ -2268,8 +2289,35 @@ function WorkOrderDetailsPage() {
   const hasNoParts = !order.parts || order.parts.length === 0;
   const clientPO = order.clientPurchaseOrderNumber || shipment?.clientPurchaseOrderNumber;
 
+  // Inspection out-of-spec across all parts (measured vs ordered spec) — for the top-of-page warning
+  const inspectionSpecIssues = [];
+  (inspectionJobs || []).forEach(job => {
+    const part = (order.parts || []).find(p => p.id === job.workOrderPartId);
+    if (!part) return;
+    (job.units || []).forEach(u => {
+      specIssues(part, u).forEach(i => inspectionSpecIssues.push({ unitId: u.unitId, partNumber: part.partNumber, ...i }));
+    });
+  });
+
   return (
     <div>
+      {/* INSPECTION OUT-OF-SPEC banner — pinned at the very top so it's caught immediately */}
+      {inspectionSpecIssues.length > 0 && (
+        <div style={{ borderRadius: '8px 8px 0 0', border: '3px solid #7f0000', borderBottom: 'none', overflow: 'hidden' }}>
+          <div style={{ background: '#c62828', color: 'white', padding: '10px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <span style={{ fontSize: '1.6rem' }}>⚠️</span>
+            <span style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: 1 }}>INSPECTION OUT OF SPEC — CHECK BEFORE RUNNING / SHIPPING</span>
+            <span style={{ fontSize: '1.6rem' }}>⚠️</span>
+          </div>
+          <div style={{ background: '#fff5f5', padding: '10px 24px', borderTop: '2px solid #ef9a9a' }}>
+            {inspectionSpecIssues.map((i, idx) => (
+              <div key={idx} style={{ fontSize: '0.86rem', color: '#7f0000', fontFamily: 'monospace', fontWeight: 600 }}>
+                Part #{i.partNumber} · {i.unitId} · {i.label}: measured {i.measured}" vs spec {i.spec}" (off {i.delta.toFixed(3)}")
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* COD Banner — full width, above header */}
       {isCODClient && (
         <div style={{ borderRadius: '8px 8px 0 0', border: '3px solid #b71c1c', borderBottom: 'none', overflow: 'hidden', marginBottom: 0 }}>
@@ -4159,7 +4207,7 @@ function WorkOrderDetailsPage() {
                   }, 0);
                   const hiddenFromCustomer = isHiddenFromCustomer(part);
                   // Base labor per piece (markup already baked in when OP enabled)
-                  const rawLaborEach = parseFloat(part.laborTotal) || 0;
+                  const rawLaborEach = basePartLabor(part);
                   // Hidden parts contribute $0 to the customer-facing table
                   const adjLabor = hiddenFromCustomer
                     ? 0
@@ -5693,9 +5741,10 @@ function WorkOrderDetailsPage() {
                             const fd = p.formData && typeof p.formData === 'object' ? p.formData : {};
                             const qty = parseInt(p.quantity) || 1;
                             const mat = parseFloat(p.materialTotal) || 0;
-                            const matMk = parseFloat(p.materialMarkupPercent) || 0;
+                            const matMkRaw = parseFloat(p.materialMarkupPercent);
+                            const matMk = isNaN(matMkRaw) ? (mat > 0 ? 20 : 0) : matMkRaw;
                             const matBilled = Math.round(mat * (1 + matMk / 100) * 100) / 100;
-                            const labor = parseFloat(p.laborTotal) || 0;
+                            const labor = basePartLabor(p);
                             // Read outside processing from JSONB array (new architecture)
                             const ops = p.outsideProcessing || [];
                             let opBilledLot = 0;
