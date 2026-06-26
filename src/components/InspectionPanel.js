@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, FileText, Printer, Check, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   getInspectionJobs, createInspectionJob, deleteInspectionJob,
-  addInspectionUnit, saveInspectionUnit,
+  addInspectionUnit, saveInspectionUnit, updateInspectionJob,
   getInspectionReportPdf, getInspectionLabelPdf,
 } from '../services/api';
 
@@ -25,7 +25,7 @@ export function parseSpec(v) {
 
 // Compare a unit's measurements against the part's ordered spec.
 // Returns [{ label, measured, spec, delta }] for anything beyond SPEC_TOLERANCE.
-export function specIssues(part, unit) {
+export function specIssues(part, unit, skip = false) {
   if (!part || !unit) return [];
   const pr = unit.preRoll || {}, po = unit.postRoll || {};
   const specW = parseSpec(part.width);
@@ -39,11 +39,13 @@ export function specIssues(part, unit) {
     const delta = Math.abs(m - spec);
     if (delta > SPEC_TOLERANCE) issues.push({ label, measured: m, spec, delta });
   };
-  check('Width (End 1)', pr.widthEnd1, specW);
-  check('Width (End 2)', pr.widthEnd2, specW);
-  check('Length (End 1)', pr.lengthEnd1, specL);
-  check('Length (End 2)', pr.lengthEnd2, specL);
-  check('Thickness', pr.thickness, specT);
+  if (!skip) {
+    check('Width (End 1)', pr.widthEnd1, specW);
+    check('Width (End 2)', pr.widthEnd2, specW);
+    check('Length (End 1)', pr.lengthEnd1, specL);
+    check('Length (End 2)', pr.lengthEnd2, specL);
+    check('Thickness', pr.thickness, specT);
+  }
   check('Diameter A', po.diamSeam, specD);
   check('Diameter B', po.diam90, specD);
   check('Diameter C', po.diam45, specD);
@@ -97,13 +99,13 @@ function Cell({ value, onChange, type, warn, error }) {
   );
 }
 
-function rowStatus(pr, po) {
+function rowStatus(pr, po, skip) {
   const oos = Math.abs((parseFloat(pr.diagA)||0) - (parseFloat(pr.diagB)||0)) > TOLERANCE_OOS;
   const dv = [parseFloat(po.diamSeam)||0, parseFloat(po.diam90)||0, parseFloat(po.diam45)||0, parseFloat(po.diamNeg45)||0].filter(v=>v>0);
   const diamFail = dv.length >= 2 && (Math.max(...dv) - Math.min(...dv)) > TOLERANCE_DIAM;
   const prDone = pr.thickness && pr.gradeConfirmed && pr.heatNumberConfirmed && pr.widthEnd1 && pr.widthEnd2 && pr.lengthEnd1 && pr.lengthEnd2 && pr.diagA && pr.diagB;
   const poDone = po.circumEnd1 && po.circumEnd2 && po.diamSeam && po.diam90 && po.diam45 && po.diamNeg45;
-  return { oos, diamFail, done: prDone && poDone };
+  return { oos, diamFail, done: (skip || prDone) && poDone };
 }
 
 // ── Main panel (CR Admin table view) ──
@@ -187,6 +189,12 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
 
   const handleAddUnit = async () => { if (!job) return; await addInspectionUnit(job.id); await loadJob(); };
 
+  const handleToggleSkip = async (val) => {
+    if (!job) return;
+    try { await updateInspectionJob(job.id, { skipPreRoll: val }); await loadJob(); }
+    catch (e) { setError('Could not update inspection setting'); }
+  };
+
   const handlePrintLabel = async (unitId) => {
     try { const r = await getInspectionLabelPdf(unitId); window.open(URL.createObjectURL(new Blob([r.data], { type:'application/pdf' })), '_blank'); }
     catch(e) { alert('Label print failed'); }
@@ -208,7 +216,8 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
   );
 
   const units = job.units || [];
-  const completedCount = units.filter(u => { const r = rows[u.id]||{preRoll:{},postRoll:{}}; return rowStatus(r.preRoll, r.postRoll).done; }).length;
+  const skip = !!job.skipPreRoll;
+  const completedCount = units.filter(u => { const r = rows[u.id]||{preRoll:{},postRoll:{}}; return rowStatus(r.preRoll, r.postRoll, skip).done; }).length;
   const allComplete = completedCount === units.length && units.length > 0;
 
   const th = { padding:'6px 6px', fontSize:'0.68rem', color:'#555', fontWeight:700, whiteSpace:'nowrap', borderBottom:'1px solid #ddd' };
@@ -222,7 +231,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
   const overSpec = (measured, spec) => { const m = parseFloat(measured); return spec != null && m && !isNaN(m) && Math.abs(m - spec) > SPEC_TOLERANCE; };
   const allSpecIssues = units.flatMap(u => {
     const r = rows[u.id] || { preRoll:{}, postRoll:{} };
-    return specIssues(linkedPart, r).map(i => ({ unitId: u.unitId, ...i }));
+    return specIssues(linkedPart, r, skip).map(i => ({ unitId: u.unitId, ...i }));
   });
 
   return (
@@ -252,6 +261,10 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
               ? <span style={{ color:'#ffe082' }}> · ✎ editing — live paused (Save to resume)</span>
               : <span style={{ color:'#a5ffb0' }}> · ● live{lastSync ? ` · updated ${lastSync.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit'})}` : ''}</span>}
           </div>
+          <label style={{ color:'white', fontSize:'0.78rem', display:'flex', alignItems:'center', gap:5, marginTop:4, cursor:'pointer' }}>
+            <input type="checkbox" checked={skip} onChange={e => handleToggleSkip(e.target.checked)} />
+            Client-supplied cylinders — skip flat-sheet (pre-roll)
+          </label>
         </div>
         <div style={{ display:'flex', gap:8 }}>
           <button onClick={() => setShowDiagrams(s => !s)} style={{ padding:'7px 12px', background:'rgba(255,255,255,0.15)', color:'white', border:'1px solid rgba(255,255,255,0.4)', borderRadius:6, cursor:'pointer', fontSize:'0.82rem', display:'flex', alignItems:'center', gap:4 }}>
@@ -265,7 +278,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
 
       {showDiagrams && (
         <div style={{ display:'flex', gap:16, padding:'12px 14px', background:'#f9fbfd', borderBottom:'1px solid #e0e0e0', flexWrap:'wrap' }}>
-          <div><div style={{ fontSize:'0.72rem', fontWeight:700, color:'#555', marginBottom:4 }}>Pre-Roll (flat plate)</div><PreRollDiagram/></div>
+          {!skip && <div><div style={{ fontSize:'0.72rem', fontWeight:700, color:'#555', marginBottom:4 }}>Pre-Roll (flat plate)</div><PreRollDiagram/></div>}
           <div><div style={{ fontSize:'0.72rem', fontWeight:700, color:'#555', marginBottom:4 }}>Post-Roll (cylinder)</div><PostRollDiagram/></div>
         </div>
       )}
@@ -276,16 +289,16 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
           <thead>
             <tr style={{ background:'#fafafa' }}>
               <th style={{ ...th, textAlign:'left', position:'sticky', left:0, background:'#fafafa' }}>Cylinder ID</th>
-              <th style={th} colSpan={9}>PRE-ROLL (flat plate)</th>
+              {!skip && <th style={th} colSpan={9}>PRE-ROLL (flat plate)</th>}
               <th style={th} colSpan={6}>POST-ROLL (cylinder)</th>
               <th style={th}>Status</th>
               <th style={th}>Label</th>
             </tr>
             <tr style={{ background:'#fafafa' }}>
               <th style={{ ...th, position:'sticky', left:0, background:'#fafafa' }}></th>
-              <th style={th}>Thk</th><th style={th}>Grade</th><th style={th}>Heat</th>
+              {!skip && <><th style={th}>Thk</th><th style={th}>Grade</th><th style={th}>Heat</th>
               <th style={th}>W1</th><th style={th}>W2</th><th style={th}>L1</th><th style={th}>L2</th>
-              <th style={th}>Diag A</th><th style={th}>Diag B</th>
+              <th style={th}>Diag A</th><th style={th}>Diag B</th></>}
               <th style={th}>Circ 1</th><th style={th}>Circ 2</th>
               <th style={th}>Ø A</th><th style={th}>Ø B</th><th style={th}>Ø C</th><th style={th}>Ø D</th>
               <th style={th}></th><th style={th}></th>
@@ -295,10 +308,11 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
             {units.map(u => {
               const r = rows[u.id] || { preRoll:{}, postRoll:{} };
               const pr = r.preRoll, po = r.postRoll;
-              const st = rowStatus(pr, po);
+              const st = rowStatus(pr, po, skip);
               return (
                 <tr key={u.id}>
                   <td style={{ ...td, textAlign:'left', fontFamily:'monospace', fontWeight:700, color:'#1565c0', position:'sticky', left:0, background:'white', whiteSpace:'nowrap' }}>{u.unitId}</td>
+                  {!skip && <>
                   <td style={td}><Cell value={pr.thickness} onChange={v=>setPR(u.id,'thickness',v)} error={overSpec(pr.thickness, specT)} /></td>
                   <td style={td}><Cell type="check" value={pr.gradeConfirmed} onChange={v=>setPR(u.id,'gradeConfirmed',v)} /></td>
                   <td style={td}><Cell type="check" value={pr.heatNumberConfirmed} onChange={v=>setPR(u.id,'heatNumberConfirmed',v)} /></td>
@@ -308,6 +322,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
                   <td style={td}><Cell value={pr.lengthEnd2} onChange={v=>setPR(u.id,'lengthEnd2',v)} error={overSpec(pr.lengthEnd2, specL)} /></td>
                   <td style={td}><Cell value={pr.diagA} onChange={v=>setPR(u.id,'diagA',v)} warn={st.oos} /></td>
                   <td style={td}><Cell value={pr.diagB} onChange={v=>setPR(u.id,'diagB',v)} warn={st.oos} /></td>
+                  </>}
                   <td style={td}><Cell value={po.circumEnd1} onChange={v=>setPO(u.id,'circumEnd1',v)} /></td>
                   <td style={td}><Cell value={po.circumEnd2} onChange={v=>setPO(u.id,'circumEnd2',v)} /></td>
                   <td style={td}><Cell value={po.diamSeam} onChange={v=>setPO(u.id,'diamSeam',v)} error={st.diamFail || overSpec(po.diamSeam, specD)} /></td>

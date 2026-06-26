@@ -2297,7 +2297,7 @@ function WorkOrderDetailsPage() {
     const part = (order.parts || []).find(p => p.id === job.workOrderPartId);
     if (!part) return;
     (job.units || []).forEach(u => {
-      specIssues(part, u).forEach(i => inspectionSpecIssues.push({ unitId: u.unitId, partNumber: part.partNumber, ...i }));
+      specIssues(part, u, job.skipPreRoll).forEach(i => inspectionSpecIssues.push({ unitId: u.unitId, partNumber: part.partNumber, ...i }));
     });
   });
 

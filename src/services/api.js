@@ -638,6 +638,7 @@ export const runGingerScan = () => api.post('/ginger/scan');
 // Inspection
 export const getInspectionJobs = (workOrderId) => api.get(`/inspections/job/${workOrderId}`);
 export const createInspectionJob = (data) => api.post('/inspections/job', data);
+export const updateInspectionJob = (id, data) => api.patch(`/inspections/job/${id}`, data);
 export const deleteInspectionJob = (id) => api.delete(`/inspections/job/${id}`);
 export const addInspectionUnit = (jobId) => api.post(`/inspections/job/${jobId}/add-unit`);
 export const saveInspectionUnit = (unitId, data) => api.patch(`/inspections/unit/${unitId}`, data);
