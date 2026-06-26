@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, FileText, Printer, Check, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, FileText, Printer, Check, AlertTriangle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import {
   getInspectionJobs, createInspectionJob, deleteInspectionJob,
   addInspectionUnit, saveInspectionUnit, updateInspectionJob,
+  moveInspectionUnit, deleteInspectionUnit,
   getInspectionTools, createInspectionTool, deleteInspectionTool,
   getInspectionReportPdf, getInspectionLabelPdf,
 } from '../services/api';
@@ -168,12 +169,9 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
       if (!found) {
         const create = await createInspectionJob({ workOrderId: order.id, workOrderPartId: linkedPartId, inspectionPartId: inspectionPart?.id, unitCount: desired });
         found = create.data.data;
-      } else if ((found.units?.length || 0) < desired) {
-        const toAdd = desired - (found.units?.length || 0);
-        for (let i = 0; i < toAdd; i++) { await addInspectionUnit(found.id); }
-        const refreshed = await getInspectionJobs(order.id);
-        found = (refreshed.data.data || []).find(j => j.id === found.id) || found;
       }
+      // Note: cylinder count is managed manually after creation (Add / Move / Delete),
+      // so we no longer auto-add units on reload — that would undo a move or delete.
       setJob(found);
       const init = {};
       (found.units || []).forEach(u => { init[u.id] = { preRoll: { ...(u.preRoll||{}) }, postRoll: { ...(u.postRoll||{}) } }; });
@@ -227,6 +225,17 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
     catch (e) { setError('Could not update inspection setting'); }
   };
 
+  const handleMoveUnit = async (unitId, targetPartId) => {
+    if (!targetPartId) return;
+    try { await moveInspectionUnit(unitId, targetPartId); await loadJob(); }
+    catch (e) { setError(e?.response?.data?.error?.message || 'Could not move cylinder'); }
+  };
+  const handleDeleteUnit = async (unitId, unitLabel) => {
+    if (!window.confirm(`Delete cylinder ${unitLabel}? Its measurements will be permanently removed.`)) return;
+    try { await deleteInspectionUnit(unitId); await loadJob(); }
+    catch (e) { setError('Could not delete cylinder'); }
+  };
+
   const handlePrintLabel = async (unitId) => {
     try { const r = await getInspectionLabelPdf(unitId); window.open(URL.createObjectURL(new Blob([r.data], { type:'application/pdf' })), '_blank'); }
     catch(e) { alert('Label print failed'); }
@@ -249,6 +258,8 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
 
   const units = job.units || [];
   const skip = !!job.skipPreRoll;
+  const SERVICE_PART_TYPES = ['fab_service','shop_rate','rush_service','inspection'];
+  const moveTargets = (order?.parts || []).filter(p => !SERVICE_PART_TYPES.includes(p.partType) && p.id !== linkedPartId);
   const completedCount = units.filter(u => { const r = rows[u.id]||{preRoll:{},postRoll:{}}; return rowStatus(r.preRoll, r.postRoll, skip).done; }).length;
   const allComplete = completedCount === units.length && units.length > 0;
 
@@ -355,6 +366,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
               <th style={th} colSpan={6}>POST-ROLL (cylinder)</th>
               <th style={th}>Status</th>
               <th style={th}>Label</th>
+              <th style={th}>Move / Del</th>
             </tr>
             <tr style={{ background:'#fafafa' }}>
               <th style={{ ...th, position:'sticky', left:0, background:'#fafafa' }}></th>
@@ -363,7 +375,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
               <th style={th}>Diag A</th><th style={th}>Diag B</th></>}
               <th style={th}>Circ 1</th><th style={th}>Circ 2</th>
               <th style={th}>Ø A</th><th style={th}>Ø B</th><th style={th}>Ø C</th><th style={th}>Ø D</th>
-              <th style={th}></th><th style={th}></th>
+              <th style={th}></th><th style={th}></th><th style={th}></th>
             </tr>
           </thead>
           <tbody>
@@ -398,6 +410,17 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
                   </td>
                   <td style={td}>
                     <button onClick={() => handlePrintLabel(u.id)} title="Print label" style={{ background:'none', border:'1px solid #ddd', borderRadius:5, padding:'4px 6px', cursor:'pointer', color:'#37474f' }}><Printer size={13}/></button>
+                  </td>
+                  <td style={td}>
+                    <div style={{ display:'flex', gap:4, alignItems:'center', justifyContent:'center' }}>
+                      {moveTargets.length > 0 && (
+                        <select defaultValue="" onChange={(e)=>{ const v=e.target.value; e.target.value=''; if(v) handleMoveUnit(u.id, v); }} title="Move this cylinder to another line" style={{ fontSize:'0.72rem', padding:'3px 4px', border:'1px solid #ddd', borderRadius:5, cursor:'pointer', maxWidth:92 }}>
+                          <option value="">Move →</option>
+                          {moveTargets.map(p => <option key={p.id} value={p.id}>Line #{p.partNumber}</option>)}
+                        </select>
+                      )}
+                      <button onClick={() => handleDeleteUnit(u.id, u.unitId)} title="Delete this cylinder" style={{ background:'none', border:'1px solid #ffcdd2', borderRadius:5, padding:'4px 6px', cursor:'pointer', color:'#c62828' }}><Trash2 size={13}/></button>
+                    </div>
                   </td>
                 </tr>
               );

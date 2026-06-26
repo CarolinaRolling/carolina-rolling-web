@@ -646,5 +646,7 @@ export const deleteInspectionTool = (id) => api.delete(`/inspections/tools/${id}
 export const deleteInspectionJob = (id) => api.delete(`/inspections/job/${id}`);
 export const addInspectionUnit = (jobId) => api.post(`/inspections/job/${jobId}/add-unit`);
 export const saveInspectionUnit = (unitId, data) => api.patch(`/inspections/unit/${unitId}`, data);
+export const moveInspectionUnit = (unitId, targetWorkOrderPartId) => api.patch(`/inspections/unit/${unitId}/move`, { targetWorkOrderPartId });
+export const deleteInspectionUnit = (unitId) => api.delete(`/inspections/unit/${unitId}`);
 export const getInspectionReportPdf = (jobId) => api.get(`/inspections/job/${jobId}/report-pdf`, { responseType: 'arraybuffer' });
 export const getInspectionLabelPdf = (unitId) => api.get(`/inspections/unit/${unitId}/label-pdf`, { responseType: 'arraybuffer' });
