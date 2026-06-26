@@ -5,6 +5,7 @@ import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import { useSectionSizes } from '../hooks/useSectionSizes';
 import HeatNumberInput from './HeatNumberInput';
+import TrackingExtraFields from './TrackingExtraFields';
 const THICKNESS_OPTIONS = [
   '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
   '1/8"', '3/16"', '1/4"', '5/16"', '3/8"', '1/2"', '5/8"', '3/4"', '1"', 'Custom'
@@ -921,7 +922,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
             <label className="form-label">Client Part Number</label>
             <input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" />
           </div>
-          <HeatNumberInput partData={partData} setPartData={setPartData} />
+          <HeatNumberInput partData={partData} setPartData={setPartData} /><TrackingExtraFields partData={partData} setPartData={setPartData} />
         </div>
       </div>
     </>

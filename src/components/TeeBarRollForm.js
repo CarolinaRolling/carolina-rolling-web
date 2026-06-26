@@ -3,6 +3,7 @@ import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import HeatNumberInput from './HeatNumberInput';
+import TrackingExtraFields from './TrackingExtraFields';
 const TEE_SIZES = [
   'WT2x6.5', 'WT2.5x8', 'WT3x4.5', 'WT3x6', 'WT3x7.5', 'WT3x8', 'WT3x10',
   'WT4x5', 'WT4x6.5', 'WT4x7.5', 'WT4x9', 'WT4x10.5', 'WT4x12', 'WT4x14',
@@ -541,7 +542,7 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9' }}><strong>Line Total ({qty} × ${unitPrice.toFixed(2)})</strong><strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong></div>
         </div>
       </div>
-      <div style={sectionStyle}>{sectionTitle('🏷️', 'Tracking', '#616161')}<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div className="form-group"><label className="form-label">Client Part Number</label><input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" /></div><HeatNumberInput partData={partData} setPartData={setPartData} /></div></div>
+      <div style={sectionStyle}>{sectionTitle('🏷️', 'Tracking', '#616161')}<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div className="form-group"><label className="form-label">Client Part Number</label><input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" /></div><HeatNumberInput partData={partData} setPartData={setPartData} /><TrackingExtraFields partData={partData} setPartData={setPartData} /></div></div>
     </>
   );
 }

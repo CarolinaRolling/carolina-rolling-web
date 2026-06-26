@@ -4,6 +4,7 @@ import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import HeatNumberInput from './HeatNumberInput';
+import TrackingExtraFields from './TrackingExtraFields';
 
 const THICKNESS_OPTIONS = [
   '24 ga', '20 ga', '16 ga', '14 ga', '12 ga', '11 ga', '10 ga',
@@ -831,7 +832,7 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
             <label className="form-label">Client Part Number</label>
             <input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" />
           </div>
-          <HeatNumberInput partData={partData} setPartData={setPartData} />
+          <HeatNumberInput partData={partData} setPartData={setPartData} /><TrackingExtraFields partData={partData} setPartData={setPartData} />
         </div>
       </div>
     </>

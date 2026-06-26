@@ -5,6 +5,7 @@ import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import { useSectionSizes } from '../hooks/useSectionSizes';
 import HeatNumberInput from './HeatNumberInput';
+import TrackingExtraFields from './TrackingExtraFields';
 const DEFAULT_CHANNEL_SIZES = [
   'C3x4.1', 'C3x5', 'C3x6',
   'C4x5.4', 'C4x7.25',
@@ -632,7 +633,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #90caf9' }}><strong>Line Total ({qty} × ${unitPrice.toFixed(2)})</strong><strong style={{ fontSize: '1.15rem', color: '#2e7d32' }}>${lineTotal.toFixed(2)}</strong></div>
         </div>
       </div>
-      <div style={sectionStyle}>{sectionTitle('🏷️', 'Tracking', '#616161')}<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div className="form-group"><label className="form-label">Client Part Number</label><input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" /></div><HeatNumberInput partData={partData} setPartData={setPartData} /></div></div>
+      <div style={sectionStyle}>{sectionTitle('🏷️', 'Tracking', '#616161')}<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}><div className="form-group"><label className="form-label">Client Part Number</label><input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" /></div><HeatNumberInput partData={partData} setPartData={setPartData} /><TrackingExtraFields partData={partData} setPartData={setPartData} /></div></div>
     </>
   );
 }

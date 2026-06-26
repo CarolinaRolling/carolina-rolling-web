@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import { useSectionSizes } from '../hooks/useSectionSizes';
 import HeatNumberInput from './HeatNumberInput';
+import TrackingExtraFields from './TrackingExtraFields';
 // Sagitta formula: h = R - sqrt(R² - (c/2)²)
 function calculateRise(radiusInches, chordInches) {
   if (!radiusInches || radiusInches <= 0) return null;
@@ -1393,7 +1394,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
             <label className="form-label">Client Part Number</label>
             <input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" />
           </div>
-          <HeatNumberInput partData={partData} setPartData={setPartData} />
+          <HeatNumberInput partData={partData} setPartData={setPartData} /><TrackingExtraFields partData={partData} setPartData={setPartData} />
         </div>
       </div>
     </>

@@ -2571,6 +2571,13 @@ function EstimateDetailsPage() {
                           🏷️ Client Part#: {part.clientPartNumber}
                         </div>
                       )}
+                      {(part.rev || part.poLineNumber || part.lotNumber) && (
+                        <div style={{ fontSize: '0.78rem', color: '#666', marginBottom: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          {part.rev && <span>Rev: <strong>{part.rev}</strong></span>}
+                          {part.poLineNumber && <span>PO Line#: <strong>{part.poLineNumber}</strong></span>}
+                          {part.lotNumber && <span>Lot#: <strong>{part.lotNumber}</strong></span>}
+                        </div>
+                      )}
                       {part.materialDescription && (
                         <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
                           📦 {part.materialDescription}

@@ -1524,6 +1524,7 @@ function WorkOrderDetailsPage() {
             <div class="pr-type${isLinkedService ? ' svc' : ''}">${isLinkedService ? '↳ ' : ''}${PART_TYPES[part.partType]?.label || part.partType}${isLinkedService && linkedParent ? ` <span style="font-weight:400;color:#9c27b0;font-size:9px">(for Part #${linkedParent.partNumber})</span>` : ''}</div>
             <div class="pr-detail">
               ${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}<br/>` : ''}
+              ${(part.rev || part.poLineNumber || part.lotNumber) ? `${[part.rev ? `Rev: ${part.rev}` : '', part.poLineNumber ? `PO Line#: ${part.poLineNumber}` : '', part.lotNumber ? `Lot#: ${part.lotNumber}` : ''].filter(Boolean).join(' &nbsp; ')}<br/>` : ''}
               ${materialLine}
               ${part.heatBreakdown && part.heatBreakdown.length > 0 
                 ? `<br/>Heat#: ${part.heatBreakdown.map(h => `<span style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:2px;padding:0 4px;font-weight:600;color:#795548">${h.heat}: ${h.qty}pc</span>`).join(' ')}` 
@@ -1995,9 +1996,10 @@ function WorkOrderDetailsPage() {
     printWindow.document.write(`<!DOCTYPE html><html><head><title>Label</title>
       <style>@page{size:62mm 29mm;margin:0}body{font-family:Arial;width:62mm;height:29mm;padding:2mm;margin:0;box-sizing:border-box}
       .lg{font-size:14pt;font-weight:bold}.sm{font-size:9pt;color:#333}</style></head>
-      <body><div class="lg">${part.clientPartNumber || `Part ${part.partNumber}`}</div>
+      <body><div class="lg">${part.clientPartNumber || `Part ${part.partNumber}`}${part.rev ? ` Rev ${part.rev}` : ''}</div>
       <div class="sm">${order.drNumber ? `DR-${order.drNumber}` : order.orderNumber}</div>
-      ${clientPO ? `<div class="sm">PO: ${clientPO}</div>` : ''}
+      ${clientPO ? `<div class="sm">PO: ${clientPO}${part.poLineNumber ? ` Ln ${part.poLineNumber}` : ''}</div>` : (part.poLineNumber ? `<div class="sm">PO Line#: ${part.poLineNumber}</div>` : '')}
+      ${part.lotNumber ? `<div class="sm">Lot: ${part.lotNumber}</div>` : ''}
       ${part.heatBreakdown && part.heatBreakdown.length > 0 
         ? `<div class="sm">Heat: ${part.heatBreakdown.map(h => `<span style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:3px;padding:0 4px;font-weight:600;color:#795548">${h.heat}: ${h.qty}pc</span>`).join(' ')}</div>` 
         : part.heatNumber ? `<div class="sm">Heat: ${part.heatNumber}</div>` : ''}
@@ -3632,6 +3634,13 @@ function WorkOrderDetailsPage() {
                       ))}
                     </div>
                     {part.clientPartNumber && <div style={{ color: '#666', fontSize: '0.875rem' }}>Client Part#: {part.clientPartNumber}</div>}
+                    {(part.rev || part.poLineNumber || part.lotNumber) && (
+                      <div style={{ color: '#666', fontSize: '0.875rem', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                        {part.rev && <span>Rev: <strong>{part.rev}</strong></span>}
+                        {part.poLineNumber && <span>PO Line#: <strong>{part.poLineNumber}</strong></span>}
+                        {part.lotNumber && <span>Lot#: <strong>{part.lotNumber}</strong></span>}
+                      </div>
+                    )}
                     {part.heatBreakdown && part.heatBreakdown.length > 0 ? (
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
                         {part.heatBreakdown.map((h, i) => (

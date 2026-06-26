@@ -4,6 +4,7 @@ import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import HeatNumberInput from './HeatNumberInput';
+import TrackingExtraFields from './TrackingExtraFields';
 const FLAT_BAR_SIZES = [
   '1/2x1/4', '3/4x1/4', '3/4x3/8',
   '1x1/4', '1x3/8', '1x1/2',
@@ -775,7 +776,7 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
         {sectionTitle('🏷️', 'Tracking', '#616161')}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div className="form-group"><label className="form-label">Client Part Number</label><input type="text" className="form-input" value={partData.clientPartNumber || ''} onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })} placeholder="Optional" /></div>
-          <HeatNumberInput partData={partData} setPartData={setPartData} />
+          <HeatNumberInput partData={partData} setPartData={setPartData} /><TrackingExtraFields partData={partData} setPartData={setPartData} />
         </div>
       </div>
     </>
