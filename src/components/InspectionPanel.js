@@ -3,6 +3,7 @@ import { Plus, FileText, Printer, Check, AlertTriangle, ChevronDown, ChevronUp }
 import {
   getInspectionJobs, createInspectionJob, deleteInspectionJob,
   addInspectionUnit, saveInspectionUnit, updateInspectionJob,
+  getInspectionTools, createInspectionTool, deleteInspectionTool,
   getInspectionReportPdf, getInspectionLabelPdf,
 } from '../services/api';
 
@@ -119,6 +120,37 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
   const [lastSync, setLastSync] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [showDiagrams, setShowDiagrams] = useState(false);
+  const [tools, setTools] = useState([]);
+  const [showTools, setShowTools] = useState(false);
+  const [newTool, setNewTool] = useState({ name:'', toolType:'', serialNumber:'', calibrationDueDate:'' });
+
+  useEffect(() => { (async () => {
+    try { const r = await getInspectionTools(); setTools(r.data?.data || r.data || []); } catch (e) {}
+  })(); }, []);
+
+  const selectedToolIds = job?.toolsUsed || [];
+  const toggleTool = async (toolId) => {
+    if (!job) return;
+    const next = selectedToolIds.includes(toolId)
+      ? selectedToolIds.filter(id => id !== toolId)
+      : [...selectedToolIds, toolId];
+    setJob({ ...job, toolsUsed: next });
+    try { await updateInspectionJob(job.id, { toolsUsed: next }); } catch (e) { setError('Could not save tool selection'); }
+  };
+  const handleAddTool = async () => {
+    if (!newTool.name.trim()) return;
+    try {
+      const r = await createInspectionTool(newTool);
+      const created = r.data?.data || r.data;
+      const list = (await getInspectionTools()).data?.data || [];
+      setTools(list);
+      setNewTool({ name:'', toolType:'', serialNumber:'', calibrationDueDate:'' });
+      if (created?.id) toggleTool(created.id);
+    } catch (e) { setError('Could not add tool'); }
+  };
+  const handleRemoveTool = async (toolId) => {
+    try { await deleteInspectionTool(toolId); setTools(tools.filter(t => t.id !== toolId)); } catch (e) {}
+  };
 
   const linkedPart = (order.parts || []).find(p => p.id === linkedPartId);
   const drNum = order.drNumber || order.orderNumber || '';
@@ -222,6 +254,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
 
   const th = { padding:'6px 6px', fontSize:'0.68rem', color:'#555', fontWeight:700, whiteSpace:'nowrap', borderBottom:'1px solid #ddd' };
   const td = { padding:'4px 5px', textAlign:'center', borderBottom:'1px solid #f0f0f0' };
+  const toolInput = { padding:'6px 8px', border:'1px solid #ccc', borderRadius:5, fontSize:'0.82rem', width:170 };
 
   // ── Spec check: measured vs the ORDERED spec on the part ──
   const specW = parseSpec(linkedPart?.width);
@@ -270,6 +303,9 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
           <button onClick={() => setShowDiagrams(s => !s)} style={{ padding:'7px 12px', background:'rgba(255,255,255,0.15)', color:'white', border:'1px solid rgba(255,255,255,0.4)', borderRadius:6, cursor:'pointer', fontSize:'0.82rem', display:'flex', alignItems:'center', gap:4 }}>
             {showDiagrams ? <ChevronUp size={14}/> : <ChevronDown size={14}/>} Diagrams
           </button>
+          <button onClick={() => setShowTools(s => !s)} style={{ padding:'7px 12px', background:'rgba(255,255,255,0.15)', color:'white', border:'1px solid rgba(255,255,255,0.4)', borderRadius:6, cursor:'pointer', fontSize:'0.82rem', display:'flex', alignItems:'center', gap:4 }}>
+            🛠 Tools{selectedToolIds.length ? ` (${selectedToolIds.length})` : ''}
+          </button>
           <button onClick={handleReport} disabled={reportLoading} style={{ padding:'7px 12px', background:allComplete?'white':'rgba(255,255,255,0.2)', color:allComplete?'#1565c0':'white', border:`1px solid ${allComplete?'white':'rgba(255,255,255,0.4)'}`, borderRadius:6, cursor:'pointer', fontWeight:600, fontSize:'0.82rem', display:'flex', alignItems:'center', gap:5 }}>
             <FileText size={14}/> {reportLoading ? 'Generating…' : 'Report'}
           </button>
@@ -280,6 +316,32 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
         <div style={{ display:'flex', gap:16, padding:'12px 14px', background:'#f9fbfd', borderBottom:'1px solid #e0e0e0', flexWrap:'wrap' }}>
           {!skip && <div><div style={{ fontSize:'0.72rem', fontWeight:700, color:'#555', marginBottom:4 }}>Pre-Roll (flat plate)</div><PreRollDiagram/></div>}
           <div><div style={{ fontSize:'0.72rem', fontWeight:700, color:'#555', marginBottom:4 }}>Post-Roll (cylinder)</div><PostRollDiagram/></div>
+        </div>
+      )}
+
+      {showTools && (
+        <div style={{ padding:'12px 14px', background:'#f9fbfd', borderBottom:'1px solid #e0e0e0' }}>
+          <div style={{ fontSize:'0.78rem', fontWeight:700, color:'#555', marginBottom:8 }}>Inspection tools used (selected tools appear on the report)</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:10 }}>
+            {tools.length === 0 && <span style={{ fontSize:'0.8rem', color:'#888' }}>No tools registered yet — add one below.</span>}
+            {tools.map(t => {
+              const sel = selectedToolIds.includes(t.id);
+              return (
+                <label key={t.id} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 9px', background: sel ? '#1565c0' : 'white', color: sel ? 'white' : '#333', border:`1px solid ${sel ? '#1565c0' : '#ccc'}`, borderRadius:6, cursor:'pointer', fontSize:'0.82rem' }}>
+                  <input type="checkbox" checked={sel} onChange={() => toggleTool(t.id)} />
+                  <span>{t.name}{t.toolType ? ` · ${t.toolType}` : ''}{t.serialNumber ? ` · #${t.serialNumber}` : ''}</span>
+                  <span onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); handleRemoveTool(t.id); }} title="Remove from list" style={{ marginLeft:4, opacity:0.6 }}>✕</span>
+                </label>
+              );
+            })}
+          </div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6, alignItems:'center' }}>
+            <input value={newTool.name} onChange={e=>setNewTool({...newTool, name:e.target.value})} placeholder={'Tool name (e.g. 6" Caliper)'} style={toolInput} />
+            <input value={newTool.toolType} onChange={e=>setNewTool({...newTool, toolType:e.target.value})} placeholder="Type" style={{...toolInput, width:110}} />
+            <input value={newTool.serialNumber} onChange={e=>setNewTool({...newTool, serialNumber:e.target.value})} placeholder="Serial / ID" style={{...toolInput, width:120}} />
+            <input type="date" value={newTool.calibrationDueDate} onChange={e=>setNewTool({...newTool, calibrationDueDate:e.target.value})} title="Calibration due date" style={{...toolInput, width:150}} />
+            <button onClick={handleAddTool} style={{ padding:'7px 12px', background:'#1565c0', color:'white', border:'none', borderRadius:6, fontWeight:600, cursor:'pointer', fontSize:'0.82rem' }}>+ Add tool</button>
+          </div>
         </div>
       )}
 
