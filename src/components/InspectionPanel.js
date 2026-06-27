@@ -27,6 +27,16 @@ export function parseSpec(v) {
   return isNaN(dec) ? null : dec;
 }
 
+// Nominal ordered diameter for a part — converts a rolled-to radius if no diameter is set
+export function specDiameter(part) {
+  if (!part) return null;
+  const fd = part.formData || {};
+  const d = parseSpec(part.diameter) ?? parseSpec(part.outerDiameter) ?? parseSpec(fd.diameter) ?? parseSpec(fd.outerDiameter);
+  if (d != null) return d;
+  const r = parseSpec(part.radius) ?? parseSpec(fd.radius);
+  return r != null ? r * 2 : null;
+}
+
 // Compare a unit's measurements against the part's ordered spec.
 // Returns [{ label, measured, spec, delta }] for anything beyond SPEC_TOLERANCE.
 export function specIssues(part, unit, skip = false) {
@@ -35,7 +45,7 @@ export function specIssues(part, unit, skip = false) {
   const specW = parseSpec(part.width);
   const specL = parseSpec(part.length);
   const specT = parseSpec(part.thickness);
-  const specD = parseSpec(part.diameter) ?? parseSpec(part.outerDiameter) ?? parseSpec(part.formData?.diameter) ?? parseSpec(part.formData?.outerDiameter);
+  const specD = specDiameter(part);
   const issues = [];
   const check = (label, measured, spec) => {
     const m = parseFloat(measured);
@@ -292,7 +302,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
   const specW = parseSpec(linkedPart?.width);
   const specL = parseSpec(linkedPart?.length);
   const specT = parseSpec(linkedPart?.thickness);
-  const specD = parseSpec(linkedPart?.diameter) ?? parseSpec(linkedPart?.outerDiameter) ?? parseSpec(linkedPart?.formData?.diameter) ?? parseSpec(linkedPart?.formData?.outerDiameter);
+  const specD = specDiameter(linkedPart);
   const overSpec = (measured, spec) => { const m = parseFloat(measured); return spec != null && m && !isNaN(m) && Math.abs(m - spec) > SPEC_TOLERANCE; };
   const allSpecIssues = units.flatMap(u => {
     const r = rows[u.id] || { preRoll:{}, postRoll:{} };
