@@ -2357,7 +2357,6 @@ function EstimateDetailsPage() {
             {(() => {
               // Group parts: regular parts first, then linked services right after their parent
               const sortedParts = [...parts].sort((a, b) => a.partNumber - b.partNumber);
-              const { display: dispNum } = computeDisplayNumbers(parts);
               const regularParts = sortedParts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !(p._linkedPartId || (p.formData || {})._linkedPartId));
               const serviceParts = sortedParts.filter(p => ['fab_service', 'shop_rate'].includes(p.partType) && (p._linkedPartId || (p.formData || {})._linkedPartId));
               const grouped = [];
@@ -2380,6 +2379,7 @@ function EstimateDetailsPage() {
               const calc = calculatePartTotal(part);
               const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
               const linkedParent = isLinkedService ? parts.find(p => String(p.id) === String(part._linkedPartId || (part.formData || {})._linkedPartId)) : null;
+              const { display: dispNum } = computeDisplayNumbers(parts);
               // Adjust labor proportionally when minimum charge applies
               const isEa = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
               const laborRatio = (totals.minInfo.minimumApplies && totals.minInfo.totalLabor > 0 && isEa) ? totals.minInfo.adjustedLabor / totals.minInfo.totalLabor : 1;
