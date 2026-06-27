@@ -103,13 +103,18 @@ function Cell({ value, onChange, type, warn, error }) {
   );
 }
 
-function rowStatus(pr, po, skip) {
+function rowStatus(pr, po, skip, nominalD) {
   const oos = Math.abs((parseFloat(pr.diagA)||0) - (parseFloat(pr.diagB)||0)) > TOLERANCE_OOS;
   const dv = [parseFloat(po.diamSeam)||0, parseFloat(po.diam90)||0, parseFloat(po.diam45)||0, parseFloat(po.diamNeg45)||0].filter(v=>v>0);
-  const diamFail = dv.length >= 2 && (Math.max(...dv) - Math.min(...dv)) > TOLERANCE_DIAM;
+  const variance = dv.length >= 2 ? (Math.max(...dv) - Math.min(...dv)) : 0;
+  // ASME UG-80: out-of-round = (Dmax−Dmin) ≤ 1% of nominal Ø. Fall back to a fixed 1/4" spread if no nominal Ø.
+  const diamFail = dv.length >= 2 && ((nominalD && nominalD > 0)
+    ? (variance / nominalD) > 0.01 + 1e-6
+    : variance > TOLERANCE_DIAM + 0.001);
+  const diamRatio = (nominalD && nominalD > 0) ? (variance / nominalD) * 100 : null;
   const prDone = pr.thickness && pr.gradeConfirmed && pr.heatNumberConfirmed && pr.widthEnd1 && pr.widthEnd2 && pr.lengthEnd1 && pr.lengthEnd2 && pr.diagA && pr.diagB;
   const poDone = po.circumEnd1 && po.circumEnd2 && po.diamSeam && po.diam90 && po.diam45 && po.diamNeg45;
-  return { oos, diamFail, done: (skip || prDone) && poDone };
+  return { oos, diamFail, variance, diamRatio, done: (skip || prDone) && poDone };
 }
 
 // ── Main panel (CR Admin table view) ──
@@ -398,7 +403,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
             {units.map(u => {
               const r = rows[u.id] || { preRoll:{}, postRoll:{} };
               const pr = r.preRoll, po = r.postRoll;
-              const st = rowStatus(pr, po, skip);
+              const st = rowStatus(pr, po, skip, specD);
               return (
                 <tr key={u.id}>
                   <td style={{ ...td, textAlign:'left', fontFamily:'monospace', fontWeight:700, color:'#1565c0', position:'sticky', left:0, background:'white', whiteSpace:'nowrap' }}>{u.unitId}</td>
@@ -453,7 +458,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
         <button onClick={handleAddUnit} style={{ padding:'9px 14px', background:'white', color:'#1565c0', border:'1px solid #1565c0', borderRadius:6, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
           <Plus size={14}/> Add cylinder
         </button>
-        <span style={{ fontSize:'0.74rem', color:'#999', marginLeft:'auto' }}>Out-of-square limit 3/16" · Diameter spread limit 1/4" (each reading ±1/8")</span>
+        <span style={{ fontSize:'0.74rem', color:'#999', marginLeft:'auto' }}>Out-of-square limit 3/16" · Out-of-round limit 1% of Ø (ASME UG-80)</span>
       </div>
     </div>
   );
