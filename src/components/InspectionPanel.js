@@ -6,6 +6,7 @@ import {
   moveInspectionUnit, deleteInspectionUnit,
   getInspectionTools, createInspectionTool, deleteInspectionTool,
   getInspectionReportPdf, getInspectionLabelPdf,
+  addWorkOrderPart,
 } from '../services/api';
 
 const TOLERANCE_OOS = 0.1875; // 3/16"
@@ -111,7 +112,7 @@ function rowStatus(pr, po, skip) {
 }
 
 // ── Main panel (CR Admin table view) ──
-export default function InspectionPanel({ order, inspectionPart, linkedPartId }) {
+export default function InspectionPanel({ order, inspectionPart, linkedPartId, onRefresh }) {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -227,8 +228,21 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId })
 
   const handleMoveUnit = async (unitId, targetPartId) => {
     if (!targetPartId) return;
-    try { await moveInspectionUnit(unitId, targetPartId); await loadJob(); }
-    catch (e) { setError(e?.response?.data?.error?.message || 'Could not move cylinder'); }
+    try {
+      await moveInspectionUnit(unitId, targetPartId);
+      // Make sure the target line has an inspection panel (service line) so the moved cylinder shows immediately
+      const hasInsp = (order.parts || []).some(p => p.partType === 'inspection' &&
+        String(p._linkedPartId || p.formData?._linkedPartId || p.formData?.linkedPartId || '') === String(targetPartId));
+      if (!hasInsp) {
+        const targetPart = (order.parts || []).find(p => p.id === targetPartId);
+        await addWorkOrderPart(order.id, {
+          partType: 'inspection', quantity: parseInt(targetPart?.quantity) || 1,
+          _linkedPartId: targetPartId, description: 'Inspection',
+          materialSource: 'customer_supplied', status: 'pending',
+        });
+      }
+      if (onRefresh) await onRefresh(); else await loadJob();
+    } catch (e) { setError(e?.response?.data?.error?.message || 'Could not move cylinder'); }
   };
   const handleDeleteUnit = async (unitId, unitLabel) => {
     if (!window.confirm(`Delete cylinder ${unitLabel}? Its measurements will be permanently removed.`)) return;

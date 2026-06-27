@@ -13,6 +13,7 @@ import {
   addEstimateShipmentCharge, updateEstimateShipmentCharge, deleteEstimateShipmentCharge, getEstimateShipmentCharges
 } from '../services/api';
 import ShipmentChargesSection from '../components/ShipmentChargesSection';
+import { computeDisplayNumbers } from '../utils/partNumbers';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
 import FlatStockForm from '../components/FlatStockForm';
@@ -1520,6 +1521,7 @@ function EstimateDetailsPage() {
   
   const printEstimate = () => {
     const totals = calculateTotals();
+    const { display: dispNum } = computeDisplayNumbers(parts);
     const partsHtml = (() => {
       // Hidden-from-customer parts (Rolling Assist) are excluded from the customer PDF
       const sorted = parts.filter(p => p.partType !== 'rush_service' && !isHiddenFromCustomer(p)).sort((a, b) => a.partNumber - b.partNumber);
@@ -1621,7 +1623,7 @@ function EstimateDetailsPage() {
         descLines.push('Material by: ' + (part.materialSource === 'customer_supplied' ? (formData.clientName || 'Customer') : 'Carolina Rolling Company'));
       }
       
-      if (part.specialInstructions) descLines.push('Note: ' + (part.specialInstructions.length > 80 ? part.specialInstructions.substring(0, 80) + '...' : part.specialInstructions));
+      if (part.specialInstructions) descLines.push('Note: ' + part.specialInstructions);
       
       // Pricing detail line
       const priceParts = [];
@@ -1631,9 +1633,9 @@ function EstimateDetailsPage() {
       const partTypeLabel = PART_TYPES[part.partType]?.label || part.partType;
       
       return `<div class="part-row${isLinkedService ? ' service' : ''}">
-        <div class="pr-item${isLinkedService ? ' svc' : ''}">${isLinkedService ? '+' : '#' + part.partNumber}</div>
+        <div class="pr-item${isLinkedService ? ' svc' : ''}">${isLinkedService ? (dispNum[part.id] || part.partNumber) : '#' + (dispNum[part.id] || part.partNumber)}</div>
         <div class="pr-desc">
-          <div class="pr-type${isLinkedService ? ' svc' : ''}">${partTypeLabel}${isLinkedService && linkedParent ? ' <span style="font-weight:400;color:#999;">(for Part #' + linkedParent.partNumber + ')</span>' : ''}</div>
+          <div class="pr-type${isLinkedService ? ' svc' : ''}">${partTypeLabel}${isLinkedService && linkedParent ? ' <span style="font-weight:400;color:#999;">(for Part #' + (dispNum[linkedParent.id] || linkedParent.partNumber) + ')</span>' : ''}</div>
           <div class="pr-detail">${descLines.join('<br/>')}</div>
           ${priceParts.length ? '<div class="pr-pricing">' + priceParts.join(' &nbsp;|&nbsp; ') + ' &nbsp;|&nbsp; <strong>Unit: ' + formatCurrency(adjUnitPrice) + '</strong></div>' : ''}
           ${part.partType === 'shop_rate' ? '<div class="shop-rate-warn">* Pricing based on estimated hours — actual cost may vary</div>' : ''}
@@ -2355,6 +2357,7 @@ function EstimateDetailsPage() {
             {(() => {
               // Group parts: regular parts first, then linked services right after their parent
               const sortedParts = [...parts].sort((a, b) => a.partNumber - b.partNumber);
+              const { display: dispNum } = computeDisplayNumbers(parts);
               const regularParts = sortedParts.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !(p._linkedPartId || (p.formData || {})._linkedPartId));
               const serviceParts = sortedParts.filter(p => ['fab_service', 'shop_rate'].includes(p.partType) && (p._linkedPartId || (p.formData || {})._linkedPartId));
               const grouped = [];
@@ -2411,10 +2414,10 @@ function EstimateDetailsPage() {
                     <div>
                       <div style={{ fontSize: isLinkedService ? '0.95rem' : '1.1rem', fontWeight: 700, color: isLinkedService ? '#424242' : '#1976d2' }}>
                         {isLinkedService && <span style={{ marginRight: 6 }}>+</span>}
-                        Part #{part.partNumber} - {PART_TYPES[part.partType]?.label || part.partType}
+                        Part #{dispNum[part.id] || part.partNumber} - {PART_TYPES[part.partType]?.label || part.partType}
                         {isLinkedService && linkedParent && (
                           <span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#757575', marginLeft: 8 }}>
-                            for Part #{linkedParent.partNumber}
+                            for Part #{dispNum[linkedParent.id] || linkedParent.partNumber}
                           </span>
                         )}
                       </div>
