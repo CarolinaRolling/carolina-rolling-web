@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getSettings } from '../services/api';
 import OutsideProcessingSection, { calculateOpTotals } from './OutsideProcessingSection';
+import { computeDisplayNumbers } from '../utils/partNumbers';
 
 const SERVICE_TYPES = [
   { key: 'weld_100', label: '100% Weld', icon: '🔥', color: '#c62828', hasWeldCalc: true },
@@ -157,6 +158,9 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
     return estimateParts.filter(p => p.partType !== 'fab_service' && p.partType !== 'shop_rate');
   }, [estimateParts]);
 
+  // Display numbers (1, 2, 3...) computed over the full parts list
+  const partDisp = useMemo(() => computeDisplayNumbers(estimateParts).display, [estimateParts]);
+
   // Find linked part using string comparison
   const linkedPart = useMemo(() => {
     if (!linkedPartIdStr) return null;
@@ -209,7 +213,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
   const serviceDescription = useMemo(() => {
     const d = [];
     if (serviceConfig) d.push(serviceConfig.label);
-    if (linkedPart) d.push('Part #' + (linkedPart.partNumber || '?'));
+    if (linkedPart) d.push('Part #' + (partDisp[linkedPart.id] || linkedPart.partNumber || '?'));
     if (serviceType === 'finishing') {
       if (partData._finishType) d.push(partData._finishType === 'Custom' ? (partData._finishTypeCustom || 'Custom Finish') : partData._finishType);
       if (partData._finishSide) {
@@ -231,7 +235,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
     }
     if (partData._serviceNotes) d.push(partData._serviceNotes);
     return d.join(' \u2014 ');
-  }, [serviceConfig, serviceType, linkedPart, selectedSeam, isCustomSeam, partData._customSeamLength, partData._bevelNotes, partData._serviceNotes, partData._finishType, partData._finishTypeCustom, partData._finishSide, partData._bevelType, partData._bevelEdge, partData._bracingSize, partData._bracingMaterial, partData._bracingNotes]);
+  }, [serviceConfig, serviceType, linkedPart, partDisp, selectedSeam, isCustomSeam, partData._customSeamLength, partData._bevelNotes, partData._serviceNotes, partData._finishType, partData._finishTypeCustom, partData._finishSide, partData._bevelType, partData._bevelEdge, partData._bracingSize, partData._bracingMaterial, partData._bracingNotes]);
 
   // Pricing
   const qty = parseInt(partData.quantity) || 1;
@@ -338,7 +342,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
               <option value="">Select a part...</option>
               {availableParts.map(p => {
                 const desc = p._materialDescription || p.materialDescription || (p.partType || '').replace(/_/g, ' ');
-                return <option key={p.id} value={String(p.id)}>Part #{p.partNumber} — {desc}</option>;
+                return <option key={p.id} value={String(p.id)}>Part #{partDisp[p.id] || p.partNumber} — {desc}</option>;
               })}
             </select>
           )}
@@ -358,7 +362,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
         <div style={{ ...sectionStyle }}>
           <div style={{ background: '#e8eaf6', padding: 14, borderRadius: 8 }}>
             <div style={{ fontWeight: 700, color: '#283593', fontSize: '0.95rem', marginBottom: 8 }}>
-              📋 Part #{linkedPart.partNumber} Details
+              📋 Part #{partDisp[linkedPart.id] || linkedPart.partNumber} Details
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, fontSize: '0.85rem' }}>
               <div><span style={{ color: '#666' }}>Thickness:</span> <strong>{partInfo.thicknessLabel || '—'}</strong>{partInfo.thickness > 0 ? ' (' + partInfo.thickness.toFixed(4) + '")' : ''}</div>
@@ -452,7 +456,7 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
               <strong style={{ color: '#6a1b9a' }}>
                 ✨ {partData._finishType === 'Custom' ? (partData._finishTypeCustom || 'Custom Finish') : partData._finishType} — {partData._finishSide === 'one' ? 'One Side' : 'Both Sides'}
               </strong>
-              <span style={{ color: '#888', marginLeft: 8 }}>(Part #{linkedPart.partNumber})</span>
+              <span style={{ color: '#888', marginLeft: 8 }}>(Part #{partDisp[linkedPart.id] || linkedPart.partNumber})</span>
             </div>
           )}
         </div>

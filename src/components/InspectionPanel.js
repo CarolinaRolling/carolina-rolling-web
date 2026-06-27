@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, FileText, Printer, Check, AlertTriangle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { computeDisplayNumbers } from '../utils/partNumbers';
 import {
   getInspectionJobs, createInspectionJob, deleteInspectionJob,
   addInspectionUnit, saveInspectionUnit, updateInspectionJob,
@@ -156,7 +157,8 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
 
   const linkedPart = (order.parts || []).find(p => p.id === linkedPartId);
   const drNum = order.drNumber || order.orderNumber || '';
-  const irNumber = `IR-${drNum}-${linkedPart?.partNumber ?? '?'}`;
+  const dispNum = computeDisplayNumbers(order.parts || []).display;
+  const irNumber = `IR-${drNum}-${(linkedPart && dispNum[linkedPart.id]) || linkedPart?.partNumber || '?'}`;
 
   useEffect(() => { if (order?.id) loadJob(); /* eslint-disable-next-line */ }, [order?.id, inspectionPart?.id]);
 
@@ -430,7 +432,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
                       {moveTargets.length > 0 && (
                         <select defaultValue="" onChange={(e)=>{ const v=e.target.value; e.target.value=''; if(v) handleMoveUnit(u.id, v); }} title="Move this cylinder to another line" style={{ fontSize:'0.72rem', padding:'3px 4px', border:'1px solid #ddd', borderRadius:5, cursor:'pointer', maxWidth:92 }}>
                           <option value="">Move →</option>
-                          {moveTargets.map(p => <option key={p.id} value={p.id}>Line #{p.partNumber}</option>)}
+                          {moveTargets.map(p => <option key={p.id} value={p.id}>Line #{dispNum[p.id] || p.partNumber}</option>)}
                         </select>
                       )}
                       <button onClick={() => handleDeleteUnit(u.id, u.unitId)} title="Delete this cylinder" style={{ background:'none', border:'1px solid #ffcdd2', borderRadius:5, padding:'4px 6px', cursor:'pointer', color:'#c62828' }}><Trash2 size={13}/></button>

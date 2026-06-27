@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
@@ -22,6 +22,7 @@ import ShopRateForm from '../components/ShopRateForm';
 import HeatNumberInput from '../components/HeatNumberInput';
 import ShipmentChargesSection from '../components/ShipmentChargesSection';
 import InspectionPanel, { specIssues } from '../components/InspectionPanel';
+import { computeDisplayNumbers } from '../utils/partNumbers';
 import WorkOrderLifecycleBar from '../components/WorkOrderLifecycleBar';
 import { 
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
@@ -78,6 +79,8 @@ function WorkOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  // Display numbers (1, 2, 3 for production parts; 1.1, 1.2 for their services) — derived, stored data untouched
+  const partDispNum = useMemo(() => computeDisplayNumbers(order?.parts || []).display, [order]);
   const [inspectionJobs, setInspectionJobs] = useState([]);
   const [showAccountingContact, setShowAccountingContact] = useState(false);
   const [woTab, setWoTab] = useState('parts');
@@ -1519,9 +1522,9 @@ function WorkOrderDetailsPage() {
 
       return `
         <div class="part-row${isLinkedService ? ' service' : ''}">
-          <div class="pr-item${isLinkedService ? ' svc' : ''}">${isLinkedService ? '+' : '#' + part.partNumber}</div>
+          <div class="pr-item${isLinkedService ? ' svc' : ''}">${isLinkedService ? (partDispNum[part.id] || part.partNumber) : '#' + (partDispNum[part.id] || part.partNumber)}</div>
           <div class="pr-desc">
-            <div class="pr-type${isLinkedService ? ' svc' : ''}">${isLinkedService ? '↳ ' : ''}${PART_TYPES[part.partType]?.label || part.partType}${isLinkedService && linkedParent ? ` <span style="font-weight:400;color:#9c27b0;font-size:9px">(for Part #${linkedParent.partNumber})</span>` : ''}</div>
+            <div class="pr-type${isLinkedService ? ' svc' : ''}">${isLinkedService ? '↳ ' : ''}${PART_TYPES[part.partType]?.label || part.partType}${isLinkedService && linkedParent ? ` <span style="font-weight:400;color:#9c27b0;font-size:9px">(for Part #${partDispNum[linkedParent.id] || linkedParent.partNumber})</span>` : ''}</div>
             <div class="pr-detail">
               ${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}<br/>` : ''}
               ${(part.rev || part.poLineNumber || part.lotNumber) ? `${[part.rev ? `Rev: ${part.rev}` : '', part.poLineNumber ? `PO Line#: ${part.poLineNumber}` : '', part.lotNumber ? `Lot#: ${part.lotNumber}` : ''].filter(Boolean).join(' &nbsp; ')}<br/>` : ''}
@@ -3599,10 +3602,10 @@ function WorkOrderDetailsPage() {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {isLinkedService && <span style={{ color: '#7b1fa2', fontWeight: 700 }}>↳</span>}
-                      <span style={{ fontWeight: 600, fontSize: isLinkedService ? '1rem' : '1.1rem' }}>#{part.partNumber}</span>
+                      <span style={{ fontWeight: 600, fontSize: isLinkedService ? '1rem' : '1.1rem' }}>#{partDispNum[part.id] || part.partNumber}</span>
                       <span style={{ color: isLinkedService ? '#7b1fa2' : '#1976d2' }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
                       {isLinkedService && linkedParent && (
-                        <span style={{ fontSize: '0.8rem', color: '#9c27b0' }}>for Part #{linkedParent.partNumber}</span>
+                        <span style={{ fontSize: '0.8rem', color: '#9c27b0' }}>for Part #{partDispNum[linkedParent.id] || linkedParent.partNumber}</span>
                       )}
                       <StatusBadge status={part.status} />
                       {part.materialOrdered && (
@@ -4227,7 +4230,7 @@ function WorkOrderDetailsPage() {
                   const adjPartTotal = hiddenFromCustomer ? 0 : (isEa ? rawPartTotal + laborDelta : rawPartTotal);
                   return (
                   <tr key={part.id} style={{ borderBottom: '1px solid #eee', background: hiddenFromCustomer ? '#FFEBEE' : (isLinkedService ? '#fce4ec' : 'transparent') }}>
-                    <td style={{ padding: 8 }}>{isLinkedService ? '' : part.partNumber}</td>
+                    <td style={{ padding: 8 }}>{isLinkedService ? '' : (partDispNum[part.id] || part.partNumber)}</td>
                     <td style={{ padding: 8, paddingLeft: isLinkedService ? 24 : 8 }}>
                       {isLinkedService && <span style={{ color: '#7b1fa2', marginRight: 4 }}>↳</span>}
                       {hiddenFromCustomer && <span style={{ color: '#C62828', marginRight: 4, fontSize: '0.75rem', fontWeight: 700 }}>🔒</span>}
@@ -4665,7 +4668,7 @@ function WorkOrderDetailsPage() {
                 {(order.parts || []).filter(p => p.files && p.files.length > 0).map(part => (
                   <div key={part.id} style={{ background: '#fafafa', padding: 12, borderRadius: 8, border: '1px solid #eee' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #e0e0e0' }}>
-                      <strong style={{ fontSize: '0.9rem' }}>Part #{part.partNumber}</strong>
+                      <strong style={{ fontSize: '0.9rem' }}>Part #{partDispNum[part.id] || part.partNumber}</strong>
                       {part.clientPartNumber && (
                         <span style={{ fontSize: '0.8rem', color: '#1976d2' }}>
                           🏷️ {part.clientPartNumber}
@@ -4789,7 +4792,7 @@ function WorkOrderDetailsPage() {
                       const fd = p.formData && typeof p.formData === 'object' ? p.formData : {};
                       return (
                         <tr key={p.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                          <td style={{ padding: '8px', fontWeight: 600 }}>#{p.partNumber} {p.clientPartNumber && <span style={{ color: '#1976d2', fontWeight: 400 }}>{p.clientPartNumber}</span>}</td>
+                          <td style={{ padding: '8px', fontWeight: 600 }}>#{partDispNum[p.id] || p.partNumber} {p.clientPartNumber && <span style={{ color: '#1976d2', fontWeight: 400 }}>{p.clientPartNumber}</span>}</td>
                           <td style={{ padding: '8px', color: '#666', fontSize: '0.8rem' }}>{(fd._materialDescription || p.materialDescription || PART_TYPES[p.partType]?.label || '').replace(/^\d+pc:\s*/i, '')}</td>
                           <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600 }}>{p.totalQty}</td>
                           <td style={{ padding: '8px', textAlign: 'center', fontWeight: 700, color: '#2e7d32' }}>{p.picked}</td>
@@ -5324,7 +5327,7 @@ function WorkOrderDetailsPage() {
               return (
                 <div key={p.id} style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Part #{p.partNumber}</span>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Part #{partDispNum[p.id] || p.partNumber}</span>
                     <span style={{ color: '#555', marginLeft: 8, fontSize: '0.85rem' }}>({p.quantity || 1}pc) {desc}</span>
                     {p.materialReceived && <span style={{ marginLeft: 8, color: '#2e7d32', fontSize: '0.8rem' }}>✅ Received</span>}
                     {p.materialOrdered && !p.materialReceived && <span style={{ marginLeft: 8, color: '#ff9800', fontSize: '0.8rem' }}>📦 Ordered — {p.materialPurchaseOrderNumber}</span>}
@@ -5376,7 +5379,7 @@ function WorkOrderDetailsPage() {
                     {allParts.filter(p => p.outsideProcessingVendorName).map(p => (
                       <div key={p.id} style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Part #{p.partNumber}</span>
+                          <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Part #{partDispNum[p.id] || p.partNumber}</span>
                           <span style={{ color: '#E65100', marginLeft: 8, fontSize: '0.85rem' }}>{p.outsideProcessingVendorName}</span>
                           <span style={{ color: '#888', marginLeft: 8, fontSize: '0.8rem' }}>{p.outsideProcessingDescription}</span>
                           {p.outsideProcessingPONumber && <span style={{ marginLeft: 8, color: '#2e7d32', fontSize: '0.8rem' }}>✅ {p.outsideProcessingPONumber}</span>}
@@ -5427,7 +5430,7 @@ function WorkOrderDetailsPage() {
                           )}
                           {issue.workOrderPart && (
                             <span style={{ background: '#1976d2', color: 'white', padding: '2px 8px', borderRadius: 4, fontSize: '0.7rem', fontWeight: 700 }}>
-                              Part #{issue.workOrderPart.partNumber}
+                              Part #{partDispNum[issue.workOrderPart.id] || issue.workOrderPart.partNumber}
                               {issue.workOrderPart.clientPartNumber ? ` (${issue.workOrderPart.clientPartNumber})` : ''}
                             </span>
                           )}
@@ -6073,7 +6076,7 @@ function WorkOrderDetailsPage() {
                       <div style={{ marginTop: 8 }}>
                         {remaining.map(p => (
                           <div key={p.id} style={{ fontSize: '0.85rem', padding: '4px 0', borderBottom: '1px solid #c8e6c9', display: 'flex', justifyContent: 'space-between' }}>
-                            <span><strong>#{p.partNumber}</strong> {PART_TYPES[p.partType]?.label || p.partType}</span>
+                            <span><strong>#{partDispNum[p.id] || p.partNumber}</strong> {PART_TYPES[p.partType]?.label || p.partType}</span>
                             <span style={{ fontWeight: 600 }}>
                               {p.remaining} of {p.totalQty}
                               {p.picked > 0 && <span style={{ color: '#888', fontWeight: 400, marginLeft: 6 }}>({p.picked} already shipped)</span>}
@@ -6150,7 +6153,7 @@ function WorkOrderDetailsPage() {
                                 style={{ width: 60, padding: '6px 4px', textAlign: 'center', border: '2px solid #ddd', borderRadius: 6, fontWeight: 700, fontSize: '1rem' }} />
                             </div>
                             <div style={{ flex: 1 }}>
-                              <div><strong>#{p.partNumber}</strong> {p.clientPartNumber && <span style={{ color: '#1976d2' }}>{p.clientPartNumber}</span>}</div>
+                              <div><strong>#{partDispNum[p.id] || p.partNumber}</strong> {p.clientPartNumber && <span style={{ color: '#1976d2' }}>{p.clientPartNumber}</span>}</div>
                               <div style={{ fontSize: '0.8rem', color: '#555' }}>{desc}</div>
                               <div style={{ fontSize: '0.75rem', color: '#999' }}>
                                 Total: {p.totalQty} | Shipped: {p.picked} | <strong style={{ color: maxQty > 0 ? '#e65100' : '#999' }}>Remaining: {maxQty}</strong>
@@ -6171,7 +6174,7 @@ function WorkOrderDetailsPage() {
                                 display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem'
                               }}>
                                 <span style={{ color: '#9e9e9e' }}>↳</span>
-                                <span style={{ fontWeight: 600, color: '#666' }}>#{child.partNumber}</span>
+                                <span style={{ fontWeight: 600, color: '#666' }}>#{partDispNum[child.id] || child.partNumber}</span>
                                 <span style={{ color: '#888' }}>{PART_TYPES[child.partType]?.label || child.partType}</span>
                                 {childFd._serviceType && <span style={{ color: '#888' }}>— {childFd._serviceType}</span>}
                                 <span style={{ marginLeft: 'auto', fontWeight: 700, color: (parseInt(childItem.qty) || 0) > 0 ? '#e65100' : '#999' }}>
@@ -6401,7 +6404,7 @@ function WorkOrderDetailsPage() {
                               const desc = (gp.part.formData && gp.part.formData._materialDescription) || gp.part.materialDescription || gp.op.serviceType || 'Service';
                               return (
                                 <div key={idx} style={{ padding: '2px 0' }}>
-                                  • Part #{gp.part.partNumber} — {desc} × {gp.qty} @ ${cost.toFixed(2)}/ea = ${gp.lineCost.toFixed(2)}
+                                  • Part #{partDispNum[gp.part.id] || gp.part.partNumber} — {desc} × {gp.qty} @ ${cost.toFixed(2)}/ea = ${gp.lineCost.toFixed(2)}
                                 </div>
                               );
                             })}
@@ -6524,7 +6527,7 @@ function WorkOrderDetailsPage() {
                         style={{ marginTop: 4 }}
                       />
                       <div style={{ flex: 1 }}>
-                        <div style={{ color: isSelected ? '#1b5e20' : '#555' }}><strong style={{ color: isSelected ? '#2e7d32' : '#333' }}>Part #{part.partNumber}:</strong> {part.materialDescription || part.partType}</div>
+                        <div style={{ color: isSelected ? '#1b5e20' : '#555' }}><strong style={{ color: isSelected ? '#2e7d32' : '#333' }}>Part #{partDispNum[part.id] || part.partNumber}:</strong> {part.materialDescription || part.partType}</div>
                         <div style={{ fontSize: '0.8rem', color: isSelected ? '#388e3c' : '#888' }}>Qty: {(part.formData || {})?._stockLengthsNeeded || part.quantity}{(part.formData || {})?._stockLengthsNeeded ? ` lengths (${part.quantity} rings)` : ''}</div>
                       </div>
                       {isSelected && <span style={{ fontSize: '0.75rem', color: '#2e7d32', fontWeight: 600, marginTop: 2 }}>✓ Selected</span>}
@@ -6886,7 +6889,7 @@ function WorkOrderDetailsPage() {
                       }
                     }} style={{ marginTop: 2 }} />
                     <div>
-                      <span style={{ fontWeight: 700 }}>Part #{p.partNumber}</span>
+                      <span style={{ fontWeight: 700 }}>Part #{partDispNum[p.id] || p.partNumber}</span>
                       {p.clientPartNumber && <span style={{ color: '#1976d2', marginLeft: 6 }}>{p.clientPartNumber}</span>}
                       <div style={{ color: '#666', fontSize: '0.78rem' }}>{desc.replace(/^\d+pc:\s*/i, '').substring(0, 80)}</div>
                     </div>
