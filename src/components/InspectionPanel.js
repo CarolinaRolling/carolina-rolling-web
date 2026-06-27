@@ -273,7 +273,11 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
   };
   const handleReport = async () => {
     if (!job) return; setReportLoading(true);
-    try { const r = await getInspectionReportPdf(job.id); window.open(URL.createObjectURL(new Blob([r.data], { type:'application/pdf' })), '_blank'); }
+    try {
+      const r = await getInspectionReportPdf(job.id);
+      window.open(URL.createObjectURL(new Blob([r.data], { type:'application/pdf' })), '_blank');
+      if (onRefresh) onRefresh(); // the report is also filed under Documents — refresh to show it
+    }
     catch(e) { alert('Report generation failed'); }
     finally { setReportLoading(false); }
   };
