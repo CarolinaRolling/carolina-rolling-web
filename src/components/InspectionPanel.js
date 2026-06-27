@@ -11,7 +11,7 @@ import {
 } from '../services/api';
 
 const TOLERANCE_OOS = 0.1875; // 3/16"
-const TOLERANCE_DIAM = 0.125; // 1/8"
+const TOLERANCE_DIAM = 0.25; // 1/4" max spread between diameter readings (each reading ±1/8")
 export const SPEC_TOLERANCE = 0.25; // 1/4" — how far a measurement may differ from the ordered spec before warning
 
 // Parse a spec dimension that may be a fraction ("1/4", "1 1/2"), decimal, or have units
@@ -453,7 +453,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
         <button onClick={handleAddUnit} style={{ padding:'9px 14px', background:'white', color:'#1565c0', border:'1px solid #1565c0', borderRadius:6, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
           <Plus size={14}/> Add cylinder
         </button>
-        <span style={{ fontSize:'0.74rem', color:'#999', marginLeft:'auto' }}>Out-of-square limit 3/16" · Diameter variance limit ±1/8"</span>
+        <span style={{ fontSize:'0.74rem', color:'#999', marginLeft:'auto' }}>Out-of-square limit 3/16" · Diameter spread limit 1/4" (each reading ±1/8")</span>
       </div>
     </div>
   );
