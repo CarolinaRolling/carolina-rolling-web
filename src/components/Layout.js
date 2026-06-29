@@ -5,13 +5,14 @@ import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
 import GingerAssistant from './GingerAssistant';
 import TodoBar from './TodoBar';
-import { getScrapPending, confirmScrapPickup, getPendingOrders, getEmailNotifications, dismissEmailNotification } from '../services/api';
+import { getScrapPending, confirmScrapPickup, getPendingOrders, getEmailNotifications, dismissEmailNotification, getCommCoverage } from '../services/api';
 
 function Layout({ children }) {
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
   const [scrapPending, setScrapPending] = useState([]);
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
+  const [commWaiting, setCommWaiting] = useState(0);
   const [emailNotifications, setEmailNotifications] = useState([]);
 
   useEffect(() => {
@@ -19,6 +20,7 @@ function Layout({ children }) {
       getScrapPending().then(res => setScrapPending(res.data.data || [])).catch(() => {});
       getPendingOrders('pending').then(res => setPendingOrderCount((res.data.data || []).length)).catch(() => {});
       getEmailNotifications().then(res => setEmailNotifications(res.data.data || [])).catch(() => {});
+      getCommCoverage().then(res => setCommWaiting(res.data.awaiting || 0)).catch(() => {});
     };
     loadPending();
     const interval = setInterval(loadPending, 60000);
@@ -63,7 +65,7 @@ function Layout({ children }) {
             <li><NavLink to="/estimates" className={({ isActive }) => isActive ? 'active' : ''}><DollarSign size={20} /><span>Estimates</span></NavLink></li>
             <li><NavLink to="/clients-vendors" className={({ isActive }) => isActive ? 'active' : ''}><Users size={20} /><span>Clients & Vendors</span></NavLink></li>
             <li><NavLink to="/shop-supplies" className={({ isActive }) => isActive ? 'active' : ''}><Package size={20} /><span>Shop Supplies</span></NavLink></li>
-            <li><NavLink to="/com-center" className={({ isActive }) => isActive ? 'active' : ''}><MessageSquare size={20} /><span>Com Center</span></NavLink></li>
+            <li><NavLink to="/com-center" className={({ isActive }) => isActive ? 'active' : ''}><MessageSquare size={20} /><span>Com Center</span>{commWaiting > 0 && <span style={{ marginLeft: 'auto', background: '#d32f2f', color: 'white', borderRadius: 10, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 700, minWidth: 18, textAlign: 'center' }}>{commWaiting}</span>}</NavLink></li>
             {isAdmin() && (
               <>
                 <li style={{ 

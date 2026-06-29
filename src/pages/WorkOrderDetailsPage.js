@@ -222,6 +222,13 @@ function WorkOrderDetailsPage() {
   const [unlinkedShipments, setUnlinkedShipments] = useState([]);
   const [shipmentSearchQuery, setShipmentSearchQuery] = useState('');
   const [shipmentLinking, setShipmentLinking] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const onKey = (e) => { if (e.key === 'Escape') setLightboxUrl(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxUrl]);
   const [reordering, setReordering] = useState(false);
   const [editingDR, setEditingDR] = useState(false);
   const [drInput, setDrInput] = useState('');
@@ -2859,13 +2866,22 @@ function WorkOrderDetailsPage() {
         <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid #4caf50' }}>
           <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h3 className="card-title"><Truck size={20} style={{ marginRight: 8 }} />Inbound Shipment Details</h3>
-            <button
-              onClick={handleUnlinkShipment}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid #d32f2f', color: '#d32f2f', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem' }}
-              title="Unlink this shipment from the work order"
-            >
-              <X size={14} /> Unlink
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={openLinkShipmentModal}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid #2e7d32', color: '#2e7d32', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                title="Link another shipment to this work order"
+              >
+                <Plus size={14} /> Link shipment
+              </button>
+              <button
+                onClick={handleUnlinkShipment}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid #d32f2f', color: '#d32f2f', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem' }}
+                title="Unlink the current shipment from the work order"
+              >
+                <X size={14} /> Unlink
+              </button>
+            </div>
           </div>
           
           {/* Shipment tabs when multiple */}
@@ -2957,8 +2973,8 @@ function WorkOrderDetailsPage() {
                     <div style={{ fontWeight: 600, marginBottom: 8 }}>📷 Photos ({activeShipment.photos.length})</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 12 }}>
                       {activeShipment.photos.map(photo => (
-                        <div key={photo.id} style={{ aspectRatio: '1', borderRadius: 8, overflow: 'hidden', cursor: 'pointer', border: '2px solid #ddd' }}
-                          onClick={() => window.open(photo.url, '_blank')}>
+                        <div key={photo.id} style={{ aspectRatio: '1', borderRadius: 8, overflow: 'hidden', cursor: 'zoom-in', border: '2px solid #ddd' }}
+                          onClick={() => setLightboxUrl(photo.url)}>
                           <img src={photo.thumbnailUrl || photo.url} alt="Shipment" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
                       ))}
@@ -6636,6 +6652,26 @@ function WorkOrderDetailsPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Image lightbox (shipment photos) — click backdrop, X, or Esc to close */}
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <button
+            onClick={() => setLightboxUrl(null)}
+            title="Close (Esc)"
+            style={{ position: 'absolute', top: 16, right: 20, width: 42, height: 42, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', color: 'white', fontSize: 24, lineHeight: 1, cursor: 'pointer' }}
+          >×</button>
+          <img
+            src={lightboxUrl}
+            alt="Shipment"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: 6, boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}
+          />
         </div>
       )}
 
