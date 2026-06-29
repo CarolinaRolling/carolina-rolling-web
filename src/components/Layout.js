@@ -20,7 +20,7 @@ function Layout({ children }) {
       getScrapPending().then(res => setScrapPending(res.data.data || [])).catch(() => {});
       getPendingOrders('pending').then(res => setPendingOrderCount((res.data.data || []).length)).catch(() => {});
       getEmailNotifications().then(res => setEmailNotifications(res.data.data || [])).catch(() => {});
-      getCommCoverage().then(res => setCommWaiting(res.data.awaiting || 0)).catch(() => {});
+      getCommCoverage({ quotesOnly: true }).then(res => setCommWaiting(res.data.awaiting || 0)).catch(() => {});
     };
     loadPending();
     const interval = setInterval(loadPending, 60000);

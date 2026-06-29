@@ -56,7 +56,7 @@ function BillsView({ bills, pending, scanning, onScan, onReload, onStatus, onOpe
         <div style={{ textAlign: 'center', padding: 60, color: '#bbb' }}>
           <div style={{ fontSize: 36, marginBottom: 10 }}>🧾</div>
           <div style={{ fontWeight: 600 }}>No bills yet</div>
-          <div style={{ fontSize: '0.8rem' }}>Invoices land here once a bill email with a PDF is scanned.</div>
+          <div style={{ fontSize: '0.8rem' }}>Invoices land here once a bill email is scanned — from a PDF attachment or from the email body.</div>
         </div>
       ) : bills.map((b) => {
         const d = b.billData || {};
