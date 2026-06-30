@@ -123,7 +123,11 @@ function InventoryPage() {
       setError(null);
       const response = await getWorkOrders({ 
         archived: statusFilter === 'archived' ? 'true' : 'false',
-        view: 'list'
+        view: 'list',
+        // The page loads all non-archived orders and splits them into tabs client-side,
+        // so request a high ceiling (the query still returns only as many as exist).
+        // Archived history can be huge, so keep that browse view bounded — use search for old ones.
+        limit: statusFilter === 'archived' ? 200 : 2000
       });
       setWorkOrders(response.data.data || []);
       
