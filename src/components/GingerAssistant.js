@@ -141,8 +141,8 @@ function GingerAssistant() {
               {total === 0 ? (
                 <div style={{ textAlign: 'center', padding: '24px 12px', color: '#555' }}>
                   <div style={{ fontSize: '1.6rem', marginBottom: 6 }}>🦴</div>
-                  <div style={{ fontWeight: 600 }}>All caught up.</div>
-                  <div style={{ fontSize: '0.82rem', color: '#888', marginTop: 4 }}>Nothing's at risk right now. Keep it that way.</div>
+                  <div style={{ fontWeight: 600 }}>All caught up... for now.</div>
+                  <div style={{ fontSize: '0.82rem', color: '#888', marginTop: 4 }}>Nothing's at risk right now. A small relief — nice work.</div>
                 </div>
               ) : (
                 (data.findings || []).map((f, i) => {
