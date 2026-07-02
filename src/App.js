@@ -10,6 +10,7 @@ import InboundPage from './pages/InboundPage';
 import InboundDetailsPage from './pages/InboundDetailsPage';
 import CombinedShipmentsPage from './pages/CombinedShipmentsPage';
 import CommunicationCenterPage from './pages/CommunicationCenterPage';
+import ReviewCenterPage from './pages/ReviewCenterPage';
 import PendingOrdersPage from './pages/PendingOrdersPage';
 import WorkOrdersPage from './pages/WorkOrdersPage';
 import WorkOrderDetailsPage from './pages/WorkOrderDetailsPage';
@@ -132,6 +133,12 @@ function AppRoutes() {
       <Route path="/pending-orders" element={
         <ProtectedRoute>
           <Layout><PendingOrdersPage /></Layout>
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/review-center" element={
+        <ProtectedRoute>
+          <Layout><ReviewCenterPage /></Layout>
         </ProtectedRoute>
       } />
       

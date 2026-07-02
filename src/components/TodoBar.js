@@ -37,6 +37,13 @@ function TodoBar() {
   const canSeeEstimateReviews = isHeadEstimator() || isAdmin();
   const visibleTodos = todos.filter(t => {
     if (t.type === 'estimate_review' && !canSeeEstimateReviews) return false;
+    // Scanner-generated review/FYI notifications now live in the Review Center, so keep them
+    // out of the task bar (which is for genuine to-dos). The one exception is the high-priority
+    // AI parse-failure warning — that's a system alert, not a review item, so it stays.
+    if (t.createdBy === 'Email Scanner' && (t.type === 'general' || t.type === 'estimate_review')) {
+      const isSystemWarning = t.type === 'general' && t.priority === 'high';
+      if (!isSystemWarning) return false;
+    }
     return true;
   });
 

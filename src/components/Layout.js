@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
 import GingerAssistant from './GingerAssistant';
 import TodoBar from './TodoBar';
-import { getScrapPending, confirmScrapPickup, getPendingOrders, getEmailNotifications, dismissEmailNotification, getCommCoverage } from '../services/api';
+import { getScrapPending, confirmScrapPickup, getPendingOrders, getEmailNotifications, dismissEmailNotification, getCommCoverage, getEstimates, getCommBills } from '../services/api';
 
 function Layout({ children }) {
   const navigate = useNavigate();
@@ -13,6 +13,8 @@ function Layout({ children }) {
   const [scrapPending, setScrapPending] = useState([]);
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
   const [commWaiting, setCommWaiting] = useState(0);
+  const [estimateReviewCount, setEstimateReviewCount] = useState(0);
+  const [billReviewCount, setBillReviewCount] = useState(0);
   const [emailNotifications, setEmailNotifications] = useState([]);
 
   useEffect(() => {
@@ -21,6 +23,8 @@ function Layout({ children }) {
       getPendingOrders('pending').then(res => setPendingOrderCount((res.data.data || []).length)).catch(() => {});
       getEmailNotifications().then(res => setEmailNotifications(res.data.data || [])).catch(() => {});
       getCommCoverage({ quotesOnly: true }).then(res => setCommWaiting(res.data.awaiting || 0)).catch(() => {});
+      getEstimates({ status: 'draft' }).then(res => setEstimateReviewCount((res.data.data || []).filter(e => e.status === 'draft').length)).catch(() => {});
+      getCommBills().then(res => setBillReviewCount((res.data.data || []).filter(b => (b.billStatus || 'pending') === 'pending').length)).catch(() => {});
     };
     loadPending();
     const interval = setInterval(loadPending, 60000);
@@ -57,6 +61,12 @@ function Layout({ children }) {
         </div>
         <nav style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           <ul className="sidebar-nav">
+            {(() => {
+              const reviewTotal = (pendingOrderCount || 0) + (commWaiting || 0) + (estimateReviewCount || 0) + (billReviewCount || 0);
+              return (
+                <li><NavLink to="/review-center" className={({ isActive }) => isActive ? 'active' : ''}><Inbox size={20} /><span>Review Center</span>{reviewTotal > 0 && <span style={{ marginLeft: 'auto', background: '#d32f2f', color: 'white', borderRadius: 10, padding: '1px 7px', fontSize: '0.7rem', fontWeight: 700, minWidth: 18, textAlign: 'center' }}>{reviewTotal}</span>}</NavLink></li>
+              );
+            })()}
             <li><NavLink to="/inventory" className={({ isActive }) => isActive ? 'active' : ''}><Package size={20} /><span>Inventory</span></NavLink></li>
             <li><NavLink to="/scheduling" className={({ isActive }) => isActive ? 'active' : ''}><CalendarClock size={20} /><span>Scheduling</span></NavLink></li>
             <li><NavLink to="/shipments" className={({ isActive }) => isActive ? 'active' : ''}><Truck size={20} /><span>Receiving</span></NavLink></li>
