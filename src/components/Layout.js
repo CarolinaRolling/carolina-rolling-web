@@ -28,7 +28,10 @@ function Layout({ children }) {
     };
     loadPending();
     const interval = setInterval(loadPending, 60000);
-    return () => clearInterval(interval);
+    // Pages dispatch this after completing a review item (approve/reject/handle/send)
+    // so the sidebar count updates immediately instead of waiting for the next poll.
+    window.addEventListener('reviewcount:refresh', loadPending);
+    return () => { clearInterval(interval); window.removeEventListener('reviewcount:refresh', loadPending); };
   }, []);
 
   const handleConfirmPickup = async (type) => {

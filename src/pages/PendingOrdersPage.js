@@ -36,6 +36,7 @@ function PendingOrdersPage() {
   const handleApprove = async (order) => {
     try {
       await approvePendingOrder(order.id, {});
+      window.dispatchEvent(new Event('reviewcount:refresh'));
       if (order.matchedEstimateId) {
         navigate(`/estimates/${order.matchedEstimateId}`, {
           state: {
@@ -77,6 +78,7 @@ function PendingOrdersPage() {
   const handleReject = async () => {
     try {
       await rejectPendingOrder(rejectModal.id, { reason: rejectReason });
+      window.dispatchEvent(new Event('reviewcount:refresh'));
       setSuccess(`PO#${rejectModal.poNumber} rejected`);
       setRejectModal(null); setRejectReason('');
       loadData();

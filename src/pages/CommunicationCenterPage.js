@@ -154,6 +154,7 @@ export default function CommunicationCenterPage() {
   const handleMarkHandled = async (id, threadId) => {
     try {
       await markCommHandled(id, true);
+      window.dispatchEvent(new Event('reviewcount:refresh'));
       const match = (e) => e.id === id || (threadId && e.gmailThreadId === threadId);
       const patch = (e) => (match(e) ? { ...e, commResponded: true, commHandledManually: true } : e);
       const wasAwaiting = coverage.some(e => match(e) && !(e.commResponded || e.commHandledManually));
@@ -181,6 +182,7 @@ export default function CommunicationCenterPage() {
   const handleBillStatus = async (id, status) => {
     try {
       await updateBillStatus(id, status);
+      window.dispatchEvent(new Event('reviewcount:refresh'));
       setBills((prev) => {
         const next = prev.map((b) => b.id === id ? { ...b, billStatus: status } : b);
         setBillsPending(next.filter((b) => (b.billStatus || 'pending') === 'pending').length);

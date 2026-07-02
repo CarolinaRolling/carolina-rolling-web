@@ -1999,6 +1999,7 @@ function EstimateDetailsPage() {
                   await generatePdfPreview();
                 }
                 await updateEstimate(id, { status: 'sent' });
+                window.dispatchEvent(new Event('reviewcount:refresh'));
                 await loadEstimate();
                 showMessage('Estimate marked as sent');
               } catch (err) { setError('Failed to update status'); }
