@@ -477,6 +477,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
             <select className="form-select" disabled={!!rollToMethod} style={rollToMethod ? { background: '#f0f0f0', color: '#999' } : {}} value={rollMeasurePoint} onChange={(e) => setRollMeasurePoint(e.target.value)}>
               <option value="inside">Inside</option>
               <option value="outside">Outside</option>
+              <option value="centerline">Centerline</option>
             </select>
           </div>
           <div className="form-group">
