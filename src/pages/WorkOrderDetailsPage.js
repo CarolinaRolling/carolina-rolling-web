@@ -1280,23 +1280,21 @@ function WorkOrderDetailsPage() {
         if (selectedItems.length === 0) { setError('Enter quantity for at least one item'); setSaving(false); return; }
         await recordPickup(id, { type: 'partial', pickedUpBy: pickupData.pickedUpBy, items: selectedItems, signature });
       }
-      const updatedOrder = await loadOrder();
+      // Index of the entry we just created (from pre-reload history length)
+      const newIdx = (order?.pickupHistory || []).length;
       setShowPickupModal(false);
       setPickupData({ pickedUpBy: '', type: null, items: {} });
       setHasSignature(false);
       showMessage(pickupData.type === 'full' ? 'Full pickup recorded' : 'Partial pickup recorded & receipt saved');
-      // Auto-print the pickup receipt for the entry we just created
+      // Open the receipt right away — don't make the user wait on the full order reload
       try {
-        // The new entry is the last one in pickupHistory
-        const history = order?.pickupHistory || [];
-        const newIdx = history.length; // after reload it will be length-1, but we use the pre-reload length as the index
         const response = await getPickupReceipt(id, newIdx);
-        const blob = new Blob([response.data], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
+        const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
         window.open(url, '_blank');
       } catch (printErr) {
         console.warn('Auto-print failed — use Outbound tab to print:', printErr.message);
       }
+      loadOrder(); // refresh page data in the background
     } catch (err) {
       console.error('Pickup error:', err.response?.data || err);
       setError(err.response?.data?.error?.message || 'Failed to record pickup');
