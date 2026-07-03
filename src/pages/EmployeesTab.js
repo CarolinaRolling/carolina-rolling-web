@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react';
 import {
   getEmployees, createEmployee, updateEmployee, deleteEmployee,
   reorderEmployees, getPayrolls, createPayroll, updatePayrollEntry,
-  updatePayrollWeek, submitPayroll, deletePayroll, sendPayrollEmail,
+  updatePayrollWeek, submitPayroll, recalcPayroll, deletePayroll, sendPayrollEmail,
   previewPayrollPdf, updateVacationLog, getSettings, updateSettings,
   getEmailAccounts,
 } from '../services/api';
@@ -22,6 +22,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
   const [ef, setEf] = useState({name:'',phone:'',hourlyRate:'',role:'',startDate:'',controlNumber:'',deductions:'ACH 100%',description:'',annualVacationDays:''});
   const [payrolls, setPayrolls] = useState([]);
   const [activePR, setActivePR] = useState(null);
+  const [prEditMode, setPrEditMode] = useState(false); // unlock editing on a submitted payroll
   const [showNewPR, setShowNewPR] = useState(false);
   const [prDates, setPrDates] = useState({weekStart:'',weekEnd:''});
   const [otEntry, setOtEntry] = useState(null);
@@ -146,19 +147,82 @@ export default function EmployeesTab({ showMsg, setErr }) {
     catch{setErr('Failed');}
   };
 
+  // Shared "estimate PDF" styling for payroll printouts (clean text header, no logo image).
+  const PAYROLL_CSS = `
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:Arial,Helvetica,sans-serif; padding:32px 40px; max-width:850px; margin:0 auto; font-size:13px; color:#333; }
+    @page { size:letter; margin:0.5in; }
+    @media print { body { padding:0; } }
+    .doc-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px; }
+    .doc-title { font-size:20px; font-weight:700; color:#1976d2; }
+    .doc-sub { font-size:11px; color:#888; margin-top:2px; }
+    .doc-right { text-align:right; }
+    .doc-num { font-size:13px; font-weight:700; color:#333; }
+    .doc-date { font-size:11px; color:#888; }
+    .divider { border:none; border-top:1px solid #ccc; margin:8px 0; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; }
+    th { background:#f5f5f5; color:#888; text-align:left; font-size:9px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; padding:6px 8px; border-bottom:2px solid #ccc; }
+    th.c, td.c { text-align:center; } th.r, td.r { text-align:right; }
+    td { padding:7px 8px; font-size:12px; border-bottom:1px solid #eee; }
+    .emp-name { font-weight:700; color:#333; }
+    .grand { margin-top:16px; padding:10px 16px; border-top:2px solid #1976d2; display:flex; justify-content:space-between; font-size:16px; font-weight:700; color:#1976d2; }
+    .emp { border:1px solid #e0e0e0; border-radius:6px; margin-top:10px; padding:10px 14px; page-break-inside:avoid; }
+    .emp-h { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+    .emp-h .n { font-size:14px; font-weight:700; color:#333; }
+    .emp-h .rt { font-size:11px; color:#888; }
+    .row { display:flex; justify-content:space-between; padding:2px 0; font-size:12px; }
+    .row .l { color:#666; } .row .v { font-weight:600; }
+    .sub2 { font-size:10px; color:#999; padding:1px 0 3px; }
+    .gp { display:flex; justify-content:space-between; border-top:1px solid #eee; margin-top:5px; padding-top:5px; font-weight:700; color:#1976d2; }
+    .foot { margin-top:24px; padding-top:10px; border-top:1px solid #ddd; display:flex; justify-content:space-between; font-size:10px; color:#999; }
+  `;
+  const payrollHeader = (titleText, sd, ed) => `<div class="doc-header"><div><span class="doc-title">${titleText}</span><div class="doc-sub">Carolina Rolling Co., Inc.</div></div><div class="doc-right"><div class="doc-num">Pay Period</div><div class="doc-date">${sd} — ${ed}</div></div></div><hr class="divider" />`;
+  const payFoot = () => { const now=new Date(); return `<div class="foot"><span>Generated ${now.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'})} ${now.toLocaleTimeString()}</span><span>CONFIDENTIAL — Carolina Rolling Co., Inc.</span></div>`; };
+  const payDates = (pr) => ({
+    sd: pr.weekStart?new Date(pr.weekStart+'T12:00:00').toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}):'',
+    ed: pr.weekEnd?new Date(pr.weekEnd+'T12:00:00').toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}):'',
+  });
+
+  // Payroll Sheet — clean summary table
   const printPayrollService = (pr) => {
-    const w=window.open('','_blank');if(!w)return;
-    const sd=pr.weekStart?new Date(pr.weekStart+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }):'';
-    const ed=pr.weekEnd?new Date(pr.weekEnd+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }):'';
-    const css='.body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto}.hdr{display:flex;align-items:center;gap:12px;border-bottom:2px solid #1976d2;padding-bottom:12px;margin-bottom:16px}.co{font-size:1.1rem;font-weight:700}.dt{font-size:0.9rem;color:#555}.dr{text-align:center;font-size:1.1rem;font-weight:600;margin-bottom:20px;color:#333}.emp{padding:12px;margin-bottom:12px;border:1px solid #e0e0e0;border-radius:6px}.en{font-size:1rem;font-weight:700;margin-bottom:6px}.r{display:flex;justify-content:space-between;padding:2px 0;font-size:0.9rem}.l{color:#666}.v{font-weight:600}.gp{display:flex;justify-content:space-between;padding:8px 0 0;border-top:1px solid #eee;font-size:1rem;font-weight:700;color:#1976d2}.tot{margin-top:16px;padding:12px;background:#e3f2fd;border-radius:6px;font-size:1.1rem;font-weight:700;text-align:center;color:#1565c0}.ft{margin-top:20px;padding-top:12px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:0.75rem;color:#888}';
+    const w=window.open('','_blank'); if(!w) return;
+    const { sd, ed } = payDates(pr);
     const entries=pr.entries||[];
-    const cards=entries.map(en=>{const reg=parseFloat(en.regularHours)||0;const ot=parseFloat(en.overtimeHours)||0;const vac=parseFloat(en.vacationHours)||0;const rate=parseFloat(en.hourlyRate)||0;const bonus=parseFloat(en.bonusAmount)||0;const regPay=reg*rate;const otPay=ot*rate*1.5;const vacPay=vac*rate;const gross=parseFloat(en.grossPay)||0;const annual=parseFloat(en.annualVacationDays)||10;const totalVacH=(entries.filter(e=>e.employeeId===en.employeeId).reduce((s,e)=>s+(parseFloat(e.vacationHours)||0),0));const vacRem=(totalVacH/8);let h=`<div class="emp"><div class="en">${en.employeeName||'Unknown'}</div>`;if(reg>0)h+=`<div class="r"><span class="l">Regular (${reg}h @ ${fmt(rate)}/h)</span><span class="v">${fmt(regPay)}</span></div>`;if(ot>0)h+=`<div class="r"><span class="l">Overtime (${ot}h @ ${fmt(rate*1.5)}/h)</span><span class="v">${fmt(otPay)}</span></div>`;if(vac>0)h+=`<div class="r"><span class="l">Vacation (${vac}h @ ${fmt(rate)}/h)</span><span class="v">${fmt(vacPay)}</span></div>`;if(annual>0)h+=`<div class="bal">Vacation balance: ${vacRem.toFixed(1)} / ${parseFloat(annual).toFixed(1)} days</div>`;if(bonus>0)h+=`<div class="r"><span class="l">Bonus${en.bonusNotes?' — '+en.bonusNotes:''}</span><span class="v">${fmt(bonus)}</span></div>`;h+=`<div class="gp"><span>Gross Pay</span><span>${fmt(gross)}</span></div></div>`;return h;}).join('');
-    const now=new Date();
-    w.document.write(`<html><head><title>Payroll</title><style>${css}</style></head><body><div class="hdr"><img src="/logo.png" onerror="this.style.display='none'"/><div><div class="co">Carolina Rolling Co., Inc.</div><div class="dt">Payroll Summary</div></div></div><div class="dr">${sd} — ${ed}</div>${cards}<div class="tot">Total Gross Payroll: ${fmt(pr.totalGross)}</div><div class="ft"><span>Generated: ${now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} ${now.toLocaleTimeString()}</span><span>CONFIDENTIAL</span></div></body></html>`);
-    w.document.close();w.print();
+    const rows=entries.map(en=>{
+      const reg=parseFloat(en.regularHours)||0, ot=parseFloat(en.overtimeHours)||0, vac=parseFloat(en.vacationHours)||0;
+      const rate=parseFloat(en.hourlyRate)||0, bonus=parseFloat(en.bonusAmount ?? en.bonus)||0, gross=parseFloat(en.grossPay)||0;
+      return `<tr><td class="emp-name">${en.employeeName||'Unknown'}</td><td class="c">${fmt(rate)}</td><td class="c">${reg||''}</td><td class="c" style="color:${ot>0?'#c62828':'#999'}">${ot||''}</td><td class="c">${vac||''}</td><td class="r">${bonus>0?fmt(bonus):''}</td><td class="r" style="font-weight:700">${fmt(gross)}</td></tr>`;
+    }).join('');
+    w.document.write(`<!DOCTYPE html><html><head><title>Payroll ${sd} to ${ed}</title><style>${PAYROLL_CSS}</style></head><body>${payrollHeader('PAYROLL REPORT',sd,ed)}<table><thead><tr><th>Employee</th><th class="c">Rate</th><th class="c">Reg</th><th class="c">OT</th><th class="c">Vac</th><th class="r">Bonus</th><th class="r">Gross</th></tr></thead><tbody>${rows}</tbody></table><div class="grand"><span>Total Gross Payroll</span><span>${fmt(pr.totalGross)}</span></div>${payFoot()}</body></html>`);
+    w.document.close(); w.print();
   };
 
-  const printPayrollDetailed = printPayrollService;
+  // Detailed — per-employee breakdown with hours x rate math, OT/vacation detail, balances
+  const printPayrollDetailed = (pr) => {
+    const w=window.open('','_blank'); if(!w) return;
+    const { sd, ed } = payDates(pr);
+    const entries=pr.entries||[];
+    const cards=entries.map(en=>{
+      const reg=parseFloat(en.regularHours)||0, ot=parseFloat(en.overtimeHours)||0, vac=parseFloat(en.vacationHours)||0;
+      const rate=parseFloat(en.hourlyRate)||0, bonus=parseFloat(en.bonusAmount ?? en.bonus)||0, gross=parseFloat(en.grossPay)||0;
+      const regPay=reg*rate, otPay=ot*rate*1.5, vacPay=vac*rate, vacDays=vac/8;
+      const annual=parseFloat(en.annualVacationDays)||0;
+      const totalVacH=entries.filter(e=>e.employeeId===en.employeeId).reduce((s,e)=>s+(parseFloat(e.vacationHours)||0),0);
+      const vacUsedDays=totalVacH/8;
+      let h=`<div class="emp"><div class="emp-h"><span class="n">${en.employeeName||'Unknown'}</span><span class="rt">${fmt(rate)}/hr · OT ${fmt(rate*1.5)}/hr</span></div>`;
+      if(reg>0) h+=`<div class="row"><span class="l">Regular — ${reg}h × ${fmt(rate)}</span><span class="v">${fmt(regPay)}</span></div>`;
+      if(ot>0){ h+=`<div class="row"><span class="l">Overtime — ${ot}h × ${fmt(rate*1.5)}</span><span class="v" style="color:#c62828">${fmt(otPay)}</span></div>`;
+        if(Array.isArray(en.overtimeDetails)&&en.overtimeDetails.length) h+=`<div class="sub2">${en.overtimeDetails.map(d=>new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+' '+d.hours+'h').join(' · ')}</div>`; }
+      if(vac>0){ h+=`<div class="row"><span class="l">Vacation — ${vac}h (${vacDays.toFixed(1)}d) × ${fmt(rate)}</span><span class="v" style="color:#1565c0">${fmt(vacPay)}</span></div>`;
+        if(Array.isArray(en.vacationDates)&&en.vacationDates.length) h+=`<div class="sub2">${en.vacationDates.map(d=>{const dt=typeof d==='string'?d:d.date;const hrs=(typeof d==='object'&&d.hours)?' ('+d.hours+'h)':'';return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+hrs;}).join(', ')}</div>`; }
+      if(annual>0) h+=`<div class="sub2">Vacation balance: ${(annual-vacUsedDays).toFixed(1)} / ${annual.toFixed(1)} days</div>`;
+      if(bonus>0) h+=`<div class="row"><span class="l">Bonus${en.bonusNotes?' — '+en.bonusNotes:''}</span><span class="v">${fmt(bonus)}</span></div>`;
+      h+=`<div class="gp"><span>Gross Pay</span><span>${fmt(gross)}</span></div></div>`;
+      return h;
+    }).join('');
+    w.document.write(`<!DOCTYPE html><html><head><title>Detailed Payroll ${sd} to ${ed}</title><style>${PAYROLL_CSS}</style></head><body>${payrollHeader('DETAILED PAYROLL',sd,ed)}${cards}<div class="grand"><span>Total Gross Payroll</span><span>${fmt(pr.totalGross)}</span></div>${payFoot()}</body></html>`);
+    w.document.close(); w.print();
+  };
 
   const previewPayrollPdfLocal = async (pr) => {
     try{const r=await previewPayrollPdf(pr.id);const blob=new Blob([r.data],{type:'application/pdf'});window.open(URL.createObjectURL(blob),'_blank');}
@@ -290,6 +354,8 @@ export default function EmployeesTab({ showMsg, setErr }) {
               <span style={{fontWeight:700,fontSize:'1rem'}}>{new Date(activePR.weekStart+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} — {new Date(activePR.weekEnd+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
             )}
             <span style={{padding:'2px 8px',borderRadius:4,fontSize:'0.8rem',fontWeight:600,background:activePR.status==='submitted'?'#c8e6c9':'#fff3e0',color:activePR.status==='submitted'?'#2e7d32':'#E65100'}}>{activePR.status==='submitted'?'✓ Submitted':'Draft'}</span>
+            {activePR.status==='submitted'&&<button className="btn btn-sm" onClick={()=>setPrEditMode(m=>!m)} style={{background:prEditMode?'#455a64':'#eceff1',color:prEditMode?'white':'#333'}} title="Edit this submitted payroll">{prEditMode?'✓ Done Editing':'✏️ Edit'}</button>}
+            {activePR&&<button className="btn btn-sm" onClick={async()=>{try{const r=await recalcPayroll(activePR.id);setActivePR(r.data.data);await loadPR();showMsg('Gross recalculated');}catch{setErr('Recalc failed');}}} style={{background:'#1565c0',color:'white'}} title="Recalculate gross pay for every employee from their hours and rate">🔄 Recalc Gross</button>}
           </div>
           <div style={{display:'flex',gap:8}}>
             {activePR.status==='draft'&&<button className="btn btn-sm" onClick={async()=>{
@@ -347,17 +413,17 @@ export default function EmployeesTab({ showMsg, setErr }) {
             <tr key={en.id} style={{borderBottom:'1px solid #e0e0e0'}}>
               <td style={{padding:'8px 12px',fontWeight:600}}>{en.employeeName}</td>
               <td style={{padding:'8px',textAlign:'center',color:'#888'}}>{fmt(en.hourlyRate)}</td>
-              <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<input key={en.id+'-r-'+en.regularHours} type="number" step="0.5" className="form-input" defaultValue={en.regularHours} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.regularHours))updateEntry(en,{regularHours:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>:en.regularHours}</td>
-              <td style={{padding:'4px 8px',textAlign:'center'}}><div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}><span style={{fontWeight:600,color:en.overtimeHours>0?'#E65100':'#888'}}>{en.overtimeHours}</span>{activePR.status==='draft'&&<button onClick={()=>openOtEditor(en)} style={{background:'#ff9800',color:'white',border:'none',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.75rem'}}>{en.overtimeHours>0?'✏️':'+ OT'}</button>}</div>{en.overtimeDetails&&en.overtimeDetails.length>0&&<div style={{fontSize:'0.7rem',color:'#888',marginTop:2}}>{en.overtimeDetails.map((d,i)=><span key={i}>{new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}:{d.hours}h{i<en.overtimeDetails.length-1?', ':''}</span>)}</div>}</td>
-              <td style={{padding:'4px 8px',textAlign:'center'}}><div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}><span style={{fontWeight:600,color:en.vacationHours>0?'#1565c0':'#888'}}>{en.vacationHours}</span>{activePR.status==='draft'&&<button onClick={()=>openVacEntryEditor(en)} style={{background:'#1565c0',color:'white',border:'none',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.75rem'}}>{en.vacationHours>0?'✏️':'+ Vac'}</button>}</div>{en.vacationDates&&en.vacationDates.length>0&&<div style={{fontSize:'0.7rem',color:'#1565c0',marginTop:2}}>{(en.vacationDates||[]).map((d,i)=>{const dt=typeof d==='string'?d:d.date;const hrs=typeof d==='object'?d.hours:null;return <span key={i}>{new Date(dt+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}{hrs?':'+hrs+'h':''}{i<en.vacationDates.length-1?', ':''}</span>;})}</div>}</td>
-              <td style={{padding:'4px 8px',textAlign:'center'}}>{activePR.status==='draft'?<div><input key={en.id+'-b-'+en.bonus} type="number" step="1" className="form-input" defaultValue={en.bonus} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.bonus))updateEntry(en,{bonus:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>{parseFloat(en.bonus)>0&&<input key={en.id+'-bn-'+(en.bonusNotes||'')} className="form-input" defaultValue={en.bonusNotes||''} onBlur={e=>{if(e.target.value!==(en.bonusNotes||''))updateEntry(en,{bonusNotes:e.target.value});}} placeholder="reason" style={{width:80,padding:'2px 4px',fontSize:'0.7rem',marginTop:2}}/>}</div>:parseFloat(en.bonus)>0?<div>{fmt(en.bonus)}{en.bonusNotes&&<div style={{fontSize:'0.7rem',color:'#888'}}>{en.bonusNotes}</div>}</div>:fmt(en.bonus)}</td>
+              <td style={{padding:'4px 8px',textAlign:'center'}}>{(activePR.status==='draft'||prEditMode)?<input key={en.id+'-r-'+en.regularHours} type="number" step="0.5" className="form-input" defaultValue={en.regularHours} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.regularHours))updateEntry(en,{regularHours:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>:en.regularHours}</td>
+              <td style={{padding:'4px 8px',textAlign:'center'}}><div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}><span style={{fontWeight:600,color:en.overtimeHours>0?'#E65100':'#888'}}>{en.overtimeHours}</span>{(activePR.status==='draft'||prEditMode)&&<button onClick={()=>openOtEditor(en)} style={{background:'#ff9800',color:'white',border:'none',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.75rem'}}>{en.overtimeHours>0?'✏️':'+ OT'}</button>}</div>{en.overtimeDetails&&en.overtimeDetails.length>0&&<div style={{fontSize:'0.7rem',color:'#888',marginTop:2}}>{en.overtimeDetails.map((d,i)=><span key={i}>{new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}:{d.hours}h{i<en.overtimeDetails.length-1?', ':''}</span>)}</div>}</td>
+              <td style={{padding:'4px 8px',textAlign:'center'}}><div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}><span style={{fontWeight:600,color:en.vacationHours>0?'#1565c0':'#888'}}>{en.vacationHours}</span>{(activePR.status==='draft'||prEditMode)&&<button onClick={()=>openVacEntryEditor(en)} style={{background:'#1565c0',color:'white',border:'none',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.75rem'}}>{en.vacationHours>0?'✏️':'+ Vac'}</button>}</div>{en.vacationDates&&en.vacationDates.length>0&&<div style={{fontSize:'0.7rem',color:'#1565c0',marginTop:2}}>{(en.vacationDates||[]).map((d,i)=>{const dt=typeof d==='string'?d:d.date;const hrs=typeof d==='object'?d.hours:null;return <span key={i}>{new Date(dt+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}{hrs?':'+hrs+'h':''}{i<en.vacationDates.length-1?', ':''}</span>;})}</div>}</td>
+              <td style={{padding:'4px 8px',textAlign:'center'}}>{(activePR.status==='draft'||prEditMode)?<div><input key={en.id+'-b-'+en.bonus} type="number" step="1" className="form-input" defaultValue={en.bonus} onBlur={e=>{const v=parseFloat(e.target.value)||0;if(v!==parseFloat(en.bonus))updateEntry(en,{bonus:v});}} onFocus={e=>e.target.select()} style={{width:70,textAlign:'center',padding:'4px'}}/>{parseFloat(en.bonus)>0&&<input key={en.id+'-bn-'+(en.bonusNotes||'')} className="form-input" defaultValue={en.bonusNotes||''} onBlur={e=>{if(e.target.value!==(en.bonusNotes||''))updateEntry(en,{bonusNotes:e.target.value});}} placeholder="reason" style={{width:80,padding:'2px 4px',fontSize:'0.7rem',marginTop:2}}/>}</div>:parseFloat(en.bonus)>0?<div>{fmt(en.bonus)}{en.bonusNotes&&<div style={{fontSize:'0.7rem',color:'#888'}}>{en.bonusNotes}</div>}</div>:fmt(en.bonus)}</td>
               <td style={{padding:'8px 12px',textAlign:'right',fontWeight:700,color:'#2e7d32'}}>{fmt(en.grossPay)}</td>
             </tr>))}
             <tr style={{background:'#e8f5e9'}}><td colSpan={6} style={{padding:'10px 12px',fontWeight:700,textAlign:'right'}}>Total Gross</td><td style={{padding:'10px 12px',textAlign:'right',fontWeight:800,fontSize:'1.1rem',color:'#2e7d32'}}>{fmt(activePR.totalGross)}</td></tr>
           </tbody></table></div>
       </div>)}
       {payrolls.length>0&&<div><h4 style={{marginBottom:8,color:'#555'}}>Payroll History</h4><div style={{display:'flex',flexDirection:'column',gap:6}}>{payrolls.map(p=>(
-        <div key={p.id} onClick={()=>setActivePR(p)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 16px',borderRadius:8,border:'1px solid #e0e0e0',cursor:'pointer',background:activePR?.id===p.id?'#e3f2fd':'white'}}>
+        <div key={p.id} onClick={()=>{setPrEditMode(false);setActivePR(p);}} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 16px',borderRadius:8,border:'1px solid #e0e0e0',cursor:'pointer',background:activePR?.id===p.id?'#e3f2fd':'white'}}>
           <div><span style={{fontWeight:600}}>{new Date(p.weekStart+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })} — {new Date(p.weekEnd+'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span><span style={{marginLeft:8,padding:'1px 8px',borderRadius:4,fontSize:'0.75rem',fontWeight:600,background:p.status==='submitted'?'#c8e6c9':'#fff3e0',color:p.status==='submitted'?'#2e7d32':'#E65100'}}>{p.status}</span></div>
           <div style={{fontWeight:700}}>{fmt(p.totalGross)}</div>
         </div>))}</div></div>}

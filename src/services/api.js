@@ -564,6 +564,7 @@ export const getPayroll = (id) => api.get(`/business/payroll/${id}`);
 export const updatePayrollEntry = (payrollId, entryId, data) => api.put(`/business/payroll/${payrollId}/entries/${entryId}`, data);
 export const updatePayrollWeek = (id, data) => api.put(`/business/payroll/${id}`, data);
 export const submitPayroll = (id, data) => api.post(`/business/payroll/${id}/submit`, data);
+export const recalcPayroll = (id) => api.post(`/business/payroll/${id}/recalc`);
 export const deletePayroll = (id) => api.delete(`/business/payroll/${id}`);
 
 // Weld Procedures (WPS)

@@ -112,6 +112,26 @@ function WorkOrderDetailsPage() {
   const [uploadingMtrs, setUploadingMtrs] = useState(false);
   const [showPickupModal, setShowPickupModal] = useState(false);
   const [pickupData, setPickupData] = useState({ pickedUpBy: '', type: null, items: {} });
+  const sigCanvasRef = useRef(null);
+  const sigDrawing = useRef(false);
+  const [hasSignature, setHasSignature] = useState(false);
+  const sigPos = (e) => { const c = sigCanvasRef.current; const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) }; };
+  const sigStart = (e) => { e.preventDefault(); const c = sigCanvasRef.current; if (!c) return; c.setPointerCapture?.(e.pointerId); sigDrawing.current = true; const ctx = c.getContext('2d'); const p = sigPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+  const sigMove = (e) => { if (!sigDrawing.current) return; e.preventDefault(); const ctx = sigCanvasRef.current.getContext('2d'); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = '#111'; const p = sigPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); if (!hasSignature) setHasSignature(true); };
+  const sigEnd = () => { sigDrawing.current = false; };
+  const clearSig = () => { const c = sigCanvasRef.current; if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height); setHasSignature(false); };
+  const renderSignaturePad = () => (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <label className="form-label" style={{ margin: 0 }}>Client Signature</label>
+        <button type="button" onClick={clearSig} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '0.8rem' }}>Clear</button>
+      </div>
+      <canvas ref={sigCanvasRef} width={520} height={140}
+        onPointerDown={sigStart} onPointerMove={sigMove} onPointerUp={sigEnd} onPointerLeave={sigEnd}
+        style={{ width: '100%', height: 140, border: `1.5px dashed ${hasSignature ? '#4caf50' : '#bbb'}`, borderRadius: 8, background: '#fafafa', touchAction: 'none', display: 'block' }} />
+      {!hasSignature && <div style={{ fontSize: '0.78rem', color: '#e65100', marginTop: 6 }}>✍️ Have the client sign above — required to confirm</div>}
+    </div>
+  );
   const [editShipmentModal, setEditShipmentModal] = useState(null); // { idx, entry } or null
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -1234,8 +1254,9 @@ function WorkOrderDetailsPage() {
     try {
       setError(null);
       setSaving(true);
+      const signature = hasSignature && sigCanvasRef.current ? sigCanvasRef.current.toDataURL('image/png') : null;
       if (pickupData.type === 'full') {
-        await recordPickup(id, { type: 'full', pickedUpBy: pickupData.pickedUpBy });
+        await recordPickup(id, { type: 'full', pickedUpBy: pickupData.pickedUpBy, signature });
       } else {
         // Build items list from qty inputs
         const selectedItems = Object.entries(pickupData.items)
@@ -1257,11 +1278,12 @@ function WorkOrderDetailsPage() {
           .filter(i => i.quantity > 0);
         
         if (selectedItems.length === 0) { setError('Enter quantity for at least one item'); setSaving(false); return; }
-        await recordPickup(id, { type: 'partial', pickedUpBy: pickupData.pickedUpBy, items: selectedItems });
+        await recordPickup(id, { type: 'partial', pickedUpBy: pickupData.pickedUpBy, items: selectedItems, signature });
       }
       const updatedOrder = await loadOrder();
       setShowPickupModal(false);
       setPickupData({ pickedUpBy: '', type: null, items: {} });
+      setHasSignature(false);
       showMessage(pickupData.type === 'full' ? 'Full pickup recorded' : 'Partial pickup recorded & receipt saved');
       // Auto-print the pickup receipt for the entry we just created
       try {
@@ -1545,7 +1567,14 @@ function WorkOrderDetailsPage() {
             ${orientationBlock}
             ${coneSegmentBlock}
             ${hasUniqueInstructions ? `<div style="margin-top:3px;font-size:10px;font-weight:600;color:#333">Note: ${specialInstr}</div>` : ''}
-            ${includePricing && part.partType !== 'fab_service' ? `<div style="margin-top:2px;font-size:9px;color:#888">Material supplied by: ${part.materialSource === 'customer_supplied' ? (order.clientName || 'Customer') : 'Carolina Rolling Company'}</div>` : ''}
+            ${includePricing && part.partType !== 'fab_service' ? (() => {
+              const custSupplied = part.materialSource === 'customer_supplied';
+              const suppliedBy = custSupplied ? (order.clientName || 'Customer') : 'Carolina Rolling Company';
+              const vendorName = part.vendor?.name || part.supplierName || '';
+              const matCostRaw = parseFloat(part.materialTotal) || 0;
+              const detail = (!custSupplied && (vendorName || matCostRaw)) ? ` <span style="color:#555">— purchased from <strong>${vendorName || 'supplier TBD'}</strong>${matCostRaw ? ` at ${formatCurrency(matCostRaw)}` : ''}${part.vendorEstimateNumber ? ` (Est# ${part.vendorEstimateNumber})` : ''}${part.materialOrdered === false ? ' — not yet ordered' : ''}</span>` : '';
+              return `<div style="margin-top:2px;font-size:9px;color:#888">Material supplied by: ${suppliedBy}${detail}</div>`;
+            })() : ''}
             ${pdfFiles.length > 0 ? `<div style="margin-top:2px;font-size:9px;color:#2e7d32">📎 ${pdfFiles.map(f => f.originalName).join(', ')}</div>` : ''}
             ${part.partType === 'press_brake' && part._pressBrakeFileName ? `<div style="margin-top:2px;font-size:9px;color:#1565c0">🗂️ Brake File: ${part._pressBrakeFileName}</div>` : ''}
             ${includePricing && pricingHtml ? `<div class="pr-pricing">${(() => {
@@ -1574,8 +1603,9 @@ function WorkOrderDetailsPage() {
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Arial, Helvetica, sans-serif; padding: 32px 40px; max-width: 850px; margin: 0 auto; font-size: 13px; color: #333; }
-    @page { size: letter; margin: 0.5in; }
-    @media print { body { padding: 0; } .no-print { display: none; } }
+    @page { size: letter; margin: 0.5in 0.5in 0.7in; }
+    @media print { body { padding: 0 0 40px; } .no-print { display: none; } .wo-foot { display: flex !important; } }
+    .wo-foot { display: none; position: fixed; bottom: 0; left: 0; right: 0; justify-content: space-between; padding: 4px 6px; font-size: 8.5px; color: #999; background: #fff; border-top: 1px solid #eee; }
     .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
     .doc-title { font-size: 20px; font-weight: 700; color: #1976d2; }
     .doc-right { text-align: right; }
@@ -1631,7 +1661,7 @@ function WorkOrderDetailsPage() {
   ` : ''}
 
   <div class="info-grid">
-    <div class="info-item"><label>Client</label><span>${order.clientName}</span></div>
+    <div class="info-item"><label>Client</label><span style="font-size:20px;font-weight:800;color:#111;line-height:1.1">${order.clientName}</span></div>
     ${clientPO ? `<div class="info-item"><label>Client PO#</label><span>${clientPO}</span></div>` : ''}
     ${order.storageLocation ? `<div class="info-item"><label>Storage</label><span>${order.storageLocation}</span></div>` : ''}
     ${includePricing && order.promisedDate ? `<div class="info-item"><label>Promised</label><span>${new Date(order.promisedDate + 'T12:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span></div>` : ''}
@@ -1699,6 +1729,10 @@ function WorkOrderDetailsPage() {
         </ul>
       </div>
     ` : ''}
+  </div>
+  <div class="wo-foot">
+    <span><strong>${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber}</strong>${order.clientName ? ' — ' + order.clientName : ''}</span>
+    <span>${title}</span>
   </div>
 </body>
 </html>`;
@@ -6042,7 +6076,7 @@ function WorkOrderDetailsPage() {
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
             <div className="modal-header">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Truck size={22} /> Record Pickup</h3>
-              <button className="btn btn-icon" onClick={() => { setShowPickupModal(false); setPickupData({ pickedUpBy: '', type: null, items: {} }); }}><X size={20} /></button>
+              <button className="btn btn-icon" onClick={() => { setShowPickupModal(false); setPickupData({ pickedUpBy: '', type: null, items: {} }); setHasSignature(false); }}><X size={20} /></button>
             </div>
             <div style={{ padding: 20 }}>
               {/* Step 1: Picked Up By */}
@@ -6102,9 +6136,10 @@ function WorkOrderDetailsPage() {
                       </div>
                     </div>
                   )}
+                  {!allAlreadyPicked && renderSignaturePad()}
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <button className="btn btn-secondary" onClick={() => setPickupData(prev => ({ ...prev, type: null }))}>Back</button>
-                    <button className="btn btn-success" onClick={handlePickup} disabled={saving || allAlreadyPicked}>
+                    <button className="btn btn-secondary" onClick={() => { setHasSignature(false); setPickupData(prev => ({ ...prev, type: null })); }}>Back</button>
+                    <button className="btn btn-success" onClick={handlePickup} disabled={saving || allAlreadyPicked || !pickupData.pickedUpBy.trim() || !hasSignature}>
                       <Check size={18} /> {saving ? 'Processing...' : 'Confirm Pickup'}
                     </button>
                   </div>
@@ -6209,18 +6244,21 @@ function WorkOrderDetailsPage() {
                     const summary = getPickupSummary();
                     const totalShipping = summary.reduce((s, p) => s + (parseInt(pickupData.items[p.id]?.qty) || 0), 0);
                     return (
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-                        <span style={{ fontSize: '0.9rem', fontWeight: 600, color: totalShipping > 0 ? '#e65100' : '#999' }}>
-                          {totalShipping > 0 ? `📦 Shipping ${totalShipping} item${totalShipping > 1 ? 's' : ''}` : 'Enter quantities to ship'}
-                        </span>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          {pickupData._fromShipPartial ? null : <button className="btn btn-secondary" onClick={() => setPickupData(prev => ({ ...prev, type: null }))}>Back</button>}
-                          <button className="btn" onClick={handlePickup} disabled={saving || totalShipping === 0}
-                            style={{ background: totalShipping > 0 ? '#ff9800' : '#ccc', color: 'white', border: 'none' }}>
-                            <Check size={18} /> {saving ? 'Processing...' : 'Record Partial Pickup'}
-                          </button>
+                      <>
+                        {renderSignaturePad()}
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+                          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: totalShipping > 0 ? '#e65100' : '#999' }}>
+                            {totalShipping > 0 ? `📦 Shipping ${totalShipping} item${totalShipping > 1 ? 's' : ''}` : 'Enter quantities to ship'}
+                          </span>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            {pickupData._fromShipPartial ? null : <button className="btn btn-secondary" onClick={() => { setHasSignature(false); setPickupData(prev => ({ ...prev, type: null })); }}>Back</button>}
+                            <button className="btn" onClick={handlePickup} disabled={saving || totalShipping === 0 || !pickupData.pickedUpBy.trim() || !hasSignature}
+                              style={{ background: (totalShipping > 0 && hasSignature && pickupData.pickedUpBy.trim()) ? '#ff9800' : '#ccc', color: 'white', border: 'none' }}>
+                              <Check size={18} /> {saving ? 'Processing...' : 'Record Partial Pickup'}
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      </>
                     );
                   })()}
                 </div>
