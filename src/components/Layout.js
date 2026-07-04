@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
 import GingerAssistant from './GingerAssistant';
 import TodoBar from './TodoBar';
-import { getScrapPending, confirmScrapPickup, getPendingOrders, getEmailNotifications, dismissEmailNotification, getCommCoverage, getEstimates, getCommBills } from '../services/api';
+import { getScrapPending, confirmScrapPickup, getPendingOrders, getEmailNotifications, dismissEmailNotification, getCommCoverage, getEstimates, getCommBills, getWorkOrderMessagesUnreadList } from '../services/api';
 
 function Layout({ children }) {
   const navigate = useNavigate();
@@ -15,6 +15,7 @@ function Layout({ children }) {
   const [commWaiting, setCommWaiting] = useState(0);
   const [estimateReviewCount, setEstimateReviewCount] = useState(0);
   const [billReviewCount, setBillReviewCount] = useState(0);
+  const [messageAlerts, setMessageAlerts] = useState([]);
   const [emailNotifications, setEmailNotifications] = useState([]);
 
   useEffect(() => {
@@ -25,6 +26,7 @@ function Layout({ children }) {
       getCommCoverage({ quotesOnly: true }).then(res => setCommWaiting(res.data.awaiting || 0)).catch(() => {});
       getEstimates({ status: 'draft' }).then(res => setEstimateReviewCount((res.data.data || []).filter(e => e.status === 'draft').length)).catch(() => {});
       getCommBills().then(res => setBillReviewCount((res.data.data || []).filter(b => (b.billStatus || 'pending') === 'pending').length)).catch(() => {});
+      getWorkOrderMessagesUnreadList().then(res => setMessageAlerts(res.data.data || [])).catch(() => {});
     };
     loadPending();
     const interval = setInterval(loadPending, 60000);
@@ -193,6 +195,29 @@ function Layout({ children }) {
                 Review Orders
               </button>
             </div>
+          </div>
+        )}
+        {messageAlerts.length > 0 && (
+          <div style={{ margin: '0 0 12px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {messageAlerts.map(m => (
+              <div key={m.workOrderId} style={{ background: '#E3F2FD', border: '2px solid #1976D2', borderRadius: 8, padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: '1.2rem' }}>💬</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, color: '#1565C0', fontSize: '0.9rem' }}>
+                      New message on DR-{m.drNumber}{m.count > 1 ? ` (${m.count})` : ''}{m.clientName ? ` · ${m.clientName}` : ''}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {m.senderName}: {m.body || (m.hasImage ? '📷 Photo' : '')}
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => navigate(`/workorders/${m.workOrderId}?tab=messages`)}
+                  style={{ background: '#1565C0', color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                  Open Messages
+                </button>
+              </div>
+            ))}
           </div>
         )}
         {emailNotifications.length > 0 && (

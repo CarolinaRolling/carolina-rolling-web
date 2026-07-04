@@ -84,7 +84,9 @@ function WorkOrderDetailsPage() {
   const partDispNum = useMemo(() => computeDisplayNumbers(order?.parts || []).display, [order]);
   const [inspectionJobs, setInspectionJobs] = useState([]);
   const [showAccountingContact, setShowAccountingContact] = useState(false);
-  const [woTab, setWoTab] = useState('parts');
+  const [woTab, setWoTab] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('tab') || 'parts'; } catch { return 'parts'; }
+  });
   const [shipmentCharges, setShipmentCharges] = useState([]);
   const [clientPaymentTerms, setClientPaymentTerms] = useState(null);
   const [shipment, setShipment] = useState(null);
