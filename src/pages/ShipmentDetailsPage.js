@@ -28,6 +28,13 @@ function ShipmentDetailsPage() {
   const docInputRef = useRef(null);
 
   const [shipment, setShipment] = useState(null);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const onKey = (e) => { if (e.key === 'Escape') setLightboxUrl(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxUrl]);
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -588,7 +595,7 @@ function ShipmentDetailsPage() {
               <div className="photo-grid">
                 {shipment.photos.map((photo) => (
                   <div key={photo.id} className="photo-item">
-                    <img src={photo.url} alt={photo.originalName} />
+                    <img src={photo.url} alt={photo.originalName} onClick={() => setLightboxUrl(photo.url)} style={{ cursor: 'zoom-in' }} />
                     <button 
                       className="photo-item-delete"
                       onClick={() => handleDeletePhoto(photo.id)}
@@ -928,6 +935,25 @@ function ShipmentDetailsPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <button
+            onClick={() => setLightboxUrl(null)}
+            title="Close (Esc)"
+            style={{ position: 'absolute', top: 16, right: 20, width: 42, height: 42, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', color: 'white', fontSize: 24, lineHeight: 1, cursor: 'pointer' }}
+          >×</button>
+          <img
+            src={lightboxUrl}
+            alt="Shipment"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: 6, boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}
+          />
         </div>
       )}
     </div>
