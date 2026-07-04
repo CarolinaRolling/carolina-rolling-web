@@ -6,6 +6,7 @@ export default function OperatorSignatureModal({ operatorName, existing, onSave,
   const drawing = useRef(false);
   const [hasSig, setHasSig] = useState(!!existing);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (existing) {
@@ -21,11 +22,15 @@ export default function OperatorSignatureModal({ operatorName, existing, onSave,
   const start = (e) => { e.preventDefault(); const c = canvasRef.current; if (!c) return; c.setPointerCapture?.(e.pointerId); drawing.current = true; const ctx = c.getContext('2d'); const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
   const move = (e) => { if (!drawing.current) return; e.preventDefault(); const ctx = canvasRef.current.getContext('2d'); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = '#111'; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); if (!hasSig) setHasSig(true); };
   const end = () => { drawing.current = false; };
-  const clear = () => { const c = canvasRef.current; if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height); setHasSig(false); };
+  const clear = () => { const c = canvasRef.current; if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height); setHasSig(false); setError(''); };
   const save = async () => {
-    if (!hasSig) return;
-    setSaving(true);
-    try { await onSave(canvasRef.current.toDataURL('image/png')); } finally { setSaving(false); }
+    if (!hasSig) { setError('Please have the operator sign in the box first.'); return; }
+    setSaving(true); setError('');
+    try {
+      await onSave(canvasRef.current.toDataURL('image/png'));
+    } catch (e) {
+      setError('Could not save: ' + (e?.response?.data?.error?.message || e?.message || 'unknown error') + '. If this persists, the backend may need to be redeployed.');
+    } finally { setSaving(false); }
   };
 
   return (
@@ -39,9 +44,10 @@ export default function OperatorSignatureModal({ operatorName, existing, onSave,
         <canvas ref={canvasRef} width={520} height={160}
           onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerLeave={end}
           style={{ width: '100%', height: 160, border: `1.5px dashed ${hasSig ? '#4caf50' : '#bbb'}`, borderRadius: 8, background: '#fafafa', touchAction: 'none', display: 'block' }} />
+        {error && <div style={{ color: '#c62828', fontSize: '0.82rem', marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
           <button onClick={onClose} className="btn btn-secondary">Cancel</button>
-          <button onClick={save} disabled={!hasSig || saving} className="btn btn-primary">{saving ? 'Saving…' : 'Save Signature'}</button>
+          <button onClick={save} disabled={saving} className="btn btn-primary">{saving ? 'Saving…' : 'Save Signature'}</button>
         </div>
       </div>
     </div>

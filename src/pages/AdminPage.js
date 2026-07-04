@@ -3356,14 +3356,12 @@ function AdminPage({ section = 'users-logs' }) {
           existing={(operatorSigs.find(s => s.operatorName === sigModalOp) || {}).signatureData || null}
           onClose={() => setSigModalOp(null)}
           onSave={async (dataUrl) => {
-            try {
-              await setOperatorSignature(sigModalOp, dataUrl);
-              setOperatorSigs(prev => {
-                const others = prev.filter(s => s.operatorName !== sigModalOp);
-                return [...others, { operatorName: sigModalOp, signatureData: dataUrl }];
-              });
-              setSigModalOp(null);
-            } catch (e) {}
+            await setOperatorSignature(sigModalOp, dataUrl);
+            setOperatorSigs(prev => {
+              const others = prev.filter(s => s.operatorName !== sigModalOp);
+              return [...others, { operatorName: sigModalOp, signatureData: dataUrl }];
+            });
+            setSigModalOp(null);
           }}
         />
       )}
