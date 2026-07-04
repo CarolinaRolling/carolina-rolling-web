@@ -17,8 +17,14 @@ export default function WorkOrderMessages({ workOrderId }) {
   const load = useCallback(async (scroll) => {
     try {
       const res = await getWorkOrderMessages(workOrderId);
-      setMessages(res.data.data || []);
-      if (scroll) setTimeout(() => { const c = containerRef.current; if (c) c.scrollTop = c.scrollHeight; }, 60);
+      const next = res.data.data || [];
+      const c = containerRef.current;
+      const nearBottom = c ? (c.scrollHeight - c.scrollTop - c.clientHeight < 120) : true;
+      setMessages(prev => {
+        const grew = next.length > prev.length;
+        if (scroll || (grew && nearBottom)) setTimeout(() => { const el = containerRef.current; if (el) el.scrollTop = el.scrollHeight; }, 60);
+        return next;
+      });
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [workOrderId]);
