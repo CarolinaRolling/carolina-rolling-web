@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Check, X, ClipboardList, Eye, ChevronDown, ChevronUp, Edit2 } from 'lucide-react';
-import { getTodos, createTodo, updateTodo, completeTodo, acceptTodo, denyTodo, deleteTodo } from '../services/api';
+import { getTodos, createTodo, updateTodo, completeTodo, acceptTodo, denyTodo, deleteTodo, getWorkOrderMessagesUnreadList, markWorkOrderMessagesRead } from '../services/api';
 
 function TodoBar() {
   const [todos, setTodos] = useState([]);
@@ -16,6 +16,8 @@ function TodoBar() {
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editPriority, setEditPriority] = useState('normal');
+  const [messageAlerts, setMessageAlerts] = useState([]);
+  const [clearingMsgId, setClearingMsgId] = useState(null);
   const navigate = useNavigate();
   const { user, isHeadEstimator, isAdmin } = useAuth();
 
@@ -89,7 +91,55 @@ function TodoBar() {
     } catch (err) {}
   };
 
-  if (loading) return null;
+  // New-message alerts (moved here from the Layout banner) — always visible, with confirm-to-clear
+  useEffect(() => {
+    const load = () => getWorkOrderMessagesUnreadList().then(r => setMessageAlerts(r.data.data || [])).catch(() => {});
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, []);
+  const clearMessage = async (woId) => {
+    try { await markWorkOrderMessagesRead(woId); setMessageAlerts(a => a.filter(m => m.workOrderId !== woId)); } catch {}
+    setClearingMsgId(null);
+  };
+  const messagePanel = messageAlerts.length > 0 ? (
+    <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {messageAlerts.map(m => (
+        <div key={m.workOrderId} style={{ background: '#E3F2FD', border: '2px solid #1976D2', borderRadius: 8, padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: '1.2rem' }}>💬</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 700, color: '#1565C0', fontSize: '0.9rem' }}>
+                New message on DR-{m.drNumber}{m.count > 1 ? ` (${m.count})` : ''}{m.clientName ? ` · ${m.clientName}` : ''}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {m.senderName}: {m.body || (m.hasImage ? '📷 Photo' : '')}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button onClick={() => navigate(`/workorders/${m.workOrderId}?tab=messages`)}
+              style={{ background: '#1565C0', color: 'white', border: 'none', borderRadius: 6, padding: '7px 14px', fontWeight: 700, cursor: 'pointer', fontSize: '0.82rem' }}>
+              Open
+            </button>
+            {clearingMsgId === m.workOrderId ? (
+              <>
+                <button onClick={() => clearMessage(m.workOrderId)}
+                  style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, padding: '7px 12px', fontWeight: 700, cursor: 'pointer', fontSize: '0.82rem' }}>Confirm clear?</button>
+                <button onClick={() => setClearingMsgId(null)}
+                  style={{ background: '#eee', color: '#555', border: 'none', borderRadius: 6, padding: '7px 12px', cursor: 'pointer', fontSize: '0.82rem' }}>Cancel</button>
+              </>
+            ) : (
+              <button onClick={() => setClearingMsgId(m.workOrderId)}
+                style={{ background: 'white', color: '#1565C0', border: '1px solid #1565C0', borderRadius: 6, padding: '7px 12px', fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem' }}>Clear</button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  ) : null;
+
+  if (loading) return messagePanel;
 
   const priorityColors = {
     urgent: { bg: '#ffebee', border: '#ef5350', text: '#c62828', icon: '🔴' },
@@ -102,6 +152,7 @@ function TodoBar() {
   // Empty state — clean bar with prominent Add button
   if (visibleTodos.length === 0 && !showAddForm) {
     return (
+      <>{messagePanel}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '6px 14px', background: '#fafafa', borderRadius: 8,
@@ -115,12 +166,14 @@ function TodoBar() {
           <Plus size={14} /> Add Task
         </button>
       </div>
+      </>
     );
   }
 
   // Add form only (no tasks yet)
   if (visibleTodos.length === 0 && showAddForm) {
     return (
+      <>{messagePanel}
       <div style={{ padding: '10px 14px', background: 'white', borderRadius: 8, border: '1px solid #ffe082', marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
@@ -144,6 +197,7 @@ function TodoBar() {
           </button>
         </div>
       </div>
+      </>
     );
   }
 
@@ -158,6 +212,7 @@ function TodoBar() {
   );
 
   return (
+    <>{messagePanel}
     <div style={{ marginBottom: 12 }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -316,6 +371,7 @@ function TodoBar() {
         </div>
       )}
     </div>
+    </>
   );
 }
 

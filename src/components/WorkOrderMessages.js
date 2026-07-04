@@ -12,12 +12,13 @@ export default function WorkOrderMessages({ workOrderId }) {
   const [loading, setLoading] = useState(true);
   const fileRef = useRef(null);
   const endRef = useRef(null);
+  const containerRef = useRef(null);
 
   const load = useCallback(async (scroll) => {
     try {
       const res = await getWorkOrderMessages(workOrderId);
       setMessages(res.data.data || []);
-      if (scroll) setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+      if (scroll) setTimeout(() => { const c = containerRef.current; if (c) c.scrollTop = c.scrollHeight; }, 60);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, [workOrderId]);
@@ -35,6 +36,24 @@ export default function WorkOrderMessages({ workOrderId }) {
     reader.onload = () => setImageData(reader.result);
     reader.readAsDataURL(file);
     e.target.value = '';
+  };
+
+  // Paste a screenshot / copied image straight into the message
+  const onPaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = () => setImageData(reader.result);
+          reader.readAsDataURL(file);
+          e.preventDefault();
+        }
+        break;
+      }
+    }
   };
 
   const send = async () => {
@@ -55,7 +74,7 @@ export default function WorkOrderMessages({ workOrderId }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 460, border: '1px solid #e0e0e0', borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: 14, background: '#f7f8fa' }}>
+      <div ref={containerRef} style={{ flex: 1, overflowY: 'auto', padding: 14, background: '#f7f8fa' }}>
         {loading ? (
           <div style={{ textAlign: 'center', color: '#999', marginTop: 30 }}>Loading messages…</div>
         ) : messages.length === 0 ? (
@@ -101,7 +120,8 @@ export default function WorkOrderMessages({ workOrderId }) {
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="Message the shop floor…"
+          onPaste={onPaste}
+          placeholder="Message the shop floor… (paste a screenshot too)"
           style={{ flex: 1, border: '1px solid #ccc', borderRadius: 20, padding: '9px 14px', fontSize: '0.9rem', outline: 'none' }}
         />
         <button onClick={send} disabled={sending || (!text.trim() && !imageData)}

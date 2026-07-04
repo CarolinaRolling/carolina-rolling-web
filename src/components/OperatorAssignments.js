@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getOperators, getAssignments, assignWorkOrder, reorderAssignments, unassignWorkOrder, getAssignableWorkOrders } from '../services/api';
 
-// Self-contained panel: pick an operator, reorder their queue (up/down), search a DR/client
-// and assign it, or unassign. Reuses the same operations endpoints as the Operations page.
-const arrowBtn = { background: 'none', border: '1px solid #ddd', borderRadius: 6, width: 30, height: 30, cursor: 'pointer', fontSize: '0.8rem' };
+// All-operators board: every operator's queue shown side by side with its job count, so you can
+// see the workload at a glance and move jobs between operators to balance. Reorder within a queue
+// with the arrows; reassign with the per-job operator dropdown; add jobs via search.
+const arrowBtn = { background: 'none', border: '1px solid #ddd', borderRadius: 5, width: 26, height: 24, cursor: 'pointer', fontSize: '0.7rem', lineHeight: 1 };
 
 export default function OperatorAssignments() {
   const [operators, setOperators] = useState([]);
   const [assignments, setAssignments] = useState([]);
-  const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -24,101 +24,106 @@ export default function OperatorAssignments() {
   useEffect(() => { load(); }, [load]);
   const refresh = async () => { try { const asg = await getAssignments(); setAssignments(asg.data.data || []); } catch {} };
 
-  const countFor = (name) => assignments.filter(a => a.assignedOperator === name).length;
-  const queue = selected
-    ? assignments.filter(a => a.assignedOperator === selected).sort((a, b) => (a.assignedSequence ?? 0) - (b.assignedSequence ?? 0))
-    : [];
+  const names = operators.map(o => o.operatorName || o.name || String(o)).filter(Boolean);
+  const queueFor = (name) => assignments.filter(a => a.assignedOperator === name).sort((a, b) => (a.assignedSequence ?? 0) - (b.assignedSequence ?? 0));
 
   const doSearch = async () => {
     setSearching(true);
     try { const res = await getAssignableWorkOrders(query.trim()); setResults(res.data.data || []); }
     catch { setResults([]); } finally { setSearching(false); }
   };
-  const assign = async (woId) => {
-    if (!selected) return;
+  const assign = async (woId, op) => {
+    if (!op) return;
     setBusy(true);
-    try { await assignWorkOrder(woId, selected); await refresh(); setResults(rs => rs.filter(r => r.id !== woId)); }
+    try { await assignWorkOrder(woId, op); await refresh(); setResults(rs => rs.filter(r => r.id !== woId)); }
     catch {} finally { setBusy(false); }
   };
-  const unassign = async (woId) => { setBusy(true); try { await unassignWorkOrder(woId); await refresh(); } catch {} finally { setBusy(false); } };
-  const move = async (idx, dir) => {
-    const ids = queue.map(q => q.id); const j = idx + dir;
+  const reassign = async (woId, newOp) => {
+    setBusy(true);
+    try { if (newOp) await assignWorkOrder(woId, newOp); else await unassignWorkOrder(woId); await refresh(); }
+    catch {} finally { setBusy(false); }
+  };
+  const move = async (name, idx, dir) => {
+    const ids = queueFor(name).map(q => q.id); const j = idx + dir;
     if (j < 0 || j >= ids.length) return;
     [ids[idx], ids[j]] = [ids[j], ids[idx]];
     setBusy(true);
-    try { await reorderAssignments(selected, ids); await refresh(); } catch {} finally { setBusy(false); }
+    try { await reorderAssignments(name, ids); await refresh(); } catch {} finally { setBusy(false); }
   };
 
+  const totalAssigned = names.reduce((s, n) => s + queueFor(n).length, 0);
+
   return (
-    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-      {/* Operator list */}
-      <div style={{ width: 210, flexShrink: 0 }}>
-        <div style={{ fontWeight: 700, marginBottom: 8, color: '#555' }}>Operators</div>
-        {operators.length === 0 ? (
-          <div style={{ color: '#999', fontSize: '0.85rem' }}>No operators found.</div>
-        ) : operators.map(op => {
-          const name = op.operatorName || op.name || String(op);
-          const active = selected === name;
-          return (
-            <button key={name} onClick={() => setSelected(name)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer', padding: '9px 10px', borderRadius: 8, marginBottom: 3, background: active ? '#e8f1fc' : '#f7f8fa', color: active ? '#1565c0' : '#333', fontWeight: active ? 700 : 500 }}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {name}
-                {op.deviceName && <span style={{ display: 'block', fontSize: '0.68rem', color: '#aaa', fontWeight: 400 }}>{op.deviceName}</span>}
-              </span>
-              <span style={{ background: countFor(name) ? '#1565c0' : '#ddd', color: 'white', borderRadius: 10, fontSize: '0.7rem', fontWeight: 700, padding: '1px 8px', flexShrink: 0 }}>{countFor(name)}</span>
-            </button>
-          );
-        })}
+    <div>
+      {/* Search + assign */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, maxWidth: 520 }}>
+          <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') doSearch(); }}
+            placeholder="Search a DR #, client, or PO to assign…" style={{ flex: 1, border: '1px solid #ccc', borderRadius: 6, padding: '8px 12px' }} />
+          <button onClick={doSearch} disabled={searching} style={{ background: '#1976d2', color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer' }}>{searching ? '…' : 'Search'}</button>
+        </div>
+        {results.map(r => (
+          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: '1px solid #f2f2f2', maxWidth: 520 }}>
+            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ fontWeight: 600 }}>DR-{r.dr}</span> <span style={{ color: '#666' }}>{r.clientName}</span>
+              {r.assignedOperator && <span style={{ color: '#e65100', fontSize: '0.78rem' }}> · on {r.assignedOperator}</span>}
+            </div>
+            <select defaultValue="" onChange={e => { if (e.target.value) assign(r.id, e.target.value); }} disabled={busy}
+              style={{ padding: '5px 6px', borderRadius: 6, border: '1px solid #2e7d32', color: '#2e7d32', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}>
+              <option value="">Assign to…</option>
+              {names.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        ))}
       </div>
 
-      {/* Selected operator's queue + assign */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {!selected ? (
-          <div className="card" style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-            <div style={{ fontWeight: 600 }}>Pick an operator to see their queue</div>
-            <div style={{ fontSize: '0.82rem' }}>Then drag order with the arrows, or search a job below and assign it.</div>
-          </div>
-        ) : (
-          <>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>{selected}'s queue <span style={{ color: '#999', fontWeight: 500 }}>· {queue.length} job{queue.length === 1 ? '' : 's'}</span></div>
-            {queue.length === 0 ? (
-              <div style={{ color: '#999', marginBottom: 16 }}>No jobs assigned yet.</div>
-            ) : queue.map((q, idx) => (
-              <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid #eee', borderRadius: 8, marginBottom: 6 }}>
-                <span style={{ color: '#999', width: 22, textAlign: 'center', fontWeight: 600 }}>{idx + 1}</span>
-                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <span style={{ fontWeight: 600 }}>DR-{q.dr}</span> <span style={{ color: '#666' }}>{q.clientName}</span>
-                </div>
-                <button onClick={() => move(idx, -1)} disabled={busy || idx === 0} style={arrowBtn} title="Move up">▲</button>
-                <button onClick={() => move(idx, 1)} disabled={busy || idx === queue.length - 1} style={arrowBtn} title="Move down">▼</button>
-                <button onClick={() => unassign(q.id)} disabled={busy} style={{ ...arrowBtn, color: '#c62828', width: 30 }} title="Remove from queue">✕</button>
-              </div>
-            ))}
+      <div style={{ fontSize: '0.82rem', color: '#888', marginBottom: 8 }}>
+        {names.length} operator{names.length === 1 ? '' : 's'} · {totalAssigned} job{totalAssigned === 1 ? '' : 's'} assigned
+      </div>
 
-            <div style={{ marginTop: 16, borderTop: '1px solid #eee', paddingTop: 12 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8, fontSize: '0.9rem' }}>Add a job to {selected}</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') doSearch(); }}
-                  placeholder="Search DR # or client…" style={{ flex: 1, border: '1px solid #ccc', borderRadius: 6, padding: '8px 12px' }} />
-                <button onClick={doSearch} disabled={searching} style={{ background: '#1976d2', color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer' }}>{searching ? '…' : 'Search'}</button>
+      {/* All operators side by side */}
+      <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, alignItems: 'flex-start' }}>
+        {names.length === 0 ? (
+          <div style={{ color: '#999' }}>No operators found.</div>
+        ) : names.map(name => {
+          const q = queueFor(name);
+          const others = names.filter(n => n !== name);
+          // Light workload coloring: green (light), amber (moderate), red (heavy)
+          const headBg = q.length === 0 ? '#f5f5f5' : q.length <= 3 ? '#e8f5e9' : q.length <= 6 ? '#fff8e1' : '#ffebee';
+          const headColor = q.length === 0 ? '#999' : q.length <= 3 ? '#2e7d32' : q.length <= 6 ? '#e65100' : '#c62828';
+          return (
+            <div key={name} style={{ minWidth: 260, maxWidth: 300, flex: '0 0 auto', border: '1px solid #e0e0e0', borderRadius: 8, background: 'white' }}>
+              <div style={{ padding: '8px 12px', background: headBg, borderRadius: '8px 8px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 700, color: headColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                <span style={{ background: headColor, color: 'white', borderRadius: 10, fontSize: '0.72rem', fontWeight: 700, padding: '1px 8px', flexShrink: 0 }}>{q.length}</span>
               </div>
-              {results.map(r => (
-                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: '1px solid #f2f2f2' }}>
-                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontWeight: 600 }}>DR-{r.dr}</span> <span style={{ color: '#666' }}>{r.clientName}</span>
-                    {r.assignedOperator && r.assignedOperator !== selected && <span style={{ color: '#e65100', fontSize: '0.78rem' }}> · on {r.assignedOperator}</span>}
+              <div style={{ padding: 8 }}>
+                {q.length === 0 ? (
+                  <div style={{ color: '#bbb', fontSize: '0.82rem', textAlign: 'center', padding: '10px 0' }}>No jobs</div>
+                ) : q.map((job, idx) => (
+                  <div key={job.id} style={{ border: '1px solid #eee', borderRadius: 6, padding: '6px 8px', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: '#999', fontSize: '0.72rem', width: 16 }}>{idx + 1}</span>
+                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                        <span style={{ fontWeight: 600 }}>DR-{job.dr}</span> <span style={{ color: '#666' }}>{job.clientName}</span>
+                      </div>
+                      <button onClick={() => move(name, idx, -1)} disabled={busy || idx === 0} style={arrowBtn} title="Up">▲</button>
+                      <button onClick={() => move(name, idx, 1)} disabled={busy || idx === q.length - 1} style={arrowBtn} title="Down">▼</button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                      <select defaultValue="" onChange={e => { const v = e.target.value; e.target.value = ''; if (v) reassign(job.id, v); }} disabled={busy}
+                        style={{ flex: 1, padding: '3px 4px', borderRadius: 5, border: '1px solid #ccc', fontSize: '0.72rem', cursor: 'pointer' }}>
+                        <option value="">Move to…</option>
+                        {others.map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                      <button onClick={() => reassign(job.id, '')} disabled={busy} style={{ ...arrowBtn, width: 24, color: '#c62828' }} title="Unassign">✕</button>
+                    </div>
                   </div>
-                  {r.assignedOperator === selected ? (
-                    <span style={{ color: '#2e7d32', fontSize: '0.8rem', fontWeight: 600 }}>✓ Assigned</span>
-                  ) : (
-                    <button onClick={() => assign(r.id)} disabled={busy} style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontSize: '0.82rem' }}>Assign</button>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </>
-        )}
+          );
+        })}
       </div>
     </div>
   );
