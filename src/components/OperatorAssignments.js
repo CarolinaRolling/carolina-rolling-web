@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getOperators, getAssignments, assignWorkOrder, reorderAssignments, unassignWorkOrder, getAssignableWorkOrders, getOperatorTasks, addOperatorTask, updateOperatorTask, deleteOperatorTask } from '../services/api';
 
 // All-operators board: every operator's queue shown side by side with its job count, so you can
@@ -7,6 +8,7 @@ import { getOperators, getAssignments, assignWorkOrder, reorderAssignments, unas
 const arrowBtn = { background: 'none', border: '1px solid #ddd', borderRadius: 5, width: 26, height: 24, cursor: 'pointer', fontSize: '0.7rem', lineHeight: 1 };
 
 export default function OperatorAssignments() {
+  const navigate = useNavigate();
   const [operators, setOperators] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [query, setQuery] = useState('');
@@ -95,7 +97,7 @@ export default function OperatorAssignments() {
         {results.map(r => (
           <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: '1px solid #f2f2f2', maxWidth: 520 }}>
             <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              <span style={{ fontWeight: 600 }}>DR-{r.dr}</span> <span style={{ color: '#666' }}>{r.clientName}</span>
+              <span onClick={() => navigate(`/workorders/${r.id}`)} title="Open work order" style={{ fontWeight: 600, color: '#1565c0', cursor: 'pointer', textDecoration: 'underline' }}>DR-{r.dr}</span> <span style={{ color: '#666' }}>{r.clientName}</span>
               {r.assignedOperator && <span style={{ color: '#e65100', fontSize: '0.78rem' }}> · on {r.assignedOperator}</span>}
             </div>
             <select defaultValue="" onChange={e => { if (e.target.value) assign(r.id, e.target.value); }} disabled={busy}
@@ -139,7 +141,7 @@ export default function OperatorAssignments() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: '#999', fontSize: '0.72rem', width: 16 }}>{idx + 1}</span>
                       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                        <span style={{ fontWeight: 600 }}>DR-{job.dr}</span> <span style={{ color: '#666' }}>{job.clientName}</span>
+                        <span onClick={() => navigate(`/workorders/${job.id}`)} title="Open work order" style={{ fontWeight: 600, color: '#1565c0', cursor: 'pointer', textDecoration: 'underline' }}>DR-{job.dr}</span> <span style={{ color: '#666' }}>{job.clientName}</span>
                       </div>
                       <button onClick={() => move(name, idx, -1)} disabled={busy || idx === 0} style={arrowBtn} title="Up">▲</button>
                       <button onClick={() => move(name, idx, 1)} disabled={busy || idx === q.length - 1} style={arrowBtn} title="Down">▼</button>
