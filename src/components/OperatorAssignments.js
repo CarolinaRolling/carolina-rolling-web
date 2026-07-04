@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getOperators, getAssignments, assignWorkOrder, reorderAssignments, unassignWorkOrder, getAssignableWorkOrders } from '../services/api';
+import { getOperators, getAssignments, assignWorkOrder, reorderAssignments, unassignWorkOrder, getAssignableWorkOrders, getOperatorTasks, addOperatorTask, updateOperatorTask, deleteOperatorTask } from '../services/api';
 
 // All-operators board: every operator's queue shown side by side with its job count, so you can
 // see the workload at a glance and move jobs between operators to balance. Reorder within a queue
@@ -14,16 +14,29 @@ export default function OperatorAssignments() {
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const [order, setOrder] = useState(() => { try { return JSON.parse(localStorage.getItem('operatorQueueOrder')) || []; } catch { return []; } });
+  const [tasks, setTasks] = useState([]);
+  const [taskInput, setTaskInput] = useState({});
 
   const load = useCallback(async () => {
     try {
-      const [ops, asg] = await Promise.all([getOperators(), getAssignments()]);
+      const [ops, asg, tks] = await Promise.all([getOperators(), getAssignments(), getOperatorTasks()]);
       setOperators(ops.data.data || []);
       setAssignments(asg.data.data || []);
+      setTasks(tks.data.data || []);
     } catch { setOperators([]); setAssignments([]); }
   }, []);
   useEffect(() => { load(); }, [load]);
   const refresh = async () => { try { const asg = await getAssignments(); setAssignments(asg.data.data || []); } catch {} };
+  const refreshTasks = async () => { try { const r = await getOperatorTasks(); setTasks(r.data.data || []); } catch {} };
+  const tasksFor = (name) => tasks.filter(t => t.operator === name);
+  const addTask = async (op) => {
+    const text = (taskInput[op] || '').trim();
+    if (!text) return;
+    setBusy(true);
+    try { await addOperatorTask(op, text); setTaskInput(ti => ({ ...ti, [op]: '' })); await refreshTasks(); } catch {} finally { setBusy(false); }
+  };
+  const toggleTask = async (t) => { setBusy(true); try { await updateOperatorTask(t.id, { done: !t.done }); await refreshTasks(); } catch {} finally { setBusy(false); } };
+  const removeTask = async (id) => { setBusy(true); try { await deleteOperatorTask(id); await refreshTasks(); } catch {} finally { setBusy(false); } };
 
   const names = operators.map(o => o.operatorName || o.name || String(o)).filter(Boolean);
   // Apply the saved column order; operators not yet ordered fall to the end alphabetically
@@ -141,6 +154,23 @@ export default function OperatorAssignments() {
                     </div>
                   </div>
                 ))}
+                {/* Tasks for this operator */}
+                <div style={{ borderTop: '1px dashed #e0e0e0', marginTop: 6, paddingTop: 6 }}>
+                  {tasksFor(name).map(t => (
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', padding: '2px 0' }}>
+                      <input type="checkbox" checked={!!t.done} onChange={() => toggleTask(t)} disabled={busy} />
+                      <span style={{ flex: 1, minWidth: 0, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? '#aaa' : '#444', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.text}</span>
+                      <button onClick={() => removeTask(t.id)} disabled={busy} title="Delete task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c62828', fontSize: '0.75rem', flexShrink: 0 }}>✕</button>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                    <input value={taskInput[name] || ''} onChange={e => setTaskInput(ti => ({ ...ti, [name]: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') addTask(name); }}
+                      placeholder="+ Add task…" style={{ flex: 1, minWidth: 0, border: '1px solid #ddd', borderRadius: 5, padding: '4px 6px', fontSize: '0.78rem' }} />
+                    <button onClick={() => addTask(name)} disabled={busy || !(taskInput[name] || '').trim()}
+                      style={{ background: '#455a64', color: 'white', border: 'none', borderRadius: 5, padding: '4px 8px', cursor: 'pointer', fontSize: '0.75rem', flexShrink: 0 }}>Add</button>
+                  </div>
+                </div>
               </div>
             </div>
           );
