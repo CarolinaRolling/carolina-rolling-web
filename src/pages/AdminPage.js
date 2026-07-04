@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import OperatorSignatureModal from '../components/OperatorSignatureModal';
 import { useNavigate } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { 
@@ -6,7 +7,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import SectionSizesPage from './SectionSizesPage';
 import SettingsPage from './SettingsPage';
@@ -111,6 +112,8 @@ function AdminPage({ section = 'users-logs' }) {
 
   // API Keys
   const [apiKeys, setApiKeys] = useState([]);
+  const [operatorSigs, setOperatorSigs] = useState([]);
+  const [sigModalOp, setSigModalOp] = useState(null);
   const [showNewApiKeyModal, setShowNewApiKeyModal] = useState(false);
   const [newApiKey, setNewApiKey] = useState({ name: '', clientName: '', vendorName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '' });
   const [createdApiKey, setCreatedApiKey] = useState(null); // holds key after creation (only shown once)
@@ -538,6 +541,7 @@ function AdminPage({ section = 'users-logs' }) {
       const [keysRes, ipsRes] = await Promise.all([getApiKeys(), getApprovedIPs()]);
       setApiKeys(keysRes.data.data || []);
       setApprovedIPs(ipsRes.data.data || []);
+      try { const sigRes = await getOperatorSignatures(); setOperatorSigs(sigRes.data.data || []); } catch {}
     } catch (err) {
       setError('Failed to load API keys');
     } finally {
@@ -2946,7 +2950,23 @@ function AdminPage({ section = 'users-logs' }) {
                           {key.vendorName && <div style={{ fontSize: '0.75rem', color: '#E65100' }}>🏭 Vendor: {key.vendorName}</div>}
                           {key.allowedIPs && <div style={{ fontSize: '0.7rem', color: '#e65100' }}>🌐 {key.allowedIPs}</div>}
                         </td>
-                        <td>{key.operatorName || <span style={{ color: '#ccc' }}>—</span>}</td>
+                        <td>
+                          {key.operatorName ? (
+                            <div>
+                              <div style={{ fontWeight: 500 }}>{key.operatorName}</div>
+                              {(() => {
+                                const sig = operatorSigs.find(s => s.operatorName === key.operatorName);
+                                const signed = !!(sig && sig.signatureData);
+                                return (
+                                  <button onClick={() => setSigModalOp(key.operatorName)}
+                                    style={{ marginTop: 3, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: '0.72rem', color: signed ? '#2e7d32' : '#1565c0', textDecoration: 'underline' }}>
+                                    {signed ? '✍️ Signature set' : '+ Set signature'}
+                                  </button>
+                                );
+                              })()}
+                            </div>
+                          ) : <span style={{ color: '#ccc' }}>—</span>}
+                        </td>
                       <td>
                         <span style={{
                           padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 500,
@@ -3328,6 +3348,24 @@ function AdminPage({ section = 'users-logs' }) {
             </form>
           </div>
         </div>
+      )}
+
+      {sigModalOp && (
+        <OperatorSignatureModal
+          operatorName={sigModalOp}
+          existing={(operatorSigs.find(s => s.operatorName === sigModalOp) || {}).signatureData || null}
+          onClose={() => setSigModalOp(null)}
+          onSave={async (dataUrl) => {
+            try {
+              await setOperatorSignature(sigModalOp, dataUrl);
+              setOperatorSigs(prev => {
+                const others = prev.filter(s => s.operatorName !== sigModalOp);
+                return [...others, { operatorName: sigModalOp, signatureData: dataUrl }];
+              });
+              setSigModalOp(null);
+            } catch (e) {}
+          }}
+        />
       )}
     </div>
   );
