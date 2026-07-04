@@ -99,7 +99,7 @@ export default function OperatorAssignments() {
       </div>
 
       {/* All operators side by side */}
-      <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, paddingBottom: 8, alignItems: 'flex-start' }}>
         {names.length === 0 ? (
           <div style={{ color: '#999' }}>No operators found.</div>
         ) : orderedNames.map((name, opIdx) => {
