@@ -13,6 +13,7 @@ export default function OperatorAssignments() {
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [order, setOrder] = useState(() => { try { return JSON.parse(localStorage.getItem('operatorQueueOrder')) || []; } catch { return []; } });
 
   const load = useCallback(async () => {
     try {
@@ -25,6 +26,22 @@ export default function OperatorAssignments() {
   const refresh = async () => { try { const asg = await getAssignments(); setAssignments(asg.data.data || []); } catch {} };
 
   const names = operators.map(o => o.operatorName || o.name || String(o)).filter(Boolean);
+  // Apply the saved column order; operators not yet ordered fall to the end alphabetically
+  const orderedNames = [...names].sort((a, b) => {
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  const moveOperator = (name, dir) => {
+    const cur = [...orderedNames];
+    const i = cur.indexOf(name), j = i + dir;
+    if (j < 0 || j >= cur.length) return;
+    [cur[i], cur[j]] = [cur[j], cur[i]];
+    setOrder(cur);
+    try { localStorage.setItem('operatorQueueOrder', JSON.stringify(cur)); } catch {}
+  };
   const queueFor = (name) => assignments.filter(a => a.assignedOperator === name).sort((a, b) => (a.assignedSequence ?? 0) - (b.assignedSequence ?? 0));
 
   const doSearch = async () => {
@@ -71,7 +88,7 @@ export default function OperatorAssignments() {
             <select defaultValue="" onChange={e => { if (e.target.value) assign(r.id, e.target.value); }} disabled={busy}
               style={{ padding: '5px 6px', borderRadius: 6, border: '1px solid #2e7d32', color: '#2e7d32', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}>
               <option value="">Assign to…</option>
-              {names.map(n => <option key={n} value={n}>{n}</option>)}
+              {orderedNames.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
         ))}
@@ -85,17 +102,21 @@ export default function OperatorAssignments() {
       <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, alignItems: 'flex-start' }}>
         {names.length === 0 ? (
           <div style={{ color: '#999' }}>No operators found.</div>
-        ) : names.map(name => {
+        ) : orderedNames.map((name, opIdx) => {
           const q = queueFor(name);
-          const others = names.filter(n => n !== name);
+          const others = orderedNames.filter(n => n !== name);
           // Light workload coloring: green (light), amber (moderate), red (heavy)
           const headBg = q.length === 0 ? '#f5f5f5' : q.length <= 3 ? '#e8f5e9' : q.length <= 6 ? '#fff8e1' : '#ffebee';
           const headColor = q.length === 0 ? '#999' : q.length <= 3 ? '#2e7d32' : q.length <= 6 ? '#e65100' : '#c62828';
           return (
             <div key={name} style={{ minWidth: 260, maxWidth: 300, flex: '0 0 auto', border: '1px solid #e0e0e0', borderRadius: 8, background: 'white' }}>
-              <div style={{ padding: '8px 12px', background: headBg, borderRadius: '8px 8px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, color: headColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+              <div style={{ padding: '8px 12px', background: headBg, borderRadius: '8px 8px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                <button onClick={() => moveOperator(name, -1)} disabled={opIdx === 0} title="Move left"
+                  style={{ background: 'none', border: 'none', cursor: opIdx === 0 ? 'default' : 'pointer', color: headColor, opacity: opIdx === 0 ? 0.3 : 1, fontSize: '0.9rem', padding: 0 }}>◀</button>
+                <span style={{ fontWeight: 700, color: headColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{name}</span>
                 <span style={{ background: headColor, color: 'white', borderRadius: 10, fontSize: '0.72rem', fontWeight: 700, padding: '1px 8px', flexShrink: 0 }}>{q.length}</span>
+                <button onClick={() => moveOperator(name, 1)} disabled={opIdx === orderedNames.length - 1} title="Move right"
+                  style={{ background: 'none', border: 'none', cursor: opIdx === orderedNames.length - 1 ? 'default' : 'pointer', color: headColor, opacity: opIdx === orderedNames.length - 1 ? 0.3 : 1, fontSize: '0.9rem', padding: 0 }}>▶</button>
               </div>
               <div style={{ padding: 8 }}>
                 {q.length === 0 ? (
