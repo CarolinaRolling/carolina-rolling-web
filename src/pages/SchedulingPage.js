@@ -4,7 +4,7 @@ import {
   Clock, Search, 
   AlertTriangle, Check, X
 } from 'lucide-react';
-import { getWorkOrders, updateWorkOrder } from '../services/api';
+import { getWorkOrders, updateWorkOrder, getOperators, getAssignments, assignWorkOrder, unassignWorkOrder } from '../services/api';
 import OperatorAssignments from '../components/OperatorAssignments';
 
 // Match inventory page statuses exactly
@@ -49,7 +49,27 @@ function SchedulingPage() {
     return localStorage.getItem('scheduling_statusFilter') || 'all';
   });
   const [editingDate, setEditingDate] = useState(null); // { orderId, field, value }
-  const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'waiting'
+  const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'waiting' | 'operators'
+  const [operators, setOperators] = useState([]);
+  const [assignMap, setAssignMap] = useState({});
+  useEffect(() => {
+    (async () => {
+      try {
+        const [ops, asg] = await Promise.all([getOperators(), getAssignments()]);
+        setOperators(ops.data.data || []);
+        const m = {}; (asg.data.data || []).forEach(a => { m[a.id] = a.assignedOperator; });
+        setAssignMap(m);
+      } catch {}
+    })();
+  }, []);
+  const handleAssign = async (orderId, operator) => {
+    const prev = assignMap[orderId];
+    setAssignMap(m => ({ ...m, [orderId]: operator || undefined }));
+    try {
+      if (operator) await assignWorkOrder(orderId, operator);
+      else await unassignWorkOrder(orderId);
+    } catch { setAssignMap(m => ({ ...m, [orderId]: prev })); }
+  };
 
   const handleDateSave = async () => {
     if (!editingDate) return;
@@ -451,7 +471,7 @@ function SchedulingPage() {
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>          {/* Table Header */}
           <div style={{ 
             display: 'grid', 
-            gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 100px 140px',
+            gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 100px 120px 150px',
             background: '#f5f5f5',
             padding: '12px 16px',
             fontWeight: 600,
@@ -467,6 +487,7 @@ function SchedulingPage() {
             <div>Promised</div>
             <div>Progress</div>
             <div>Status</div>
+            <div>Assign</div>
           </div>
 
           {/* Table Body */}
@@ -496,7 +517,7 @@ function SchedulingPage() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 100px 140px',
+                    gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 100px 120px 150px',
                     padding: '16px',
                     borderBottom: isRush ? '2px solid #ef5350' : '1px solid #eee',
                     cursor: 'pointer',
@@ -683,6 +704,15 @@ function SchedulingPage() {
                     }}>
                       {statusCfg.label}
                     </span>
+                  </div>
+
+                  {/* Assign to operator */}
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <select value={assignMap[order.id] || ''} onChange={(e) => handleAssign(order.id, e.target.value)}
+                      style={{ width: '100%', padding: '5px 6px', borderRadius: 6, border: '1px solid #ccc', fontSize: '0.8rem', background: assignMap[order.id] ? '#e8f5e9' : 'white', cursor: 'pointer' }}>
+                      <option value="">Unassigned</option>
+                      {operators.map(op => { const n = op.operatorName || op.name || String(op); return <option key={n} value={n}>{n}</option>; })}
+                    </select>
                   </div>
                 </div>
               </div>
