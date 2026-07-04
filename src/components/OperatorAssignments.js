@@ -159,10 +159,10 @@ export default function OperatorAssignments() {
                 {/* Tasks for this operator */}
                 <div style={{ borderTop: '1px dashed #e0e0e0', marginTop: 6, paddingTop: 6 }}>
                   {tasksFor(name).map(t => (
-                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', padding: '2px 0' }}>
-                      <input type="checkbox" checked={!!t.done} onChange={() => toggleTask(t)} disabled={busy} />
-                      <span style={{ flex: 1, minWidth: 0, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? '#aaa' : '#444', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.text}</span>
-                      <button onClick={() => removeTask(t.id)} disabled={busy} title="Delete task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c62828', fontSize: '0.75rem', flexShrink: 0 }}>✕</button>
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: '0.8rem', padding: '3px 0' }}>
+                      <input type="checkbox" checked={!!t.done} onChange={() => toggleTask(t)} disabled={busy} style={{ marginTop: 2, flexShrink: 0 }} />
+                      <span style={{ flex: 1, minWidth: 0, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? '#aaa' : '#444', overflowWrap: 'anywhere', whiteSpace: 'normal' }}>{t.text}</span>
+                      <button onClick={() => removeTask(t.id)} disabled={busy} title="Delete task" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c62828', fontSize: '0.75rem', flexShrink: 0, marginTop: 1 }}>✕</button>
                     </div>
                   ))}
                   <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
