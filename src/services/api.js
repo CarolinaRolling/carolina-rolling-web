@@ -124,6 +124,9 @@ export const deleteInboundOrder = (id) => api.delete(`/inbound/${id}`);
 
 // Work Orders
 export const getWorkOrders = (params) => api.get('/workorders', { params });
+export const getWorkOrderMessages = (id) => api.get(`/workorders/${id}/messages`);
+export const sendWorkOrderMessage = (id, data) => api.post(`/workorders/${id}/messages`, data);
+export const getWorkOrderMessagesUnread = () => api.get('/workorders/messages/unread-count');
 export const getWorkOrderById = (id) => api.get(`/workorders/${id}`);
 export const createWorkOrder = (data) => api.post('/workorders', data);
 export const updateWorkOrder = (id, data) => api.put(`/workorders/${id}`, data);

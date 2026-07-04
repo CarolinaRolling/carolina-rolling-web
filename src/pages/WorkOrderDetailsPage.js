@@ -5,6 +5,7 @@ import {
   Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink, RefreshCw
 } from 'lucide-react';
 import PlateRollForm from '../components/PlateRollForm';
+import WorkOrderMessages from '../components/WorkOrderMessages';
 import AngleRollForm from '../components/AngleRollForm';
 import PipeRollForm from '../components/PipeRollForm';
 import SquareTubeRollForm from '../components/SquareTubeRollForm';
@@ -2892,6 +2893,14 @@ function WorkOrderDetailsPage() {
         onLinkShipment={openLinkShipmentModal}
         showMessage={showMessage}
       />
+
+      {/* Messages — operator (shop floor) <-> office */}
+      <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid #1976d2' }}>
+        <div className="card-header">
+          <h3 className="card-title">💬 Messages</h3>
+        </div>
+        <WorkOrderMessages workOrderId={id} />
+      </div>
 
       {/* Shipping Details Panel */}
       {showReceivingInfo && allShipments.length > 0 && (
