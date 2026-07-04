@@ -2894,14 +2894,6 @@ function WorkOrderDetailsPage() {
         showMessage={showMessage}
       />
 
-      {/* Messages — operator (shop floor) <-> office */}
-      <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid #1976d2' }}>
-        <div className="card-header">
-          <h3 className="card-title">💬 Messages</h3>
-        </div>
-        <WorkOrderMessages workOrderId={id} />
-      </div>
-
       {/* Shipping Details Panel */}
       {showReceivingInfo && allShipments.length > 0 && (
         <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid #4caf50' }}>
@@ -3470,7 +3462,27 @@ function WorkOrderDetailsPage() {
             {tab.badge && <span style={{ marginLeft: 5, padding: '1px 6px', borderRadius: 99, fontSize: '0.65rem', fontWeight: 700, background: tab.badge === 'FULL' ? '#2e7d32' : '#e65100', color: 'white', letterSpacing: '0.3px' }}>{tab.badge}</span>}
           </button>
         ))}
+        {/* Messages — pushed to the right, others stay left */}
+        <button onClick={(e) => { e.preventDefault(); setWoTab('messages'); setTimeout(() => document.getElementById('wo-tabs')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}
+          style={{
+            marginLeft: 'auto',
+            padding: '10px 20px', border: 'none', cursor: 'pointer',
+            background: woTab === 'messages' ? '#1976d2' : 'transparent',
+            color: woTab === 'messages' ? 'white' : '#555',
+            fontWeight: woTab === 'messages' ? 700 : 500,
+            fontSize: '0.95rem', borderRadius: '8px 8px 0 0',
+            transition: 'all 0.15s'
+          }}>
+          💬 Messages
+        </button>
       </div>
+
+      {/* ===== MESSAGES TAB ===== */}
+      {woTab === 'messages' && (
+        <div style={{ marginTop: 16 }}>
+          <WorkOrderMessages workOrderId={id} />
+        </div>
+      )}
 
       {/* ===== PARTS TAB ===== */}
       {woTab === 'parts' && (
