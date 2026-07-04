@@ -5,6 +5,7 @@ import {
   AlertTriangle, Check, X
 } from 'lucide-react';
 import { getWorkOrders, updateWorkOrder } from '../services/api';
+import OperatorAssignments from '../components/OperatorAssignments';
 
 // Match inventory page statuses exactly
 const STATUSES = {
@@ -371,7 +372,20 @@ function SchedulingPage() {
             {waitingOrders.length}
           </span>
         </button>
+        <button onClick={() => setActiveTab('operators')} style={{
+          padding: '10px 24px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem',
+          background: 'none', borderBottom: activeTab === 'operators' ? '3px solid #2e7d32' : '3px solid transparent',
+          color: activeTab === 'operators' ? '#2e7d32' : '#666', marginBottom: -2, display: 'flex', alignItems: 'center', gap: 8
+        }}>
+          👷 Operator Queues
+        </button>
       </div>
+
+      {activeTab === 'operators' && (
+        <div className="card" style={{ padding: 16 }}>
+          <OperatorAssignments />
+        </div>
+      )}
 
       {/* Filters — only show on queue tab */}
       {activeTab === 'queue' && <div className="card" style={{ marginBottom: 20 }}>
