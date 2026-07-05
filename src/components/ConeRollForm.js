@@ -196,7 +196,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
     if (!coneData) return [];
     var n = heightSegs.length;
     var synced = layerSegments.length === n ? layerSegments :
-      Array.from({ length: n }, function(_, i) { return layerSegments[i] || layerSegments[0] || 1; });
+      Array.from({ length: n }, function(_, i) { return layerSegments[i] || 1; });
     return heightSegs.map(function(seg, i) {
       var rS = parseInt(synced[i]) || 1;
       var segH = seg.topHeight - seg.bottomHeight;
@@ -216,14 +216,19 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   var syncedLayerSegments = useMemo(function() {
     var n = heightSegs.length;
     if (layerSegments.length === n) return layerSegments;
-    return Array.from({ length: n }, function(_, i) { return layerSegments[i] || layerSegments[0] || 1; });
+    return Array.from({ length: n }, function(_, i) { return layerSegments[i] || 1; });
   }, [heightSegs.length, layerSegments]);
 
-  // Generated AutoCAD commands
+  // Generated AutoCAD commands (one per layer, using each layer's own radial split; offset so they don't overlap)
   var generatedCmds = useMemo(function() {
     if (!coneData) return [];
-    return generateCommands(coneData, heightSegs, radialSegments);
-  }, [coneData, heightSegs, radialSegments]);
+    var offsetX = 0, cmds = [];
+    segmentSpecs.forEach(function(sp) {
+      cmds.push('(CONELAYOUT ' + sp.outerRadius.toFixed(4) + ' ' + sp.innerRadius.toFixed(4) + ' ' + sp.segmentAngle.toFixed(4) + ' 1 "CONE-L' + sp.layer + '" ' + offsetX.toFixed(4) + ')');
+      offsetX += (sp.outerRadius * 2 + 2);
+    });
+    return cmds;
+  }, [coneData, segmentSpecs]);
 
   useEffect(function() { if (coneData && coneCanvasRef.current) drawCone3D(coneCanvasRef.current, coneData, heightSegs); }, [coneData, heightSegs]);
   useEffect(function() { segmentSpecs.forEach(function(sp) { var cv = blankRefs.current[sp.layer]; if (cv && sp.blank) drawBlank(cv, sp.blank, sp.segmentAngle, sp.layer); }); }, [segmentSpecs]);
@@ -292,6 +297,32 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
 
   // Pricing
   var qty = parseInt(partData.quantity) || 1;
+
+  // Per-segment pricing: each height tier is a distinct piece size; enter material + labor per piece
+  var pricePerSegment = !!partData._conePricePerSegment;
+  var segPricing = partData._coneSegmentPricing || [];
+  var updateSegPrice = function(i, field, val) {
+    setPartData(function(p) {
+      var arr = (p._coneSegmentPricing || []).slice();
+      while (arr.length <= i) arr.push({ mat: '', lab: '' });
+      arr[i] = Object.assign({}, arr[i]); arr[i][field] = val;
+      return Object.assign({}, p, { _coneSegmentPricing: arr });
+    });
+  };
+  var segMatTotal = 0, segLabTotal = 0;
+  segmentSpecs.forEach(function(sp, i) {
+    var pr = segPricing[i] || {};
+    var pcs = sp.radialSegments || 1;
+    segMatTotal += (parseFloat(pr.mat) || 0) * pcs;
+    segLabTotal += (parseFloat(pr.lab) || 0) * pcs;
+  });
+  useEffect(function() {
+    if (!pricePerSegment) return;
+    setPartData(function(p) {
+      return Object.assign({}, p, { materialTotal: segMatTotal.toFixed(2), _baseLaborTotal: segLabTotal.toFixed(2), laborTotal: segLabTotal.toFixed(2) });
+    });
+  }, [pricePerSegment, segMatTotal, segLabTotal]);
+
   var matCost = parseFloat(partData.materialTotal) || 0;
   var matMarkup = parseFloat(partData.materialMarkupPercent) || 0;
   var matEaRaw = Math.round(matCost * (1 + matMarkup / 100) * 100) / 100;
@@ -485,7 +516,9 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       {segmentSpecs.length > 0 && coneType === 'concentric' && (
         <div style={secStyle}>
           {secHead('📋', 'Segment Details (' + segmentSpecs.length + ' layer' + (segmentSpecs.length > 1 ? 's' : '') + (coneCount > 1 ? ' \u00d7 ' + coneCount + ' cones' : '') + ')', '#2e7d32')}
-          {segmentSpecs.map(function(sp) { return (
+          {segmentSpecs.map(function(sp) {
+            var segCmd = '(CONELAYOUT ' + sp.outerRadius.toFixed(4) + ' ' + sp.innerRadius.toFixed(4) + ' ' + sp.segmentAngle.toFixed(4) + ' 1 "CONE-L' + sp.layer + '" 0.0000)';
+            return (
             <div key={sp.layer} style={{ background: '#f0fdf4', padding: 12, borderRadius: 8, marginBottom: 8, border: '1px solid #bbf7d0' }}>
               <div style={{ fontWeight: 700, color: '#166534', marginBottom: 6, fontSize: '0.9rem' }}>Layer {sp.layer}: {sp.bottomHeight.toFixed(3)}" → {sp.topHeight.toFixed(3)}" <span style={{ fontWeight: 400, color: '#888' }}>({sp.radialSegments} seg{sp.radialSegments > 1 ? 's' : ''})</span></div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: '0.8rem' }}>
@@ -500,6 +533,16 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
                 <div style={{ gridColumn: 'span 2', marginTop: 4, padding: '4px 8px', background: '#dcfce7', borderRadius: 4, fontWeight: 600 }}>📐 Sheet Size: {sp.sheetWidth}" × {sp.sheetHeight}" (with 1" trim)</div>
               </div>
               <canvas ref={function(el) { blankRefs.current[sp.layer] = el; }} style={{ width: '100%', height: 140, marginTop: 8, borderRadius: 6, border: '1px solid #d1fae5' }} />
+              {coneType === 'concentric' && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 600, marginBottom: 3 }}>📐 AutoCAD command (this segment):</div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+                    <code style={{ flex: 1, minWidth: 0, fontFamily: '"Courier New", monospace', fontSize: '0.72rem', background: '#1e1e2e', color: '#89b4fa', border: '1px solid #45475a', borderRadius: 6, padding: '6px 8px', overflowX: 'auto', whiteSpace: 'nowrap' }}>{segCmd}</code>
+                    <button type="button" onClick={function() { navigator.clipboard.writeText(segCmd).then(function() { if (showMessage) showMessage('Layer ' + sp.layer + ' command copied \u2014 paste into AutoCAD'); }).catch(function() {}); }}
+                      style={{ background: '#b45309', color: 'white', border: 'none', borderRadius: 6, padding: '0 12px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, flexShrink: 0 }}>Copy</button>
+                  </div>
+                </div>
+              )}
             </div>
           ); })}
         </div>
@@ -599,11 +642,55 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       {/* PRICING */}
       <div style={secStyle}>
         {secHead('💰', 'Pricing', '#1976d2')}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
-          <div className="form-group"><label className="form-label">Material Cost (each)</label><input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialTotal: e.target.value })); }} placeholder="0.00" /></div>
-          <div className="form-group"><label className="form-label">Markup %</label><input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialMarkupPercent: e.target.value })); }} placeholder="20" /></div>
-          <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input" value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { _baseLaborTotal: e.target.value, laborTotal: e.target.value })); }} placeholder="0.00" /></div>
-        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, cursor: 'pointer', fontSize: '0.9rem' }}>
+          <input type="checkbox" checked={pricePerSegment} onChange={function(e) { setPartData(Object.assign({}, partData, { _conePricePerSegment: e.target.checked })); }} />
+          <span>Price per segment <span style={{ color: '#888' }}>(enter material + labor for each piece size)</span></span>
+        </label>
+        {pricePerSegment ? (
+          <div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: '#666', borderBottom: '1px solid #ddd' }}>
+                  <th style={{ padding: '4px 6px' }}>Segment</th>
+                  <th style={{ padding: '4px 6px' }}>Blank size</th>
+                  <th style={{ padding: '4px 6px', textAlign: 'center' }}>Pcs</th>
+                  <th style={{ padding: '4px 6px' }}>Material $/pc</th>
+                  <th style={{ padding: '4px 6px' }}>Labor $/pc</th>
+                  <th style={{ padding: '4px 6px', textAlign: 'right' }}>Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {segmentSpecs.map(function(sp, i) {
+                  var pr = segPricing[i] || { mat: '', lab: '' };
+                  var pcs = sp.radialSegments || 1;
+                  var rowTotal = ((parseFloat(pr.mat) || 0) + (parseFloat(pr.lab) || 0)) * pcs;
+                  var isBottom = i === segmentSpecs.length - 1;
+                  var tierLabel = segmentSpecs.length > 1 ? (i === 0 ? ' (top)' : isBottom ? ' (bottom)' : '') : '';
+                  return (
+                    <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                      <td style={{ padding: '4px 6px', fontWeight: 600 }}>Tier {sp.layer}{tierLabel}</td>
+                      <td style={{ padding: '4px 6px', color: '#555' }}>{sp.sheetWidth}" × {sp.sheetHeight}"</td>
+                      <td style={{ padding: '4px 6px', textAlign: 'center', fontWeight: 600 }}>{pcs}</td>
+                      <td style={{ padding: '4px 6px' }}><input type="number" step="any" className="form-input" style={{ width: 90, padding: '4px 6px' }} value={pr.mat} onFocus={function(e){e.target.select();}} onChange={function(e) { updateSegPrice(i, 'mat', e.target.value); }} placeholder="0.00" /></td>
+                      <td style={{ padding: '4px 6px' }}><input type="number" step="any" className="form-input" style={{ width: 90, padding: '4px 6px' }} value={pr.lab} onFocus={function(e){e.target.select();}} onChange={function(e) { updateSegPrice(i, 'lab', e.target.value); }} placeholder="0.00" /></td>
+                      <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>${rowTotal.toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 8, fontSize: '0.85rem' }}>
+              <div style={{ color: '#555' }}>Per cone: <strong>${segMatTotal.toFixed(2)}</strong> material + <strong>${segLabTotal.toFixed(2)}</strong> labor</div>
+              <div className="form-group" style={{ margin: 0 }}><label className="form-label" style={{ fontSize: '0.75rem' }}>Markup % (material)</label><input type="number" step="1" className="form-input" style={{ width: 90 }} value={partData.materialMarkupPercent ?? 20} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialMarkupPercent: e.target.value })); }} placeholder="20" /></div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
+            <div className="form-group"><label className="form-label">Material Cost (each)</label><input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialTotal: e.target.value })); }} placeholder="0.00" /></div>
+            <div className="form-group"><label className="form-label">Markup %</label><input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialMarkupPercent: e.target.value })); }} placeholder="20" /></div>
+            <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input" value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { _baseLaborTotal: e.target.value, laborTotal: e.target.value })); }} placeholder="0.00" /></div>
+          </div>
+        )}
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material Cost (ea)</span><span>${matCost.toFixed(2)}</span></div>
           {matMarkup > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#e65100' }}>
