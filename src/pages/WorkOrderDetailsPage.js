@@ -1459,8 +1459,18 @@ function WorkOrderDetailsPage() {
       } else if (part._rollToMethod === 'template') {
         rollingLines.push('Roll Per Template / Sample');
       } else if (rollingDescFull) {
-        const descLines = rollingDescFull.split(/\n|\\n/).map(l => l.trim()).filter(l => l);
+        const segDetails = Array.isArray(part._coneSegmentDetails) ? part._coneSegmentDetails : null;
+        const hasSegFinal = segDetails && segDetails.length > 1;
+        // Drop per-layer "L#:" lines (sheet/layout or old format) only when we'll re-add final cone sizes below
+        const descLines = rollingDescFull.split(/\n|\\n/).map(l => l.trim()).filter(l => l && (!hasSegFinal || !/^L\d+:/.test(l)));
         rollingLines.push(...descLines);
+        if (hasSegFinal) {
+          segDetails.forEach(s => {
+            const rs = s.radialSegments || 1;
+            const bd = (s.bottomDia || 0).toFixed(3), td = (s.topDia || 0).toFixed(3), vh = (s.segmentHeight || 0).toFixed(3);
+            rollingLines.push(`  L${s.layer}: ${rs > 1 ? rs + 'pc - ' : ''}${bd}" OD x ${td}" OD x ${vh}" VH${rs > 1 ? ' @ ' + Math.round(360 / rs) + ' deg' : ''}`);
+          });
+        }
       } else {
         // Fallback: build roll line from raw fields
         const rollVal = part.diameter || part.radius;
@@ -1681,6 +1691,57 @@ function WorkOrderDetailsPage() {
   </div>
   
   ${partsHtml}
+  ${includePricing ? (() => {
+    const cp = (order.parts || []).filter(p => p.partType !== 'rush_service').sort((a, b) => a.partNumber - b.partNumber);
+    if (!cp.length) return '';
+    let totalCost = 0, totalCharged = 0;
+    const rowsHtml = cp.map(p => {
+      const part = { ...p, ...(p.formData && typeof p.formData === 'object' ? p.formData : {}) };
+      const qty = parseInt(part.quantity) || 1;
+      const matCost = (parseFloat(part.materialTotal) || 0) * qty;
+      const labCost = (parseFloat(part._baseLaborTotal ?? part.laborTotal) || 0) * qty;
+      let opCost = 0;
+      (part.outsideProcessing || []).forEach(op => { opCost += ((parseFloat(op.costPerPart) || 0) + (parseFloat(op.expediteCost) || 0)) * qty; });
+      const lineCost = matCost + labCost + opCost;
+      totalCost += lineCost;
+      totalCharged += parseFloat(part.partTotal) || 0;
+      const opVendors = (part.outsideProcessing || []).map(o => o.vendorName).filter(Boolean).join(', ');
+      const vendorName = part.vendor?.name || part.supplierName || opVendors || '—';
+      const desc = part._materialDescription || part.materialDescription || part.description || (part.partType === 'fab_service' ? (part._serviceType || 'Service') : '') || '';
+      const mk = parseFloat(part.materialMarkupPercent) || 0;
+      return `<tr style="border-bottom:1px solid #eee;">
+        <td style="padding:4px 6px;">${part.partNumber}</td>
+        <td style="padding:4px 6px;">${desc}</td>
+        <td style="padding:4px 6px;">${vendorName}</td>
+        <td style="padding:4px 6px;text-align:right;">${matCost ? formatCurrency(matCost) + (mk ? ' <span style="color:#888">+' + mk + '%</span>' : '') : '—'}</td>
+        <td style="padding:4px 6px;text-align:right;">${labCost ? formatCurrency(labCost) : '—'}</td>
+        <td style="padding:4px 6px;text-align:right;">${opCost ? formatCurrency(opCost) : '—'}</td>
+        <td style="padding:4px 6px;text-align:right;font-weight:700;">${formatCurrency(lineCost)}</td>
+      </tr>`;
+    }).join('');
+    const shipCost = parseFloat(order.shippingCost) || 0;
+    const grandCost = totalCost + shipCost;
+    const margin = totalCharged - grandCost;
+    return `
+    <div style="page-break-before:always;"></div>
+    <h2 style="color:#1565c0;font-size:17px;margin:0 0 2px;">Internal Cost Summary</h2>
+    <div style="font-size:10px;color:#999;margin-bottom:10px;">Confidential — our cost, not for the client</div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="border-bottom:2px solid #333;text-align:left;color:#555;">
+        <th style="padding:4px 6px;">#</th><th style="padding:4px 6px;">Description</th><th style="padding:4px 6px;">Vendor / Sub</th>
+        <th style="padding:4px 6px;text-align:right;">Material</th><th style="padding:4px 6px;text-align:right;">Labor</th><th style="padding:4px 6px;text-align:right;">Outside</th><th style="padding:4px 6px;text-align:right;">Line Cost</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div style="margin-top:14px;border-top:1px solid #ddd;padding-top:8px;max-width:320px;margin-left:auto;font-size:12px;">
+      <div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Parts cost</span><span>${formatCurrency(totalCost)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Shipping &amp; handling</span><span>${formatCurrency(shipCost)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid #eee;font-weight:700;font-size:13px;"><span>Total cost</span><span>${formatCurrency(grandCost)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0;color:#555;"><span>Charged to client</span><span>${formatCurrency(totalCharged)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid #eee;font-weight:700;font-size:13px;color:${margin >= 0 ? '#2e7d32' : '#c62828'};"><span>Margin</span><span>${formatCurrency(margin)}</span></div>
+    </div>
+    `;
+  })() : ''}
 
   ${includePricing ? `
     <div style="margin-top:24px;padding:16px;background:#f0f7ff;border-radius:8px;border:1px solid #bbdefb">

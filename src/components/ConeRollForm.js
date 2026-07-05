@@ -273,7 +273,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
     // Line 3: Multi-layer info (only if multiple layers)
     if (heightSegs.length > 1) {
       l.push(heightSegs.length + ' layers');
-      segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': ' + s.segmentAngle.toFixed(3) + ' deg - Sheet ' + s.sheetWidth + '"x' + s.sheetHeight + '" | OR:' + s.outerRadius.toFixed(3) + '" IR:' + s.innerRadius.toFixed(3) + '"'); });
+      segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': ' + (s.radialSegments > 1 ? s.radialSegments + 'pc - ' : '') + s.bottomDia.toFixed(3) + '" OD x ' + s.topDia.toFixed(3) + '" OD x ' + s.segmentHeight.toFixed(3) + '" VH' + (s.radialSegments > 1 ? ' @ ' + (360 / s.radialSegments).toFixed(0) + ' deg' : '')); });
     }
     // Total pieces summary
     var segPerCone = heightSegs.length * rS;
