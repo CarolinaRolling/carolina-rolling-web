@@ -137,6 +137,10 @@ function WorkOrderDetailsPage() {
   );
   const [editShipmentModal, setEditShipmentModal] = useState(null); // { idx, entry } or null
   const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [printOpts, setPrintOpts] = useState({
+    includePricing: true, includeCostSummary: true,
+    prints: true, inspectionReports: true, shippingDocs: true, certs: true, pos: false, otherDocs: true
+  });
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editingInvoiceNum, setEditingInvoiceNum] = useState(false);
   const [invoiceNumInput, setInvoiceNumInput] = useState('');
@@ -1338,7 +1342,7 @@ function WorkOrderDetailsPage() {
   const codPaid = order?.codPaid === true;
 
   // Helper: build work order print HTML
-  const buildWorkOrderPrintHtml = (includePricing) => {
+  const buildWorkOrderPrintHtml = (includePricing, opts = {}) => {
     const clientPO = order.clientPurchaseOrderNumber || shipment?.clientPurchaseOrderNumber;
     const title = includePricing ? 'Work Order' : 'Production Order';
     const formatCurrency = (v) => '$' + (parseFloat(v) || 0).toFixed(2);
@@ -1589,22 +1593,11 @@ function WorkOrderDetailsPage() {
             ${includePricing && part.partType !== 'fab_service' ? (() => {
               const custSupplied = part.materialSource === 'customer_supplied';
               const suppliedBy = custSupplied ? (order.clientName || 'Customer') : 'Carolina Rolling Company';
-              const vendorName = part.vendor?.name || part.supplierName || '';
-              const matCostRaw = parseFloat(part.materialTotal) || 0;
-              const detail = (!custSupplied && (vendorName || matCostRaw)) ? ` <span style="color:#555">— purchased from <strong>${vendorName || 'supplier TBD'}</strong>${matCostRaw ? ` at ${formatCurrency(matCostRaw)}` : ''}${part.vendorEstimateNumber ? ` (Est# ${part.vendorEstimateNumber})` : ''}${part.materialOrdered === false ? ' — not yet ordered' : ''}</span>` : '';
-              return `<div style="margin-top:2px;font-size:9px;color:#888">Material supplied by: ${suppliedBy}${detail}</div>`;
+              // Client copy: who supplies the material only — vendor, our cost, Est#, and order status are internal (see cost summary)
+              return `<div style="margin-top:2px;font-size:9px;color:#888">Material supplied by: ${suppliedBy}</div>`;
             })() : ''}
             ${pdfFiles.length > 0 ? `<div style="margin-top:2px;font-size:9px;color:#2e7d32">📎 ${pdfFiles.map(f => f.originalName).join(', ')}</div>` : ''}
             ${part.partType === 'press_brake' && part._pressBrakeFileName ? `<div style="margin-top:2px;font-size:9px;color:#1565c0">🗂️ Brake File: ${part._pressBrakeFileName}</div>` : ''}
-            ${includePricing && pricingHtml ? `<div class="pr-pricing">${(() => {
-              const matCost2 = parseFloat(part.materialTotal) || 0;
-              const matMarkup2Raw = parseFloat(part.materialMarkupPercent);
-              const matMarkup2 = isNaN(matMarkup2Raw) ? (matCost2 > 0 ? 20 : 0) : matMarkup2Raw;
-              const matEach2Raw = matCost2 * (1 + matMarkup2 / 100);
-              const matEach2 = matRounding === 'dollar' ? Math.ceil(matEach2Raw) : matRounding === 'five' ? Math.ceil(matEach2Raw / 5) * 5 : matEach2Raw;
-              const labEach2 = basePartLabor(part);
-              return `${matCost2 ? `<span>Material: ${formatCurrency(matCost2)}${matMarkup2 > 0 ? ' +' + matMarkup2 + '%' : ''}</span>` : ''}${labEach2 ? `<span>Labor: ${formatCurrency(labEach2)}</span>` : ''}`;
-            })()}</div>` : ''}
           </div>
           <div class="pr-qty">${parseInt(part.quantity) || 1}</div>
           ${includePricing ? `
@@ -1699,7 +1692,7 @@ function WorkOrderDetailsPage() {
   </div>
   
   ${partsHtml}
-  ${includePricing ? (() => {
+  ${(includePricing && opts.includeCostSummary !== false) ? (() => {
     const cp = (order.parts || []).filter(p => p.partType !== 'rush_service').sort((a, b) => a.partNumber - b.partNumber);
     if (!cp.length) return '';
     let totalCost = 0, totalCharged = 0;
@@ -1707,7 +1700,7 @@ function WorkOrderDetailsPage() {
       const part = { ...p, ...(p.formData && typeof p.formData === 'object' ? p.formData : {}) };
       const qty = parseInt(part.quantity) || 1;
       const matCost = (parseFloat(part.materialTotal) || 0) * qty;
-      const labCost = (parseFloat(part._baseLaborTotal ?? part.laborTotal) || 0) * qty;
+      const labCost = (parseFloat(part.laborTotal) || 0) * qty;
       let opCost = 0;
       const opArr = part.outsideProcessing || [];
       if (opArr.length) {
@@ -1718,13 +1711,15 @@ function WorkOrderDetailsPage() {
       const lineCost = matCost + labCost + opCost;
       totalCost += lineCost;
       totalCharged += parseFloat(part.partTotal) || 0;
+      // Skip lines with no cost to us (inspections, customer-supplied) — they only clutter the cost table
+      if (lineCost === 0) return '';
       const opVendors = (part.outsideProcessing || []).map(o => o.vendorName).filter(Boolean).join(', ');
       const vendorName = part.vendor?.name || part.supplierName || opVendors || '—';
       const desc = part._materialDescription || part.materialDescription || part.description || (part.partType === 'fab_service' ? (part._serviceType || 'Service') : '') || '';
       const mk = parseFloat(part.materialMarkupPercent) || 0;
       return `<tr style="border-bottom:1px solid #eee;">
-        <td style="padding:4px 6px;">${part.partNumber}</td>
-        <td style="padding:4px 6px;">${desc}</td>
+        <td style="padding:4px 6px;">${part.partType === 'fab_service' ? '' : part.partNumber}</td>
+        <td style="padding:4px 6px;${part.partType === 'fab_service' ? 'padding-left:22px;color:#555;font-style:italic;' : ''}">${part.partType === 'fab_service' ? '↳ ' : ''}${desc}</td>
         <td style="padding:4px 6px;">${vendorName}</td>
         <td style="padding:4px 6px;text-align:right;">${matCost ? formatCurrency(matCost) + (mk ? ' <span style="color:#888">+' + mk + '%</span>' : '') : '—'}</td>
         <td style="padding:4px 6px;text-align:right;">${labCost ? formatCurrency(labCost) : '—'}</td>
@@ -1816,14 +1811,22 @@ function WorkOrderDetailsPage() {
   };
 
   // Generate complete print package (work order details + attached PDFs merged into one)
-  const generatePrintPackage = async (mode, saveToFile = false) => {
+  const generatePrintPackage = async (mode, saveToFile = false, printOpts = null) => {
     try {
       setShowPrintMenu(false);
-      const includePricing = mode === 'full';
-      const { html } = buildWorkOrderPrintHtml(includePricing);
-      
-      // Send HTML to backend — it renders to PDF via Chrome, merges with part prints/POs
-      const res = await getWorkOrderPrintPackage(id, mode, html);
+      const includePricing = printOpts ? printOpts.includePricing : (mode === 'full');
+      const { html } = buildWorkOrderPrintHtml(includePricing, printOpts || {});
+      const docOptions = printOpts ? {
+        prints: !!printOpts.prints,
+        inspectionReports: !!printOpts.inspectionReports,
+        shippingDocs: !!printOpts.shippingDocs,
+        certs: !!printOpts.certs,
+        pos: !!printOpts.pos,
+        otherDocs: !!printOpts.otherDocs
+      } : null;
+
+      // Send HTML to backend — it renders to PDF via Chrome, merges with selected part prints/docs
+      const res = await getWorkOrderPrintPackage(id, mode, html, docOptions);
       const blob = new Blob([res.data], { type: 'application/pdf' });
       
       // Verify it's actually a PDF
@@ -2625,29 +2628,36 @@ function WorkOrderDetailsPage() {
             {showPrintMenu && (
               <div style={{ position: 'absolute', top: '100%', right: 0, background: 'white', border: '1px solid #ddd', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 100, minWidth: 340, padding: 8 }}>
                 
-                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Full Work Order</div>
-                <div style={{ display: 'flex', gap: 6, padding: '4px 8px 8px' }}>
-                  <button onClick={printFullWorkOrder} style={{ flex: 1, padding: '14px 12px', border: '2px solid #1565C0', background: '#E3F2FD', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontWeight: 700, fontSize: '0.9rem', color: '#1565C0' }}>
+                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Include in printout</div>
+                <div style={{ padding: '0 4px' }}>
+                  {[
+                    ['includePricing', 'Client pricing (page 1)'],
+                    ['includeCostSummary', 'Internal cost summary'],
+                    ['prints', 'Part prints / drawings'],
+                    ['inspectionReports', 'Inspection reports'],
+                    ['shippingDocs', 'Shipping & pickup docs'],
+                    ['certs', 'Certs (COC / USMCA / MTR)'],
+                    ['pos', 'Purchase orders'],
+                    ['otherDocs', 'Other documents'],
+                  ].map(([key, label]) => (
+                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: 'pointer', fontSize: '0.85rem', color: '#333' }}>
+                      <input type="checkbox" checked={!!printOpts[key]} onChange={e => setPrintOpts(o => ({ ...o, [key]: e.target.checked }))} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <button onClick={() => setPrintOpts({ includePricing: true, includeCostSummary: true, prints: false, inspectionReports: false, shippingDocs: false, certs: false, pos: false, otherDocs: false })}
+                  style={{ width: '100%', padding: '4px', border: 'none', background: 'none', color: '#1565C0', cursor: 'pointer', fontSize: '0.76rem', textDecoration: 'underline' }}>
+                  Quick: just the work-order pages (page 1 + 2)
+                </button>
+                <div style={{ display: 'flex', gap: 6, padding: '6px 8px 4px' }}>
+                  <button onClick={() => generatePrintPackage('full', false, printOpts)} style={{ flex: 1, padding: '12px', border: 'none', background: '#1565C0', color: 'white', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}>
                     🖨️ Print
                   </button>
-                  <button onClick={() => generatePrintPackage('full', true)} style={{ flex: 1, padding: '14px 12px', border: '2px solid #1565C0', background: 'white', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontWeight: 700, fontSize: '0.9rem', color: '#1565C0' }}>
+                  <button onClick={() => generatePrintPackage('full', true, printOpts)} style={{ flex: 1, padding: '12px', border: '2px solid #1565C0', background: 'white', color: '#1565C0', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}>
                     ⬇️ Download
                   </button>
                 </div>
-                <div style={{ padding: '2px 12px', fontSize: '0.75rem', color: '#888', marginBottom: 4 }}>Details + pricing + all documents + POs</div>
-                
-                <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
-                
-                <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', color: '#999', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}>Production Copy</div>
-                <div style={{ display: 'flex', gap: 6, padding: '4px 8px 8px' }}>
-                  <button onClick={printShopOrder} style={{ flex: 1, padding: '14px 12px', border: '2px solid #E65100', background: '#FFF3E0', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontWeight: 700, fontSize: '0.9rem', color: '#E65100' }}>
-                    🖨️ Print
-                  </button>
-                  <button onClick={() => generatePrintPackage('production', true)} style={{ flex: 1, padding: '14px 12px', border: '2px solid #E65100', background: 'white', borderRadius: 8, cursor: 'pointer', textAlign: 'center', fontWeight: 700, fontSize: '0.9rem', color: '#E65100' }}>
-                    ⬇️ Download
-                  </button>
-                </div>
-                <div style={{ padding: '2px 12px', fontSize: '0.75rem', color: '#888', marginBottom: 4 }}>Details (no pricing) + all documents</div>
                 
                 <div style={{ borderTop: '2px solid #eee', margin: '6px 0' }}></div>
                 

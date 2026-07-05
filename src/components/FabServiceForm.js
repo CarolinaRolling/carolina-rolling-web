@@ -291,6 +291,14 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
     }
   }, [lineTotal, laborEach, baseLaborEach, serviceDescription, serviceConfig, weldCalc, opEnabled, hiddenFromCustomer]);
 
+  // When outsourced, ensure any previously-entered in-house labor isn't billed on top of the OP cost.
+  // (_baseLaborTotal is preserved, so the labor returns if outside processing is removed.)
+  useEffect(() => {
+    if (opEnabled) {
+      setPartData(prev => ((parseFloat(prev.laborTotal) || 0) !== 0 ? { ...prev, laborTotal: '0.00' } : prev));
+    }
+  }, [opEnabled]);
+
   const update = (fields) => {
     setPartData(prev => ({ ...prev, ...fields }));
   };
