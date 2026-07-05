@@ -1598,6 +1598,16 @@ function WorkOrderDetailsPage() {
             })() : ''}
             ${pdfFiles.length > 0 ? `<div style="margin-top:2px;font-size:9px;color:#2e7d32">📎 ${pdfFiles.map(f => f.originalName).join(', ')}</div>` : ''}
             ${part.partType === 'press_brake' && part._pressBrakeFileName ? `<div style="margin-top:2px;font-size:9px;color:#1565c0">🗂️ Brake File: ${part._pressBrakeFileName}</div>` : ''}
+            ${includePricing && pricingHtml ? `<div class="pr-pricing">${(() => {
+              // Client-facing breakdown: material shown is the MARKED-UP (sell) price — never our cost, markup %, or vendor
+              const matCost2 = parseFloat(part.materialTotal) || 0;
+              const matMarkup2Raw = parseFloat(part.materialMarkupPercent);
+              const matMarkup2 = isNaN(matMarkup2Raw) ? (matCost2 > 0 ? 20 : 0) : matMarkup2Raw;
+              const matEach2Raw = matCost2 * (1 + matMarkup2 / 100);
+              const matEach2 = matRounding === 'dollar' ? Math.ceil(matEach2Raw) : matRounding === 'five' ? Math.ceil(matEach2Raw / 5) * 5 : matEach2Raw;
+              const labEach2 = basePartLabor(part);
+              return `${matEach2 ? `<span>Material: ${formatCurrency(matEach2)}</span>` : ''}${labEach2 ? `<span>Labor: ${formatCurrency(labEach2)}</span>` : ''}`;
+            })()}</div>` : ''}
           </div>
           <div class="pr-qty">${parseInt(part.quantity) || 1}</div>
           ${includePricing ? `
@@ -1619,6 +1629,12 @@ function WorkOrderDetailsPage() {
     @media print { body { padding: 0 0 40px; } .no-print { display: none; } .wo-foot { display: flex !important; } }
     .wo-foot { display: none; position: fixed; bottom: 0; left: 0; right: 0; justify-content: space-between; padding: 4px 6px; font-size: 8.5px; color: #999; background: #fff; border-top: 1px solid #eee; }
     .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+    @font-face { font-family: 'Yellowcake'; src: url('/fonts/Yellowcake-Regular.ttf') format('truetype'); }
+    .company-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2px; }
+    .company-left { display: flex; align-items: center; gap: 14px; }
+    .logo { width: 54px; height: 54px; border-radius: 50%; object-fit: cover; }
+    .company-name { font-family: 'Yellowcake', cursive; font-size: 22px; color: #333; line-height: 1.2; }
+    .company-contact { font-size: 8.5px; color: #666; margin-top: 3px; }
     .doc-title { font-size: 20px; font-weight: 700; color: #1976d2; }
     .doc-right { text-align: right; }
     .doc-num { font-size: 13px; font-weight: 700; color: #333; }
@@ -1656,9 +1672,16 @@ function WorkOrderDetailsPage() {
   </style>
 </head>
 <body>
-  <div class="doc-header">
-    <span class="doc-title">${includePricing ? 'WORK ORDER' : 'PRODUCTION ORDER'}</span>
+  <div class="company-header">
+    <div class="company-left">
+      <img src="/logo.png" class="logo" onerror="this.style.display='none'" />
+      <div>
+        <div class="company-name">Carolina Rolling Co. Inc.</div>
+        <div class="company-contact">9152 Sonrisa St., Bellflower, CA 90706 &nbsp;|&nbsp; (562) 633-1044 &nbsp;|&nbsp; keepitrolling@carolinarolling.com</div>
+      </div>
+    </div>
     <div class="doc-right">
+      <div class="doc-title">${includePricing ? 'WORK ORDER' : 'PRODUCTION ORDER'}</div>
       <div class="doc-num">${order.drNumber ? 'DR-' + order.drNumber : order.orderNumber}</div>
       <div class="doc-date">${order.estimateNumber ? 'Est: ' + order.estimateNumber : ''}</div>
     </div>
