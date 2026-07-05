@@ -6,9 +6,9 @@ import { computeDisplayNumbers } from '../utils/partNumbers';
 const SERVICE_TYPES = [
   { key: 'weld_100', label: '100% Weld', icon: '🔥', color: '#c62828', hasWeldCalc: true },
   { key: 'tack_weld', label: 'Tack Weld', icon: '⚡', color: '#e65100', hasWeldCalc: false },
-  { key: 'bevel', label: 'Bevel', icon: '📐', color: '#4527a0', hasWeldCalc: false },
+  { key: 'bevel', label: 'Bevel Edge', icon: '📐', color: '#4527a0', hasWeldCalc: false },
   { key: 'bracing', label: 'Bracing', icon: '🔩', color: '#00695c', hasWeldCalc: false },
-  { key: 'fit', label: 'Fit Only', icon: '🔧', color: '#1565c0', hasWeldCalc: false },
+  { key: 'fit', label: 'Fit for Welding', icon: '🔧', color: '#1565c0', hasWeldCalc: false },
   { key: 'cut_to_size', label: 'Cut to Size', icon: '✂️', color: '#2e7d32', hasWeldCalc: false },
   { key: 'finishing', label: 'Finishing', icon: '✨', color: '#6a1b9a', hasWeldCalc: false },
   { key: 'other', label: 'Other Service', icon: '🛠️', color: '#616161', hasWeldCalc: false },

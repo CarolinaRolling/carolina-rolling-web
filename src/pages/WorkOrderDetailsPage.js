@@ -1388,21 +1388,23 @@ function WorkOrderDetailsPage() {
         if (part.formData && typeof part.formData === 'object') Object.assign(part, part.formData);
         return part;
       });
-      const regular = sorted.filter(p => !['fab_service', 'shop_rate'].includes(p.partType) || !p._linkedPartId);
-      const services = sorted.filter(p => ['fab_service', 'shop_rate'].includes(p.partType) && p._linkedPartId);
+      const getLink = (p) => String(p._linkedPartId || p.linkedPartId || (p.formData && (p.formData._linkedPartId || p.formData.linkedPartId)) || '');
+      const isChildType = (p) => ['fab_service', 'shop_rate', 'inspection'].includes(p.partType);
+      const regular = sorted.filter(p => !isChildType(p) || !getLink(p));
+      const services = sorted.filter(p => isChildType(p) && getLink(p));
       const grouped = [];
       const used = new Set();
       regular.forEach(rp => {
         grouped.push(rp);
         services.forEach(sp => {
-          if (String(sp._linkedPartId) === String(rp.id) && !used.has(sp.id)) { grouped.push(sp); used.add(sp.id); }
+          if (getLink(sp) === String(rp.id) && !used.has(sp.id)) { grouped.push(sp); used.add(sp.id); }
         });
       });
       services.forEach(sp => { if (!used.has(sp.id)) grouped.push(sp); });
       return grouped;
     })().map(part => {
-      const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && part._linkedPartId;
-      const linkedParent = isLinkedService ? order.parts.find(p => String(p.id) === String(part._linkedPartId)) : null;
+      const isLinkedService = ['fab_service', 'shop_rate', 'inspection'].includes(part.partType) && (part._linkedPartId || part.linkedPartId);
+      const linkedParent = isLinkedService ? order.parts.find(p => String(p.id) === String(part._linkedPartId || part.linkedPartId)) : null;
 
       const pdfFiles = part.files?.filter(f => f.mimeType === 'application/pdf' || f.originalName?.toLowerCase().endsWith('.pdf')) || [];
       pdfFiles.forEach(f => allPdfUrls.push({ url: f.url, name: f.originalName, partNumber: part.partNumber }));
@@ -1426,6 +1428,9 @@ function WorkOrderDetailsPage() {
         if (grade) coneLine += ' ' + grade;
         if (origin) coneLine += ' ' + origin;
         materialLine = `${part.quantity}pc: ${coneLine}`;
+      } else if (part.partType === 'inspection') {
+        const insp = (formMaterialDesc || '').replace(/^\(\d+\)\s*/, '').replace(/^\d+pc:?\s*/, '').replace(/inspection/gi, 'Dimensional Report').trim();
+        materialLine = `${part.quantity}pc: ${insp || 'Dimensional Report'}`;
       } else if (formMaterialDesc) {
         // Use the pre-formatted description; ensure qty is shown
         const cleaned = formMaterialDesc.replace(/^\(\d+\)\s*/, '').replace(/^\d+pc:?\s*/, '');
@@ -1576,7 +1581,7 @@ function WorkOrderDetailsPage() {
         <div class="part-row${isLinkedService ? ' service' : ''}">
           <div class="pr-item${isLinkedService ? ' svc' : ''}">${isLinkedService ? (partDispNum[part.id] || part.partNumber) : '#' + (partDispNum[part.id] || part.partNumber)}</div>
           <div class="pr-desc">
-            <div class="pr-type${isLinkedService ? ' svc' : ''}">${isLinkedService ? '↳ ' : ''}${PART_TYPES[part.partType]?.label || part.partType}${isLinkedService && linkedParent ? ` <span style="font-weight:400;color:#9c27b0;font-size:9px">(for Part #${partDispNum[linkedParent.id] || linkedParent.partNumber})</span>` : ''}</div>
+            <div class="pr-type${isLinkedService ? ' svc' : ''}">${isLinkedService ? '↳ ' : ''}${PART_TYPES[part.partType]?.label || (part.partType === 'inspection' ? 'Dimensional Report' : part.partType)}${isLinkedService && linkedParent ? ` <span style="font-weight:400;color:#9c27b0;font-size:9px">(for Part #${partDispNum[linkedParent.id] || linkedParent.partNumber})</span>` : ''}</div>
             <div class="pr-detail">
               ${part.clientPartNumber ? `Client Part#: ${part.clientPartNumber}<br/>` : ''}
               ${(part.rev || part.poLineNumber || part.lotNumber) ? `${[part.rev ? `Rev: ${part.rev}` : '', part.poLineNumber ? `PO Line#: ${part.poLineNumber}` : '', part.lotNumber ? `Lot#: ${part.lotNumber}` : ''].filter(Boolean).join(' &nbsp; ')}<br/>` : ''}
@@ -1718,58 +1723,79 @@ function WorkOrderDetailsPage() {
   ${(includePricing && opts.includeCostSummary !== false) ? (() => {
     const cp = (order.parts || []).filter(p => p.partType !== 'rush_service').sort((a, b) => a.partNumber - b.partNumber);
     if (!cp.length) return '';
-    let totalCost = 0, totalCharged = 0;
+    let totalCharged = 0, totalPaidOut = 0, totalLabor = 0, totalMarkup = 0;
     const rowsHtml = cp.map(p => {
       const part = { ...p, ...(p.formData && typeof p.formData === 'object' ? p.formData : {}) };
       const qty = parseInt(part.quantity) || 1;
+      const isFab = part.partType === 'fab_service';
+      // Material we bought
       const matCost = (parseFloat(part.materialTotal) || 0) * qty;
-      const labCost = (parseFloat(part.laborTotal) || 0) * qty;
-      let opCost = 0;
+      const matMk = isNaN(parseFloat(part.materialMarkupPercent)) ? (matCost > 0 ? 20 : 0) : parseFloat(part.materialMarkupPercent);
+      const matSell = matCost * (1 + matMk / 100);
+      const matVendor = part.vendor?.name || part.supplierName || '';
+      // Outside labor / services
+      let opCost = 0, opSell = 0;
       const opArr = part.outsideProcessing || [];
       if (opArr.length) {
-        opArr.forEach(op => { opCost += ((parseFloat(op.costPerPart) || 0) + (parseFloat(op.expediteCost) || 0)) * qty; });
+        opArr.forEach(op => {
+          const c = ((parseFloat(op.costPerPart) || 0) + (parseFloat(op.expediteCost) || 0)) * qty;
+          const m = parseFloat(op.markup) || 0;
+          opCost += c; opSell += c * (1 + m / 100);
+        });
       } else {
         opCost = (parseFloat(part.outsideProcessingCost) || 0) + (parseFloat(part.outsideProcessingTransportCost) || 0);
+        opSell = opCost * (1 + (parseFloat(part.outsideProcessingMarkupPercent) || 0) / 100);
       }
-      const lineCost = matCost + labCost + opCost;
-      totalCost += lineCost;
-      totalCharged += parseFloat(part.partTotal) || 0;
-      // Skip lines with no cost to us (inspections, customer-supplied) — they only clutter the cost table
-      if (lineCost === 0) return '';
-      const opVendors = (part.outsideProcessing || []).map(o => o.vendorName).filter(Boolean).join(', ');
-      const vendorName = part.vendor?.name || part.supplierName || opVendors || '—';
-      const desc = part._materialDescription || part.materialDescription || part.description || (part.partType === 'fab_service' ? (part._serviceType || 'Service') : '') || '';
-      const mk = parseFloat(part.materialMarkupPercent) || 0;
+      const opMk = opCost > 0 ? Math.round((opSell / opCost - 1) * 100) : 0;
+      const opVendors = opArr.map(o => o.vendorName).filter(Boolean).join(', ') || part.outsideProcessingVendorName || '';
+      const labCost = (parseFloat(part.laborTotal) || 0) * qty;
+      const charge = parseFloat(part.partTotal) || 0;
+      const paidOut = matCost + opCost;
+      const profit = charge - paidOut - labCost;
+      totalCharged += charge; totalPaidOut += paidOut; totalLabor += labCost;
+      totalMarkup += (matSell - matCost) + (opSell - opCost);
+      // Skip lines that are nothing to us AND not charged (e.g. inspections)
+      if (charge === 0 && paidOut === 0 && labCost === 0) return '';
+      const desc = part._materialDescription || part.materialDescription || part.description || (isFab ? (part._serviceType || 'Service') : '') || '';
+      const matCell = matCost
+        ? `${formatCurrency(matCost)}${matVendor ? ` <span style="color:#888;font-size:9px">${matVendor}</span>` : ''}${matMk ? `<div style="color:#1565c0;font-size:9.5px;margin-top:2px">+${matMk}% → <b>${formatCurrency(matSell)}</b></div>` : ''}`
+        : '<span style="color:#bbb">—</span>';
+      const opCell = opCost
+        ? `${formatCurrency(opCost)}${opVendors ? ` <span style="color:#888;font-size:9px">${opVendors}</span>` : ''}${opMk ? `<div style="color:#1565c0;font-size:9.5px;margin-top:2px">+${opMk}% → <b>${formatCurrency(opSell)}</b></div>` : ''}`
+        : '<span style="color:#bbb">—</span>';
       return `<tr style="border-bottom:1px solid #eee;">
-        <td style="padding:4px 6px;">${part.partType === 'fab_service' ? '' : part.partNumber}</td>
-        <td style="padding:4px 6px;${part.partType === 'fab_service' ? 'padding-left:22px;color:#555;font-style:italic;' : ''}">${part.partType === 'fab_service' ? '↳ ' : ''}${desc}</td>
-        <td style="padding:4px 6px;">${vendorName}</td>
-        <td style="padding:4px 6px;text-align:right;">${matCost ? formatCurrency(matCost) + (mk ? ' <span style="color:#888">+' + mk + '%</span>' : '') : '—'}</td>
-        <td style="padding:4px 6px;text-align:right;">${labCost ? formatCurrency(labCost) : '—'}</td>
-        <td style="padding:4px 6px;text-align:right;">${opCost ? formatCurrency(opCost) : '—'}</td>
-        <td style="padding:4px 6px;text-align:right;font-weight:700;">${formatCurrency(lineCost)}</td>
+        <td style="padding:6px 6px;vertical-align:top;${isFab ? 'padding-left:22px;color:#555;font-style:italic;' : 'font-weight:600;'}">${isFab ? '↳ ' : (part.partNumber + '&nbsp;&nbsp;')}${desc}</td>
+        <td style="padding:6px 6px;text-align:right;vertical-align:top;">${charge ? formatCurrency(charge) : '<span style="color:#bbb">—</span>'}</td>
+        <td style="padding:6px 6px;vertical-align:top;">${matCell}</td>
+        <td style="padding:6px 6px;vertical-align:top;">${opCell}</td>
+        <td style="padding:6px 6px;text-align:right;vertical-align:top;">${labCost ? formatCurrency(labCost) : '<span style="color:#bbb">—</span>'}</td>
+        <td style="padding:6px 6px;text-align:right;vertical-align:top;font-weight:700;color:${profit >= 0 ? '#2e7d32' : '#c62828'}">${formatCurrency(profit)}</td>
       </tr>`;
     }).join('');
     const shipCost = parseFloat(order.shippingCost) || 0;
-    const grandCost = totalCost + shipCost;
-    const margin = totalCharged - grandCost;
+    const grandProfit = totalCharged - totalPaidOut - totalLabor - shipCost;
     return `
     <div style="page-break-before:always;"></div>
     <h2 style="color:#1565c0;font-size:17px;margin:0 0 2px;">Internal Cost Summary</h2>
     <div style="font-size:10px;color:#999;margin-bottom:10px;">Confidential — our cost, not for the client</div>
     <table style="width:100%;border-collapse:collapse;font-size:11px;">
-      <thead><tr style="border-bottom:2px solid #333;text-align:left;color:#555;">
-        <th style="padding:4px 6px;">#</th><th style="padding:4px 6px;">Description</th><th style="padding:4px 6px;">Vendor / Sub</th>
-        <th style="padding:4px 6px;text-align:right;">Material</th><th style="padding:4px 6px;text-align:right;">Labor</th><th style="padding:4px 6px;text-align:right;">Outside</th><th style="padding:4px 6px;text-align:right;">Line Cost</th>
+      <thead><tr style="border-bottom:2px solid #333;text-align:left;color:#555;font-size:9.5px;text-transform:uppercase;">
+        <th style="padding:5px 6px;">Line</th>
+        <th style="padding:5px 6px;text-align:right;">We charge</th>
+        <th style="padding:5px 6px;">Outside material (vendor)</th>
+        <th style="padding:5px 6px;">Outside labor / svc (vendor)</th>
+        <th style="padding:5px 6px;text-align:right;">In-house labor</th>
+        <th style="padding:5px 6px;text-align:right;">Our profit<br><span style="text-transform:none;font-weight:400;color:#999">(incl. markup)</span></th>
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
-    <div style="margin-top:14px;border-top:1px solid #ddd;padding-top:8px;max-width:320px;margin-left:auto;font-size:12px;">
-      <div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Parts cost</span><span>${formatCurrency(totalCost)}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Shipping &amp; handling</span><span>${formatCurrency(shipCost)}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid #eee;font-weight:700;font-size:13px;"><span>Total cost</span><span>${formatCurrency(grandCost)}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:2px 0;color:#555;"><span>Charged to client</span><span>${formatCurrency(totalCharged)}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid #eee;font-weight:700;font-size:13px;color:${margin >= 0 ? '#2e7d32' : '#c62828'};"><span>Margin</span><span>${formatCurrency(margin)}</span></div>
+    <div style="margin-top:14px;border-top:1px solid #ddd;padding-top:8px;max-width:360px;margin-left:auto;font-size:12px;">
+      <div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Charged to client</span><span>${formatCurrency(totalCharged)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Paid out — material + outside labor</span><span>${formatCurrency(totalPaidOut)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0;"><span>In-house labor</span><span>${formatCurrency(totalLabor)}</span></div>
+      ${shipCost ? `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Shipping &amp; handling</span><span>${formatCurrency(shipCost)}</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between;padding:2px 0;color:#1565c0;"><span>Markup earned</span><span>${formatCurrency(totalMarkup)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid #eee;font-weight:700;font-size:13px;color:${grandProfit >= 0 ? '#2e7d32' : '#c62828'};"><span>Total profit / margin</span><span>${formatCurrency(grandProfit)}</span></div>
     </div>
     `;
   })() : ''}
