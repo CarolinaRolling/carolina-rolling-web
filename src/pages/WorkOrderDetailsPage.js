@@ -971,12 +971,19 @@ function WorkOrderDetailsPage() {
         });
         const opCostPerPart = qty > 0 ? opCostLot / qty : 0;
         const opProfitPerPart = qty > 0 ? opProfitLot / qty : 0;
+        // Keep the legacy single-op columns in sync with the array (some displays read them, and their
+        // markup column defaults to 20% — this makes those reflect what you actually entered).
+        if (opEnabled) {
+          dataToSend.outsideProcessingVendorName = ops.map(o => o.vendorName).filter(Boolean).join(', ') || null;
+          dataToSend.outsideProcessingCost = opCostPerPart.toFixed(2);
+          dataToSend.outsideProcessingMarkupPercent = (parseFloat(ops[0].markup) || 0).toFixed(2);
+        }
         dataToSend._baseLaborTotal = baseLabEach.toFixed(2);
         // When OP is enabled, rolling labor is disabled (vendor does the work)
         const effectiveBase = opEnabled ? 0 : baseLabEach;
         dataToSend.laborTotal = (effectiveBase + opProfitPerPart).toFixed(2);
         const labEachWithOp = effectiveBase + opProfitPerPart;
-        dataToSend.partTotal = (Math.round((matEach + labEachWithOp + opCostPerPart) * qty * 100) / 100).toFixed(2);
+        dataToSend.partTotal = dataToSend._fsHiddenFromCustomer ? '0.00' : (Math.round((matEach + labEachWithOp + opCostPerPart) * qty * 100) / 100).toFixed(2);
       }
       
       let savedPartId = editingPart?.id;
@@ -1701,7 +1708,12 @@ function WorkOrderDetailsPage() {
       const matCost = (parseFloat(part.materialTotal) || 0) * qty;
       const labCost = (parseFloat(part._baseLaborTotal ?? part.laborTotal) || 0) * qty;
       let opCost = 0;
-      (part.outsideProcessing || []).forEach(op => { opCost += ((parseFloat(op.costPerPart) || 0) + (parseFloat(op.expediteCost) || 0)) * qty; });
+      const opArr = part.outsideProcessing || [];
+      if (opArr.length) {
+        opArr.forEach(op => { opCost += ((parseFloat(op.costPerPart) || 0) + (parseFloat(op.expediteCost) || 0)) * qty; });
+      } else {
+        opCost = (parseFloat(part.outsideProcessingCost) || 0) + (parseFloat(part.outsideProcessingTransportCost) || 0);
+      }
       const lineCost = matCost + labCost + opCost;
       totalCost += lineCost;
       totalCharged += parseFloat(part.partTotal) || 0;
