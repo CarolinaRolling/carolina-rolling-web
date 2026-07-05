@@ -1753,7 +1753,7 @@ function WorkOrderDetailsPage() {
       }
       const opMk = opCost > 0 ? Math.round((opSell / opCost - 1) * 100) : 0;
       const opVendors = opArr.map(o => o.vendorName).filter(Boolean).join(', ') || part.outsideProcessingVendorName || '';
-      const charge = parseFloat(part.partTotal) || 0;
+      const charge = parseFloat(part.partTotal) || ((basePartMaterialEach(part) + basePartLabor(part)) * qty);
       const paidOut = matCost + opCost;
       // In-house labor = what's left of the charge after the marked-up material + outside (captures labor
       // even when it isn't stored in laborTotal, e.g. customer-supplied plate rolls).
