@@ -1704,7 +1704,7 @@ function WorkOrderDetailsPage() {
     ${includePricing && clientPaymentTerms ? `<div class="info-item"><label>Payment Terms</label><span style="color:#1565c0">${clientPaymentTerms}</span></div>` : ''}
   </div>
 
-  ${order.notes ? `<div class="notes-box"><strong>Notes:</strong> ${order.notes}</div>` : ''}
+  ${order.notes && order.notes.trim() ? `<div class="notes-box"><strong>Notes:</strong> ${order.notes}</div>` : ''}
 
   <div class="section-title">SERVICES & MATERIALS</div>
   <div class="parts-header">
