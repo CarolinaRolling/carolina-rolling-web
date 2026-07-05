@@ -1751,7 +1751,9 @@ function WorkOrderDetailsPage() {
       const labCost = (parseFloat(part.laborTotal) || 0) * qty;
       const charge = parseFloat(part.partTotal) || 0;
       const paidOut = matCost + opCost;
-      const profit = charge - paidOut - labCost;
+      // In-house labor is money we keep (we did the work), so it stays IN the profit.
+      // Profit = what we charge − what we paid out to others (material + outside).
+      const profit = charge - paidOut;
       totalCharged += charge; totalPaidOut += paidOut; totalLabor += labCost;
       totalMarkup += (matSell - matCost) + (opSell - opCost);
       // Skip lines that are nothing to us AND not charged (e.g. inspections)
@@ -1773,7 +1775,7 @@ function WorkOrderDetailsPage() {
       </tr>`;
     }).join('');
     const shipCost = parseFloat(order.shippingCost) || 0;
-    const grandProfit = totalCharged - totalPaidOut - totalLabor - shipCost;
+    const grandProfit = totalCharged - totalPaidOut - shipCost;
     return `
     <div style="page-break-before:always;"></div>
     <h2 style="color:#1565c0;font-size:17px;margin:0 0 2px;">Internal Cost Summary</h2>
