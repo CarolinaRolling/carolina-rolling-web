@@ -244,14 +244,15 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
   const opTotals = calculateOpTotals(partData.outsideProcessing, partData.quantity, partData);
   const opEnabled = (partData.outsideProcessing || []).length > 0;
   const hiddenFromCustomer = !!partData._fsHiddenFromCustomer;
-  // When OP enabled, in-house labor is $0 (vendor does the work). OP markup IS the profit.
+  // Outsourced: no in-house labor. The OP markup is billed through the OP line, NOT the labor line.
   const effectiveBaseLabor = opEnabled ? 0 : baseLaborEach;
-  const laborEach = effectiveBaseLabor + opTotals.totalProfit;
+  const laborEach = effectiveBaseLabor;
   const opCostEach = opTotals.totalCost;
+  const opBilledEach = opTotals.totalBilled; // vendor cost + your OP markup
 
   // Line total (what gets billed to customer)
   // When hidden, it's $0 (customer pays nothing for this part)
-  const lineTotal = hiddenFromCustomer ? 0 : ((laborEach + opCostEach) * qty);
+  const lineTotal = hiddenFromCustomer ? 0 : ((laborEach + opBilledEach) * qty);
   // Internal cost (what we actually paid out) — used for the hidden-part display
   const lineCost = (effectiveBaseLabor * qty) + (opCostEach * qty);
   // Profit for this line (difference between what customer pays and what we spent)

@@ -981,7 +981,8 @@ function WorkOrderDetailsPage() {
         dataToSend._baseLaborTotal = baseLabEach.toFixed(2);
         // When OP is enabled, rolling labor is disabled (vendor does the work)
         const effectiveBase = opEnabled ? 0 : baseLabEach;
-        dataToSend.laborTotal = (effectiveBase + opProfitPerPart).toFixed(2);
+        // Labor is in-house only (0 when outsourced). OP markup stays in the line total, not labor.
+        dataToSend.laborTotal = effectiveBase.toFixed(2);
         const labEachWithOp = effectiveBase + opProfitPerPart;
         dataToSend.partTotal = dataToSend._fsHiddenFromCustomer ? '0.00' : (Math.round((matEach + labEachWithOp + opCostPerPart) * qty * 100) / 100).toFixed(2);
       }
