@@ -1721,7 +1721,12 @@ function WorkOrderDetailsPage() {
   
   ${partsHtml}
   ${(includePricing && opts.includeCostSummary !== false) ? (() => {
-    const cp = (order.parts || []).filter(p => p.partType !== 'rush_service').sort((a, b) => a.partNumber - b.partNumber);
+    const dnKey = (p) => {
+      const dn = partDispNum[p.id] || String(p.partNumber || 0);
+      const parts = dn.split('.').map(Number);
+      return (parts[0] || 0) * 1000 + (parts[1] || 0);
+    };
+    const cp = (order.parts || []).filter(p => p.partType !== 'rush_service').sort((a, b) => dnKey(a) - dnKey(b));
     if (!cp.length) return '';
     let totalCharged = 0, totalPaidOut = 0, totalLabor = 0, totalMarkup = 0;
     const rowsHtml = cp.map(p => {
@@ -1748,16 +1753,18 @@ function WorkOrderDetailsPage() {
       }
       const opMk = opCost > 0 ? Math.round((opSell / opCost - 1) * 100) : 0;
       const opVendors = opArr.map(o => o.vendorName).filter(Boolean).join(', ') || part.outsideProcessingVendorName || '';
-      const labCost = (parseFloat(part.laborTotal) || 0) * qty;
       const charge = parseFloat(part.partTotal) || 0;
       const paidOut = matCost + opCost;
+      // In-house labor = what's left of the charge after the marked-up material + outside (captures labor
+      // even when it isn't stored in laborTotal, e.g. customer-supplied plate rolls).
+      const labCost = Math.max(0, charge - matSell - opSell);
       // In-house labor is money we keep (we did the work), so it stays IN the profit.
-      // Profit = what we charge − what we paid out to others (material + outside).
       const profit = charge - paidOut;
       totalCharged += charge; totalPaidOut += paidOut; totalLabor += labCost;
       totalMarkup += (matSell - matCost) + (opSell - opCost);
-      // Skip lines that are nothing to us AND not charged (e.g. inspections)
-      if (charge === 0 && paidOut === 0 && labCost === 0) return '';
+      // Only skip truly empty inspection/service sub-lines (no charge, no cost). Production parts always show.
+      const isSubLine = ['inspection', 'fab_service', 'shop_rate'].includes(part.partType);
+      if (isSubLine && charge === 0 && paidOut === 0 && labCost === 0) return '';
       const desc = part._materialDescription || part.materialDescription || part.description || (isFab ? (part._serviceType || 'Service') : '') || '';
       const matCell = matCost
         ? `${formatCurrency(matCost)}${matVendor ? ` <span style="color:#888;font-size:9px">${matVendor}</span>` : ''}${matMk ? `<div style="color:#1565c0;font-size:9.5px;margin-top:2px">+${matMk}% → <b>${formatCurrency(matSell)}</b></div>` : ''}`
@@ -1766,7 +1773,7 @@ function WorkOrderDetailsPage() {
         ? `${formatCurrency(opCost)}${opVendors ? ` <span style="color:#888;font-size:9px">${opVendors}</span>` : ''}${opMk ? `<div style="color:#1565c0;font-size:9.5px;margin-top:2px">+${opMk}% → <b>${formatCurrency(opSell)}</b></div>` : ''}`
         : '<span style="color:#bbb">—</span>';
       return `<tr style="border-bottom:1px solid #eee;">
-        <td style="padding:6px 6px;vertical-align:top;${isFab ? 'padding-left:22px;color:#555;font-style:italic;' : 'font-weight:600;'}">${isFab ? '↳ ' : (part.partNumber + '&nbsp;&nbsp;')}${desc}</td>
+        <td style="padding:6px 6px;vertical-align:top;${isFab ? 'padding-left:22px;color:#555;font-style:italic;' : 'font-weight:600;'}">${isFab ? ('↳ ' + (partDispNum[part.id] ? partDispNum[part.id] + '&nbsp; ' : '')) : ('#' + (partDispNum[part.id] || part.partNumber) + '&nbsp;&nbsp;')}${desc}</td>
         <td style="padding:6px 6px;text-align:right;vertical-align:top;">${charge ? formatCurrency(charge) : '<span style="color:#bbb">—</span>'}</td>
         <td style="padding:6px 6px;vertical-align:top;">${matCell}</td>
         <td style="padding:6px 6px;vertical-align:top;">${opCell}</td>
