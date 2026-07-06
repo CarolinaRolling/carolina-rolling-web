@@ -5,6 +5,23 @@ import { renderWpsPdf } from '../services/api';
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const fmtDate = (iso) => { if (!iso) return ''; const p = String(iso).split('-'); return p.length === 3 ? `${p[1]}/${p[2]}/${p[0]}` : iso; };
 
+// Format a decimal-inch value as a readable fraction (nearest 1/16")
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+const fmtInch = (v) => {
+  const s = Math.round(v * 16); const whole = Math.floor(s / 16); let frac = s % 16;
+  if (frac === 0) return `${whole}"`;
+  const g = gcd(frac, 16); const num = frac / g, den = 16 / g;
+  return whole > 0 ? `${whole}-${num}/${den}"` : `${num}/${den}"`;
+};
+// ASME IX QW-451.1 base-metal thickness range qualified for a groove-weld test coupon of thickness T (in.)
+const calcThicknessRange = (couponIn) => {
+  const T = parseFloat(couponIn) || 0;
+  if (T <= 0) return '1/16" – 3/4"';
+  const min = T <= 0.375 ? '1/16"' : '3/16"';
+  const max = T >= 1.5 ? '8"' : fmtInch(2 * T);
+  return `${min} – ${max}`;
+};
+
 // ---- Reference data -------------------------------------------------------
 const METALS = {
   P1: {
@@ -127,6 +144,7 @@ export default function WpsGeneratorPage() {
     return {
       pNo: m.pNo,
       baseText: m.baseText,
+      thicknessRange: calcThicknessRange(thickness),
       fillerClass: f.cls,
       sfa: f.sfa,
       fillerSize: p.size,
@@ -162,8 +180,7 @@ export default function WpsGeneratorPage() {
     const sections = [
       { title: 'Base Materials', rows: [
         ['', field('baseText')],
-        ['P-Number', field('pNo')],
-        ['Material Thickness', `${thickness}"`],
+        ['Thickness Range Qualified', field('thicknessRange')],
       ]},
       { title: 'Filler', rows: [
         ['Process', field('procName')],
@@ -213,7 +230,11 @@ export default function WpsGeneratorPage() {
   ol.notes { margin: 4px 0 0 18px; padding: 0; }
   ol.notes li { font-size: 10.5px; margin-bottom: 2.5px; line-height: 1.32; }
   .sig { margin-top: 26px; display: flex; justify-content: space-between; }
-  .sig .line { border-top: 1px solid #333; padding-top: 4px; font-size: 10px; color: #666; }
+  .sig .col { width: 45%; }
+  .sig .val { height: 40px; padding: 0 0 3px 8px; display: flex; align-items: flex-end; font-size: 12px; color: #222; }
+  .sig .val img { height: 40px; }
+  .sig .bar { border-top: 1px solid #333; }
+  .sig .lbl { padding-top: 4px; font-size: 10px; color: #666; }
 </style></head><body>
   <div class="company-header">
     <div class="company-left">
@@ -234,13 +255,15 @@ export default function WpsGeneratorPage() {
   <h2>Note</h2>
   <ol class="notes">${notesHtml}</ol>
   <div class="sig">
-    <div style="width:45%">
-      ${signerSig ? `<img src="${signerSig}" style="height:40px;display:block;margin:0 0 2px 8px" />` : '<div style="height:40px"></div>'}
-      <div class="line">Prepared / Updated by: ${preparedBy}</div>
+    <div class="col">
+      <div class="val">${signerSig ? `<img src="${signerSig}" />` : ''}</div>
+      <div class="bar"></div>
+      <div class="lbl">Prepared / Updated by: ${preparedBy}</div>
     </div>
-    <div style="width:45%">
-      <div style="height:40px"></div>
-      <div class="line">Date: ${sigDateStr}</div>
+    <div class="col">
+      <div class="val">${sigDateStr}</div>
+      <div class="bar"></div>
+      <div class="lbl">Date</div>
     </div>
   </div>
   <div style="margin-top:24px;text-align:center;font-size:9px;color:#999;">Printed on: ${today}</div>
@@ -308,7 +331,7 @@ export default function WpsGeneratorPage() {
       <div style={{ fontSize: '0.72rem', color: '#888', marginBottom: 8 }}>These two dates stay fixed on the document; the footer always shows today's "Printed on" date automatically.</div>
 
       {[
-        { title: 'Base Materials', fields: [['baseText', 'Base Materials'], ['pNo', 'P-Number']] },
+        { title: 'Base Materials', fields: [['baseText', 'Base Materials'], ['thicknessRange', 'Thickness Range Qualified']] },
         { title: 'Filler', fields: [['sfa', 'SFA Specification'], ['fillerClass', 'AWS Classification'], ['fillerSize', 'Size'], ['gas', 'Shielding Gas']] },
         { title: 'Technique', fields: [['position', 'Welding Position'], ['bead', 'Bead Type'], ['joint', 'Joint Type'], ['backGouge', 'Back Gouging'], ['passType', 'Pass Type'], ['preheat', 'Preheat'], ['current', 'Current / Polarity'], ['amps', 'Amperage'], ['volts', 'Voltage']] },
       ].map(sec => (
