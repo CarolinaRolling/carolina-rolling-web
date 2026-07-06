@@ -1,4 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { getOperatorSignatures } from '../services/api';
+
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const fmtDate = (iso) => { if (!iso) return ''; const p = String(iso).split('-'); return p.length === 3 ? `${p[1]}/${p[2]}/${p[0]}` : iso; };
 
 // ---- Reference data -------------------------------------------------------
 const METALS = {
@@ -97,7 +101,20 @@ export default function WpsGeneratorPage() {
   const [weldType, setWeldType] = useState('tack'); // tack | full
   const [thickness, setThickness] = useState('0.375');
   const [rev, setRev] = useState('R0');
+  const [revisionDate, setRevisionDate] = useState(todayIso());
+  const [lastUpdatedDate, setLastUpdatedDate] = useState(todayIso());
   const [preparedBy, setPreparedBy] = useState('Jason Thornton');
+  const [sigs, setSigs] = useState([]);
+  useEffect(() => {
+    getOperatorSignatures().then(r => {
+      const list = r.data.data || [];
+      setSigs(list);
+      const jason = list.find(s => /jason/i.test(s.operatorName));
+      if (jason) setPreparedBy(jason.operatorName);
+      else if (list.length) setPreparedBy(list[0].operatorName);
+    }).catch(() => {});
+  }, []);
+  const signerSig = (sigs.find(s => s.operatorName === preparedBy) || {}).signatureData || null;
 
   // Derived defaults
   const derived = useMemo(() => {
@@ -115,6 +132,12 @@ export default function WpsGeneratorPage() {
       current: PROCESSES[process].current,
       gas: process === 'stick' ? 'N/A (Stick)' : (m.gas[process] || ''),
       preheat: m.preheatF(parseFloat(thickness) || 0) + '° F',
+      position: 'G2 (Horizontal, Fixed Axis)',
+      joint: 'Butt',
+      bead: weldType === 'tack' ? 'Weave' : 'Stringer / Weave',
+      passType: weldType === 'tack' ? 'Intermittent as Necessary (weld ≤ 2")' : 'Root + Fill + Cap',
+      backGouge: weldType === 'tack' ? 'Air Carbon Arc as Necessary' : 'Air Carbon Arc — root, as required',
+      procName: PROCESSES[process].name,
       notes: weldType === 'tack' ? TACK_NOTES : FULL_NOTES,
     };
   }, [metal, process, weldType, thickness]);
@@ -132,25 +155,35 @@ export default function WpsGeneratorPage() {
 
   const generatePdf = () => {
     const today = new Date().toLocaleDateString('en-US');
-    const rows = [
-      ['Process', PROCESSES[process].name + ' — Manual'],
-      ['Weld Type', weldType === 'tack' ? 'Tack Weld' : 'Full Penetration (100%)'],
-      ['Base Materials', `${field('baseText')}  (${field('pNo')})`],
-      ['Material Thickness', `${thickness}"`],
-      ['Welding Position', 'G2 (Horizontal, Fixed Axis)'],
-      ['Filler — SFA Spec.', field('sfa')],
-      ['Filler — AWS Class', field('fillerClass')],
-      ['Filler Size', field('fillerSize')],
-      ['Shielding Gas', field('gas')],
-      ['Current / Polarity', field('current')],
-      ['Amperage', field('amps')],
-      ['Voltage', field('volts')],
-      ['Preheat', field('preheat')],
-      ['Joint Type', 'Butt'],
-      ['Bead Type', weldType === 'tack' ? 'Intermittent (weld ≤ 2")' : 'Root + Fill + Cap'],
-      ['Back Gouging', weldType === 'tack' ? 'As necessary' : 'Air Carbon Arc — root, as required'],
+    const sections = [
+      { title: 'Base Materials', rows: [
+        ['', field('baseText')],
+        ['P-Number', field('pNo')],
+        ['Material Thickness', `${thickness}"`],
+      ]},
+      { title: 'Filler', rows: [
+        ['Process', field('procName')],
+        ['SFA Specification', field('sfa')],
+        ['AWS Classification', field('fillerClass')],
+        ['Size', field('fillerSize')],
+        ...(process !== 'stick' ? [['Shielding Gas', field('gas')]] : []),
+      ]},
+      { title: 'Technique', rows: [
+        ['Welding Position', field('position')],
+        ['Bead Type', field('bead')],
+        ['Joint Type', field('joint')],
+        ['Back Gouging', field('backGouge')],
+        ['Pass Type', field('passType')],
+        ['Preheat', field('preheat')],
+        ['Current', `${field('current')} — ${field('amps')}`],
+        ['Voltage', field('volts')],
+      ]},
     ];
-    const rowsHtml = rows.map(([k, v]) => `<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`).join('');
+    const sectionsHtml = sections.map(sec =>
+      `<h2>${sec.title}</h2><table class="spec"><tbody>` +
+      sec.rows.map(([k, v]) => `<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`).join('') +
+      `</tbody></table>`
+    ).join('');
     const notesHtml = (field('notes') || '').split('\n').filter(l => l.trim()).map(l => `<li>${l}</li>`).join('');
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${wpsNumber}</title>
@@ -176,7 +209,7 @@ export default function WpsGeneratorPage() {
   ol.notes { margin: 4px 0 0 18px; padding: 0; }
   ol.notes li { font-size: 11px; margin-bottom: 4px; line-height: 1.4; }
   .sig { margin-top: 40px; display: flex; justify-content: space-between; }
-  .sig .line { border-top: 1px solid #333; width: 45%; padding-top: 4px; font-size: 10px; color: #666; }
+  .sig .line { border-top: 1px solid #333; padding-top: 4px; font-size: 10px; color: #666; }
 </style></head><body>
   <div class="company-header">
     <div class="company-left">
@@ -187,18 +220,26 @@ export default function WpsGeneratorPage() {
     <div class="doc-right">
       <div class="doc-title">WELDING PROCEDURE SPEC.</div>
       <div class="doc-num">${wpsNumber}</div>
-      <div class="doc-date">Date: ${today}</div>
+      <div class="doc-date">Rev Date: ${fmtDate(revisionDate)}</div>
+      <div class="doc-date">Last Updated: ${fmtDate(lastUpdatedDate)}</div>
     </div>
   </div>
   <hr/>
-  <h2>Procedure Details</h2>
-  <table class="spec"><tbody>${rowsHtml}</tbody></table>
-  <h2>Procedure Notes</h2>
+  <div style="font-size:12px;margin-bottom:4px;"><strong>Process:</strong> ${field('procName')} &nbsp;&nbsp;&nbsp; <strong>Type:</strong> Manual &nbsp;&nbsp;&nbsp; <strong>Weld Type:</strong> ${weldType === 'tack' ? 'Tack Weld' : 'Full Penetration (100%)'}</div>
+  ${sectionsHtml}
+  <h2>Note</h2>
   <ol class="notes">${notesHtml}</ol>
   <div class="sig">
-    <div class="line">Prepared / Updated by: ${preparedBy}</div>
-    <div class="line">Date: ${today}</div>
+    <div style="width:45%">
+      ${signerSig ? `<img src="${signerSig}" style="height:40px;display:block;margin:0 0 2px 8px" />` : '<div style="height:40px"></div>'}
+      <div class="line">Prepared / Updated by: ${preparedBy}</div>
+    </div>
+    <div style="width:45%">
+      <div style="height:40px"></div>
+      <div class="line">Date: ${fmtDate(revisionDate)}</div>
+    </div>
   </div>
+  <div style="margin-top:24px;text-align:center;font-size:9px;color:#999;">Printed on: ${today}</div>
 </body></html>`;
 
     const w = window.open('', '_blank');
@@ -246,24 +287,47 @@ export default function WpsGeneratorPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-        {[
-          ['baseText', 'Base Materials'], ['pNo', 'P-Number'], ['sfa', 'Filler SFA Spec'],
-          ['fillerClass', 'Filler AWS Class'], ['fillerSize', 'Filler Size'], ['current', 'Current / Polarity'],
-          ['amps', 'Amperage'], ['volts', 'Voltage'], ['gas', 'Shielding Gas'],
-          ['preheat', 'Preheat'],
-        ].map(([k, lbl]) => (
-          <div key={k} style={cell}><label style={labelStyle}>{lbl}</label>
-            <input style={inputStyle} value={field(k)} onChange={e => setField(k, e.target.value)} /></div>
-        ))}
+      <div style={{ display: 'flex', gap: 20, marginBottom: 4 }}>
+        <div><label style={labelStyle}>Revision Date (prints by signature)</label>
+          <input type="date" style={{ ...inputStyle, maxWidth: 200 }} value={revisionDate} onChange={e => setRevisionDate(e.target.value)} /></div>
+        <div><label style={labelStyle}>Last Updated</label>
+          <input type="date" style={{ ...inputStyle, maxWidth: 200 }} value={lastUpdatedDate} onChange={e => setLastUpdatedDate(e.target.value)} /></div>
       </div>
+      <div style={{ fontSize: '0.72rem', color: '#888', marginBottom: 8 }}>These two dates stay fixed on the document; the footer always shows today's "Printed on" date automatically.</div>
+
+      {[
+        { title: 'Base Materials', fields: [['baseText', 'Base Materials'], ['pNo', 'P-Number']] },
+        { title: 'Filler', fields: [['sfa', 'SFA Specification'], ['fillerClass', 'AWS Classification'], ['fillerSize', 'Size'], ['gas', 'Shielding Gas']] },
+        { title: 'Technique', fields: [['position', 'Welding Position'], ['bead', 'Bead Type'], ['joint', 'Joint Type'], ['backGouge', 'Back Gouging'], ['passType', 'Pass Type'], ['preheat', 'Preheat'], ['current', 'Current / Polarity'], ['amps', 'Amperage'], ['volts', 'Voltage']] },
+      ].map(sec => (
+        <div key={sec.title}>
+          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1565c0', textTransform: 'uppercase', letterSpacing: 0.5, margin: '14px 0 8px', borderBottom: '1px solid #e0e0e0', paddingBottom: 4 }}>{sec.title}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            {sec.fields.map(([k, lbl]) => (
+              <div key={k} style={cell}><label style={labelStyle}>{lbl}</label>
+                <input style={inputStyle} value={field(k)} onChange={e => setField(k, e.target.value)} /></div>
+            ))}
+          </div>
+        </div>
+      ))}
 
       <div style={cell}><label style={labelStyle}>Procedure Notes (one step per line)</label>
         <textarea style={{ ...inputStyle, minHeight: 200, fontFamily: 'inherit', lineHeight: 1.5 }}
           value={field('notes')} onChange={e => setField('notes', e.target.value)} /></div>
 
-      <div style={cell}><label style={labelStyle}>Prepared / Updated by</label>
-        <input style={{ ...inputStyle, maxWidth: 320 }} value={preparedBy} onChange={e => setPreparedBy(e.target.value)} /></div>
+      <div style={cell}><label style={labelStyle}>Prepared / Updated by (signs the WPS)</label>
+        {sigs.length ? (
+          <select style={{ ...inputStyle, maxWidth: 340 }} value={preparedBy} onChange={e => setPreparedBy(e.target.value)}>
+            {!sigs.find(s => s.operatorName === preparedBy) && <option value={preparedBy}>{preparedBy}</option>}
+            {sigs.map(s => <option key={s.operatorName} value={s.operatorName}>{s.operatorName}{s.signatureData ? ' ✍️' : ' (no signature)'}</option>)}
+          </select>
+        ) : (
+          <input style={{ ...inputStyle, maxWidth: 340 }} value={preparedBy} onChange={e => setPreparedBy(e.target.value)} />
+        )}
+        {signerSig
+          ? <div style={{ fontSize: '0.72rem', color: '#2e7d32', marginTop: 4 }}>✍️ Digital signature will be applied and auto-dated on the PDF.</div>
+          : <div style={{ fontSize: '0.72rem', color: '#b45309', marginTop: 4 }}>No saved signature for this name — set one in Admin → API Keys, or it prints a blank line.</div>}
+      </div>
 
       <button onClick={generatePdf}
         style={{ marginTop: 8, padding: '12px 28px', background: '#1565c0', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}>
