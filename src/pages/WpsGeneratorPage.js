@@ -158,6 +158,7 @@ export default function WpsGeneratorPage() {
 
   const generatePdf = async () => {
     const today = new Date().toLocaleDateString('en-US');
+    const sigDateStr = fmtDate(signDate || todayIso());
     const sections = [
       { title: 'Base Materials', rows: [
         ['', field('baseText')],
@@ -239,7 +240,7 @@ export default function WpsGeneratorPage() {
     </div>
     <div style="width:45%">
       <div style="height:40px"></div>
-      <div class="line">Date: ${fmtDate(signDate)}</div>
+      <div class="line">Date: ${sigDateStr}</div>
     </div>
   </div>
   <div style="margin-top:24px;text-align:center;font-size:9px;color:#999;">Printed on: ${today}</div>
