@@ -60,8 +60,34 @@ const METALS = {
     gas: { mig: 'Tri-Mix (90% He / 7.5% Ar / 2.5% CO₂)', tig: '100% Argon' },
     preheatF: () => 60,
   },
+  AL_6061: {
+    label: 'Aluminum — 6061',
+    pNo: 'P-No. 23',
+    baseText: '6061 (P-No. 23) to 6061 (P-No. 23)',
+    isAluminum: true,
+    filler: {
+      stick: { cls: 'E4043', sfa: 'A5.3' },
+      mig:   { cls: 'ER4043', sfa: 'A5.10' },
+      tig:   { cls: 'ER4043', sfa: 'A5.10' },
+    },
+    gas: { mig: '100% Argon', tig: '100% Argon' },
+    preheatF: () => 60,
+  },
+  AL_5052: {
+    label: 'Aluminum — 5052',
+    pNo: 'P-No. 22',
+    baseText: '5052 (P-No. 22) to 5052 (P-No. 22)',
+    isAluminum: true,
+    filler: {
+      stick: { cls: 'E4043', sfa: 'A5.3' },
+      mig:   { cls: 'ER5356', sfa: 'A5.10' },
+      tig:   { cls: 'ER5356', sfa: 'A5.10' },
+    },
+    gas: { mig: '100% Argon', tig: '100% Argon' },
+    preheatF: () => 60,
+  },
 };
-const METAL_CODE = { P1: 'P1', P8_304: 'P8', P8_316: 'P8' };
+const METAL_CODE = { P1: 'P1', P8_304: 'P8', P8_316: 'P8', AL_6061: 'AL6061', AL_5052: 'AL5052' };
 
 const PROCESSES = {
   stick: { name: 'SMAW (Stick)', code: 'STK', current: 'DCEP (Reverse)' },
@@ -150,7 +176,7 @@ export default function WpsGeneratorPage() {
       fillerSize: p.size,
       amps: p.amps,
       volts: p.volts,
-      current: PROCESSES[process].current,
+      current: (m.isAluminum && process === 'tig') ? 'AC (Balanced — oxide cleaning)' : PROCESSES[process].current,
       gas: process === 'stick' ? 'N/A (Stick)' : (m.gas[process] || ''),
       preheat: m.preheatF(parseFloat(thickness) || 0) + '° F',
       position: 'G2 (Horizontal, Fixed Axis)',
