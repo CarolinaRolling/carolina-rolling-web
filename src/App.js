@@ -20,6 +20,7 @@ import BackupPage from './pages/BackupPage';
 import SettingsPage from './pages/SettingsPage';
 import LocationSettingsPage from './pages/LocationSettingsPage';
 import AdminPage from './pages/AdminPage';
+import WpsGeneratorPage from './pages/WpsGeneratorPage';
 import SchedulingPage from './pages/SchedulingPage';
 import DRNumbersPage from './pages/DRNumbersPage';
 import PONumbersPage from './pages/PONumbersPage';
@@ -217,6 +218,12 @@ function AppRoutes() {
         </AdminRoute>
       } />
       
+      <Route path="/admin/wps-generator" element={
+        <AdminRoute>
+          <Layout><WpsGeneratorPage /></Layout>
+        </AdminRoute>
+      } />
+
       <Route path="/admin/shop-config" element={
         <AdminRoute>
           <Layout><AdminPage section="shop-config" /></Layout>

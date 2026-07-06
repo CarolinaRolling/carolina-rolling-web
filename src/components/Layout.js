@@ -93,6 +93,7 @@ function Layout({ children }) {
                 <li><NavLink to="/admin/operations" className={({ isActive }) => isActive ? 'active' : ''}><Activity size={20} /><span>Operations</span></NavLink></li>
                 <li><NavLink to="/admin/tracking" className={({ isActive }) => isActive ? 'active' : ''}><Hash size={20} /><span>Tracking</span></NavLink></li>
                 <li><NavLink to="/admin/users-logs" className={({ isActive }) => isActive ? 'active' : ''}><Shield size={20} /><span>Users & Logs</span></NavLink></li>
+                <li><NavLink to="/admin/wps-generator" className={({ isActive }) => isActive ? 'active' : ''}><Wrench size={20} /><span>WPS Generator</span></NavLink></li>
                 <li><NavLink to="/admin/settings" className={({ isActive }) => isActive ? 'active' : ''}><Settings size={20} /><span>Settings</span></NavLink></li>
                 <li><NavLink to="/admin/backup" className={({ isActive }) => isActive ? 'active' : ''}><Database size={20} /><span>Backup</span></NavLink></li>
               </>
