@@ -140,6 +140,7 @@ export const acknowledgeVendorIssue = (workOrderId, issueId) => api.put(`/workor
 export const updateDRNumber = (id, drNumber) => api.put(`/workorders/${id}/dr-number`, { drNumber });
 export const deleteWorkOrder = (id, overrideCode) => api.delete(`/workorders/${id}`, overrideCode ? { data: { overrideCode } } : undefined);
 export const getWorkOrderPrintPackage = (id, mode, html, options = null) => api.post(`/workorders/${id}/print-package`, { mode, html, options }, { responseType: 'blob', timeout: 60000 });
+export const renderWpsPdf = (html, filename) => api.post('/workorders/wps/render-pdf', { html, filename }, { responseType: 'blob', timeout: 60000 });
 
 // Work Order Parts
 export const addWorkOrderPart = (workOrderId, data) => api.post(`/workorders/${workOrderId}/parts`, data);

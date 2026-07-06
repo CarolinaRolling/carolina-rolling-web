@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { getOperatorSignatures } from '../services/api';
+import { renderWpsPdf } from '../services/api';
 
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const fmtDate = (iso) => { if (!iso) return ''; const p = String(iso).split('-'); return p.length === 3 ? `${p[1]}/${p[2]}/${p[0]}` : iso; };
@@ -103,8 +104,10 @@ export default function WpsGeneratorPage() {
   const [rev, setRev] = useState('R0');
   const [revisionDate, setRevisionDate] = useState(todayIso());
   const [lastUpdatedDate, setLastUpdatedDate] = useState(todayIso());
+  const [signDate, setSignDate] = useState(todayIso());
   const [preparedBy, setPreparedBy] = useState('Jason Thornton');
   const [sigs, setSigs] = useState([]);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     getOperatorSignatures().then(r => {
       const list = r.data.data || [];
@@ -153,7 +156,7 @@ export default function WpsGeneratorPage() {
 
   const wpsNumber = `WPS-${METAL_CODE[metal]}-${PROCESSES[process].code}-${weldType === 'tack' ? 'TACK' : 'FULL'}-G2-${rev}`;
 
-  const generatePdf = () => {
+  const generatePdf = async () => {
     const today = new Date().toLocaleDateString('en-US');
     const sections = [
       { title: 'Base Materials', rows: [
@@ -190,7 +193,7 @@ export default function WpsGeneratorPage() {
 <style>
   @page { size: letter; margin: 0.5in; }
   @font-face { font-family: 'Yellowcake'; src: url('/fonts/Yellowcake-Regular.ttf') format('truetype'); }
-  body { font-family: Arial, Helvetica, sans-serif; color: #333; font-size: 12px; padding: 8px 4px; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #333; font-size: 12px; padding: 4px 2px; }
   .company-header { display: flex; justify-content: space-between; align-items: flex-start; }
   .company-left { display: flex; align-items: center; gap: 14px; }
   .logo { width: 54px; height: 54px; border-radius: 50%; object-fit: cover; }
@@ -201,14 +204,14 @@ export default function WpsGeneratorPage() {
   .doc-num { font-size: 13px; font-weight: 700; }
   .doc-date { font-size: 11px; color: #888; }
   hr { border: none; border-top: 1px solid #ccc; margin: 8px 0; }
-  h2 { color: #1976d2; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; margin: 16px 0 6px; }
+  h2 { color: #1976d2; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; margin: 11px 0 5px; }
   table.spec { width: 100%; border-collapse: collapse; }
-  table.spec td { padding: 5px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  table.spec td { padding: 3.5px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
   table.spec td.k { width: 38%; color: #666; font-weight: 600; }
   table.spec td.v { font-weight: 600; color: #222; }
   ol.notes { margin: 4px 0 0 18px; padding: 0; }
-  ol.notes li { font-size: 11px; margin-bottom: 4px; line-height: 1.4; }
-  .sig { margin-top: 40px; display: flex; justify-content: space-between; }
+  ol.notes li { font-size: 10.5px; margin-bottom: 2.5px; line-height: 1.32; }
+  .sig { margin-top: 26px; display: flex; justify-content: space-between; }
   .sig .line { border-top: 1px solid #333; padding-top: 4px; font-size: 10px; color: #666; }
 </style></head><body>
   <div class="company-header">
@@ -236,17 +239,23 @@ export default function WpsGeneratorPage() {
     </div>
     <div style="width:45%">
       <div style="height:40px"></div>
-      <div class="line">Date: ${fmtDate(revisionDate)}</div>
+      <div class="line">Date: ${fmtDate(signDate)}</div>
     </div>
   </div>
   <div style="margin-top:24px;text-align:center;font-size:9px;color:#999;">Printed on: ${today}</div>
 </body></html>`;
 
-    const w = window.open('', '_blank');
-    if (!w) { alert('Please allow pop-ups to generate the WPS.'); return; }
-    w.document.write(html);
-    w.document.close();
-    setTimeout(() => w.print(), 400);
+    setBusy(true);
+    try {
+      const res = await renderWpsPdf(html, wpsNumber);
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      alert('Could not generate the WPS PDF. ' + (e?.response?.data?.error?.message || e?.message || ''));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const inputStyle = { width: '100%', padding: '7px 9px', border: '1px solid #ccc', borderRadius: 6, fontSize: '0.85rem' };
@@ -292,6 +301,8 @@ export default function WpsGeneratorPage() {
           <input type="date" style={{ ...inputStyle, maxWidth: 200 }} value={revisionDate} onChange={e => setRevisionDate(e.target.value)} /></div>
         <div><label style={labelStyle}>Last Updated</label>
           <input type="date" style={{ ...inputStyle, maxWidth: 200 }} value={lastUpdatedDate} onChange={e => setLastUpdatedDate(e.target.value)} /></div>
+        <div><label style={labelStyle}>Signature Date (auto — today)</label>
+          <input type="date" style={{ ...inputStyle, maxWidth: 200 }} value={signDate} onChange={e => setSignDate(e.target.value)} /></div>
       </div>
       <div style={{ fontSize: '0.72rem', color: '#888', marginBottom: 8 }}>These two dates stay fixed on the document; the footer always shows today's "Printed on" date automatically.</div>
 
@@ -329,9 +340,9 @@ export default function WpsGeneratorPage() {
           : <div style={{ fontSize: '0.72rem', color: '#b45309', marginTop: 4 }}>No saved signature for this name — set one in Admin → API Keys, or it prints a blank line.</div>}
       </div>
 
-      <button onClick={generatePdf}
-        style={{ marginTop: 8, padding: '12px 28px', background: '#1565c0', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}>
-        🖨️ Generate WPS PDF
+      <button onClick={generatePdf} disabled={busy}
+        style={{ marginTop: 8, padding: '12px 28px', background: busy ? '#90a4ae' : '#1565c0', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.95rem', cursor: busy ? 'default' : 'pointer' }}>
+        {busy ? 'Generating…' : '🖨️ Generate WPS PDF'}
       </button>
     </div>
   );
