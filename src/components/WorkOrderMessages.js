@@ -31,7 +31,7 @@ export default function WorkOrderMessages({ workOrderId }) {
 
   useEffect(() => {
     load(true);
-    const t = setInterval(() => load(false), 15000);
+    const t = setInterval(() => load(false), 5000);
     return () => clearInterval(t);
   }, [load]);
 
