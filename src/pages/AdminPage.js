@@ -7,7 +7,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings, getAvailableModels } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import SectionSizesPage from './SectionSizesPage';
 import SettingsPage from './SettingsPage';
@@ -128,6 +128,9 @@ function AdminPage({ section = 'users-logs' }) {
   const [scannerStatus, setScannerStatus] = useState(null);
   const [aiModels, setAiModelsState] = useState({ parsingModel: '', triageModel: '', defaults: {} });
   const [aiModelsSaving, setAiModelsSaving] = useState(false);
+  const [availableModels, setAvailableModels] = useState([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState('');
   const [scannerAccounts, setScannerAccounts] = useState([]);
   const [scannerHistory, setScannerHistory] = useState([]);
   const [monitoredClients, setMonitoredClients] = useState([]);
@@ -670,6 +673,17 @@ function AdminPage({ section = 'users-logs' }) {
       setSuccess('AI models updated — changes apply immediately.');
     } catch (e) { setError(e.response?.data?.error?.message || 'Failed to save AI models'); }
     finally { setAiModelsSaving(false); }
+  };
+
+  const lookupModels = async () => {
+    setModelsLoading(true);
+    setModelsError('');
+    try {
+      const res = await getAvailableModels();
+      setAvailableModels(res.data.data || []);
+      if (!(res.data.data || []).length) setModelsError('No models returned.');
+    } catch (e) { setModelsError(e.response?.data?.error?.message || 'Lookup failed — check the server API key.'); }
+    finally { setModelsLoading(false); }
   };
 
   const loadEmailScanner = async () => {
@@ -2568,6 +2582,13 @@ function AdminPage({ section = 'users-logs' }) {
                 <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>
                   Parsing / extraction model
                 </label>
+                {availableModels.length > 0 && (
+                  <select value="" onChange={(e) => { if (e.target.value) setAiModelsState((p) => ({ ...p, parsingModel: e.target.value })); }}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #1565c0', borderRadius: 6, fontSize: '0.82rem', marginBottom: 6, background: '#f5f9ff' }}>
+                    <option value="">— pick from available models —</option>
+                    {availableModels.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.id}</option>)}
+                  </select>
+                )}
                 <input type="text" value={aiModels.parsingModel}
                   onChange={(e) => setAiModelsState((p) => ({ ...p, parsingModel: e.target.value }))}
                   placeholder={aiModels.defaults?.parsingModel || 'claude-sonnet-4-6'}
@@ -2580,6 +2601,13 @@ function AdminPage({ section = 'users-logs' }) {
                 <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>
                   Triage model (Comm Center)
                 </label>
+                {availableModels.length > 0 && (
+                  <select value="" onChange={(e) => { if (e.target.value) setAiModelsState((p) => ({ ...p, triageModel: e.target.value })); }}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #1565c0', borderRadius: 6, fontSize: '0.82rem', marginBottom: 6, background: '#f5f9ff' }}>
+                    <option value="">— pick from available models —</option>
+                    {availableModels.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.id}</option>)}
+                  </select>
+                )}
                 <input type="text" value={aiModels.triageModel}
                   onChange={(e) => setAiModelsState((p) => ({ ...p, triageModel: e.target.value }))}
                   placeholder={aiModels.defaults?.triageModel || 'claude-haiku-4-5-20251001'}
@@ -2590,6 +2618,11 @@ function AdminPage({ section = 'users-logs' }) {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
+              <button className="btn btn-outline" onClick={lookupModels} disabled={modelsLoading} style={{ borderColor: '#1565c0', color: '#1565c0' }}>
+                {modelsLoading ? 'Looking up…' : '🔎 Look up available models'}
+              </button>
+              {availableModels.length > 0 && <span style={{ fontSize: '0.78rem', color: '#2e7d32' }}>{availableModels.length} models found — pick from the dropdowns above.</span>}
+              {modelsError && <span style={{ fontSize: '0.78rem', color: '#c62828' }}>{modelsError}</span>}
               <button className="btn btn-primary" onClick={saveAiModels} disabled={aiModelsSaving}>
                 {aiModelsSaving ? 'Saving…' : 'Save AI Models'}
               </button>
