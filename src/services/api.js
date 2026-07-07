@@ -338,7 +338,7 @@ export const reassignPONumber = (oldPoNumber, newPoNumber) => api.put(`/po-numbe
 
 // Daily Email Settings
 export const getAiModelSettings = () => api.get('/settings/ai-models');
-export const getAvailableModels = () => api.get('/settings/available-models');
+export const getAvailableModels = () => api.get('/settings/available-models', { params: { _t: Date.now() } });
 export const getProductionWeek = (start) => api.get('/operations/production', { params: start ? { start } : {} });
 export const getOperators = () => api.get('/operations/operators');
 export const getAssignableWorkOrders = (q) => api.get('/operations/workorders', { params: q ? { q } : {} });
