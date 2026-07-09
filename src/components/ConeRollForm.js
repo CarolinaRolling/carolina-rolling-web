@@ -240,8 +240,11 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   }, [largeDia, largeDiaType, largeDiaMeasure, smallDia, smallDiaType, smallDiaMeasure, coneHeight, layerSegments, syncedLayerSegments, showAdvanced, heightCutMethod, heightSegments, customCuts, segmentSpecs, coneType, eccentricAngle]);
 
   var coneCount = parseInt(partData._coneCount) || 1;
-  var segPerCone = heightSegs.length * (parseInt(radialSegments) || 1);
-  useEffect(function() { var total = segPerCone * coneCount; setPartData(function(p) { return Object.assign({}, p, { quantity: String(total) }); }); }, [radialSegments, heightSegs, coneCount]);
+  var segPerCone = (segmentSpecs && segmentSpecs.length)
+    ? segmentSpecs.reduce(function(s, sp) { return s + (parseInt(sp.radialSegments) || 1); }, 0)
+    : heightSegs.length * (parseInt(radialSegments) || 1);
+  // Part quantity = number of cones (the deliverable). The blank/segment count is shown separately as info.
+  useEffect(function() { setPartData(function(p) { return Object.assign({}, p, { quantity: String(coneCount) }); }); }, [coneCount]);
 
   var materialDescription = useMemo(function() {
     var parts = [];
@@ -276,7 +279,9 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': ' + (s.radialSegments > 1 ? s.radialSegments + 'pc - ' : '') + s.bottomDia.toFixed(3) + '" OD x ' + s.topDia.toFixed(3) + '" OD x ' + s.segmentHeight.toFixed(3) + '" VH' + (s.radialSegments > 1 ? ' @ ' + (360 / s.radialSegments).toFixed(0) + ' deg' : '')); });
     }
     // Total pieces summary
-    var segPerCone = heightSegs.length * rS;
+    var segPerCone = (segmentSpecs && segmentSpecs.length)
+      ? segmentSpecs.reduce(function(s, sp) { return s + (parseInt(sp.radialSegments) || 1); }, 0)
+      : heightSegs.length * rS;
     if (cc > 1) {
       l.push(cc + ' cones x ' + segPerCone + ' segments = ' + (cc * segPerCone) + ' total pieces');
     }

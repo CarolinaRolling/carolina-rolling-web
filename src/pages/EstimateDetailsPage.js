@@ -4474,6 +4474,11 @@ function EstimateDetailsPage() {
                                 {typeIcon} Part #{p.partNumber} — {typeLabel}
                               </span>
                               <span style={{ marginLeft: 8, color: '#666', fontSize: '0.85rem' }}>Qty: {p.quantity || 1}</span>
+                              {(p.unitPrice || p.formData?.laborTotal) && (
+                                <span style={{ marginLeft: 8, color: '#2e7d32', fontSize: '0.85rem', fontWeight: 700 }}>
+                                  💲 ${parseFloat(p.unitPrice || p.formData?.laborTotal).toFixed(2)}/ea
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div style={{ fontSize: '0.85rem', color: '#555', marginTop: 4 }}>
@@ -4555,6 +4560,7 @@ function EstimateDetailsPage() {
                           clientPartNumber: p.clientPartNumber || '',
                           materialDescription: p.description || '',
                           materialSource: p.materialSource || 'customer_supplied',
+                          laborTotal: fd.laborTotal || '',
                           formData: fd
                         };
                         await addEstimatePart(id, partPayload);
