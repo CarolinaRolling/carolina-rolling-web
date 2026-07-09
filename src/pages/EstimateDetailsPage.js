@@ -98,6 +98,54 @@ function EstimateDetailsPage() {
   const [aiParsing, setAiParsing] = useState(false);
   const [aiParseResults, setAiParseResults] = useState(null);
   const [aiParseNotes, setAiParseNotes] = useState('');
+  const [aiSelectedFile, setAiSelectedFile] = useState(null);
+  const [aiPhase, setAiPhase] = useState('select'); // select | parsing | ready | error
+  const [aiElapsed, setAiElapsed] = useState(0);
+  const [aiJobMsg, setAiJobMsg] = useState('');
+  const [aiPendingResult, setAiPendingResult] = useState(null);
+
+  const resetAiParse = () => {
+    setAiSelectedFile(null); setAiPhase('select'); setAiElapsed(0);
+    setAiJobMsg(''); setAiPendingResult(null); setAiParseResults(null); setAiParseNotes('');
+  };
+
+  const submitAiParse = async () => {
+    if (!aiSelectedFile) return;
+    setAiPhase('parsing'); setAiJobMsg(''); setAiElapsed(0);
+    const t0 = Date.now();
+    const timer = setInterval(() => setAiElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
+    try {
+      const startRes = await aiParseDocument(id, aiSelectedFile, aiParseNotes);
+      const jobId = startRes.data?.data?.jobId;
+      if (!jobId) throw new Error('Could not start parsing.');
+      let finished = false;
+      for (let attempt = 0; attempt < 80 && !finished; attempt++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const st = await getAiParseStatus(id, jobId);
+        if (st.data.status === 'done') {
+          const d = st.data.data;
+          if (!d.parts || d.parts.length === 0) {
+            setAiJobMsg('The AI read the document but found 0 parts.\n\nAI notes: ' + (d.aiNotes || d.notes || '(none)') + (d.aiRawSnippet ? '\n\nRaw reply from AI:\n' + d.aiRawSnippet : ''));
+            setAiPhase('error');
+          } else {
+            setAiPendingResult(d);
+            setAiPhase('ready');
+          }
+          finished = true;
+        } else if (st.data.status === 'error') {
+          setAiJobMsg(st.data.error || 'Parsing failed.');
+          setAiPhase('error');
+          finished = true;
+        }
+      }
+      if (!finished) { setAiJobMsg('Parsing is taking longer than expected (over 4 minutes) — please try again.'); setAiPhase('error'); }
+    } catch (err) {
+      setAiJobMsg(err.response?.data?.error?.message || err.message || 'AI parsing failed.');
+      setAiPhase('error');
+    } finally {
+      clearInterval(timer);
+    }
+  };
   const [aiAddingParts, setAiAddingParts] = useState(false);
   const pdfPreviewActive = useRef(false);
 
@@ -2301,7 +2349,7 @@ function EstimateDetailsPage() {
                 style={{ fontSize: '0.85rem' }}>
                 <Eye size={14} /> {pdfGenerating ? 'Generating...' : 'Generate PDF'}
               </button>
-              <button className="btn btn-sm btn-outline" onClick={() => { setShowAiParseModal(true); setAiParseResults(null); setAiParseNotes(''); }}
+              <button className="btn btn-sm btn-outline" onClick={() => { setShowAiParseModal(true); resetAiParse(); }}
                 style={{ fontSize: '0.85rem', color: '#00838f', borderColor: '#00838f' }}>
                 🤖 Upload to AI
               </button>
@@ -2879,7 +2927,7 @@ function EstimateDetailsPage() {
               <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <h3 className="card-title" style={{ margin: 0 }}>📋 Bill of Materials</h3>
-                  <button className="btn btn-sm btn-outline" onClick={() => { setShowAiParseModal(true); setAiParseResults(null); setAiParseNotes(''); }}
+                  <button className="btn btn-sm btn-outline" onClick={() => { setShowAiParseModal(true); resetAiParse(); }}
                     style={{ color: '#00838f', borderColor: '#00838f' }}>🤖 Upload to AI</button>
                 </div>
 
@@ -4311,72 +4359,81 @@ function EstimateDetailsPage() {
 
       {/* AI Document Parser Modal */}
       {showAiParseModal && (
-        <div className="modal-overlay" onClick={() => !aiParsing && setShowAiParseModal(false)}>
+        <div className="modal-overlay" onClick={() => aiPhase !== 'parsing' && setShowAiParseModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
             <div className="modal-header">
               <h3>🤖 Upload Document to AI</h3>
-              <button className="btn btn-icon" onClick={() => !aiParsing && setShowAiParseModal(false)}><X size={20} /></button>
+              <button className="btn btn-icon" onClick={() => aiPhase !== 'parsing' && setShowAiParseModal(false)}><X size={20} /></button>
             </div>
             <div style={{ padding: '16px 20px', maxHeight: '70vh', overflowY: 'auto' }}>
               {!aiParseResults ? (
                 <div>
-                  <p style={{ color: '#555', marginBottom: 16 }}>
-                    Upload a drawing, RFQ, spec sheet, or any document and the AI will read it and extract parts to add to this estimate.
-                  </p>
-                  
-                  {/* File upload area */}
-                  <label style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    padding: 32, border: '2px dashed #00838f', borderRadius: 12, cursor: aiParsing ? 'wait' : 'pointer',
-                    background: '#e0f7fa', minHeight: 120, transition: 'all 0.2s'
-                  }}>
-                    {aiParsing ? (
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: 8 }}>🔄</div>
-                        <div style={{ fontWeight: 700, color: '#00838f', fontSize: '1.1rem' }}>AI is reading your document...</div>
-                        <div style={{ color: '#888', fontSize: '0.85rem', marginTop: 4 }}>This may take 15-30 seconds</div>
+                  {aiPhase === 'select' && (
+                    <>
+                      <p style={{ color: '#555', marginBottom: 16 }}>
+                        Choose a drawing, RFQ, spec sheet, or PO, add any notes, then submit. The AI reads it in the background and shows the parts when done.
+                      </p>
+                      <label style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        padding: 28, border: '2px dashed #00838f', borderRadius: 12, cursor: 'pointer',
+                        background: '#e0f7fa', minHeight: 110
+                      }}>
+                        <div style={{ fontSize: '2.2rem', marginBottom: 8 }}>📄</div>
+                        {aiSelectedFile ? (
+                          <div style={{ fontWeight: 700, color: '#00695c' }}>✓ {aiSelectedFile.name}</div>
+                        ) : (
+                          <>
+                            <div style={{ fontWeight: 600, color: '#00838f', fontSize: '1rem' }}>Click to choose a PDF, image, or drawing</div>
+                            <div style={{ color: '#888', fontSize: '0.8rem', marginTop: 4 }}>PDF, PNG, JPG — max 50MB</div>
+                          </>
+                        )}
+                        <input type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" hidden
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) setAiSelectedFile(f); e.target.value = ''; }} />
+                      </label>
+                      {aiSelectedFile && (
+                        <button className="btn btn-sm btn-outline" style={{ marginTop: 8 }} onClick={() => setAiSelectedFile(null)}>Choose a different file</button>
+                      )}
+                      <div className="form-group" style={{ marginTop: 16 }}>
+                        <label className="form-label">Additional context for AI <span style={{ color: '#999', fontWeight: 400 }}>(optional)</span></label>
+                        <textarea className="form-textarea" value={aiParseNotes} onChange={(e) => setAiParseNotes(e.target.value)}
+                          rows={2} placeholder='e.g. "These are all A36 material", "Client wants everything rolled to 48&quot; OD", "Ignore the header row"' />
                       </div>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>📄</div>
-                        <div style={{ fontWeight: 600, color: '#00838f', fontSize: '1rem' }}>Click to upload PDF, Image, or Drawing</div>
-                        <div style={{ color: '#888', fontSize: '0.8rem', marginTop: 4 }}>PDF, PNG, JPG — max 50MB</div>
-                      </>
-                    )}
-                    <input type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" hidden disabled={aiParsing}
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        try {
-                          setAiParsing(true);
-                          const startRes = await aiParseDocument(id, file, aiParseNotes);
-                          const jobId = startRes.data?.data?.jobId;
-                          if (!jobId) throw new Error('Could not start parsing.');
-                          // Parse runs in the background (avoids the 30s request limit) — poll for the result.
-                          let finished = false;
-                          for (let attempt = 0; attempt < 60 && !finished; attempt++) {
-                            await new Promise(r => setTimeout(r, 3000));
-                            const st = await getAiParseStatus(id, jobId);
-                            if (st.data.status === 'done') { setAiParseResults(st.data.data); finished = true; }
-                            else if (st.data.status === 'error') { throw new Error(st.data.error || 'Parsing failed.'); }
-                          }
-                          if (!finished) throw new Error('Parsing is taking longer than expected — please try again.');
-                        } catch (err) {
-                          setError(err.response?.data?.error?.message || err.message || 'AI parsing failed. Please try again.');
-                          setShowAiParseModal(false);
-                        } finally {
-                          setAiParsing(false);
-                          e.target.value = '';
-                        }
-                      }} />
-                  </label>
+                      <button className="btn btn-primary" style={{ marginTop: 16, width: '100%', background: '#00838f', borderColor: '#00838f' }}
+                        disabled={!aiSelectedFile} onClick={submitAiParse}>
+                        🤖 Submit to AI
+                      </button>
+                    </>
+                  )}
 
-                  {/* Optional notes */}
-                  <div className="form-group" style={{ marginTop: 16 }}>
-                    <label className="form-label">Additional context for AI <span style={{ color: '#999', fontWeight: 400 }}>(optional)</span></label>
-                    <textarea className="form-textarea" value={aiParseNotes} onChange={(e) => setAiParseNotes(e.target.value)}
-                      rows={2} placeholder='e.g. "These are all A36 material", "Client wants everything rolled to 48" OD", "Ignore the header row"' />
-                  </div>
+                  {aiPhase === 'parsing' && (
+                    <div style={{ textAlign: 'center', padding: '32px 16px' }}>
+                      <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🔄</div>
+                      <div style={{ fontWeight: 700, color: '#00838f', fontSize: '1.15rem' }}>AI is reading {aiSelectedFile?.name}…</div>
+                      <div style={{ color: '#888', marginTop: 6 }}>Running in the background — <strong>{aiElapsed}s</strong> elapsed. This usually takes 30–90 seconds.</div>
+                      <div style={{ color: '#aaa', fontSize: '0.8rem', marginTop: 10 }}>Leave this open; it'll switch to your parts automatically when done.</div>
+                    </div>
+                  )}
+
+                  {aiPhase === 'ready' && (
+                    <div style={{ textAlign: 'center', padding: '28px 16px' }}>
+                      <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>✅</div>
+                      <div style={{ fontWeight: 700, color: '#2e7d32', fontSize: '1.15rem', marginBottom: 4 }}>Parsing complete</div>
+                      <div style={{ color: '#666', marginBottom: 18 }}>Found {aiPendingResult?.parts?.length || 0} part(s) in {aiPendingResult?.fileName}.</div>
+                      <button className="btn btn-primary" style={{ background: '#2e7d32', borderColor: '#2e7d32', fontSize: '1rem', padding: '12px 28px' }}
+                        onClick={() => setAiParseResults(aiPendingResult)}>
+                        📋 Open Results ({aiPendingResult?.parts?.length || 0} parts)
+                      </button>
+                    </div>
+                  )}
+
+                  {aiPhase === 'error' && (
+                    <div style={{ padding: '20px 8px' }}>
+                      <div style={{ fontSize: '2rem', textAlign: 'center', marginBottom: 8 }}>⚠️</div>
+                      <div style={{ fontWeight: 700, color: '#c62828', textAlign: 'center', marginBottom: 10 }}>Couldn't extract parts</div>
+                      <div style={{ background: '#fff3f3', border: '1px solid #ffcdd2', borderRadius: 8, padding: 12, fontSize: '0.82rem', color: '#444', whiteSpace: 'pre-wrap', maxHeight: 260, overflowY: 'auto' }}>{aiJobMsg}</div>
+                      <button className="btn btn-outline" style={{ marginTop: 14, width: '100%' }} onClick={() => { setAiPhase('select'); setAiJobMsg(''); }}>← Try again</button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div>
@@ -4446,7 +4503,7 @@ function EstimateDetailsPage() {
               )}
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => !aiParsing && setShowAiParseModal(false)} disabled={aiParsing}>Cancel</button>
+              <button className="btn btn-secondary" onClick={() => aiPhase !== 'parsing' && setShowAiParseModal(false)} disabled={aiPhase === 'parsing'}>Cancel</button>
               {aiParseResults && aiParseResults.parts?.length > 0 && (
                 <button className="btn" disabled={aiAddingParts}
                   onClick={async () => {
