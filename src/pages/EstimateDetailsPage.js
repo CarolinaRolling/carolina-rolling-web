@@ -9,7 +9,7 @@ import {
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile, toggleEstimateFilePortal,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
   getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
-  sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument,
+  sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument, getAiParseStatus,
   addEstimateShipmentCharge, updateEstimateShipmentCharge, deleteEstimateShipmentCharge, getEstimateShipmentCharges
 } from '../services/api';
 import ShipmentChargesSection from '../components/ShipmentChargesSection';
@@ -4349,10 +4349,20 @@ function EstimateDetailsPage() {
                         if (!file) return;
                         try {
                           setAiParsing(true);
-                          const res = await aiParseDocument(id, file, aiParseNotes);
-                          setAiParseResults(res.data.data);
+                          const startRes = await aiParseDocument(id, file, aiParseNotes);
+                          const jobId = startRes.data?.data?.jobId;
+                          if (!jobId) throw new Error('Could not start parsing.');
+                          // Parse runs in the background (avoids the 30s request limit) — poll for the result.
+                          let finished = false;
+                          for (let attempt = 0; attempt < 60 && !finished; attempt++) {
+                            await new Promise(r => setTimeout(r, 3000));
+                            const st = await getAiParseStatus(id, jobId);
+                            if (st.data.status === 'done') { setAiParseResults(st.data.data); finished = true; }
+                            else if (st.data.status === 'error') { throw new Error(st.data.error || 'Parsing failed.'); }
+                          }
+                          if (!finished) throw new Error('Parsing is taking longer than expected — please try again.');
                         } catch (err) {
-                          setError(err.response?.data?.error?.message || 'AI parsing failed. Please try again.');
+                          setError(err.response?.data?.error?.message || err.message || 'AI parsing failed. Please try again.');
                           setShowAiParseModal(false);
                         } finally {
                           setAiParsing(false);

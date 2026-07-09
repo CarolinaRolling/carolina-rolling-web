@@ -258,9 +258,11 @@ export const aiParseDocument = (estimateId, file, additionalNotes = '') => {
   if (additionalNotes) formData.append('additionalNotes', additionalNotes);
   return api.post(`/estimates/${estimateId}/ai-parse-document`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 120000 // 2 min for AI processing
+    timeout: 30000 // upload only — parsing now runs in the background and is polled
   });
 };
+export const getAiParseStatus = (estimateId, jobId) =>
+  api.get(`/estimates/${estimateId}/ai-parse-status/${jobId}`, { timeout: 20000 });
 export const deleteEstimatePartFile = (estimateId, partId, fileId) => 
   api.delete(`/estimates/${estimateId}/parts/${partId}/files/${fileId}`);
 export const toggleEstimateFilePortal = (estimateId, partId, fileId, portalVisible) =>
