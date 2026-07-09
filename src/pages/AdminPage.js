@@ -129,6 +129,7 @@ function AdminPage({ section = 'users-logs' }) {
   const [aiModels, setAiModelsState] = useState({ parsingModel: '', triageModel: '', defaults: {} });
   const [aiModelsSaving, setAiModelsSaving] = useState(false);
   const [availableModels, setAvailableModels] = useState([]);
+  const [modelRecs, setModelRecs] = useState({});
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState('');
   const [scannerAccounts, setScannerAccounts] = useState([]);
@@ -681,6 +682,7 @@ function AdminPage({ section = 'users-logs' }) {
     try {
       const res = await getAvailableModels();
       setAvailableModels(res.data.data || []);
+      setModelRecs(res.data.recommendations || {});
       if (!(res.data.data || []).length) setModelsError('No models returned.');
     } catch (e) { setModelsError(e.response?.data?.error?.message || 'Lookup failed — check the server API key.'); }
     finally { setModelsLoading(false); }
@@ -2573,7 +2575,7 @@ function AdminPage({ section = 'users-logs' }) {
 
           {/* AI Model configuration */}
           <div className="card" style={{ marginBottom: 20 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 4 }}>🤖 AI Models <span style={{ fontSize: '0.65rem', fontWeight: 400, color: '#90a4ae', marginLeft: 6 }}>UI build v243</span></h3>
+            <h3 style={{ marginTop: 0, marginBottom: 4 }}>🤖 AI Models <span style={{ fontSize: '0.65rem', fontWeight: 400, color: '#90a4ae', marginLeft: 6 }}>UI build v245</span></h3>
             <p style={{ fontSize: '0.82rem', color: '#777', marginTop: 0 }}>
               If a model is retired and scanning starts failing, update the name here — changes apply right away, no redeploy.
             </p>
@@ -2586,7 +2588,7 @@ function AdminPage({ section = 'users-logs' }) {
                   <select value="" onChange={(e) => { if (e.target.value) setAiModelsState((p) => ({ ...p, parsingModel: e.target.value })); }}
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid #1565c0', borderRadius: 6, fontSize: '0.82rem', marginBottom: 6, background: '#f5f9ff' }}>
                     <option value="">— pick from available models —</option>
-                    {availableModels.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.id}</option>)}
+                    {availableModels.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.id}{m.vision ? ' ✓ vision' : ' (no vision)'}{m.id === modelRecs.parsing ? ' ★ Recommended' : ''}</option>)}
                   </select>
                 )}
                 <input type="text" value={aiModels.parsingModel}
@@ -2605,7 +2607,7 @@ function AdminPage({ section = 'users-logs' }) {
                   <select value="" onChange={(e) => { if (e.target.value) setAiModelsState((p) => ({ ...p, triageModel: e.target.value })); }}
                     style={{ width: '100%', padding: '8px 10px', border: '1px solid #1565c0', borderRadius: 6, fontSize: '0.82rem', marginBottom: 6, background: '#f5f9ff' }}>
                     <option value="">— pick from available models —</option>
-                    {availableModels.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.id}</option>)}
+                    {availableModels.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.id}{m.id === modelRecs.triage ? ' ★ Recommended' : ''}</option>)}
                   </select>
                 )}
                 <input type="text" value={aiModels.triageModel}
@@ -2621,7 +2623,7 @@ function AdminPage({ section = 'users-logs' }) {
               <button className="btn btn-outline" onClick={lookupModels} disabled={modelsLoading} style={{ borderColor: '#1565c0', color: '#1565c0' }}>
                 {modelsLoading ? 'Looking up…' : '🔎 Look up available models'}
               </button>
-              {availableModels.length > 0 && <span style={{ fontSize: '0.78rem', color: '#2e7d32' }}>{availableModels.length} models found — pick from the dropdowns above.</span>}
+              {availableModels.length > 0 && <span style={{ fontSize: '0.78rem', color: '#2e7d32' }}>{availableModels.length} models found{modelRecs.parsing ? ` — ★ recommended: parsing → ${modelRecs.parsing}, triage → ${modelRecs.triage}` : ' — pick from the dropdowns above.'}</span>}
               {modelsError && <span style={{ fontSize: '0.78rem', color: '#c62828' }}>{modelsError}</span>}
               <button className="btn btn-primary" onClick={saveAiModels} disabled={aiModelsSaving}>
                 {aiModelsSaving ? 'Saving…' : 'Save AI Models'}
