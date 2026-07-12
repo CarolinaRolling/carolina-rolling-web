@@ -216,6 +216,11 @@ export const unlinkEstimateFromWorkOrder = (workOrderId) =>
 
 // Estimates
 export const getEstimates = (params) => api.get('/estimates', { params });
+// Quotes awaiting reply (head estimator / admin only)
+export const getAwaitingReplyQuotes = () => api.get('/estimates/awaiting-reply');
+export const dismissQuoteReminder = (id) => api.post(`/estimates/${id}/reminder-dismiss`);
+export const snoozeQuoteReminder = (id, days) => api.post(`/estimates/${id}/reminder-snooze`, { days });
+export const restoreQuoteReminder = (id) => api.post(`/estimates/${id}/reminder-restore`);
 export const getEstimateById = (id) => api.get(`/estimates/${id}`);
 export const createEstimate = (data) => api.post('/estimates', data);
 export const updateEstimate = (id, data) => api.put(`/estimates/${id}`, data);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search, DollarSign, Send, Check, X, Archive, Trash2 } from 'lucide-react';
-import { getEstimates, deleteEstimate, restoreEstimate, permanentDeleteEstimate, getEstimateTrash, convertEstimateToWorkOrder, createEstimate, searchClients, updateClient } from '../services/api';
+import { getEstimates, deleteEstimate, restoreEstimate, permanentDeleteEstimate, getEstimateTrash, convertEstimateToWorkOrder, createEstimate, searchClients, updateClient, getAwaitingReplyQuotes, dismissQuoteReminder, snoozeQuoteReminder } from '../services/api';
 
 function EstimatesPage() {
   const navigate = useNavigate();
@@ -21,6 +21,15 @@ function EstimatesPage() {
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [awaitingQuotes, setAwaitingQuotes] = useState([]);
+
+  const loadAwaitingQuotes = async () => {
+    try {
+      const res = await getAwaitingReplyQuotes();
+      setAwaitingQuotes(res.data.data || []);
+    } catch { setAwaitingQuotes([]); /* non-estimator users simply see nothing */ }
+  };
+  useEffect(() => { loadAwaitingQuotes(); }, []);
   const [showArchived, setShowArchived] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [trashEstimates, setTrashEstimates] = useState([]);
@@ -234,6 +243,51 @@ function EstimatesPage() {
 
   return (
     <div>
+      {awaitingQuotes.length > 0 && (
+        <div style={{ background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: '1.1rem' }}>⏰</span>
+            <strong style={{ color: '#e65100' }}>
+              {awaitingQuotes.length} quote{awaitingQuotes.length === 1 ? '' : 's'} awaiting reply
+            </strong>
+            <span style={{ color: '#8d6e63', fontSize: '0.8rem' }}>(monitored clients — sent, no response yet)</span>
+          </div>
+          {awaitingQuotes.map(q => {
+            const urgent = (q.ageDays || 0) >= 5;
+            return (
+              <div key={q.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', marginBottom: 6,
+                background: 'white', border: '1px solid ' + (urgent ? '#ef9a9a' : '#eee'), borderRadius: 8
+              }}>
+                <span style={{
+                  fontWeight: 700, fontSize: '0.78rem', padding: '2px 8px', borderRadius: 12,
+                  background: urgent ? '#ffebee' : '#f1f8e9', color: urgent ? '#c62828' : '#558b2f'
+                }}>
+                  {q.ageDays != null ? `${q.ageDays}d` : 'sent'}
+                </span>
+                <span
+                  style={{ fontWeight: 700, cursor: 'pointer', color: '#1565c0' }}
+                  onClick={() => navigate(`/estimates/${q.id}`)}
+                >
+                  {q.clientName}
+                </span>
+                <span style={{ color: '#777', fontSize: '0.85rem' }}>{q.estimateNumber}</span>
+                {q.total != null && <span style={{ color: '#2e7d32', fontWeight: 700, fontSize: '0.85rem' }}>${parseFloat(q.total).toFixed(2)}</span>}
+                <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                  <button className="btn btn-sm btn-outline" title="Remind me again in 3 days"
+                    onClick={async () => { await snoozeQuoteReminder(q.id, 3); loadAwaitingQuotes(); }}>
+                    Snooze 3d
+                  </button>
+                  <button className="btn btn-sm btn-outline" title="Client went dark — stop reminding"
+                    onClick={async () => { await dismissQuoteReminder(q.id); loadAwaitingQuotes(); }}>
+                    Dismiss
+                  </button>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <div className="page-header">
         <div>
           <h1 className="page-title">Estimates</h1>

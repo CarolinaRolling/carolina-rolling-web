@@ -2575,7 +2575,7 @@ function AdminPage({ section = 'users-logs' }) {
 
           {/* AI Model configuration */}
           <div className="card" style={{ marginBottom: 20 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 4 }}>🤖 AI Models <span style={{ fontSize: '0.65rem', fontWeight: 400, color: '#90a4ae', marginLeft: 6 }}>UI build v253</span></h3>
+            <h3 style={{ marginTop: 0, marginBottom: 4 }}>🤖 AI Models <span style={{ fontSize: '0.65rem', fontWeight: 400, color: '#90a4ae', marginLeft: 6 }}>UI build v255</span></h3>
             <p style={{ fontSize: '0.82rem', color: '#777', marginTop: 0 }}>
               If a model is retired and scanning starts failing, update the name here — changes apply right away, no redeploy.
             </p>
