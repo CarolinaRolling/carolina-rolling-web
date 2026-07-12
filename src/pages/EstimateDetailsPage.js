@@ -10,7 +10,8 @@ import {
   searchClients, searchVendors, getSettings, resetEstimateConversion,
   getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
   sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument, getAiParseStatus,
-  addEstimateShipmentCharge, updateEstimateShipmentCharge, deleteEstimateShipmentCharge, getEstimateShipmentCharges
+  addEstimateShipmentCharge, updateEstimateShipmentCharge, deleteEstimateShipmentCharge, getEstimateShipmentCharges,
+  deleteEstimate
 } from '../services/api';
 import ShipmentChargesSection from '../components/ShipmentChargesSection';
 import { computeDisplayNumbers } from '../utils/partNumbers';
@@ -167,6 +168,7 @@ function EstimateDetailsPage() {
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderParts, setReorderParts] = useState([]);
   const [duplicating, setDuplicating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [editingPart, setEditingPart] = useState(null);
   const [partData, setPartData] = useState({});
   
@@ -1494,6 +1496,21 @@ function EstimateDetailsPage() {
     }
   };
 
+  const handleDeleteEstimate = async () => {
+    if (isNew) return;
+    const label = estimate?.estimateNumber ? `estimate ${estimate.estimateNumber}` : 'this estimate';
+    const client = estimate?.clientName ? ` for ${estimate.clientName}` : '';
+    if (!window.confirm(`Delete ${label}${client}?\n\nIt will be moved to the trash (you can restore it from the Estimates page if needed).`)) return;
+    setDeleting(true);
+    try {
+      await deleteEstimate(id);
+      navigate('/estimates', { state: { message: `${label.charAt(0).toUpperCase() + label.slice(1)} deleted` } });
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to delete estimate');
+      setDeleting(false);
+    }
+  };
+
   const handleDuplicateEstimate = async () => {
     if (!window.confirm('Duplicate this estimate? A new draft estimate will be created with all parts and files copied.')) return;
     try {
@@ -1880,6 +1897,13 @@ function EstimateDetailsPage() {
               style={{ color: '#546e7a', borderColor: '#546e7a' }}
               title="Copy this estimate to a new draft — useful for alternate pricing options">
               📋 {duplicating ? 'Duplicating...' : 'Duplicate'}
+            </button>
+          )}
+          {!isNew && (
+            <button className="btn btn-outline btn-sm" onClick={handleDeleteEstimate} disabled={deleting}
+              style={{ color: '#c62828', borderColor: '#c62828' }}
+              title="Delete this estimate (moves it to trash — recoverable)">
+              <Trash2 size={16} /> {deleting ? 'Deleting...' : 'Delete'}
             </button>
           )}
           {!isNew && !estimate?.workOrderId && (
