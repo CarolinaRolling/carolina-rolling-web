@@ -221,6 +221,8 @@ export const getAwaitingReplyQuotes = () => api.get('/estimates/awaiting-reply')
 export const dismissQuoteReminder = (id) => api.post(`/estimates/${id}/reminder-dismiss`);
 export const snoozeQuoteReminder = (id, days) => api.post(`/estimates/${id}/reminder-snooze`, { days });
 export const restoreQuoteReminder = (id) => api.post(`/estimates/${id}/reminder-restore`);
+export const markQuoteDeclined = (id) => api.post(`/estimates/${id}/mark-declined`);
+export const getUnsentDrafts = () => api.get('/estimates/unsent-drafts');
 export const getEstimateById = (id) => api.get(`/estimates/${id}`);
 export const createEstimate = (data) => api.post('/estimates', data);
 export const updateEstimate = (id, data) => api.put(`/estimates/${id}`, data);
