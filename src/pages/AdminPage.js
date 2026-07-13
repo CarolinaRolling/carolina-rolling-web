@@ -7,7 +7,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings, getAvailableModels, getPricingConfig, updatePricingConfig } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings, getAvailableModels, getPricingConfig, updatePricingConfig, getPricingWorksheet, submitPricingWorksheet } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import SectionSizesPage from './SectionSizesPage';
 import SettingsPage from './SettingsPage';
@@ -128,7 +128,11 @@ function AdminPage({ section = 'users-logs' }) {
   const [scannerStatus, setScannerStatus] = useState(null);
   const [aiModels, setAiModelsState] = useState({ parsingModel: '', triageModel: '', defaults: {} });
   const [aiModelsSaving, setAiModelsSaving] = useState(false);
-  const [pricingCfg, setPricingCfg] = useState({ newClientUpliftPct: 0, targetGrowthPct: 0 });
+  const [pricingCfg, setPricingCfg] = useState({ newClientUpliftPct: 0, targetGrowthPct: 0, minLaborCharge: 150, partTypes: {} });
+  const [pricingTab, setPricingTab] = useState('plate_roll');
+  const [worksheet, setWorksheet] = useState(null);
+  const [wsAnswers, setWsAnswers] = useState({});
+  const [wsBusy, setWsBusy] = useState(false);
   const [pricingSaving, setPricingSaving] = useState(false);
   const [availableModels, setAvailableModels] = useState([]);
   const [modelRecs, setModelRecs] = useState({});
@@ -669,7 +673,9 @@ function AdminPage({ section = 'users-logs' }) {
       const pres = await getPricingConfig();
       setPricingCfg({
         newClientUpliftPct: pres.data.data.newClientUpliftPct ?? 0,
-        targetGrowthPct: pres.data.data.targetGrowthPct ?? 0
+        targetGrowthPct: pres.data.data.targetGrowthPct ?? 0,
+        minLaborCharge: pres.data.data.minLaborCharge ?? 150,
+        partTypes: pres.data.data.partTypes || {}
       });
     } catch { /* quiet */ }
   };
@@ -2620,6 +2626,165 @@ function AdminPage({ section = 'users-logs' }) {
               }}>
                 {pricingSaving ? 'Saving…' : 'Save Pricing Strategy'}
               </button>
+            </div>
+
+            {/* Per-part-type pricing — every process has different economics */}
+            <div style={{ marginTop: 20, borderTop: '1px solid #eee', paddingTop: 14 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Per-part-type pricing</div>
+              <p style={{ color: '#666', fontSize: '0.8rem', marginTop: 0 }}>
+                By default each part type learns its own <strong>setup + rate</strong> curve from your won jobs.
+                Override it here when you'd rather set the numbers yourself, and add guidance the estimator sees while quoting.
+              </p>
+
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12 }}>
+                {[
+                  ['plate_roll', 'Plate Roll'], ['cone_roll', 'Cone Roll'], ['shaped_plate', 'Shaped Plate'],
+                  ['angle_roll', 'Angle Roll'], ['channel_roll', 'Channel'], ['beam_roll', 'Beam'],
+                  ['pipe_roll', 'Pipe'], ['tube_roll', 'Tube'], ['flat_bar', 'Flat Bar'],
+                  ['press_brake', 'Press Brake'], ['flat_stock', 'Flat Stock'], ['fab_service', 'Fab Service']
+                ].map(([key, label]) => {
+                  const active = pricingTab === key;
+                  const hasOverride = !!pricingCfg.partTypes?.[key]?.enabled;
+                  return (
+                    <button key={key} onClick={() => setPricingTab(key)}
+                      style={{
+                        padding: '5px 12px', borderRadius: 16, fontSize: '0.78rem', cursor: 'pointer', fontWeight: active ? 700 : 500,
+                        border: '1px solid ' + (active ? '#1565c0' : '#ddd'),
+                        background: active ? '#1565c0' : 'white', color: active ? 'white' : '#555'
+                      }}>
+                      {label}{hasOverride ? ' •' : ''}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {(() => {
+                const cur = pricingCfg.partTypes?.[pricingTab] || {};
+                const setCur = (patch) => setPricingCfg(p => ({
+                  ...p,
+                  partTypes: { ...(p.partTypes || {}), [pricingTab]: { ...(p.partTypes?.[pricingTab] || {}), ...patch } }
+                }));
+                return (
+                  <div style={{ background: '#fafafa', border: '1px solid #eee', borderRadius: 8, padding: 14 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 12 }}>
+                      <input type="checkbox" checked={!!cur.enabled} onChange={(e) => setCur({ enabled: e.target.checked })} />
+                      <span style={{ fontWeight: 600 }}>Override the learned curve for this part type</span>
+                    </label>
+
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                      <div>
+                        <label className="form-label">Setup $ (per job)</label>
+                        <input type="number" step="0.01" className="form-input" style={{ maxWidth: 130 }}
+                          disabled={!cur.enabled} value={cur.setupCost ?? ''}
+                          onChange={(e) => setCur({ setupCost: e.target.value })} placeholder="e.g. 42.62" />
+                        <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 3 }}>Paid once, spread over the quantity.</div>
+                      </div>
+                      <div>
+                        <label className="form-label">Rate $/lb</label>
+                        <input type="number" step="0.0001" className="form-input" style={{ maxWidth: 130 }}
+                          disabled={!cur.enabled} value={cur.ratePerLb ?? ''}
+                          onChange={(e) => setCur({ ratePerLb: e.target.value })} placeholder="e.g. 0.1167" />
+                      </div>
+                      <div>
+                        <label className="form-label">Minimum charge $</label>
+                        <input type="number" step="1" className="form-input" style={{ maxWidth: 130 }}
+                          value={cur.minCharge ?? ''} onChange={(e) => setCur({ minCharge: e.target.value })} placeholder="150" />
+                        <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 3 }}>Applies even without an override.</div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 12 }}>
+                      <label className="form-label">Guidance for whoever is quoting</label>
+                      <textarea className="form-textarea" rows={2} value={cur.notes ?? ''}
+                        onChange={(e) => setCur({ notes: e.target.value })}
+                        placeholder='e.g. "Anything over 120&quot; wide — confirm machine clearance first, price high." or "Tight radius under 20x thickness costs more passes."' />
+                      <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 3 }}>
+                        Shown right next to the recommended price when quoting this part type.
+                      </div>
+                    </div>
+
+                    {/* Calibration worksheet — bootstraps pricing when there's little history */}
+                    <div style={{ marginTop: 16, borderTop: '1px dashed #ddd', paddingTop: 12 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>📋 Calibration worksheet</div>
+                      <p style={{ color: '#666', fontSize: '0.8rem', marginTop: 0 }}>
+                        No history for this part type — or a material you've never quoted, like AR400? Price a short list of
+                        sample jobs the way you actually would, and the system works out your setup cost, your rate, and how much
+                        harder each metal is than A36.
+                      </p>
+
+                      {!worksheet ? (
+                        <button className="btn btn-outline" disabled={wsBusy} onClick={async () => {
+                          setWsBusy(true);
+                          try {
+                            const res = await getPricingWorksheet(pricingTab);
+                            setWorksheet(res.data.data);
+                            setWsAnswers({});
+                          } catch (e) { setError('Could not build the worksheet'); }
+                          finally { setWsBusy(false); }
+                        }}>
+                          {wsBusy ? 'Building…' : 'Build worksheet for this part type'}
+                        </button>
+                      ) : (
+                        <div>
+                          <div style={{ fontSize: '0.78rem', color: '#666', marginBottom: 8 }}>{worksheet.note}</div>
+                          <div style={{ maxHeight: 340, overflowY: 'auto', border: '1px solid #eee', borderRadius: 8 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                              <tbody>
+                                {worksheet.rows.map((r) => (
+                                  <tr key={r.id} style={{ borderTop: '1px solid #f0f0f0', background: r.purpose === 'baseline' ? '#fffde7' : r.purpose === 'material' ? '#f3e5f5' : 'white' }}>
+                                    <td style={{ padding: '6px 8px', width: 80 }}>
+                                      <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#777', textTransform: 'uppercase' }}>{r.purpose}</span>
+                                    </td>
+                                    <td style={{ padding: '6px 8px' }}>
+                                      <div style={{ fontWeight: 600 }}>{r.description}</div>
+                                      <div style={{ color: '#999', fontSize: '0.7rem' }}>~{r.estWeightLbs?.toLocaleString()} lb · {r.teaches}</div>
+                                    </td>
+                                    <td style={{ padding: '6px 8px', width: 120 }}>
+                                      <input type="number" step="0.01" className="form-input" placeholder="$ each"
+                                        value={wsAnswers[r.id] ?? ''}
+                                        onChange={(e) => setWsAnswers(a => ({ ...a, [r.id]: e.target.value }))} />
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                            <button className="btn btn-primary" disabled={wsBusy} onClick={async () => {
+                              setWsBusy(true);
+                              try {
+                                const res = await submitPricingWorksheet(pricingTab, wsAnswers);
+                                const d = res.data.data;
+                                setSuccess(d.message + ' Material factors saved.');
+                                const cfgRes = await getPricingConfig();
+                                setPricingCfg({
+                                  newClientUpliftPct: cfgRes.data.data.newClientUpliftPct ?? 0,
+                                  targetGrowthPct: cfgRes.data.data.targetGrowthPct ?? 0,
+                                  minLaborCharge: cfgRes.data.data.minLaborCharge ?? 150,
+                                  partTypes: cfgRes.data.data.partTypes || {},
+                                  materialFactors: cfgRes.data.data.materialFactors || {}
+                                });
+                                setWorksheet(null);
+                              } catch (e) { setError(e.response?.data?.error?.message || 'Could not fit the worksheet'); }
+                              finally { setWsBusy(false); }
+                            }}>
+                              {wsBusy ? 'Working…' : 'Apply — learn my pricing from these'}
+                            </button>
+                            <button className="btn btn-outline" onClick={() => { setWorksheet(null); setWsAnswers({}); }}>Cancel</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {pricingCfg.materialFactors && Object.keys(pricingCfg.materialFactors).length > 0 && (
+                        <div style={{ marginTop: 12, fontSize: '0.76rem', color: '#555' }}>
+                          <strong>Material difficulty (vs A36 = 1.00):</strong>{' '}
+                          {Object.entries(pricingCfg.materialFactors).map(([k, v]) => `${k} ${Number(v).toFixed(2)}×`).join(' · ')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

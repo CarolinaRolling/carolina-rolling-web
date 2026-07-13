@@ -675,3 +675,5 @@ export const getInspectionLabelPdf = (unitId) => api.get(`/inspections/unit/${un
 export const getPriceSuggestion = (params) => api.get('/estimates/price-suggestion', { params });
 export const getPricingConfig = () => api.get('/settings/pricing-config');
 export const updatePricingConfig = (data) => api.put('/settings/pricing-config', data);
+export const getPricingWorksheet = (partType) => api.get('/settings/pricing-worksheet', { params: { partType } });
+export const submitPricingWorksheet = (partType, answers) => api.post('/settings/pricing-worksheet', { partType, answers });

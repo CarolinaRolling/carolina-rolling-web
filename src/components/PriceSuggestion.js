@@ -9,7 +9,7 @@ import { getPriceSuggestion } from '../services/api';
  *  - leads with the proven-high end of the range, not the median
  *  - labels thin data as thin instead of faking precision
  */
-export default function PriceSuggestion({ partType, material, thickness, width, length, diameter, clientName, onApply }) {
+export default function PriceSuggestion({ partType, material, thickness, width, length, diameter, quantity, clientName, onApply }) {
   const [sug, setSug] = useState(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -20,13 +20,13 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
     const t = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await getPriceSuggestion({ partType, material, thickness, width, length, diameter, clientName });
+        const res = await getPriceSuggestion({ partType, material, thickness, width, length, diameter, quantity, clientName });
         if (!cancelled) setSug(res.data.data);
       } catch { if (!cancelled) setSug(null); }
       finally { if (!cancelled) setLoading(false); }
     }, 400); // debounce while they're typing dimensions
     return () => { cancelled = true; clearTimeout(t); };
-  }, [partType, material, thickness, width, length, diameter, clientName]);
+  }, [partType, material, thickness, width, length, diameter, quantity, clientName]);
 
   if (loading) return <div style={{ fontSize: '0.72rem', color: '#aaa', marginTop: 4 }}>checking past jobs…</div>;
   if (!sug) return null;
@@ -89,6 +89,12 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
         </button>
       </div>
 
+      {sug.guidance && (
+        <div style={{ marginTop: 5, fontSize: '0.75rem', background: '#e3f2fd', border: '1px solid #90caf9', borderRadius: 8, padding: '6px 10px', color: '#0d47a1' }}>
+          📌 {sug.guidance}
+        </div>
+      )}
+
       {open && (
         <div style={{ marginTop: 6, background: '#fafafa', border: '1px solid #eee', borderRadius: 8, padding: 10, fontSize: '0.75rem', color: '#555' }}>
           <div style={{ marginBottom: 6 }}>
@@ -98,6 +104,12 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
             {sug.estWeightLbs != null && sug.estWeightLbs !== sug.billableWeightLbs && <> (actual steel: {sug.estWeightLbs.toLocaleString()} lb)</>},
             at <strong>${sug.ratePerLb}/lb</strong> from comparable won jobs.
           </div>
+          {sug.quantity > 1 && sug.priceEachAtQty1 && (
+            <div style={{ marginBottom: 6, color: '#1565c0' }}>
+              Qty <strong>{sug.quantity}</strong>: setup is spread across the run — <strong>${sug.suggested.toFixed(2)} each</strong>
+              {' '}(a single piece would be ${sug.priceEachAtQty1.toFixed(2)}). Job total ≈ <strong>${sug.jobTotal?.toFixed(2)}</strong>.
+            </div>
+          )}
           <div style={{ marginBottom: 6 }}>
             {sug.fitted ? (
               <>
@@ -123,6 +135,7 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
                 {sug.samples.map((s, i) => (
                   <tr key={i} style={{ borderTop: '1px solid #eee' }}>
                     <td style={{ padding: '3px 4px', fontWeight: 700, color: '#2e7d32' }}>${parseFloat(s.labor).toFixed(2)}</td>
+                    <td style={{ padding: '3px 4px', color: '#999' }}>×{s.qty || 1}</td>
                     <td style={{ padding: '3px 4px', color: '#777' }}>{s.material || '—'}</td>
                     <td style={{ padding: '3px 4px', color: '#777' }}>
                       {s.thickness ? `${s.thickness}"` : ''}{s.width ? ` × ${s.width}"w` : ''}{s.diameter ? ` × ${s.diameter}"⌀` : ''}
