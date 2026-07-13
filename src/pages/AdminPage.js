@@ -115,7 +115,7 @@ function AdminPage({ section = 'users-logs' }) {
   const [operatorSigs, setOperatorSigs] = useState([]);
   const [sigModalOp, setSigModalOp] = useState(null);
   const [showNewApiKeyModal, setShowNewApiKeyModal] = useState(false);
-  const [newApiKey, setNewApiKey] = useState({ name: '', clientName: '', vendorName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '' });
+  const [newApiKey, setNewApiKey] = useState({ name: '', clientName: '', vendorName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '', isEstimator: false });
   const [createdApiKey, setCreatedApiKey] = useState(null); // holds key after creation (only shown once)
   const [apiKeysLoading, setApiKeysLoading] = useState(false);
   const [editingApiKey, setEditingApiKey] = useState(null);
@@ -781,10 +781,11 @@ function AdminPage({ section = 'users-logs' }) {
         permissions: newApiKey.permissions,
         allowedIPs: newApiKey.allowedIPs.trim() || null,
         operatorName: newApiKey.operatorName.trim() || null,
-        deviceName: newApiKey.deviceName.trim() || null
+        deviceName: newApiKey.deviceName.trim() || null,
+        isEstimator: !!newApiKey.isEstimator
       });
       setCreatedApiKey(response.data.data);
-      setNewApiKey({ name: '', clientName: '', vendorName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '' });
+      setNewApiKey({ name: '', clientName: '', vendorName: '', permissions: 'read', allowedIPs: '', operatorName: '', deviceName: '', isEstimator: false });
       loadApiKeys();
     } catch (err) {
       setError('Failed to create API key');
@@ -3033,6 +3034,18 @@ function AdminPage({ section = 'users-logs' }) {
                           {key.clientName && <div style={{ fontSize: '0.75rem', color: '#1565c0' }}>🔒 Client: {key.clientName}</div>}
                           {key.vendorName && <div style={{ fontSize: '0.75rem', color: '#E65100' }}>🏭 Vendor: {key.vendorName}</div>}
                           {key.allowedIPs && <div style={{ fontSize: '0.7rem', color: '#e65100' }}>🌐 {key.allowedIPs}</div>}
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, cursor: 'pointer', fontSize: '0.72rem', color: key.isEstimator ? '#6a1b9a' : '#999' }}
+                            title="Estimator device: unlocks the Quotes tab and sends quote notifications to this device">
+                            <input type="checkbox" checked={!!key.isEstimator}
+                              onChange={async (e) => {
+                                try {
+                                  await updateApiKey(key.id, { isEstimator: e.target.checked });
+                                  setSuccess(e.target.checked ? `"${key.name}" is now an estimator device — it will get quote notifications.` : `"${key.name}" is no longer an estimator device.`);
+                                  loadApiKeys();
+                                } catch (err) { setError('Could not update the key'); }
+                              }} />
+                            <span>{key.isEstimator ? '📋 Estimator device' : 'Estimator device'}</span>
+                          </label>
                         </td>
                         <td>
                           {key.operatorName ? (
@@ -3153,6 +3166,20 @@ function AdminPage({ section = 'users-logs' }) {
               <input type="text" className="form-input" placeholder="e.g. Jesus, Mike"
                 value={newApiKey.operatorName} onChange={(e) => setNewApiKey({ ...newApiKey, operatorName: e.target.value })} />
               <small style={{ color: '#666' }}>Fixed operator for this tablet. Logged when parts are marked complete.</small>
+            </div>
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', background: '#f3e5f5', border: '1px solid #ce93d8', borderRadius: 8, padding: 12 }}>
+                <input type="checkbox" style={{ marginTop: 3 }}
+                  checked={!!newApiKey.isEstimator}
+                  onChange={(e) => setNewApiKey({ ...newApiKey, isEstimator: e.target.checked })} />
+                <span>
+                  <strong style={{ color: '#6a1b9a' }}>📋 Estimator device</strong>
+                  <div style={{ color: '#666', fontSize: '0.8rem', marginTop: 2 }}>
+                    Unlocks the <strong>Quotes</strong> tab and sends <strong>quote notifications</strong> to this device
+                    (new quote requests + reminders about quotes you haven't sent). Leave unchecked for shop tablets.
+                  </div>
+                </span>
+              </label>
             </div>
             <div className="form-group">
               <label className="form-label">Allowed IPs</label>
