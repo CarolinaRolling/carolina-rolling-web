@@ -13,6 +13,7 @@ const DEFAULT_GRADE_OPTIONS = ['A36', 'A572 Gr 50', '304 S/S', '316 S/S', 'AR400
 
 export default function PressBrakeForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const [customThickness, setCustomThickness] = useState('');
+  const [useCustomThickness, setUseCustomThickness] = useState(false);
   const [customGrade, setCustomGrade] = useState('');
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
 
@@ -69,7 +70,8 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
   }, [lineTotal]);
 
   const isCustomThickness = partData.thickness && !THICKNESS_OPTIONS.includes(partData.thickness) && partData.thickness !== 'Custom';
-  const selectedThicknessOption = THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : '');
+  const selectedThicknessOption = useCustomThickness ? 'Custom'
+    : (THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : ''));
 
   const isCustomGrade = partData.material && !gradeOptions.includes(partData.material);
   const selectedGradeOption = gradeOptions.includes(partData.material) ? partData.material : (partData.material ? 'Custom' : '');
@@ -82,22 +84,32 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
       {/* === DIMENSIONS === */}
       <div className="form-group">
         <label className="form-label">Quantity *</label>
-        <input type="number" className="form-input" value={partData.quantity}
-          onChange={(e) => setPartData({ ...partData, quantity: e.target.value })} onFocus={(e) => e.target.select()} min="1" />
+        <input type="number" className="form-input" value={partData.quantity ?? 1}
+          onChange={(e) => setPartData({ ...partData, quantity: e.target.value })}
+          onBlur={(e) => { const q = parseInt(e.target.value, 10); if (!q || q < 1) setPartData({ ...partData, quantity: 1 }); }}
+          onFocus={(e) => e.target.select()} min="1" />
       </div>
 
       <div className="form-group">
         <label className="form-label">Thickness *</label>
         <select className="form-select" value={selectedThicknessOption}
           onChange={(e) => {
-            if (e.target.value === 'Custom') setPartData({ ...partData, thickness: customThickness || '' });
-            else { setPartData({ ...partData, thickness: e.target.value }); setCustomThickness(''); }
+            if (e.target.value === 'Custom') {
+              // Stay in custom mode even though the value is still blank — otherwise the dropdown
+              // snaps back to "Select..." and the custom box never appears.
+              setUseCustomThickness(true);
+              setPartData({ ...partData, thickness: customThickness || '' });
+            } else {
+              setUseCustomThickness(false);
+              setPartData({ ...partData, thickness: e.target.value });
+              setCustomThickness('');
+            }
           }}>
           <option value="">Select...</option>
           {THICKNESS_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        {(selectedThicknessOption === 'Custom' || isCustomThickness) && (
-          <input className="form-input" style={{ marginTop: 4 }} placeholder='e.g. 7/8"'
+        {(useCustomThickness || isCustomThickness) && (
+          <input className="form-input" style={{ marginTop: 4 }} placeholder='e.g. 7/8"' autoFocus
             value={isCustomThickness ? partData.thickness : customThickness}
             onChange={(e) => { setCustomThickness(e.target.value); setPartData({ ...partData, thickness: e.target.value }); }} />
         )}

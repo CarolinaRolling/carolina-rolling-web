@@ -19,6 +19,7 @@ const DEFAULT_GRADE_OPTIONS = ['A36', 'A572 Gr 50', '304 S/S', '316 S/S', 'AR400
 
 export default function ShapedPlateForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const [customThickness, setCustomThickness] = useState('');
+  const [useCustomThickness, setUseCustomThickness] = useState(false);
   const [customGrade, setCustomGrade] = useState('');
   const [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
   const [showDiaFind, setShowDiaFind] = useState(false);
@@ -131,7 +132,8 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
   }, [lineTotal]);
 
   const isCustomThickness = partData.thickness && !THICKNESS_OPTIONS.includes(partData.thickness) && partData.thickness !== 'Custom';
-  const selectedThicknessOption = THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : '');
+  const selectedThicknessOption = useCustomThickness ? 'Custom'
+    : (THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : ''));
   const isCustomGrade = partData.material && !gradeOptions.includes(partData.material);
   const selectedGradeOption = gradeOptions.includes(partData.material) ? partData.material : (partData.material ? 'Custom' : '');
 
@@ -173,13 +175,13 @@ export default function ShapedPlateForm({ partData, setPartData, vendorSuggestio
         <label className="form-label">Thickness *</label>
         <select className="form-select" value={selectedThicknessOption}
           onChange={(e) => {
-            if (e.target.value === 'Custom') setPartData({ ...partData, thickness: customThickness || '' });
-            else { setPartData({ ...partData, thickness: e.target.value }); setCustomThickness(''); }
+            if (e.target.value === 'Custom') { setUseCustomThickness(true); setPartData({ ...partData, thickness: customThickness || '' }); }
+            else { setUseCustomThickness(false); setPartData({ ...partData, thickness: e.target.value }); setCustomThickness(''); }
           }}>
           <option value="">Select...</option>
           {THICKNESS_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        {(selectedThicknessOption === 'Custom' || isCustomThickness) && (
+        {(useCustomThickness || isCustomThickness) && (
           <input className="form-input" style={{ marginTop: 4 }} placeholder='e.g. 7/8"'
             value={isCustomThickness ? partData.thickness : customThickness}
             onChange={(e) => { setCustomThickness(e.target.value); setPartData({ ...partData, thickness: e.target.value }); }} />

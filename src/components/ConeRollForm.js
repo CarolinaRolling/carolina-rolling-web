@@ -136,6 +136,7 @@ function drawBlank(canvas, blank, segAngle, layerNum) {
 // ========== COMPONENT ==========
 export default function ConeRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   var [customThickness, setCustomThickness] = useState('');
+  var [useCustomThickness, setUseCustomThickness] = useState(false);
   var [customGrade, setCustomGrade] = useState('');
   var [gradeOptions, setGradeOptions] = useState(DEFAULT_GRADE_OPTIONS);
   var [largeDia, setLargeDia] = useState(partData._coneLargeDia || '');
@@ -233,6 +234,22 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   useEffect(function() { if (coneData && coneCanvasRef.current) drawCone3D(coneCanvasRef.current, coneData, heightSegs); }, [coneData, heightSegs]);
   useEffect(function() { segmentSpecs.forEach(function(sp) { var cv = blankRefs.current[sp.layer]; if (cv && sp.blank) drawBlank(cv, sp.blank, sp.segmentAngle, sp.layer); }); }, [segmentSpecs]);
 
+  // Persist a compact per-layer summary so the DXF upload slots and printouts can key off it.
+  useEffect(function() {
+    var layers = segmentSpecs.map(function(sp) {
+      return {
+        layer: sp.layer,
+        pieces: sp.radialSegments,
+        bottomDia: Number(sp.bottomDia.toFixed(3)),
+        topDia: Number(sp.topDia.toFixed(3)),
+        height: Number(sp.segmentHeight.toFixed(3)),
+        sheetWidth: sp.sheetWidth,
+        sheetHeight: sp.sheetHeight
+      };
+    });
+    setPartData(function(p) { return Object.assign({}, p, { _coneLayers: layers }); });
+  }, [segmentSpecs]);
+
   useEffect(function() {
     setPartData(function(p) { return Object.assign({}, p, { _coneLargeDia: largeDia, _coneLargeDiaType: largeDiaType, _coneLargeDiaMeasure: largeDiaMeasure, _coneSmallDia: smallDia, _coneSmallDiaType: smallDiaType, _coneSmallDiaMeasure: smallDiaMeasure, _coneHeight: coneHeight, _coneRadialSegments: syncedLayerSegments[0] || 1, _coneLayerSegments: syncedLayerSegments, _coneShowAdvanced: showAdvanced, _coneHeightCutMethod: heightCutMethod, _coneHeightSegments: heightSegments, _coneCustomCuts: customCuts, _coneType: coneType, _coneEccentricAngle: eccentricAngle,
       _coneSegmentDetails: segmentSpecs.map(function(s) { return { layer: s.layer, radialSegments: s.radialSegments, segmentHeight: s.segmentHeight, segmentAngle: s.segmentAngle, sheetWidth: s.sheetWidth, sheetHeight: s.sheetHeight, outerRadius: s.outerRadius, innerRadius: s.innerRadius, bottomDia: s.bottomDia, topDia: s.topDia }; })
@@ -275,8 +292,8 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
     }
     // Line 3: Multi-layer info (only if multiple layers)
     if (heightSegs.length > 1) {
-      l.push(heightSegs.length + ' layers');
-      segmentSpecs.forEach(function(s) { l.push('  L' + s.layer + ': ' + (s.radialSegments > 1 ? s.radialSegments + 'pc - ' : '') + s.bottomDia.toFixed(3) + '" OD x ' + s.topDia.toFixed(3) + '" OD x ' + s.segmentHeight.toFixed(3) + '" VH' + (s.radialSegments > 1 ? ' @ ' + (360 / s.radialSegments).toFixed(0) + ' deg' : '')); });
+      l.push('Split into ' + heightSegs.length + ' rolled sections:');
+      segmentSpecs.forEach(function(s) { l.push('  Section ' + s.layer + ': ' + s.radialSegments + 'pc' + (s.radialSegments > 1 ? ' @ ' + (360 / s.radialSegments).toFixed(0) + ' deg each' : ' (full wrap)') + ' - ' + s.bottomDia.toFixed(3) + '" OD x ' + s.topDia.toFixed(3) + '" OD x ' + s.segmentHeight.toFixed(3) + '" VH'); });
     }
     // Total pieces summary
     var segPerCone = (segmentSpecs && segmentSpecs.length)
@@ -343,7 +360,7 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   useEffect(function() { setPartData(function(p) { return Object.assign({}, p, { partTotal: lineTotal.toFixed(2) }); }); }, [lineTotal]);
 
   var isCustomThk = partData.thickness && !THICKNESS_OPTIONS.includes(partData.thickness) && partData.thickness !== 'Custom';
-  var selThk = THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : '');
+  var selThk = useCustomThickness ? 'Custom' : (THICKNESS_OPTIONS.includes(partData.thickness) ? partData.thickness : (partData.thickness ? 'Custom' : ''));
   var isCustomGrd = partData.material && !gradeOptions.includes(partData.material);
   var selGrd = gradeOptions.includes(partData.material) ? partData.material : (partData.material ? 'Custom' : '');
 
@@ -371,10 +388,10 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
       {/* THICKNESS */}
       <div className="form-group">
         <label className="form-label">Material Thickness *</label>
-        <select className="form-select" value={selThk} onChange={function(e) { if (e.target.value === 'Custom') setPartData(Object.assign({}, partData, { thickness: customThickness || '' })); else { setPartData(Object.assign({}, partData, { thickness: e.target.value })); setCustomThickness(''); } }}>
+        <select className="form-select" value={selThk} onChange={function(e) { if (e.target.value === 'Custom') { setUseCustomThickness(true); setPartData(Object.assign({}, partData, { thickness: customThickness || '' })); } else { setUseCustomThickness(false); setPartData(Object.assign({}, partData, { thickness: e.target.value })); setCustomThickness(''); } }}>
           <option value="">Select...</option>{THICKNESS_OPTIONS.map(function(t) { return <option key={t} value={t}>{t}</option>; })}
         </select>
-        {(selThk === 'Custom' || isCustomThk) && <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter thickness" value={isCustomThk ? partData.thickness : customThickness} onChange={function(e) { setCustomThickness(e.target.value); setPartData(Object.assign({}, partData, { thickness: e.target.value })); }} />}
+        {(useCustomThickness || isCustomThk) && <input className="form-input" style={{ marginTop: 4 }} placeholder="Enter thickness" value={isCustomThk ? partData.thickness : customThickness} onChange={function(e) { setCustomThickness(e.target.value); setPartData(Object.assign({}, partData, { thickness: e.target.value })); }} />}
       </div>
 
       {/* CONE DIMENSIONS */}

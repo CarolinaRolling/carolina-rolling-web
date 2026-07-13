@@ -99,9 +99,19 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
             at <strong>${sug.ratePerLb}/lb</strong> from comparable won jobs.
           </div>
           <div style={{ marginBottom: 6 }}>
-            Typical would be <strong>${sug.median.toFixed(2)}</strong>
-            {sug.recentMedian != null && <> (recently <strong>${sug.recentMedian.toFixed(2)}</strong>)</>};
-            at your <strong>best proven rate</strong> this job is <strong>${sug.provenHigh.toFixed(2)}</strong>.
+            {sug.fitted ? (
+              <>
+                Fitted from your won jobs: <strong>${sug.setupCost?.toFixed(2)} setup</strong> + <strong>${sug.ratePerLb}/lb</strong>
+                {' '}— that's why your $/lb is higher on small jobs and lower on big ones.
+                <br />
+                On the line: <strong>${sug.median.toFixed(2)}</strong>. Most you've won at this size: <strong>${sug.provenHigh.toFixed(2)}</strong>.
+              </>
+            ) : (
+              <>
+                Not enough comparable jobs to fit a setup + rate curve — using your median rate of <strong>${sug.ratePerLb}/lb</strong>.
+                Typical <strong>${sug.median.toFixed(2)}</strong>.
+              </>
+            )}
           </div>
           <div style={{ color: '#777', marginBottom: 6 }}>
             Based only on quotes you actually <strong>won</strong>{sug.widthBand ? ` at ${sug.widthBand} width` : ''} — recent jobs weighted more heavily.

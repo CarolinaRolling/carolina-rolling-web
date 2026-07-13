@@ -242,7 +242,7 @@ export const deleteEstimatePart = (estimateId, partId) => api.delete(`/estimates
 // Estimate Part Files
 export const getEstimatePartFiles = (estimateId, partId) => api.get(`/estimates/${estimateId}/parts/${partId}/files`);
 export const viewEstimatePartFile = (estimateId, partId, fileId) => api.get(`/estimates/${estimateId}/parts/${partId}/files/${fileId}/view`);
-export const uploadEstimatePartFile = (estimateId, partId, fileOrFiles, fileType = 'other') => {
+export const uploadEstimatePartFile = (estimateId, partId, fileOrFiles, fileType = 'other', layer = null) => {
   const formData = new FormData();
   const firstFile = Array.isArray(fileOrFiles) ? fileOrFiles[0] : fileOrFiles;
   if (Array.isArray(fileOrFiles)) {
@@ -251,6 +251,7 @@ export const uploadEstimatePartFile = (estimateId, partId, fileOrFiles, fileType
     formData.append('files', fileOrFiles);
   }
   formData.append('fileType', fileType);
+  if (layer) formData.append('layer', String(layer)); // cone layer this cut file belongs to
   // Send the file's actual last-modified date from the filesystem
   if (firstFile && firstFile.lastModified) {
     formData.append('fileLastModified', String(firstFile.lastModified));

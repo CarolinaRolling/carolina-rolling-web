@@ -2768,8 +2768,60 @@ function EstimateDetailsPage() {
 
                   {/* DXF Cut File Section — plate_roll, shaped_plate, flat_stock, cone_roll, press_brake */}
                   {['plate_roll', 'shaped_plate', 'flat_stock', 'cone_roll', 'press_brake'].includes(part.partType) && (() => {
-                    const dxfFile = (part.files || []).find(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.dxf$/i));
                     const fd = part.formData && typeof part.formData === 'object' ? part.formData : {};
+                    const coneLayers = Array.isArray(fd._coneLayers) ? fd._coneLayers : [];
+                    // A cone split into layers needs a DXF PER LAYER — each layer is a different blank.
+                    if (part.partType === 'cone_roll' && coneLayers.length > 1) {
+                      return (
+                        <div style={{ marginTop: 12, padding: 10, background: '#EDE7F6', borderRadius: 8, border: '1.5px solid #B39DDB' }}>
+                          <div style={{ fontWeight: 700, color: '#5E35B1', marginBottom: 8 }}>
+                            ✂️ DXF Cut Files — {coneLayers.length} layers
+                            <span style={{ fontWeight: 400, color: '#7E57C2', fontSize: '0.78rem', marginLeft: 8 }}>
+                              each layer is a different blank, so it needs its own file
+                            </span>
+                          </div>
+                          {coneLayers.map((L) => {
+                            const layerFile = (part.files || []).find(f =>
+                              (f.fileType === 'cut_file' || (f.originalName || '').match(/\.dxf$/i)) && f.layer === L.layer);
+                            return (
+                              <div key={L.layer} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', marginBottom: 5, background: 'white', borderRadius: 6, border: '1px solid #D1C4E9' }}>
+                                <span style={{ fontWeight: 700, color: '#5E35B1', minWidth: 60 }}>Layer {L.layer}</span>
+                                <span style={{ fontSize: '0.78rem', color: '#666' }}>
+                                  {L.pieces > 1 ? `${L.pieces} pc · ` : ''}blank {L.sheetWidth}" × {L.sheetHeight}"
+                                </span>
+                                <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  {layerFile && (
+                                    <>
+                                      <span style={{ fontSize: '0.75rem', color: '#2e7d32', fontWeight: 600 }}>✓ {layerFile.originalName}</span>
+                                      <button className="btn btn-sm btn-outline" style={{ color: '#c62828', borderColor: '#c62828' }}
+                                        onClick={async () => { try { await deleteEstimatePartFile(id, part.id, layerFile.id); await loadEstimate(); } catch { setError('Could not remove the file'); } }}>
+                                        Remove
+                                      </button>
+                                    </>
+                                  )}
+                                  <label className="btn btn-sm btn-outline" style={{ cursor: 'pointer', margin: 0 }}>
+                                    📎 {layerFile ? 'Replace' : 'Upload DXF'}
+                                    <input type="file" accept=".dxf,.DXF" hidden onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      try {
+                                        if (layerFile) { try { await deleteEstimatePartFile(id, part.id, layerFile.id); } catch {} }
+                                        await uploadEstimatePartFile(id, part.id, [file], 'cut_file', L.layer);
+                                        await loadEstimate();
+                                        setSuccess(`DXF uploaded for layer ${L.layer}`);
+                                      } catch (err) {
+                                        setError('Could not upload the DXF');
+                                      } finally { e.target.value = ''; }
+                                    }} />
+                                  </label>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    }
+                    const dxfFile = (part.files || []).find(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.dxf$/i));
                     const hasCutPerPrint = part._cutPerPrint || fd._cutPerPrint;
                     return (
                       <div style={{ marginTop: 12, padding: 10, background: '#EDE7F6', borderRadius: 8, border: '1.5px solid #B39DDB' }}>
