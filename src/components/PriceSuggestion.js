@@ -92,10 +92,16 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
       {open && (
         <div style={{ marginTop: 6, background: '#fafafa', border: '1px solid #eee', borderRadius: 8, padding: 10, fontSize: '0.75rem', color: '#555' }}>
           <div style={{ marginBottom: 6 }}>
-            You typically charge <strong>${sug.median.toFixed(2)}</strong>
-            {sug.recentMedian != null && <> (recently <strong>${sug.recentMedian.toFixed(2)}</strong>)</>},
-            and you have <strong>already won</strong> jobs like this at up to <strong>${sug.provenHigh.toFixed(2)}</strong>.
-            Range: ${sug.low.toFixed(2)} – ${sug.provenHigh.toFixed(2)}.
+            Priced at <strong>{sug.billableWidth}" band width</strong> ({sug.widthBand}) — the machine setup is the same
+            across the band, so you charge band capacity, not literal inches.
+            That's <strong>{sug.billableWeightLbs?.toLocaleString()} lb</strong> billable
+            {sug.estWeightLbs != null && sug.estWeightLbs !== sug.billableWeightLbs && <> (actual steel: {sug.estWeightLbs.toLocaleString()} lb)</>},
+            at <strong>${sug.ratePerLb}/lb</strong> from comparable won jobs.
+          </div>
+          <div style={{ marginBottom: 6 }}>
+            Typical would be <strong>${sug.median.toFixed(2)}</strong>
+            {sug.recentMedian != null && <> (recently <strong>${sug.recentMedian.toFixed(2)}</strong>)</>};
+            at your <strong>best proven rate</strong> this job is <strong>${sug.provenHigh.toFixed(2)}</strong>.
           </div>
           <div style={{ color: '#777', marginBottom: 6 }}>
             Based only on quotes you actually <strong>won</strong>{sug.widthBand ? ` at ${sug.widthBand} width` : ''} — recent jobs weighted more heavily.
@@ -111,6 +117,8 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
                     <td style={{ padding: '3px 4px', color: '#777' }}>
                       {s.thickness ? `${s.thickness}"` : ''}{s.width ? ` × ${s.width}"w` : ''}{s.diameter ? ` × ${s.diameter}"⌀` : ''}
                     </td>
+                    <td style={{ padding: '3px 4px', color: '#999' }}>{s.weight?.toLocaleString()} lb</td>
+                    <td style={{ padding: '3px 4px', color: '#1565c0' }}>${s.rate}/lb</td>
                     <td style={{ padding: '3px 4px', color: '#999' }}>{s.client}</td>
                     <td style={{ padding: '3px 4px', color: '#bbb', textAlign: 'right' }}>{s.ageDays}d ago</td>
                   </tr>
