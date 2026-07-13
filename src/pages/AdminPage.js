@@ -7,7 +7,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings, getAvailableModels } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings, getAvailableModels, getPricingConfig, updatePricingConfig } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import SectionSizesPage from './SectionSizesPage';
 import SettingsPage from './SettingsPage';
@@ -128,6 +128,8 @@ function AdminPage({ section = 'users-logs' }) {
   const [scannerStatus, setScannerStatus] = useState(null);
   const [aiModels, setAiModelsState] = useState({ parsingModel: '', triageModel: '', defaults: {} });
   const [aiModelsSaving, setAiModelsSaving] = useState(false);
+  const [pricingCfg, setPricingCfg] = useState({ newClientUpliftPct: 0, targetGrowthPct: 0 });
+  const [pricingSaving, setPricingSaving] = useState(false);
   const [availableModels, setAvailableModels] = useState([]);
   const [modelRecs, setModelRecs] = useState({});
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -662,6 +664,13 @@ function AdminPage({ section = 'users-logs' }) {
     try {
       const res = await getAiModelSettings();
       setAiModelsState({ parsingModel: res.data.data.parsingModel || '', triageModel: res.data.data.triageModel || '', defaults: res.data.data.defaults || {} });
+    } catch { /* quiet */ }
+    try {
+      const pres = await getPricingConfig();
+      setPricingCfg({
+        newClientUpliftPct: pres.data.data.newClientUpliftPct ?? 0,
+        targetGrowthPct: pres.data.data.targetGrowthPct ?? 0
+      });
     } catch { /* quiet */ }
   };
 
@@ -2571,6 +2580,46 @@ function AdminPage({ section = 'users-logs' }) {
                 <div style={{ fontSize: '0.75rem', color: '#888', fontWeight: 600 }}>{card.label}</div>
               </div>
             ))}
+          </div>
+
+          {/* Pricing strategy — drives the "Recommended price" suggestion */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 4 }}>💰 Pricing Strategy</h3>
+            <p style={{ color: '#666', fontSize: '0.82rem', marginTop: 0 }}>
+              The recommended price on each part is learned from jobs you actually <strong>won</strong> — and leans toward the
+              high end of what you've already proven clients will pay. These settings push it further.
+            </p>
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div style={{ minWidth: 220 }}>
+                <label className="form-label">New-client uplift %</label>
+                <input type="number" step="1" className="form-input" style={{ maxWidth: 120 }}
+                  value={pricingCfg.newClientUpliftPct}
+                  onChange={(e) => setPricingCfg({ ...pricingCfg, newClientUpliftPct: e.target.value })} />
+                <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 4 }}>
+                  Clients with no history have no price anchor — quote them higher. Applied automatically to new clients.
+                </div>
+              </div>
+              <div style={{ minWidth: 220 }}>
+                <label className="form-label">Target growth %</label>
+                <input type="number" step="1" className="form-input" style={{ maxWidth: 120 }}
+                  value={pricingCfg.targetGrowthPct}
+                  onChange={(e) => setPricingCfg({ ...pricingCfg, targetGrowthPct: e.target.value })} />
+                <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 4 }}>
+                  Your goal for the year (used for reporting; will drive suggested uplift as this grows).
+                </div>
+              </div>
+              <button className="btn btn-primary" disabled={pricingSaving} onClick={async () => {
+                setPricingSaving(true);
+                try {
+                  const res = await updatePricingConfig(pricingCfg);
+                  setPricingCfg(res.data.data);
+                  setSuccess('Pricing strategy saved — applies to new suggestions immediately.');
+                } catch (e) { setError(e.response?.data?.error?.message || 'Failed to save pricing config'); }
+                finally { setPricingSaving(false); }
+              }}>
+                {pricingSaving ? 'Saving…' : 'Save Pricing Strategy'}
+              </button>
+            </div>
           </div>
 
           {/* AI Model configuration */}

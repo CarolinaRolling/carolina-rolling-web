@@ -1527,6 +1527,16 @@ function EstimateDetailsPage() {
   };
 
   // Convert to Work Order Handlers
+  // Quotes are valid 30 days. Jobs often come back 6-12 months later — converting an old
+  // quote means doing the work at last year's prices, so warn before that happens.
+  const QUOTE_VALID_DAYS = 30;
+  const quoteAgeDays = (() => {
+    const basis = estimate?.sentAt || estimate?.createdAt;
+    if (!basis) return null;
+    return Math.floor((Date.now() - new Date(basis).getTime()) / 86400000);
+  })();
+  const quoteExpired = quoteAgeDays != null && quoteAgeDays > QUOTE_VALID_DAYS;
+
   const openConvertModal = async () => {
     if (parts.length === 0) {
       setError('Add at least one part before converting to work order');
@@ -1548,6 +1558,16 @@ function EstimateDetailsPage() {
   };
 
   const handleConvertToWorkOrder = async () => {
+    // A quote older than its validity window may be priced on last year's material/labor costs.
+    if (quoteExpired) {
+      const ok = window.confirm(
+        `⏳ This quote is ${quoteAgeDays} days old (valid ${QUOTE_VALID_DAYS} days).\n\n` +
+        `Converting it will create the work order at the ORIGINAL prices. If material or labor costs have moved since, ` +
+        `you may be doing this job at last year's rates.\n\n` +
+        `Convert anyway at the original pricing?`
+      );
+      if (!ok) return;
+    }
     try {
       setConverting(true);
       const payload = {
@@ -1945,6 +1965,15 @@ function EstimateDetailsPage() {
 
       {error && <div className="alert alert-error" style={{ whiteSpace: 'pre-line' }}>{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
+      {!isNew && quoteExpired && !estimate?.workOrderId && (
+        <div style={{ background: '#fff8e1', border: '1px solid #ffb74d', borderRadius: 8, padding: '10px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: '1.1rem' }}>⏳</span>
+          <div style={{ fontSize: '0.88rem', color: '#5d4037' }}>
+            <strong>This quote is {quoteAgeDays} days old</strong> — past its {QUOTE_VALID_DAYS}-day validity.
+            Material and labor costs may have moved. <strong>Re-price before converting or honoring it.</strong>
+          </div>
+        </div>
+      )}
 
       {/* Stored PDF File Bar */}
       {!isNew && files.some(f => (f.originalName || f.filename || '').startsWith('Generated-Estimate-')) && !pdfPreviewUrl && (
@@ -3787,6 +3816,7 @@ function EstimateDetailsPage() {
                     setShowVendorSuggestions={setShowVendorSuggestions}
                     showMessage={showMessage}
                     setError={setError}
+                    clientName={formData.clientName}
                   />
                 </div>
               ) : partData.partType === 'shaped_plate' ? (

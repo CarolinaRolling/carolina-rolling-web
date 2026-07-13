@@ -669,3 +669,8 @@ export const moveInspectionUnit = (unitId, targetWorkOrderPartId) => api.patch(`
 export const deleteInspectionUnit = (unitId) => api.delete(`/inspections/unit/${unitId}`);
 export const getInspectionReportPdf = (jobId) => api.get(`/inspections/job/${jobId}/report-pdf`, { responseType: 'arraybuffer' });
 export const getInspectionLabelPdf = (unitId) => api.get(`/inspections/unit/${unitId}/label-pdf`, { responseType: 'arraybuffer' });
+
+// Price recommendation from comparable WON jobs
+export const getPriceSuggestion = (params) => api.get('/estimates/price-suggestion', { params });
+export const getPricingConfig = () => api.get('/settings/pricing-config');
+export const updatePricingConfig = (data) => api.put('/settings/pricing-config', data);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import RollToOverride from './RollToOverride';
+import PriceSuggestion from './PriceSuggestion';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
@@ -36,7 +37,7 @@ function thicknessToDecimal(t) {
   return parseFloat(clean) || 0;
 }
 
-export default function PlateRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
+export default function PlateRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError, clientName }) {
   const [customThickness, setCustomThickness] = useState('');
   const [customGrade, setCustomGrade] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
@@ -781,6 +782,14 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
               onFocus={(e) => e.target.select()}
               onChange={(e) => setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value })}
               placeholder="0.00" />
+            <PriceSuggestion
+              partType="plate_roll"
+              material={partData.material}
+              thickness={partData.thickness}
+              diameter={partData.diameter || partData.innerDiameter || partData.outerDiameter}
+              clientName={clientName}
+              onApply={(price) => setPartData({ ...partData, _baseLaborTotal: String(price), laborTotal: String(price) })}
+            />
           </div>
         </div>
 
