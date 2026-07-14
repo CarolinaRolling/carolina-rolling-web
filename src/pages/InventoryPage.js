@@ -722,7 +722,9 @@ function InventoryPage() {
                 onClick={() => navigate(`/workorder/${order.id}`)}
                 style={{ 
                   cursor: 'pointer',
-                  borderLeft: `4px solid ${getStatusColor(order.status)}`,
+                  borderLeft: `4px solid ${order.isVoided ? '#b71c1c' : getStatusColor(order.status)}`,
+                  opacity: order.isVoided ? 0.55 : 1,
+                  background: order.isVoided ? '#fafafa' : undefined,
                   transition: 'transform 0.15s, box-shadow 0.15s',
                   padding: 0,
                   overflow: 'hidden'
@@ -786,6 +788,21 @@ function InventoryPage() {
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {order.isVoided && (
+                        <span title={order.voidReason ? `Voided: ${order.voidReason}` : 'This work order was voided'}
+                          style={{
+                            background: '#b71c1c',
+                            color: 'white',
+                            padding: '4px 10px',
+                            borderRadius: 12,
+                            fontSize: '0.7rem',
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            letterSpacing: '1px'
+                          }}>
+                          ⛔ VOID
+                        </span>
+                      )}
                       {order.priority && order.priority !== 'normal' && (
                         <span style={{
                           background: order.priority === 'urgent' ? '#c62828' : order.priority === 'high' ? '#e65100' : '#1565c0',

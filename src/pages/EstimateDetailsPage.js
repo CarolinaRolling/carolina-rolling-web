@@ -1574,26 +1574,50 @@ function EstimateDetailsPage() {
         ...convertData,
         customDRNumber: useCustomDR && customDR ? parseInt(customDR) : null
       };
-      const response = await convertEstimateToWorkOrder(id, payload);
-      const workOrder = response.data.data.workOrder;
+
+      let workOrder = null;
+      try {
+        const response = await convertEstimateToWorkOrder(id, payload);
+        workOrder = response.data?.data?.workOrder || null;
+      } catch (err) {
+        // The request failed — but the work order may still have been created (a slow response,
+        // a dropped connection, a proxy timeout). Check before crying failure.
+        try {
+          const check = await getEstimateById(id);
+          const est = check.data?.data;
+          if (est?.workOrderId) {
+            // It DID convert — the response just never made it back to us.
+            workOrder = { id: est.workOrderId, drNumber: null };
+          }
+        } catch (_) { /* couldn't check — fall through to the real error */ }
+        if (!workOrder) {
+          setError(err.response?.data?.error?.message || 'Failed to convert to work order');
+          setConverting(false);
+          return;
+        }
+      }
+
+      if (!workOrder?.id) {
+        setError('The work order could not be created. Please try again.');
+        setConverting(false);
+        return;
+      }
+
+      // ===== From here the work order EXISTS. Nothing below may report a failure. =====
       setShowConvertModal(false);
-      
-      // Auto-approve any pending orders linked to this estimate
+      showMessage(workOrder.drNumber ? `Work order DR-${workOrder.drNumber} created!` : 'Work order created!');
+
+      // Auto-approve any pending orders linked to this estimate (best effort)
       try {
         const poRes = await getPendingOrders('pending');
         const linked = (poRes.data.data || []).filter(o => o.matchedEstimateId === id);
         for (const order of linked) {
           await approvePendingOrder(order.id, {}).catch(() => {});
         }
-      } catch (e) { /* ignore */ }
-      
-      const message = `Work order DR-${workOrder.drNumber} created!`;
-      showMessage(message);
-      
-      // Reload estimate to update workOrderId status
-      await loadEstimate();
-      
-      // Navigate to the new work order
+      } catch (e) { /* non-fatal */ }
+
+      try { await loadEstimate(); } catch (e) { /* non-fatal */ }
+
       setTimeout(() => navigate(`/workorders/${workOrder.id}`), 1500);
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Failed to convert to work order');
