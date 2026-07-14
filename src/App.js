@@ -218,6 +218,12 @@ function AppRoutes() {
         </AdminRoute>
       } />
       
+      <Route path="/admin/pricing" element={
+        <AdminRoute>
+          <Layout><AdminPage section="pricing" /></Layout>
+        </AdminRoute>
+      } />
+
       <Route path="/admin/wps-generator" element={
         <AdminRoute>
           <Layout><WpsGeneratorPage /></Layout>
