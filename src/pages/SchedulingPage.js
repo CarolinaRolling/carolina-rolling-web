@@ -542,8 +542,12 @@ function SchedulingPage() {
                           DR-{order.drNumber}
                         </span>
                       ) : (
-                        <span style={{ fontWeight: 600, color: '#666' }}>
-                          {order.orderNumber || '—'}
+                        // No DR number. Say so plainly — this used to render the bare order
+                        // number, which reads like a name and hides that the work order was
+                        // never assigned a DR.
+                        <span style={{ fontWeight: 700, color: '#c62828' }}
+                          title="This work order has no DR number assigned">
+                          ⚠ NO DR# <span style={{ fontWeight: 500, color: '#666' }}>({order.orderNumber || '—'})</span>
                         </span>
                       )}
                       {isRush && (
@@ -757,7 +761,7 @@ function SchedulingPage() {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                       <span style={{ fontWeight: 700, color: isRush ? '#c62828' : '#1565c0', fontSize: '0.95rem' }}>
-                        {order.drNumber ? `DR-${order.drNumber}` : order.orderNumber || '—'}
+                        {order.drNumber ? `DR-${order.drNumber}` : `⚠ NO DR# (${order.orderNumber || '—'})`}
                       </span>
                       {isRush && <span style={{ background: '#c62828', color: 'white', padding: '2px 8px', borderRadius: 4, fontSize: '0.7rem', fontWeight: 700 }}>🚨 RUSH</span>}
                     </div>
