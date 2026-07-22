@@ -133,6 +133,15 @@ function drawBlank(canvas, blank, segAngle, layerNum) {
   ctx.fillText('Layer ' + layerNum, cx, 14);
 }
 
+// Spec label matching the other roll forms: ID/ISR, OD/OSR, CLD/CLR.
+function coneSpecLabel(measurePoint, measureType) {
+  var isRad = measureType === 'radius';
+  var mp = measurePoint || 'inside';
+  if (mp === 'inside') return isRad ? 'ISR' : 'ID';
+  if (mp === 'outside') return isRad ? 'OSR' : 'OD';
+  return isRad ? 'CLR' : 'CLD';
+}
+
 // ========== COMPONENT ==========
 export default function ConeRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   var [customThickness, setCustomThickness] = useState('');
@@ -268,14 +277,14 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
     if (partData.thickness) parts.push(partData.thickness);
     parts.push('Cone -');
     if (coneData) {
-      var ldLabel = largeDiaType === 'inside' ? 'ID' : largeDiaType === 'outside' ? 'OD' : 'CLD';
-      var sdLabel = smallDiaType === 'inside' ? 'ID' : smallDiaType === 'outside' ? 'OD' : 'CLD';
+      var ldLabel = coneSpecLabel(largeDiaType, largeDiaMeasure);
+      var sdLabel = coneSpecLabel(smallDiaType, smallDiaMeasure);
       parts.push(parseFloat(largeDia).toFixed(3) + '" ' + ldLabel + ' x ' + parseFloat(smallDia).toFixed(3) + '" ' + sdLabel + ' x ' + parseFloat(coneHeight).toFixed(3) + '" VH');
     }
     if (partData.material) parts.push(partData.material);
     if (partData._materialOrigin) parts.push(partData._materialOrigin);
     return parts.join(' ');
-  }, [partData.thickness, partData.material, partData._materialOrigin, largeDia, smallDia, largeDiaType, smallDiaType, coneHeight, coneData]);
+  }, [partData.thickness, partData.material, partData._materialOrigin, largeDia, smallDia, largeDiaType, smallDiaType, largeDiaMeasure, smallDiaMeasure, coneHeight, coneData]);
 
   var rollingDescription = useMemo(function() {
     if (!coneData) return '';

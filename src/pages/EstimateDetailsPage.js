@@ -32,6 +32,16 @@ import PressBrakeForm from '../components/PressBrakeForm';
 import RushServiceForm from '../components/RushServiceForm';
 import HeatNumberInput from '../components/HeatNumberInput';
 
+// Spec label matching the other roll forms: ID/ISR, OD/OSR, CLD/CLR.
+function coneSpecLabel(measurePoint, measureType) {
+  const isRad = measureType === 'radius';
+  const mp = measurePoint || 'inside';
+  if (mp === 'inside') return isRad ? 'ISR' : 'ID';
+  if (mp === 'outside') return isRad ? 'OSR' : 'OD';
+  return isRad ? 'CLR' : 'CLD';
+}
+
+
 const PART_TYPES = {
   plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator' },
   shaped_plate: { label: 'Shaped Plate', icon: '⭕', desc: 'Round plates, donuts, and custom shapes' },
@@ -505,7 +515,7 @@ function EstimateDetailsPage() {
       return parseDimension(part._teeSize || part.sectionSize || '');
     }
     if (part.partType === 'cone_roll') {
-      return parseFloat(part._coneLargeDia) || parseDimension(part.sectionSize || '');
+      return (parseFloat(part._coneLargeDia) * (part._coneLargeDiaMeasure === 'radius' ? 2 : 1)) || parseDimension(part.sectionSize || '');
     }
     return parseDimension(part.sectionSize || part.thickness || '');
   };
@@ -1074,7 +1084,7 @@ function EstimateDetailsPage() {
       if (!partData._coneLargeDia) warnings.push('Large diameter is required');
       if (!partData._coneSmallDia) warnings.push('Small diameter is required');
       if (!partData._coneHeight) warnings.push('Cone height is required');
-      if (parseFloat(partData._coneLargeDia) <= parseFloat(partData._coneSmallDia)) warnings.push('Large diameter must be greater than small diameter');
+      if (parseFloat(partData._coneLargeDia) * (partData._coneLargeDiaMeasure === 'radius' ? 2 : 1) <= parseFloat(partData._coneSmallDia) * (partData._coneSmallDiaMeasure === 'radius' ? 2 : 1)) warnings.push('Large diameter must be greater than small diameter');
     }
 
     if (partData.partType === 'fab_service') {
@@ -1665,8 +1675,8 @@ function EstimateDetailsPage() {
       // Material description
       if (part.partType === 'cone_roll') {
         const thk = part.thickness || '';
-        const ldType = (part._coneLargeDiaType || 'inside') === 'inside' ? 'ID' : (part._coneLargeDiaType === 'outside' ? 'OD' : 'CLD');
-        const sdType = (part._coneSmallDiaType || 'inside') === 'inside' ? 'ID' : (part._coneSmallDiaType === 'outside' ? 'OD' : 'CLD');
+        const ldType = coneSpecLabel(part._coneLargeDiaType, part._coneLargeDiaMeasure);
+        const sdType = coneSpecLabel(part._coneSmallDiaType, part._coneSmallDiaMeasure);
         const ld = parseFloat(part._coneLargeDia) || 0;
         const sd = parseFloat(part._coneSmallDia) || 0;
         const vh = parseFloat(part._coneHeight) || 0;

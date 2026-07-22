@@ -492,7 +492,7 @@ export default function CommunicationCenterPage() {
                   {log.message}
                 </span>
                 {log.detail && (
-                  <div style={{ color: '#ff6e6e', paddingLeft: 16, whiteSpace: 'pre-wrap', fontSize: '0.7rem', marginTop: 2, background: '#2a0000', padding: '4px 8px', borderRadius: 4, marginTop: 3 }}>
+                  <div style={{ color: '#ff6e6e', paddingLeft: 16, whiteSpace: 'pre-wrap', fontSize: '0.7rem', background: '#2a0000', padding: '4px 8px', borderRadius: 4, marginTop: 3 }}>
                     {log.detail}
                   </div>
                 )}

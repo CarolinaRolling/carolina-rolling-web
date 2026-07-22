@@ -26,6 +26,7 @@ import InspectionPanel, { specIssues } from '../components/InspectionPanel';
 import { computeDisplayNumbers } from '../utils/partNumbers';
 import WorkOrderLifecycleBar from '../components/WorkOrderLifecycleBar';
 import { 
+
   getWorkOrderById, updateWorkOrder, deleteWorkOrder,
   addWorkOrderPart, updateWorkOrderPart, deleteWorkOrderPart, reorderWorkOrderParts,
   createOutsideProcessingPO, createOutsideProcessingPOsAuto, createServicePOsAuto, regenServicePO, deleteServicePO, updateOutsideProcessingStatus, createTransportPO,
@@ -41,6 +42,16 @@ import {
   generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo,
   addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge, getWOShipmentCharges, getInspectionJobs
 } from '../services/api';
+
+// Spec label matching the other roll forms: ID/ISR, OD/OSR, CLD/CLR.
+function coneSpecLabel(measurePoint, measureType) {
+  const isRad = measureType === 'radius';
+  const mp = measurePoint || 'inside';
+  if (mp === 'inside') return isRad ? 'ISR' : 'ID';
+  if (mp === 'outside') return isRad ? 'OSR' : 'OD';
+  return isRad ? 'CLR' : 'CLD';
+}
+
 
 const PART_TYPES = {
   plate_roll: { label: 'Plate Roll', icon: '🔩', desc: 'Flat plate rolling with arc calculator', fields: ['material', 'thickness', 'width', 'length', 'rollType', 'radius', 'diameter', 'arcDegrees'] },
@@ -458,7 +469,7 @@ function WorkOrderDetailsPage() {
     if (part.partType === 'channel_roll') return parseDimension(fd._channelSize || part.sectionSize || '');
     if (part.partType === 'beam_roll') return parseDimension(fd._beamSize || part.sectionSize || '');
     if (part.partType === 'tee_bar') return parseDimension(fd._teeSize || part.sectionSize || '');
-    if (part.partType === 'cone_roll') return parseFloat(fd._coneLargeDia) || parseDimension(part.sectionSize || '');
+    if (part.partType === 'cone_roll') return (parseFloat(fd._coneLargeDia) * (fd._coneLargeDiaMeasure === 'radius' ? 2 : 1)) || parseDimension(part.sectionSize || '');
     return parseDimension(part.sectionSize || part.thickness || '');
   };
 
@@ -769,7 +780,7 @@ function WorkOrderDetailsPage() {
       partType: type, clientPartNumber: '', heatNumber: '', cutFileReference: '', quantity: 1,
       material: '', thickness: '', width: '', length: '',
       outerDiameter: '', wallThickness: '', rollType: '', radius: '', diameter: '',
-      arcDegrees: '', sectionSize: '', flangeOut: false, specialInstructions: '', internalNotes: '', serviceFitting: false, serviceFittingCost: '', serviceFittingVendor: '', serviceWelding: false, serviceWeldingCost: '', serviceWeldingVendor: '', serviceWeldingPercent: 100,
+      arcDegrees: '', sectionSize: '', flangeOut: false, specialInstructions: '', internalNotes: '',
       laborRate: '', laborHours: '', laborTotal: '', materialUnitCost: '', materialTotal: '',
       setupCharge: '', otherCharges: '', partTotal: '',
       materialSource: 'customer_supplied', vendorId: null, supplierName: '', materialDescription: '',
@@ -902,7 +913,7 @@ function WorkOrderDetailsPage() {
       if (!partData._coneLargeDia) warnings.push('Large diameter is required');
       if (!partData._coneSmallDia) warnings.push('Small diameter is required');
       if (!partData._coneHeight) warnings.push('Cone height is required');
-      if (parseFloat(partData._coneLargeDia) <= parseFloat(partData._coneSmallDia)) warnings.push('Large diameter must be greater than small diameter');
+      if (parseFloat(partData._coneLargeDia) * (partData._coneLargeDiaMeasure === 'radius' ? 2 : 1) <= parseFloat(partData._coneSmallDia) * (partData._coneSmallDiaMeasure === 'radius' ? 2 : 1)) warnings.push('Large diameter must be greater than small diameter');
     }
     if (selectedPartType === 'rush_service') {
       if (!partData._expediteEnabled && !partData._emergencyEnabled) warnings.push('Select at least Expedite or Emergency Service');
@@ -1415,8 +1426,8 @@ function WorkOrderDetailsPage() {
       if (part.partType === 'cone_roll') {
         // Always rebuild cone description from fields to avoid stale/garbled data
         const thk = part.thickness || '';
-        const ldType = (part._coneLargeDiaType || 'inside') === 'inside' ? 'ID' : (part._coneLargeDiaType === 'outside' ? 'OD' : 'CLD');
-        const sdType = (part._coneSmallDiaType || 'inside') === 'inside' ? 'ID' : (part._coneSmallDiaType === 'outside' ? 'OD' : 'CLD');
+        const ldType = coneSpecLabel(part._coneLargeDiaType, part._coneLargeDiaMeasure);
+        const sdType = coneSpecLabel(part._coneSmallDiaType, part._coneSmallDiaMeasure);
         const ld = parseFloat(part._coneLargeDia) || 0;
         const sd = parseFloat(part._coneSmallDia) || 0;
         const vh = parseFloat(part._coneHeight) || 0;
@@ -4608,7 +4619,7 @@ function WorkOrderDetailsPage() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontWeight: 700, fontSize: '1.1rem', background: '#e3f2fd', margin: '8px -8px -8px', padding: '12px 8px', borderRadius: '0 0 8px 8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '1.1rem', background: '#e3f2fd', margin: '8px -8px -8px', padding: '12px 8px', borderRadius: '0 0 8px 8px' }}>
                 <span>Grand Total:</span>
                 <span>{formatCurrency(calculateTotals().grandTotal)}</span>
               </div>

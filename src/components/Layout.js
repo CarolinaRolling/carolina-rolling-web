@@ -102,6 +102,11 @@ function Layout({ children }) {
           </ul>
         </nav>
         
+        {/* Front-end build stamp — so it's obvious whether the web app is actually up to date */}
+        <div style={{ flexShrink: 0, padding: '4px 20px', fontSize: '0.65rem', color: 'rgba(255,255,255,0.35)', textAlign: 'right' }}>
+          UI v293
+        </div>
+
         {/* User info and logout */}
         <div style={{ 
           flexShrink: 0,
