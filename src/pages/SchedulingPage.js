@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { getWorkOrders, updateWorkOrder, getOperators, getAssignments, assignWorkOrder, unassignWorkOrder } from '../services/api';
 import OperatorAssignments from '../components/OperatorAssignments';
+import usePolling from '../hooks/usePolling';
 
 // Match inventory page statuses exactly
 const STATUSES = {
@@ -94,9 +95,8 @@ function SchedulingPage() {
 
   useEffect(() => {
     loadWorkOrders();
-    const interval = setInterval(() => loadWorkOrders(true), 30000);
-    return () => clearInterval(interval);
   }, []);
+  usePolling(() => loadWorkOrders(true), 30000);
 
   useEffect(() => {
     filterAndSort();

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Search, ChevronDown, ChevronRight, Package, FileText, User } from 'lucide-react';
 import { getInboundOrders, createInboundOrder, deleteInboundOrder } from '../services/api';
+import usePolling from '../hooks/usePolling';
 
 function InboundPage() {
   const navigate = useNavigate();
@@ -22,9 +23,8 @@ function InboundPage() {
 
   useEffect(() => {
     loadOrders();
-    const interval = setInterval(() => loadOrders(true), 30000);
-    return () => clearInterval(interval);
   }, []);
+  usePolling(() => loadOrders(true), 30000);
 
   useEffect(() => {
     groupOrdersBySupplier();

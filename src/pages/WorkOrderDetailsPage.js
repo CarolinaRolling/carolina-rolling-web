@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
@@ -42,6 +42,7 @@ import {
   generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo,
   addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge, getWOShipmentCharges, getInspectionJobs
 } from '../services/api';
+import usePolling from '../hooks/usePolling';
 
 // Spec label matching the other roll forms: ID/ISR, OD/OSR, CLD/CLR.
 function coneSpecLabel(measurePoint, measureType) {
@@ -277,13 +278,13 @@ function WorkOrderDetailsPage() {
   const [codShowOverride, setCodShowOverride] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
 
-  useEffect(() => {
+  const loadInsp = useCallback(() => {
     if (!id) return;
-    const loadInsp = () => getInspectionJobs(id).then(r => setInspectionJobs(r.data.data || [])).catch(() => {});
-    loadInsp();
-    const it = setInterval(loadInsp, 15000);
-    return () => clearInterval(it);
+    getInspectionJobs(id).then(r => setInspectionJobs(r.data.data || [])).catch(() => {});
   }, [id]);
+  useEffect(() => { loadInsp(); }, [loadInsp]);
+  // Pauses while the tab is hidden, refreshes immediately on return.
+  usePolling(loadInsp, 15000, { enabled: Boolean(id) });
 
   useEffect(() => { 
     loadOrder(); loadLaborMinimums(); 
@@ -291,10 +292,12 @@ function WorkOrderDetailsPage() {
     getSettings('cod_override_password').then(res => {
       if (res.data.data?.value) setCodOverridePassword(res.data.data.value);
     }).catch(() => {});
-    // Auto-refresh every 30 seconds for live progress updates from shop tablets
-    const interval = setInterval(() => { loadOrder(); }, 30000);
-    return () => clearInterval(interval);
   }, [id]);
+
+  // Auto-refresh for live progress updates from shop tablets. Paused while the tab is hidden —
+  // this endpoint returns the whole order including every part and file, so a forgotten
+  // background tab was re-downloading all of it twice a minute.
+  usePolling(() => { loadOrder(); }, 30000, { enabled: Boolean(id) });
 
   useEffect(() => {
     if (woTab === 'invoice' && id) {

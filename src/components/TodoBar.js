@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Check, X, ClipboardList, Eye, ChevronDown, ChevronUp, Edit2 } from 'lucide-react';
 import { getTodos, createTodo, updateTodo, completeTodo, acceptTodo, denyTodo, deleteTodo, getWorkOrderMessagesUnreadList, markWorkOrderMessagesRead } from '../services/api';
+import usePolling from '../hooks/usePolling';
 
 function TodoBar() {
   const [todos, setTodos] = useState([]);
@@ -31,9 +32,8 @@ function TodoBar() {
 
   useEffect(() => {
     loadTodos();
-    const interval = setInterval(loadTodos, 30000);
-    return () => clearInterval(interval);
   }, [loadTodos]);
+  usePolling(loadTodos, 30000);
 
   // Estimate review tasks only visible to head estimator or admin
   const canSeeEstimateReviews = isHeadEstimator() || isAdmin();
@@ -92,12 +92,12 @@ function TodoBar() {
   };
 
   // New-message alerts (moved here from the Layout banner) — always visible, with confirm-to-clear
-  useEffect(() => {
-    const load = () => getWorkOrderMessagesUnreadList().then(r => setMessageAlerts(r.data.data || [])).catch(() => {});
-    load();
-    const t = setInterval(load, 30000);
-    return () => clearInterval(t);
-  }, []);
+  const loadMessageAlerts = useCallback(
+    () => getWorkOrderMessagesUnreadList().then(r => setMessageAlerts(r.data.data || [])).catch(() => {}),
+    []
+  );
+  useEffect(() => { loadMessageAlerts(); }, [loadMessageAlerts]);
+  usePolling(loadMessageAlerts, 30000);
   const clearMessage = async (woId) => {
     try { await markWorkOrderMessagesRead(woId); setMessageAlerts(a => a.filter(m => m.workOrderId !== woId)); } catch {}
     setClearingMsgId(null);

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 import LoginPage from './pages/LoginPage';
 import InventoryPage from './pages/InventoryPage';
 import ShipmentDetailsPage from './pages/ShipmentDetailsPage';
@@ -53,8 +54,10 @@ const ProtectedRoute = ({ children }) => {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
-  return children;
+
+  // Contain render errors to the page that threw. Keyed on pathname so navigating away from a
+  // broken screen resets the boundary instead of leaving it stuck in the error state.
+  return <ErrorBoundary key={window.location.pathname} label="this page">{children}</ErrorBoundary>;
 };
 
 // Admin Route Component
@@ -76,8 +79,8 @@ const AdminRoute = ({ children }) => {
   if (!isAdmin()) {
     return <Navigate to="/inventory" replace />;
   }
-  
-  return children;
+
+  return <ErrorBoundary key={window.location.pathname} label="this page">{children}</ErrorBoundary>;
 };
 
 function AppRoutes() {

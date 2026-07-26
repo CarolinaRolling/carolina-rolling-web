@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Image as ImageIcon, X } from 'lucide-react';
 import { getWorkOrderMessages, sendWorkOrderMessage } from '../services/api';
+import usePolling from '../hooks/usePolling';
 
 // Text-message style thread between the office (this side) and the shop-floor operator.
 // Office messages align right (blue); operator messages align left (gray).
@@ -31,9 +32,10 @@ export default function WorkOrderMessages({ workOrderId }) {
 
   useEffect(() => {
     load(true);
-    const t = setInterval(() => load(false), 5000);
-    return () => clearInterval(t);
   }, [load]);
+  // 5s is aggressive for a chat panel; pausing on hidden tabs keeps that cost to tabs
+  // somebody is actually looking at.
+  usePolling(() => load(false), 5000);
 
   const onPickImage = (e) => {
     const file = e.target.files?.[0];

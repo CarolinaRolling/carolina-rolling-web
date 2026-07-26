@@ -721,6 +721,11 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
               <input type="text" className="form-input" value={partData.clientPartNumber || ''}
                 onChange={(e) => update({ clientPartNumber: e.target.value })} placeholder="Optional" />
             </div>
+            <div className="form-group">
+              <label className="form-label">Client Job #</label>
+              <input type="text" className="form-input" value={partData.clientJobNumber || ''}
+                onChange={(e) => update({ clientJobNumber: e.target.value })} placeholder="Optional" />
+            </div>
           </div>
         </div>
       )}

@@ -126,6 +126,12 @@ export default function ShopRateForm({ partData, setPartData }) {
           onChange={(e) => setPartData({ ...partData, clientPartNumber: e.target.value })}
           placeholder="Optional" />
       </div>
+      <div className="form-group">
+        <label className="form-label">Client Job #</label>
+        <input className="form-input" value={partData.clientJobNumber || ''}
+          onChange={(e) => setPartData({ ...partData, clientJobNumber: e.target.value })}
+          placeholder="Optional" />
+      </div>
     </>
   );
 }
