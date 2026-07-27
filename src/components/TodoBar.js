@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Plus, Check, X, ClipboardList, Eye, ChevronDown, ChevronUp, Edit2 } from 'lucide-react';
+import { Plus, Check, X, ClipboardList, Eye, Edit2 } from 'lucide-react';
 import { getTodos, createTodo, updateTodo, completeTodo, acceptTodo, denyTodo, deleteTodo, getWorkOrderMessagesUnreadList, markWorkOrderMessagesRead } from '../services/api';
 import usePolling from '../hooks/usePolling';
 
 function TodoBar() {
   const [todos, setTodos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(false);
+  // Task bar is always open — it was collapsing and hiding items people needed to see.
+  // Kept as a constant (rather than deleting every reference) so the add-form logic below,
+  // which calls setExpanded(true), still works without changes.
+  const expanded = true;
+  const setExpanded = () => {};
   const [showAddForm, setShowAddForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newPriority, setNewPriority] = useState('normal');
@@ -49,8 +53,8 @@ function TodoBar() {
     return true;
   });
 
-  // Default collapsed — the header already shows a live count + urgent badge, so a flood of
-  // scanner tasks never takes over the screen. The user expands the list when they want it.
+  // Always open. The list has a bounded max-height with its own scroll, so a flood of scanner
+  // tasks stays contained without hiding the whole bar — which was causing missed items.
 
   const handleAdd = async () => {
     if (!newTitle.trim()) return;
@@ -216,9 +220,9 @@ function TodoBar() {
     <div style={{ marginBottom: 12 }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 14px', background: '#fff8e1', borderRadius: expanded ? '8px 8px 0 0' : 8,
-        border: '1px solid #ffe082', cursor: 'pointer'
-      }} onClick={() => setExpanded(!expanded)}>
+        padding: '8px 14px', background: '#fff8e1', borderRadius: '8px 8px 0 0',
+        border: '1px solid #ffe082'
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: '0.85rem', color: '#f57f17' }}>
           <ClipboardList size={16} />
           Tasks ({visibleTodos.length})
@@ -226,11 +230,11 @@ function TodoBar() {
           {reviewCount > 0 && <span style={{ background: '#ff9800', color: 'white', padding: '1px 8px', borderRadius: 10, fontSize: '0.7rem' }}>{reviewCount} review</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={(e) => { e.stopPropagation(); setShowAddForm(!showAddForm); setExpanded(true); }}
+          <button onClick={(e) => { e.stopPropagation(); setShowAddForm(!showAddForm); }}
+            title="Add task"
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f57f17', padding: 2 }}>
             <Plus size={16} />
           </button>
-          {expanded ? <ChevronUp size={16} color="#f57f17" /> : <ChevronDown size={16} color="#f57f17" />}
         </div>
       </div>
 
