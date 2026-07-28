@@ -790,7 +790,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
           </div>
           <div className="form-group">
             <label className="form-label">Material Source</label>
-            <select className="form-select" value={partData.materialSource || 'customer_supplied'} onChange={(e) => setPartData({ ...partData, materialSource: e.target.value })}>
+            <select className="form-select" value={partData.materialSource || 'customer_supplied'} onChange={(e) => setPartData(prev => ({ ...prev, materialSource: e.target.value }))}>
               <option value="customer_supplied">Client Supplies</option>
               <option value="we_order">We Order</option>
               <option value="in_stock">In Stock (We Supply)</option>
@@ -807,11 +807,11 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
               value={partData._vendorSearch !== undefined ? partData._vendorSearch : (partData.supplierName || partData.vendor?.name || '')}
               onChange={async (e) => {
                 const value = e.target.value;
-                setPartData({ ...partData, _vendorSearch: value });
+                setPartData(prev => ({ ...prev, _vendorSearch: value }));
                 if (value.length >= 1) {
                   try { const res = await searchVendors(value); setVendorSuggestions(res.data.data || []); setShowVendorSuggestions(true); } catch { setVendorSuggestions([]); }
                 } else {
-                  setPartData({ ...partData, _vendorSearch: value, vendorId: null, supplierName: '', vendor: null }); setVendorSuggestions([]); setShowVendorSuggestions(false);
+                  setPartData(prev => ({ ...prev, _vendorSearch: value, vendorId: null, supplierName: '', vendor: null })); setVendorSuggestions([]); setShowVendorSuggestions(false);
                 }
               }}
               onFocus={async () => { try { const res = await searchVendors(''); setVendorSuggestions(res.data.data || []); setShowVendorSuggestions(true); } catch {} }}
@@ -822,7 +822,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1px solid #ddd', borderRadius: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
                 {vendorSuggestions.map(v => (
                   <div key={v.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                    onMouseDown={() => { setPartData({ ...partData, vendorId: v.id, supplierName: v.name, vendor: null, _vendorSearch: undefined }); setShowVendorSuggestions(false); }}>
+                    onMouseDown={() => { setPartData(prev => ({ ...prev, vendorId: v.id, supplierName: v.name, vendor: null, _vendorSearch: undefined })); setShowVendorSuggestions(false); }}>
                     <strong>{v.name}</strong>
                     {v.contactPhone && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: 8 }}>{v.contactPhone}</span>}
                   </div>
@@ -832,7 +832,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
                     onMouseDown={async () => {
                       try {
                         const resp = await createVendor({ name: partData._vendorSearch });
-                        if (resp.data.data) { setPartData({ ...partData, vendorId: resp.data.data.id, supplierName: resp.data.data.name, vendor: null, _vendorSearch: undefined }); showMessage(`Vendor "${resp.data.data.name}" created`); }
+                        if (resp.data.data) { setPartData(prev => ({ ...prev, vendorId: resp.data.data.id, supplierName: resp.data.data.name, vendor: null, _vendorSearch: undefined })); showMessage(`Vendor "${resp.data.data.name}" created`); }
                       } catch { setError('Failed to create vendor'); }
                       setShowVendorSuggestions(false);
                     }}>
