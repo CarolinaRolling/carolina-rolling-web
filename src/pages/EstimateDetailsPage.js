@@ -1134,17 +1134,22 @@ function EstimateDetailsPage() {
       if (!dataToSend.materialSource || !['we_order', 'customer_supplied', 'in_stock'].includes(dataToSend.materialSource)) {
         dataToSend.materialSource = 'customer_supplied';
       }
-      // Reconcile the two fields that describe material supply so they can never disagree on
-      // save. The checkbox is the source of truth: if we supply, materialSource must be a
-      // we-supply value; if not, it must be customer_supplied. Without this a stale
-      // materialSource could override the checkbox and drop the vendor on reload.
-      if (dataToSend.weSupplyMaterial) {
-        if (!['we_order', 'in_stock'].includes(dataToSend.materialSource)) {
-          dataToSend.materialSource = 'we_order';
-        }
-      } else {
-        dataToSend.materialSource = 'customer_supplied';
+      // Reconcile the checkbox and the dropdown WITHOUT letting one silently override the other.
+      //
+      // Two different UIs set material supply: the roll-form components use a Material Source
+      // DROPDOWN (customer_supplied / we_order / in_stock), while a few older part types use a
+      // "We Supply Material" CHECKBOX (weSupplyMaterial boolean). materialSource is the real
+      // stored truth. The checkbox is only a convenience that maps onto it.
+      //
+      // Rule: if the checkbox is checked but materialSource is still customer_supplied, promote
+      // it to we_order (the checkbox was the control used). But NEVER force customer_supplied
+      // just because weSupplyMaterial is false — the dropdown parts always have that false, and
+      // doing so was resetting every "We Order" roll part back to client-supplied on save.
+      if (dataToSend.weSupplyMaterial && dataToSend.materialSource === 'customer_supplied') {
+        dataToSend.materialSource = 'we_order';
       }
+      // Keep the boolean consistent with the dropdown for display code that reads it.
+      dataToSend.weSupplyMaterial = ['we_order', 'in_stock'].includes(dataToSend.materialSource);
       // On load, the form derives the checkbox from the part. Make sure a we-supply
       // materialSource lights the checkbox even for older parts saved before this fix.
       // Guard against "shadow" copies of real columns hiding inside formData. Some parts
