@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Mail, Save, ArrowRight, DollarSign, Archive, Plus, Edit3, Trash2 } from 'lucide-react';
-import { getNotificationEmail, updateNotificationEmail, getSettings, updateSettings, getWeldProcedures, createWeldProcedure, updateWeldProcedure, deleteWeldProcedure } from '../services/api';
+import { getNotificationEmail, updateNotificationEmail, getSettings, updateSettings, getWeldProcedures, createWeldProcedure, updateWeldProcedure, deleteWeldProcedure, getHtsCodes, saveHtsCodes } from '../services/api';
 
 function SettingsPage() {
   const navigate = useNavigate();
@@ -102,6 +102,33 @@ function SettingsPage() {
 
   const [settingsTab, setSettingsTab] = useState('general');
 
+  // Confirmed HS/tariff codes (broker-verified lookup table)
+  const [htsCodes, setHtsCodes] = useState([]);
+  const [htsSaving, setHtsSaving] = useState(false);
+  const [htsSaved, setHtsSaved] = useState(false);
+  useEffect(() => {
+    getHtsCodes().then(r => setHtsCodes(r.data.data || [])).catch(e => console.warn('[hts] load:', e.message));
+  }, []);
+  const updateHts = (idx, field, val) => {
+    setHtsSaved(false);
+    setHtsCodes(prev => prev.map((c, i) => i === idx ? { ...c, [field]: val } : c));
+  };
+  const addHts = () => setHtsCodes(prev => [...prev, { id: `hts_${Date.now()}`, material: '', shape: '', hsCode: '', note: '', confirmedBy: '' }]);
+  const removeHts = (idx) => { setHtsSaved(false); setHtsCodes(prev => prev.filter((_, i) => i !== idx)); };
+  const saveHts = async () => {
+    setHtsSaving(true);
+    try {
+      const stamped = htsCodes.map(c => ({ ...c, confirmedAt: c.confirmedAt || (c.hsCode ? new Date().toISOString() : null) }));
+      const r = await saveHtsCodes(stamped);
+      setHtsCodes(r.data.data || stamped);
+      setHtsSaved(true);
+    } catch (e) {
+      alert('Could not save HS codes: ' + (e.response?.data?.error?.message || e.message));
+    } finally {
+      setHtsSaving(false);
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -115,6 +142,7 @@ function SettingsPage() {
       <div className="tabs" style={{ marginBottom: 16 }}>
         <button className={`tab ${settingsTab === 'general' ? 'active' : ''}`} onClick={() => setSettingsTab('general')}>⚙️ General</button>
         <button className={`tab ${settingsTab === 'wps' ? 'active' : ''}`} onClick={() => setSettingsTab('wps')}>🔥 Weld Procedures</button>
+        <button className={`tab ${settingsTab === 'hts' ? 'active' : ''}`} onClick={() => setSettingsTab('hts')}>🌎 HS/Tariff Codes</button>
       </div>
 
       {settingsTab === 'general' && (<>
@@ -431,6 +459,63 @@ function SettingsPage() {
           </div>
         </div></div>
       )}
+      </>)}
+
+      {settingsTab === 'hts' && (<>
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <h2 style={{ margin: 0 }}>🌎 Confirmed HS / Tariff Codes</h2>
+          </div>
+          <div style={{ background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: '0.85rem', color: '#795548', lineHeight: 1.5 }}>
+            Enter the HS codes your <strong>customs broker has confirmed</strong> for each material and shape you run.
+            The USMCA generator uses these first and only falls back to an automatic guess when nothing matches.
+            <br />
+            <span style={{ color: '#e65100' }}>
+              These codes go on a signed customs document. Do not enter a guess here — this table is for
+              broker-verified codes only. Match is by material + shape keywords (e.g. material "carbon", shape "flat bar").
+            </span>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ background: '#f5f5f5', textAlign: 'left' }}>
+                  <th style={{ padding: '8px' }}>Material</th>
+                  <th style={{ padding: '8px' }}>Shape</th>
+                  <th style={{ padding: '8px' }}>HS Code</th>
+                  <th style={{ padding: '8px' }}>Note</th>
+                  <th style={{ padding: '8px' }}>Confirmed By</th>
+                  <th style={{ padding: '8px', width: 40 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {htsCodes.map((c, idx) => (
+                  <tr key={c.id || idx} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '4px' }}><input className="form-input" placeholder="carbon" value={c.material||''} onChange={e => updateHts(idx, 'material', e.target.value)} style={{ fontSize: '0.85rem' }} /></td>
+                    <td style={{ padding: '4px' }}><input className="form-input" placeholder="flat bar" value={c.shape||''} onChange={e => updateHts(idx, 'shape', e.target.value)} style={{ fontSize: '0.85rem' }} /></td>
+                    <td style={{ padding: '4px' }}><input className="form-input" placeholder="7214.99" value={c.hsCode||''} onChange={e => updateHts(idx, 'hsCode', e.target.value)} style={{ fontSize: '0.85rem', fontWeight: 600 }} /></td>
+                    <td style={{ padding: '4px' }}><input className="form-input" placeholder="optional" value={c.note||''} onChange={e => updateHts(idx, 'note', e.target.value)} style={{ fontSize: '0.85rem' }} /></td>
+                    <td style={{ padding: '4px' }}><input className="form-input" placeholder="broker/firm" value={c.confirmedBy||''} onChange={e => updateHts(idx, 'confirmedBy', e.target.value)} style={{ fontSize: '0.85rem' }} /></td>
+                    <td style={{ padding: '4px', textAlign: 'center' }}>
+                      <button onClick={() => removeHts(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c62828' }}><Trash2 size={16} /></button>
+                    </td>
+                  </tr>
+                ))}
+                {htsCodes.length === 0 && (
+                  <tr><td colSpan={6} style={{ padding: '16px', textAlign: 'center', color: '#999' }}>No confirmed codes yet. Add one below after your broker confirms it.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            <button className="btn" onClick={addHts}><Plus size={16} /> Add Row</button>
+            <button className="btn btn-primary" onClick={saveHts} disabled={htsSaving}>
+              <Save size={16} /> {htsSaving ? 'Saving…' : 'Save Codes'}
+            </button>
+            {htsSaved && <span style={{ color: '#2e7d32', alignSelf: 'center', fontSize: '0.85rem' }}>✓ Saved</span>}
+          </div>
+        </div>
       </>)}
     </div>
   );

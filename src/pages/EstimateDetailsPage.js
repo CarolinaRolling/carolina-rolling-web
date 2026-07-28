@@ -923,7 +923,7 @@ function EstimateDetailsPage() {
       ...formDataFields,  // First: spread nested formData fields (cone, beam, etc)
       ...part,            // Then: top-level part fields (overrides any duplicates)
       _vendorSearch: undefined, // ensure clean vendor search state
-      weSupplyMaterial: part.weSupplyMaterial || false,
+      weSupplyMaterial: part.weSupplyMaterial || ['we_order', 'in_stock'].includes(part.materialSource) || false,
       materialUnitCost: part.materialUnitCost || '',
       materialMarkupPercent: part.materialMarkupPercent ?? defaultSettings.defaultMaterialMarkup ?? 20,
       rollingCost: part.rollingCost || '',
@@ -1129,6 +1129,19 @@ function EstimateDetailsPage() {
       if (!dataToSend.materialSource || !['we_order', 'customer_supplied', 'in_stock'].includes(dataToSend.materialSource)) {
         dataToSend.materialSource = 'customer_supplied';
       }
+      // Reconcile the two fields that describe material supply so they can never disagree on
+      // save. The checkbox is the source of truth: if we supply, materialSource must be a
+      // we-supply value; if not, it must be customer_supplied. Without this a stale
+      // materialSource could override the checkbox and drop the vendor on reload.
+      if (dataToSend.weSupplyMaterial) {
+        if (!['we_order', 'in_stock'].includes(dataToSend.materialSource)) {
+          dataToSend.materialSource = 'we_order';
+        }
+      } else {
+        dataToSend.materialSource = 'customer_supplied';
+      }
+      // On load, the form derives the checkbox from the part. Make sure a we-supply
+      // materialSource lights the checkbox even for older parts saved before this fix.
       // Sanitize ENUM fields — empty strings break Postgres ENUMs, must be null
       if (!dataToSend.rollType) dataToSend.rollType = null;
 
@@ -4081,7 +4094,20 @@ function EstimateDetailsPage() {
                 <input 
                   type="checkbox" 
                   checked={partData.weSupplyMaterial || false}
-                  onChange={(e) => setPartData({ ...partData, weSupplyMaterial: e.target.checked })}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    // Keep materialSource in lockstep with the checkbox. These two fields both
+                    // describe "who supplies the material" and used to drift apart — the box set
+                    // weSupplyMaterial while materialSource stayed 'customer_supplied', so the
+                    // vendor and the we-supply choice silently reverted on reload.
+                    setPartData({
+                      ...partData,
+                      weSupplyMaterial: checked,
+                      materialSource: checked
+                        ? (['we_order', 'in_stock'].includes(partData.materialSource) ? partData.materialSource : 'we_order')
+                        : 'customer_supplied'
+                    });
+                  }}
                   style={{ width: 20, height: 20 }}
                 />
                 <span style={{ fontSize: '1.1rem' }}>We Supply Material</span>
@@ -4104,7 +4130,10 @@ function EstimateDetailsPage() {
                         value={partData.supplierName || ''}
                         onChange={async (e) => {
                           const value = e.target.value;
-                          setPartData({ ...partData, supplierName: value });
+                          // Typing a name by hand clears any previously-selected vendor link so
+                          // supplierName and vendorId can't point at different vendors. Picking
+                          // from the dropdown sets vendorId again.
+                          setPartData({ ...partData, supplierName: value, vendorId: null });
                           if (value.length >= 2) {
                             try {
                               const res = await searchVendors(value);
@@ -4129,7 +4158,7 @@ function EstimateDetailsPage() {
                         }}>
                           {vendorSuggestions.map(vendor => (
                             <div key={vendor.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                              onMouseDown={() => { setPartData({ ...partData, supplierName: vendor.name }); setShowVendorSuggestions(false); }}>
+                              onMouseDown={() => { setPartData({ ...partData, supplierName: vendor.name, vendorId: vendor.id }); setShowVendorSuggestions(false); }}>
                               <strong>{vendor.name}</strong>
                             </div>
                           ))}

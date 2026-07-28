@@ -36,13 +36,14 @@ import {
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, downloadWorkOrderDocument, deleteWorkOrderDocument, regeneratePODocument, createPODocument, toggleDocumentPortal,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
-  searchClients, getSettings, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
+  searchClients, getSettings, getHtsCodes, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
   generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo,
   addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge, getWOShipmentCharges, getInspectionJobs
 } from '../services/api';
 import usePolling from '../hooks/usePolling';
+import { COUNTRIES as USMCA_COUNTRY_LIST } from '../constants/countries';
 
 // Spec label matching the other roll forms: ID/ISR, OD/OSR, CLD/CLR.
 function coneSpecLabel(measurePoint, measureType) {
@@ -159,49 +160,135 @@ function WorkOrderDetailsPage() {
   const [usmcaGenerating, setUsmcaGenerating] = useState(false);
 
   const HTS_REF = [
-    { code: '7215.50', desc: 'Cold-formed carbon/mild steel bars & rods', examples: 'Flat bar, round bar, square bar — A36, A513, 1018' },
-    { code: '7216.91', desc: 'Carbon steel L-sections / angles, cold-formed <80mm', examples: 'Rolled angle rings — leg under ~3"' },
-    { code: '7216.99', desc: 'Carbon steel angles, shapes & sections, cold-formed (other)', examples: 'Larger angle rings — leg 3" and over' },
-    { code: '7216.50', desc: 'Carbon steel channels, cold-formed', examples: 'Rolled channel rings' },
-    { code: '7216.61', desc: 'Carbon steel structural beams & sections', examples: 'Rolled I-beam, H-beam, wide flange' },
-    { code: '7222.20', desc: 'Stainless steel bars & rods, cold-formed', examples: 'Flat bar, round bar — 304, 316 S/S' },
+    { code: '7214.99', desc: 'Carbon steel bars, hot-rolled (other)', examples: 'Hot-rolled flat bar, round bar, square bar — A36 (bent, not cold-formed)' },
+    { code: '7214.91', desc: 'Carbon steel bars, hot-rolled, rectangular', examples: 'Hot-rolled flat bar — rectangular cross-section' },
+    { code: '7215.50', desc: 'Carbon/mild steel bars & rods, cold-finished', examples: 'Cold-drawn / cold-finished bar only — 1018, A513' },
+    { code: '7216.91', desc: 'Carbon steel L-sections / angles <80mm', examples: 'Rolled angle rings — leg under ~3"' },
+    { code: '7216.99', desc: 'Carbon steel angles, shapes & sections (other)', examples: 'Larger angle rings — leg 3" and over' },
+    { code: '7216.50', desc: 'Carbon steel channels', examples: 'Rolled channel rings' },
+    { code: '7216.33', desc: 'Carbon steel H-sections', examples: 'Rolled H-beam, wide flange' },
+    { code: '7216.31', desc: 'Carbon steel U/channel sections', examples: 'Rolled structural channel' },
+    { code: '7222.11', desc: 'Stainless steel bars & rods, hot-rolled', examples: 'Hot-rolled stainless flat/round bar — 304, 316' },
     { code: '7222.40', desc: 'Stainless steel angles, shapes & sections', examples: 'Rolled stainless angle, channel, tee — 304, 316' },
-    { code: '7228.30', desc: 'Alloy steel bars & rods, cold-formed', examples: '4130, 4140, 4340, chrome-moly' },
-    { code: '7304.31', desc: 'Seamless carbon steel pipe & tube', examples: 'Rolled pipe coils — A53, A106, Schedule 40/80' },
+    { code: '7228.70', desc: 'Alloy steel angles, shapes & sections', examples: '4130, 4140, 4340 shapes — chrome-moly' },
+    { code: '7228.30', desc: 'Alloy steel bars & rods, hot-rolled', examples: '4130, 4140, 4340 bar — chrome-moly' },
+    { code: '7604.29', desc: 'Aluminum bars, rods & profiles (other alloy)', examples: 'Rolled aluminum bar/angle — 6061, 5052' },
+    { code: '7604.21', desc: 'Aluminum hollow profiles', examples: 'Rolled aluminum tube/hollow profile' },
+    { code: '7306.30', desc: 'Welded carbon steel pipe & tube', examples: 'Rolled ERW pipe — A53, A500' },
+    { code: '7304.31', desc: 'Seamless carbon steel pipe & tube', examples: 'Rolled seamless pipe — A106, Schedule 40/80' },
     { code: '7304.41', desc: 'Seamless stainless steel pipe & tube', examples: 'Rolled stainless pipe — 304, 316 S/S' },
-    { code: '7211.23', desc: 'Flat-rolled carbon steel', examples: 'Rolled plate rings, flat stock' },
-    { code: '7219.32', desc: 'Flat-rolled stainless steel', examples: 'Rolled stainless plate rings' },
+    { code: '7211.23', desc: 'Flat-ROLLED carbon steel (plate/sheet, not bar)', examples: 'Rolled plate rings from sheet/plate — NOT flat bar' },
+    { code: '7219.32', desc: 'Flat-rolled stainless steel (plate/sheet)', examples: 'Rolled stainless plate rings' },
   ];
-  const guessHTS = (part) => {
+  const [confirmedHtsCodes, setConfirmedHtsCodes] = useState([]);
+
+  // Look up a broker-confirmed code for this part before falling back to the heuristic guess.
+  // Matches on material + shape keywords found in the part's description/type.
+  const lookupConfirmedHTS = (part) => {
+    if (!confirmedHtsCodes.length) return null;
     const fd = (part.formData && typeof part.formData === 'object') ? part.formData : {};
     const text = ((part._materialDescription || fd._materialDescription || part.materialDescription || '') + ' ' + (part.partType || '')).toLowerCase();
-    const isStainless = /stainless|304|316|321|347|s\/s|ss/.test(text);
+    // Prefer the most specific match: an entry whose material AND shape both appear.
+    let best = null;
+    for (const c of confirmedHtsCodes) {
+      if (!c.hsCode) continue;
+      const mat = (c.material || '').toLowerCase().trim();
+      const shape = (c.shape || '').toLowerCase().trim();
+      const matHit = mat && text.includes(mat);
+      const shapeHit = shape && text.includes(shape);
+      if (mat && shape && matHit && shapeHit) return c.hsCode;   // exact material+shape wins
+      if (!best && ((matHit && !shape) || (shapeHit && !mat))) best = c.hsCode;
+    }
+    return best;
+  };
+
+  const guessHTS = (part) => {
+    // Broker-confirmed codes take priority over any heuristic. This is the whole point of the
+    // confirmed table — once your broker verifies a code, the system recalls it instead of
+    // guessing.
+    const confirmed = lookupConfirmedHTS(part);
+    if (confirmed) return confirmed;
+    const fd = (part.formData && typeof part.formData === 'object') ? part.formData : {};
+    const text = ((part._materialDescription || fd._materialDescription || part.materialDescription || '') + ' ' + (part.partType || '')).toLowerCase();
+    // Word-boundary on the stainless cue so "ss" no longer matches "cross", "thickness", etc.
+    const isStainless = /stainless|\b304\b|\b316\b|\b321\b|\b347\b|s\/s|\bss\b/.test(text);
+    const isAluminum = /alumin|6061|5052|3003|\bal\b/.test(text);
     const isAngle = /angle|l-section/.test(text);
     const isChannel = /channel/.test(text);
     const isPipe = /pipe|tube/.test(text);
-    const isPlate = /plate|flat.?bar|flat.?stock/.test(text);
+    // Flat BAR is a bar, not flat-rolled product — keep it distinct from plate/sheet.
+    const isFlatBar = /flat.?bar|flat.?stock/.test(text) || part.partType === 'flat_bar';
+    const isPlate = /\bplate\b|\bsheet\b/.test(text) || part.partType === 'plate_roll' || part.partType === 'shaped_plate';
     const isBeam = /beam|i-beam|h-beam|wide.?flange/.test(text);
     const isAlloy = /alloy|4130|4140|4340|chrome.?moly|moly/.test(text);
-    if (isBeam) return '7216.61';
-    if (isAlloy) return '7228.30';
+    // NOTE: these are SUGGESTIONS to speed data entry, not authoritative classifications.
+    // Every code is editable per line, and the certificate should be broker-confirmed. See the
+    // note under the line-item editor.
+    if (isAluminum) return '7604.29';                 // aluminum bars/rods/profiles
+    if (isBeam) return '7216.33';
+    if (isAlloy) return '7228.70';                    // alloy steel angles/shapes/sections
     if (isStainless && isPipe) return '7304.41';
-    if (!isStainless && isPipe) return '7304.31';
+    if (!isStainless && isPipe) return '7306.30';
     if (isStainless && isPlate) return '7219.32';
-    if (!isStainless && isPlate) return '7211.23';
+    if (!isStainless && isPlate) return '7211.23';    // flat-ROLLED carbon plate/sheet
+    if (isStainless && isFlatBar) return '7222.11';   // stainless bars, hot-rolled
+    if (!isStainless && isFlatBar) return '7214.99';  // carbon steel bars, hot-rolled (flat bar)
     if (isStainless && isChannel) return '7222.40';
     if (!isStainless && isChannel) return '7216.50';
     if (isStainless && isAngle) return '7222.40';
     if (!isStainless && isAngle) return '7216.91';
-    if (isStainless) return '7222.20';
-    return '7215.50';
+    if (isStainless) return '7222.11';
+    return '7214.99';                                 // default: hot-rolled carbon bar
   };
+
+  // Country of origin for the certificate. Rolling a bar into a ring does not change where the
+  // steel was made, so origin comes straight from the heat records entered on the part — never
+  // assumed. A part split across heats from different countries yields one line per country.
+  const USMCA_SET = new Set(['US', 'CA', 'MX']);
+  const partOriginGroups = (p) => {
+    const breakdown = Array.isArray(p.heatBreakdown) ? p.heatBreakdown.filter(r => r && (r.heat || r.country)) : [];
+    const qty = parseInt(p.quantity) || 1;
+    if (breakdown.length === 0) {
+      return [{ country: p.heatCountry || '', qty, heats: p.heatNumber ? [p.heatNumber] : [] }];
+    }
+    const byCountry = {};
+    let assigned = 0;
+    for (const row of breakdown) {
+      const c = row.country || '';
+      const q = parseInt(row.qty) || 0;
+      assigned += q;
+      if (!byCountry[c]) byCountry[c] = { country: c, qty: 0, heats: [] };
+      byCountry[c].qty += q;
+      if (row.heat) byCountry[c].heats.push(row.heat);
+    }
+    if (assigned < qty) {
+      if (!byCountry['']) byCountry[''] = { country: '', qty: 0, heats: [] };
+      byCountry[''].qty += (qty - assigned);
+    }
+    return Object.values(byCountry).filter(g => g.qty > 0);
+  };
+
   const buildLineItems = (ord) => {
     const pts = (ord.parts || []).filter(p => !['fab_service', 'shop_rate', 'rush_service'].includes(p.partType));
-    return pts.map(p => {
+    const items = [];
+    pts.map(p => {
       const fd = (p.formData && typeof p.formData === 'object') ? p.formData : {};
       const mat = (p._materialDescription || fd._materialDescription || p.materialDescription || '').replace(/^\d+pc:\s*/i, '');
-      return { partId: p.id, partNumber: p.clientPartNumber || String(p.partNumber || ''), description: mat, qty: p.quantity || 1, htsCode: guessHTS(p) };
+      const hts = guessHTS(p);
+      const groups = partOriginGroups(p);
+      const multi = groups.length > 1;
+      groups.forEach(g => {
+        items.push({
+          partId: p.id,
+          partNumber: p.clientPartNumber || String(p.partNumber || ''),
+          description: multi && g.heats.length ? `${mat} (Heat ${g.heats.join(', ')})` : mat,
+          qty: g.qty,
+          htsCode: hts,
+          originCountry: g.country || '',
+        });
+      });
     });
+    return items;
   };
   const [usmcaEditModal, setUsmcaEditModal] = useState(null); // { htsCode, blanketFrom, blanketTo, importerName, importerAddress, goodsDescription }
   const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
@@ -287,7 +374,7 @@ function WorkOrderDetailsPage() {
   usePolling(loadInsp, 15000, { enabled: Boolean(id) });
 
   useEffect(() => { 
-    loadOrder(); loadLaborMinimums(); 
+    loadOrder(); loadLaborMinimums(); loadConfirmedHts(); 
     // Load COD override password
     getSettings('cod_override_password').then(res => {
       if (res.data.data?.value) setCodOverridePassword(res.data.data.value);
@@ -429,6 +516,12 @@ function WorkOrderDetailsPage() {
     }
   };
 
+  const loadConfirmedHts = async () => {
+    try {
+      const r = await getHtsCodes();
+      setConfirmedHtsCodes(r.data.data || []);
+    } catch (e) { console.warn('[hts] load:', e.message); }
+  };
   const loadLaborMinimums = async () => {
     const defaults = [
       { partType: 'plate_roll', label: 'Plate ≤ 3/8"', sizeField: 'thickness', maxSize: 0.375, minWidth: '', maxWidth: '', minimum: 125 },
@@ -2816,12 +2909,17 @@ function WorkOrderDetailsPage() {
                   </div>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Origin Criteria</label>
-                    <select className="form-select" value={f.originCriteria||'A'} onChange={e => set('originCriteria', e.target.value)}>
-                      <option value="A">A — Wholly obtained in US</option>
-                      <option value="B">B — Tariff classification change</option>
-                      <option value="C">C — Regional value content</option>
-                      <option value="D">D — Produced in USMCA territory</option>
+                    <select className="form-select" value={f.originCriteria||''} onChange={e => set('originCriteria', e.target.value)}>
+                      <option value="">— select (ask broker) —</option>
+                      <option value="A">A — Wholly obtained/produced in USMCA territory</option>
+                      <option value="B">B — Produced using non-originating materials that meet a tariff shift / rule</option>
+                      <option value="C">C — Produced entirely from originating materials</option>
+                      <option value="D">D — Meets regional value content requirement</option>
                     </select>
+                    <div style={{ fontSize: '0.68rem', color: '#e65100', marginTop: 3 }}>
+                      Criterion is a customs determination — confirm with a broker. "A" (wholly
+                      obtained) rarely applies to purchased steel.
+                    </div>
                   </div>
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
@@ -2834,10 +2932,11 @@ function WorkOrderDetailsPage() {
                   <div style={{ border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', tableLayout: 'fixed' }}>
                       <colgroup>
-                        <col style={{ width: 80 }} />
+                        <col style={{ width: 70 }} />
                         <col />
-                        <col style={{ width: 44 }} />
-                        <col style={{ width: 165 }} />
+                        <col style={{ width: 40 }} />
+                        <col style={{ width: 140 }} />
+                        <col style={{ width: 120 }} />
                       </colgroup>
                       <thead>
                         <tr style={{ background: '#1565c0', color: 'white' }}>
@@ -2845,6 +2944,7 @@ function WorkOrderDetailsPage() {
                           <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, fontSize: '0.75rem' }}>Description</th>
                           <th style={{ padding: '6px 4px', textAlign: 'center', fontWeight: 600, fontSize: '0.75rem' }}>Qty</th>
                           <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, fontSize: '0.75rem' }}>HS Tariff Code</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, fontSize: '0.75rem' }}>Origin</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2861,8 +2961,26 @@ function WorkOrderDetailsPage() {
                             </td>
                             <td style={{ padding: '4px 6px' }}>
                               <select className="form-select" style={{ padding: '3px 5px', fontSize: '0.72rem' }}
-                                value={item.htsCode||'7215.50'} onChange={e => updateLineItem(idx, 'htsCode', e.target.value)}>
+                                value={item.htsCode||'7214.99'} onChange={e => updateLineItem(idx, 'htsCode', e.target.value)}>
                                 {HTS_REF.map(h => <option key={h.code} value={h.code}>{h.code} — {h.desc}</option>)}
+                              </select>
+                            </td>
+                            <td style={{ padding: '4px 6px' }}>
+                              <select className="form-select"
+                                style={{ padding: '3px 5px', fontSize: '0.72rem',
+                                  color: item.originCountry && !['US','CA','MX'].includes(item.originCountry) ? '#e65100' : undefined,
+                                  fontWeight: item.originCountry && !['US','CA','MX'].includes(item.originCountry) ? 600 : undefined }}
+                                value={item.originCountry||''} onChange={e => updateLineItem(idx, 'originCountry', e.target.value)}>
+                                <option value="">— set origin —</option>
+                                <optgroup label="USMCA">
+                                  <option value="US">United States</option>
+                                  <option value="CA">Canada</option>
+                                  <option value="MX">Mexico</option>
+                                </optgroup>
+                                <optgroup label="Other">
+                                  {USMCA_COUNTRY_LIST.filter(c => !['US','CA','MX'].includes(c.code)).map(c =>
+                                    <option key={c.code} value={c.code}>{c.name}</option>)}
+                                </optgroup>
                               </select>
                             </td>
                           </tr>
@@ -2870,7 +2988,17 @@ function WorkOrderDetailsPage() {
                       </tbody>
                     </table>
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 4 }}>Country of origin is USA for all parts.</div>
+                  <div style={{ fontSize: '0.72rem', color: '#666', marginTop: 6, lineHeight: 1.5 }}>
+                    Origin is taken from each part's heat records. Blank means no country was
+                    recorded — set it before certifying. Orange = non-USMCA origin.
+                    <br />
+                    <span style={{ color: '#e65100' }}>
+                      HS codes and origin criterion are suggestions only. Rolling material does not
+                      change its country of origin, and whether your process lets you certify as
+                      producer is a customs determination — confirm both with a licensed broker
+                      before signing.
+                    </span>
+                  </div>
                 </div>
                 {/* Collapsible HTS Reference */}
                 {f.showRef && (
