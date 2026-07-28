@@ -4116,17 +4116,16 @@ function EstimateDetailsPage() {
                   checked={partData.weSupplyMaterial || false}
                   onChange={(e) => {
                     const checked = e.target.checked;
-                    // Keep materialSource in lockstep with the checkbox. These two fields both
-                    // describe "who supplies the material" and used to drift apart — the box set
-                    // weSupplyMaterial while materialSource stayed 'customer_supplied', so the
-                    // vendor and the we-supply choice silently reverted on reload.
-                    setPartData({
-                      ...partData,
+                    // Functional update so a concurrent vendor-field update can't clobber this,
+                    // and vice versa. These two controls sit next to each other and both write
+                    // partData; stale-closure spreads were resetting each other.
+                    setPartData(prev => ({
+                      ...prev,
                       weSupplyMaterial: checked,
                       materialSource: checked
-                        ? (['we_order', 'in_stock'].includes(partData.materialSource) ? partData.materialSource : 'we_order')
+                        ? (['we_order', 'in_stock'].includes(prev.materialSource) ? prev.materialSource : 'we_order')
                         : 'customer_supplied'
-                    });
+                    }));
                   }}
                   style={{ width: 20, height: 20 }}
                 />
@@ -4153,7 +4152,11 @@ function EstimateDetailsPage() {
                           // Typing a name by hand clears any previously-selected vendor link so
                           // supplierName and vendorId can't point at different vendors. Picking
                           // from the dropdown sets vendorId again.
-                          setPartData({ ...partData, supplierName: value, vendorId: null });
+                          // Functional update: spread the CURRENT state, never a stale closure
+                          // snapshot. Previously this spread an old partData captured before the
+                          // "We Supply Material" box was checked, so typing a vendor silently
+                          // reset weSupplyMaterial to false — the part reverted to client-supplied.
+                          setPartData(prev => ({ ...prev, supplierName: value, vendorId: null }));
                           if (value.length >= 2) {
                             try {
                               const res = await searchVendors(value);
@@ -4178,7 +4181,7 @@ function EstimateDetailsPage() {
                         }}>
                           {vendorSuggestions.map(vendor => (
                             <div key={vendor.id} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                              onMouseDown={() => { setPartData({ ...partData, supplierName: vendor.name, vendorId: vendor.id }); setShowVendorSuggestions(false); }}>
+                              onMouseDown={() => { setPartData(prev => ({ ...prev, supplierName: vendor.name, vendorId: vendor.id })); setShowVendorSuggestions(false); }}>
                               <strong>{vendor.name}</strong>
                             </div>
                           ))}
