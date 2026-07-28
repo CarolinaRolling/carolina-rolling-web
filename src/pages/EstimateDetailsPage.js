@@ -918,7 +918,12 @@ function EstimateDetailsPage() {
     setShowVendorSuggestions(false);
     // Robust spread: explicitly merge formData (in case backend didn't merge it,
     // or in case some fields are nested only in formData JSONB)
-    const formDataFields = (part.formData && typeof part.formData === 'object') ? part.formData : {};
+    const formDataFields = (part.formData && typeof part.formData === 'object') ? { ...part.formData } : {};
+    // Strip real columns out of the formData copy so the spread below can't let a stale shadow
+    // value override the true column. Real material/vendor fields come from `part` only.
+    ['materialSource', 'weSupplyMaterial', 'vendorId', 'supplierName', 'materialUnitCost',
+     'materialMarkupPercent', 'quantity', 'materialDescription', 'vendorEstimateNumber',
+     'materialTotal', 'partTotal', 'laborTotal'].forEach(k => { delete formDataFields[k]; });
     const editData = {
       ...formDataFields,  // First: spread nested formData fields (cone, beam, etc)
       ...part,            // Then: top-level part fields (overrides any duplicates)
@@ -1142,6 +1147,21 @@ function EstimateDetailsPage() {
       }
       // On load, the form derives the checkbox from the part. Make sure a we-supply
       // materialSource lights the checkbox even for older parts saved before this fix.
+      // Guard against "shadow" copies of real columns hiding inside formData. Some parts
+      // (notably AI-imported ones) have materialSource/vendorId/etc. duplicated into the
+      // formData JSONB. On load, formData is spread into partData, so a stale shadow value can
+      // silently override the real column and revert your change on the next save — this is the
+      // "reverts to client supplied" bug. Real columns live at the top level only; scrub them
+      // out of any formData object before sending.
+      if (dataToSend.formData && typeof dataToSend.formData === 'object') {
+        const REAL_COLUMNS = ['materialSource', 'weSupplyMaterial', 'vendorId', 'supplierName',
+          'materialUnitCost', 'materialMarkupPercent', 'quantity', 'materialDescription',
+          'vendorEstimateNumber', 'materialTotal', 'partTotal', 'laborTotal'];
+        const fd = { ...dataToSend.formData };
+        REAL_COLUMNS.forEach(k => delete fd[k]);
+        dataToSend.formData = fd;
+      }
+
       // Sanitize ENUM fields — empty strings break Postgres ENUMs, must be null
       if (!dataToSend.rollType) dataToSend.rollType = null;
 
