@@ -920,10 +920,12 @@ function EstimateDetailsPage() {
     // or in case some fields are nested only in formData JSONB)
     const formDataFields = (part.formData && typeof part.formData === 'object') ? { ...part.formData } : {};
     // Strip real columns out of the formData copy so the spread below can't let a stale shadow
-    // value override the true column. Real material/vendor fields come from `part` only.
-    ['materialSource', 'weSupplyMaterial', 'vendorId', 'supplierName', 'materialUnitCost',
-     'materialMarkupPercent', 'quantity', 'materialDescription', 'vendorEstimateNumber',
-     'materialTotal', 'partTotal', 'laborTotal'].forEach(k => { delete formDataFields[k]; });
+    // value override the true column. Legitimate formData keys are form-only and start with '_'
+    // (roll geometry, rounding, etc.); any NON-underscore key here is a shadow of a real table
+    // column (specialInstructions, material, thickness, materialSource, ...) and must be removed
+    // so the real column from `part` wins. This was reverting edits to specialInstructions and
+    // other fields.
+    Object.keys(formDataFields).forEach(k => { if (!k.startsWith('_')) delete formDataFields[k]; });
     const editData = {
       ...formDataFields,  // First: spread nested formData fields (cone, beam, etc)
       ...part,            // Then: top-level part fields (overrides any duplicates)
@@ -1159,11 +1161,10 @@ function EstimateDetailsPage() {
       // "reverts to client supplied" bug. Real columns live at the top level only; scrub them
       // out of any formData object before sending.
       if (dataToSend.formData && typeof dataToSend.formData === 'object') {
-        const REAL_COLUMNS = ['materialSource', 'weSupplyMaterial', 'vendorId', 'supplierName',
-          'materialUnitCost', 'materialMarkupPercent', 'quantity', 'materialDescription',
-          'vendorEstimateNumber', 'materialTotal', 'partTotal', 'laborTotal'];
+        // Legit formData keys are form-only and start with '_'. Any non-underscore key is a
+        // shadow of a real column — strip it so it can't override the real value on next load.
         const fd = { ...dataToSend.formData };
-        REAL_COLUMNS.forEach(k => delete fd[k]);
+        Object.keys(fd).forEach(k => { if (!k.startsWith('_')) delete fd[k]; });
         dataToSend.formData = fd;
       }
 
