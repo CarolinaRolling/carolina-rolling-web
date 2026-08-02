@@ -165,7 +165,7 @@ function BackupPage() {
           <span style={{ fontSize: '1.3rem' }}>{backupInfo.lastBackupStatus.status === 'failed' ? '🚨' : '✅'}</span>
           <div style={{ flex: 1 }}>
             <strong style={{ color: backupInfo.lastBackupStatus.status === 'failed' ? '#c62828' : '#2e7d32' }}>
-              {backupInfo.lastBackupStatus.status === 'failed' ? 'Last Auto-Backup Failed' : 'Last Auto-Backup Succeeded'}
+              {backupInfo.lastBackupStatus.status === 'failed' ? 'Last Backup Failed' : 'Last Backup Succeeded'}
             </strong>
             <div style={{ fontSize: '0.82rem', color: '#666', marginTop: 2 }}>
               {new Date(backupInfo.lastBackupStatus.timestamp).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} PT
