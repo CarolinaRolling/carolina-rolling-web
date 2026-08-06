@@ -1215,6 +1215,8 @@ function WorkOrderDetailsPage() {
   );
 
   const handleAddInspection = async (part) => {
+    const partLabel = part.clientPartNumber || `Part #${part.partNumber || ''}`;
+    if (!window.confirm(`Add a Dimensional Inspection Report to ${partLabel}?\n\nThis creates an inspection line where measurements get recorded.`)) return;
     try {
       await addWorkOrderPart(id, {
         partType: 'inspection',
@@ -1275,6 +1277,38 @@ function WorkOrderDetailsPage() {
         await loadOrder();
         showMessage('Cut service removed and fab service deleted');
       } catch (err) { setError('Failed to delete part'); }
+      return;
+    }
+
+    // Inspection lines get their own confirmation. If measurements have already been recorded,
+    // warn explicitly that the data will be lost — so an accidental click can't silently discard
+    // inspection results.
+    if (part?.partType === 'inspection') {
+      const job = (inspectionJobs || []).find(j =>
+        j.workOrderPartId === partId || j.inspectionPartId === partId ||
+        j.workOrderPartId === (part._linkedPartId || fd._linkedPartId));
+      const units = job?.units || [];
+      const hasData = units.some(u =>
+        (u.preRoll && Object.values(u.preRoll).some(v => v !== null && v !== '' && v !== undefined)) ||
+        (u.postRoll && Object.values(u.postRoll).some(v => v !== null && v !== '' && v !== undefined))
+      ) || (job && job.status && job.status !== 'not_started');
+
+      if (hasData) {
+        if (!window.confirm(
+          '⚠ This Dimensional Inspection Report already has recorded measurements.\n\n' +
+          'Deleting it will PERMANENTLY remove the report and all its inspection data. ' +
+          'This cannot be undone.\n\nDelete the inspection report anyway?'
+        )) return;
+      } else {
+        if (!window.confirm('Remove this Dimensional Inspection Report? No measurements have been recorded yet.')) return;
+      }
+      try {
+        await deleteWorkOrderPart(id, partId);
+        await loadOrder();
+        showMessage('Inspection report removed');
+      } catch (err) {
+        setError('Failed to remove inspection report');
+      }
       return;
     }
 
