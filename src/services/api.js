@@ -401,6 +401,7 @@ export const getClient = (id) => api.get(`/clients/${id}`);
 export const createClient = (data) => api.post('/clients', data);
 export const updateClient = (id, data) => api.put(`/clients/${id}`, data);
 export const mergeClient = (targetId, sourceId) => api.post(`/clients/${targetId}/merge`, { sourceId });
+export const mergeVendor = (targetId, sourceId) => api.post(`/vendors/${targetId}/merge`, { sourceId });
 export const getClientHistory = (clientId) => api.get(`/clients/${clientId}/history`);
 export const getClientStatementPdf = (clientId) => api.get(`/clients/${clientId}/statement-pdf`, { responseType: 'arraybuffer' });
 export const deleteClient = (id) => api.delete(`/clients/${id}`);
