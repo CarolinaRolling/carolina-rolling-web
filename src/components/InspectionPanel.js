@@ -128,7 +128,7 @@ function rowStatus(pr, po, skip, nominalD) {
 }
 
 // ── Main panel (CR Admin table view) ──
-export default function InspectionPanel({ order, inspectionPart, linkedPartId, onRefresh }) {
+export default function InspectionPanel({ order, inspectionPart, linkedPartId, onRefresh, onRemove }) {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -355,7 +355,12 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
           <button onClick={handleReport} disabled={reportLoading} style={{ padding:'7px 12px', background:allComplete?'white':'rgba(255,255,255,0.2)', color:allComplete?'#1565c0':'white', border:`1px solid ${allComplete?'white':'rgba(255,255,255,0.4)'}`, borderRadius:6, cursor:'pointer', fontWeight:600, fontSize:'0.82rem', display:'flex', alignItems:'center', gap:5 }}>
             <FileText size={14}/> {reportLoading ? 'Generating…' : 'Report'}
           </button>
-        </div>
+          {onRemove && (
+            <button onClick={() => onRemove(inspectionPart)} title="Remove this inspection report"
+              style={{ padding:'7px 12px', background:'rgba(255,255,255,0.15)', color:'white', border:'1px solid rgba(255,255,255,0.4)', borderRadius:6, cursor:'pointer', fontSize:'0.82rem', display:'flex', alignItems:'center', gap:4 }}>
+              <Trash2 size={14}/> Remove
+            </button>
+          )}
       </div>
 
       {showDiagrams && (

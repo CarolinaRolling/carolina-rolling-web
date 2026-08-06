@@ -4546,7 +4546,7 @@ function WorkOrderDetailsPage() {
 
                 {/* Inspection tabs for this part (appear at the bottom of the part card) */}
                 {(order.parts||[]).filter(ip => ip.partType==='inspection' && String(ip._linkedPartId||ip.formData?._linkedPartId||ip.formData?.linkedPartId||'')===String(part.id)).map(inspPart => (
-                  <InspectionPanel key={inspPart.id} order={order} inspectionPart={inspPart} linkedPartId={part.id} onRefresh={loadOrder} />
+                  <InspectionPanel key={inspPart.id} order={order} inspectionPart={inspPart} linkedPartId={part.id} onRefresh={loadOrder} onRemove={(ip) => handleDeletePart(ip.id)} />
                 ))}
               </div>
             ); })}
