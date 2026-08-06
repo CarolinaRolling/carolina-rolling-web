@@ -361,6 +361,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
               <Trash2 size={14}/> Remove
             </button>
           )}
+        </div>
       </div>
 
       {showDiagrams && (
