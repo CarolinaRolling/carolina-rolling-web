@@ -127,6 +127,27 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
           onChange={(e) => setPartData({ ...partData, length: e.target.value })} placeholder={'e.g. 48" or 4\''} />
       </div>
 
+      <div className="form-group">
+        <label className="form-label">Bend Count *</label>
+        <input type="number" min="0" step="1" className="form-input" value={partData.bendCount ?? ''}
+          onChange={(e) => setPartData(prev => ({ ...prev, bendCount: e.target.value === '' ? null : parseInt(e.target.value) }))}
+          placeholder="number of bends" />
+        <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 3 }}>
+          Number of bends in the part — a 1-bend and a 9-bend part are very different jobs.
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Handling</label>
+        <select className="form-select" value={partData.handlingClass || ''}
+          onChange={(e) => setPartData(prev => ({ ...prev, handlingClass: e.target.value || null }))}>
+          <option value="">— select —</option>
+          <option value="one-hand">One-hand (small part)</option>
+          <option value="two-hand">Two-hand</option>
+          <option value="two-person">Two-person (large/long part)</option>
+        </select>
+      </div>
+
       {/* === PRINT UPLOAD === */}
       <div style={sectionStyle}>
         <div className="form-group">
