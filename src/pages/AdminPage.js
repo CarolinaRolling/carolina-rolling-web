@@ -7,7 +7,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings, getAvailableModels, getPricingConfig, updatePricingConfig, getPricingWorksheet, submitPricingWorksheet } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings, getAvailableModels, getPricingConfig, updatePricingConfig, getPricingWorksheet, submitPricingWorksheet, getPressBrakeConfig, savePressBrakeConfig } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import SectionSizesPage from './SectionSizesPage';
 import SettingsPage from './SettingsPage';
@@ -130,6 +130,10 @@ function AdminPage({ section = 'users-logs' }) {
   const [aiModelsSaving, setAiModelsSaving] = useState(false);
   const [pricingCfg, setPricingCfg] = useState({ newClientUpliftPct: 0, targetGrowthPct: 0, minLaborCharge: 150, partTypes: {} });
   const [pricingTab, setPricingTab] = useState('plate_roll');
+  // Press brake uses a bend-based formula, not the weight-based curve — its own config blob.
+  const [pbConfig, setPbConfig] = useState(null);
+  const [pbSaving, setPbSaving] = useState(false);
+  const [pbSaved, setPbSaved] = useState(false);
   const [worksheet, setWorksheet] = useState(null);
   const [wsAnswers, setWsAnswers] = useState({});
   const [wsBusy, setWsBusy] = useState(false);
@@ -678,6 +682,10 @@ function AdminPage({ section = 'users-logs' }) {
         partTypes: pres.data.data.partTypes || {}
       });
     } catch { /* quiet */ }
+    try {
+      const pb = await getPressBrakeConfig();
+      setPbConfig(pb.data.data);
+    } catch { /* quiet */ }
   };
 
   const saveAiModels = async () => {
@@ -1126,6 +1134,101 @@ function AdminPage({ section = 'users-logs' }) {
               </div>
 
               {(() => {
+                // Press brake is bend-based, not weight-based — show its own config panel.
+                if (pricingTab === 'press_brake') {
+                  const c = pbConfig;
+                  if (!c) return <div style={{ color: '#999', fontSize: '0.85rem' }}>Loading press brake config…</div>;
+                  const setPb = (patch) => { setPbSaved(false); setPbConfig(prev => ({ ...prev, ...patch })); };
+                  const setMult = (key, val) => { setPbSaved(false); setPbConfig(prev => ({ ...prev, handlingMultipliers: { ...(prev.handlingMultipliers||{}), [key]: val } })); };
+                  const setFactor = (key, val) => { setPbSaved(false); setPbConfig(prev => ({ ...prev, materialFactors: { ...(prev.materialFactors||{}), [key]: val } })); };
+                  const setVDie = (i, field, val) => { setPbSaved(false); setPbConfig(prev => { const t=[...(prev.vDieTable||[])]; t[i]={...t[i],[field]:val}; return {...prev, vDieTable:t}; }); };
+                  const num = (v) => v === '' || v === null || v === undefined ? '' : v;
+                  return (
+                    <div style={{ background: '#fafafa', border: '1px solid #eee', borderRadius: 8, padding: 14 }}>
+                      {c._placeholder && (
+                        <div style={{ background: '#fff3e0', border: '1px solid #ffb74d', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: '0.82rem', color: '#e65100' }}>
+                          ⚠️ These are <strong>placeholder values</strong>, not your real shop numbers. Enter your actual rates and save — the recommendation isn't reliable until you do.
+                        </div>
+                      )}
+                      <div style={{ fontWeight: 700, marginBottom: 10, color: '#333' }}>Press Brake — Labor Formula</div>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+                        <div><label className="form-label">Setup time (sec)</label>
+                          <input type="number" className="form-input" style={{ maxWidth: 130 }} value={num(c.setupTimeSec)}
+                            onChange={(e) => setPb({ setupTimeSec: e.target.value })} />
+                          <div style={{ fontSize: '0.7rem', color: '#888' }}>Flat, one machine.</div></div>
+                        <div><label className="form-label">Shop rate ($/hr)</label>
+                          <input type="number" className="form-input" style={{ maxWidth: 130 }} value={num(c.shopRate)}
+                            onChange={(e) => setPb({ shopRate: e.target.value })} /></div>
+                        <div><label className="form-label">Seconds per bend</label>
+                          <input type="number" className="form-input" style={{ maxWidth: 130 }} value={num(c.secondsPerBend)}
+                            onChange={(e) => setPb({ secondsPerBend: e.target.value })} />
+                          <div style={{ fontSize: '0.7rem', color: '#888' }}>Before handling multiplier.</div></div>
+                        <div><label className="form-label">Minimum charge ($)</label>
+                          <input type="number" className="form-input" style={{ maxWidth: 130 }} value={num(c.minimumCharge)}
+                            onChange={(e) => setPb({ minimumCharge: e.target.value })} /></div>
+                      </div>
+
+                      <div style={{ fontWeight: 700, marginBottom: 8, color: '#333' }}>Handling Multipliers</div>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+                        {[['one-operator','One operator'],['two-person','Two person'],['two-person-crane','Two person + crane']].map(([k,lbl]) => (
+                          <div key={k}><label className="form-label">{lbl}</label>
+                            <input type="number" step="0.1" className="form-input" style={{ maxWidth: 110 }}
+                              value={num(c.handlingMultipliers?.[k])} onChange={(e) => setMult(k, e.target.value)} /></div>
+                        ))}
+                      </div>
+
+                      <div style={{ fontWeight: 700, marginBottom: 8, color: '#333' }}>Capacity & Tonnage</div>
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 10 }}>
+                        <div><label className="form-label">Max bend length (ft)</label>
+                          <input type="number" className="form-input" style={{ maxWidth: 110 }} value={num(c.maxBendLengthFt)}
+                            onChange={(e) => setPb({ maxBendLengthFt: e.target.value })} /></div>
+                        <div><label className="form-label">Max tonnage</label>
+                          <input type="number" className="form-input" style={{ maxWidth: 110 }} value={num(c.maxTonnage)}
+                            onChange={(e) => setPb({ maxTonnage: e.target.value })} /></div>
+                        {[['mild','Mild ×'],['stainless','Stainless ×'],['aluminum','Aluminum ×']].map(([k,lbl]) => (
+                          <div key={k}><label className="form-label">{lbl}</label>
+                            <input type="number" step="0.1" className="form-input" style={{ maxWidth: 90 }}
+                              value={num(c.materialFactors?.[k])} onChange={(e) => setFactor(k, e.target.value)} /></div>
+                        ))}
+                      </div>
+
+                      <div style={{ fontWeight: 700, marginBottom: 8, color: '#333' }}>V-Die Table (thickness → V opening, inches)</div>
+                      <table style={{ borderCollapse: 'collapse', marginBottom: 8, fontSize: '0.82rem' }}>
+                        <thead><tr style={{ textAlign: 'left' }}><th style={{ padding: '2px 8px' }}>Thickness (in)</th><th style={{ padding: '2px 8px' }}>V opening (in)</th><th></th></tr></thead>
+                        <tbody>
+                          {(c.vDieTable || []).map((row, i) => (
+                            <tr key={i}>
+                              <td style={{ padding: '2px 8px' }}><input type="number" step="0.001" className="form-input" style={{ maxWidth: 110 }} value={num(row.thickness)} onChange={(e) => setVDie(i, 'thickness', e.target.value)} /></td>
+                              <td style={{ padding: '2px 8px' }}><input type="number" step="0.01" className="form-input" style={{ maxWidth: 110 }} value={num(row.vOpening)} onChange={(e) => setVDie(i, 'vOpening', e.target.value)} /></td>
+                              <td><button className="btn btn-sm" onClick={() => { setPbSaved(false); setPbConfig(prev => ({ ...prev, vDieTable: prev.vDieTable.filter((_, j) => j !== i) })); }} style={{ color: '#c62828' }}>✕</button></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <button className="btn btn-sm" onClick={() => { setPbSaved(false); setPbConfig(prev => ({ ...prev, vDieTable: [...(prev.vDieTable||[]), { thickness: '', vOpening: '' }] })); }}>+ Add die</button>
+
+                      <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
+                        <button className="btn btn-primary" disabled={pbSaving} onClick={async () => {
+                          setPbSaving(true);
+                          try {
+                            const clean = { ...pbConfig,
+                              setupTimeSec: Number(pbConfig.setupTimeSec)||0, shopRate: Number(pbConfig.shopRate)||0,
+                              secondsPerBend: Number(pbConfig.secondsPerBend)||0, minimumCharge: Number(pbConfig.minimumCharge)||0,
+                              maxBendLengthFt: Number(pbConfig.maxBendLengthFt)||12, maxTonnage: Number(pbConfig.maxTonnage)||350,
+                              handlingMultipliers: Object.fromEntries(Object.entries(pbConfig.handlingMultipliers||{}).map(([k,v])=>[k,Number(v)||0])),
+                              materialFactors: Object.fromEntries(Object.entries(pbConfig.materialFactors||{}).map(([k,v])=>[k,Number(v)||0])),
+                              vDieTable: (pbConfig.vDieTable||[]).filter(r=>r.thickness!==''&&r.vOpening!=='').map(r=>({thickness:Number(r.thickness),vOpening:Number(r.vOpening)})),
+                            };
+                            const res = await savePressBrakeConfig(clean);
+                            setPbConfig(res.data.data); setPbSaved(true);
+                          } catch (e) { setError('Could not save press brake config: ' + (e.response?.data?.error?.message || e.message)); }
+                          finally { setPbSaving(false); }
+                        }}>{pbSaving ? 'Saving…' : 'Save Press Brake Config'}</button>
+                        {pbSaved && <span style={{ color: '#2e7d32', fontSize: '0.85rem' }}>✓ Saved</span>}
+                      </div>
+                    </div>
+                  );
+                }
                 const cur = pricingCfg.partTypes?.[pricingTab] || {};
                 const setCur = (patch) => setPricingCfg(p => ({
                   ...p,
