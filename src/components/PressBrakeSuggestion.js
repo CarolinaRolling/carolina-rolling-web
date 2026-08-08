@@ -39,9 +39,11 @@ export default function PressBrakeSuggestion({ thickness, width, length, materia
     const mult = (config.handlingMultipliers && config.handlingMultipliers[handlingClass]) || 1;
     const rate = Number(config.shopRate) || 0;
     if (!(b > 0 && rate > 0)) { onRecommend(null); return; }
-    const runSec = b * (Number(config.secondsPerBend) || 0) * mult * q;
-    const totalHours = ((Number(config.setupTimeSec) || 0) + runSec) / 3600;
-    const rec = Math.max(totalHours * rate, Number(config.minimumCharge) || 0);
+    // Per piece: run time per piece + setup spread over qty (matches render + shop convention).
+    const runSecEach = b * (Number(config.secondsPerBend) || 0) * mult;
+    const setupSecEach = q > 0 ? (Number(config.setupTimeSec) || 0) / q : (Number(config.setupTimeSec) || 0);
+    const totalHoursEach = (setupSecEach + runSecEach) / 3600;
+    const rec = Math.max(totalHoursEach * rate, Number(config.minimumCharge) || 0);
     onRecommend(Number(rec.toFixed(2)));
   }, [config, bendCount, handlingClass, quantity]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -78,17 +80,22 @@ export default function PressBrakeSuggestion({ thickness, width, length, materia
   const bendLenIn = Math.max(w || 0, l || 0);
   const bendLenFt = bendLenIn / 12;
 
-  // ---- recommended labor ----
+  // ---- recommended labor (PER PIECE — the form's "Labor (each)" field) ----
+  // Matches the shop convention (pricingSuggest: priceEach = setup/qty + per-piece work).
+  // Run time is per piece (bends × sec × handling), NOT × qty — the system multiplies the
+  // per-each labor by quantity downstream to get the line total. Setup is a one-time cost
+  // spread across the run, so per piece it's setup/qty.
   const handlingMult = (config.handlingMultipliers && config.handlingMultipliers[handlingClass]) || 1;
   const secPerBend = Number(config.secondsPerBend) || 0;
   const setupSec = Number(config.setupTimeSec) || 0;
   const shopRate = Number(config.shopRate) || 0;          // $/hr
   const minCharge = Number(config.minimumCharge) || 0;
 
-  const runSec = bends * secPerBend * handlingMult * qty;
-  const totalSec = setupSec + runSec;
-  const totalHours = totalSec / 3600;
-  const rawLabor = totalHours * shopRate;
+  const runSecEach = bends * secPerBend * handlingMult;   // per piece
+  const setupSecEach = qty > 0 ? setupSec / qty : setupSec; // one-time setup spread over the run
+  const totalSecEach = setupSecEach + runSecEach;
+  const totalHoursEach = totalSecEach / 3600;
+  const rawLabor = totalHoursEach * shopRate;             // per piece
   const recommended = Math.max(rawLabor, minCharge);
   const hitMinimum = rawLabor < minCharge;
 
@@ -158,12 +165,13 @@ export default function PressBrakeSuggestion({ thickness, width, length, materia
       {open && canRecommend && (
         <div style={{ marginTop: 6, background: '#fafafa', border: '1px solid #eee', borderRadius: 8, padding: 10, fontSize: '0.75rem', color: '#555' }}>
           <div style={{ marginBottom: 5 }}>
-            <strong>Setup</strong> {(setupSec/60).toFixed(1)} min + <strong>{bends} bend{bends===1?'':'s'}</strong> ×
-            {' '}{secPerBend}s × {handlingMult}× handling{qty>1?<> × {qty} pcs</>:null}
-            {' '}= <strong>{(totalSec/60).toFixed(1)} min</strong> total.
+            <strong>{bends} bend{bends===1?'':'s'}</strong> × {secPerBend}s × {handlingMult}× handling
+            = <strong>{(runSecEach/60).toFixed(1)} min</strong>/pc run
+            {qty > 1 ? <> + {(setupSecEach/60).toFixed(1)} min/pc setup ({(setupSec/60).toFixed(0)} min ÷ {qty} pcs)</> : <> + {(setupSec/60).toFixed(1)} min setup</>}
+            = <strong>{(totalSecEach/60).toFixed(1)} min</strong>/pc.
           </div>
           <div style={{ marginBottom: 5 }}>
-            {(totalHours).toFixed(2)} hr × <strong>${shopRate}/hr</strong> = ${rawLabor.toFixed(2)}
+            {(totalHoursEach).toFixed(3)} hr × <strong>${shopRate}/hr</strong> = ${rawLabor.toFixed(2)}/pc
             {hitMinimum && <> → raised to <strong>${minCharge.toFixed(2)}</strong> minimum</>}.
           </div>
           {requiredTons != null && (
