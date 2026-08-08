@@ -27,6 +27,24 @@ export default function PressBrakeSuggestion({ thickness, width, length, materia
     return () => { cancelled = true; };
   }, []);
 
+  // Report the current recommendation up to the form so it can be stored at save time even if
+  // the employee never clicks "Apply" — that's how Step 4 captures overrides (recommended vs
+  // entered). Computed here from props+config so this hook always runs (before any early return),
+  // satisfying the rules of hooks. No-ops until config + inputs are ready.
+  useEffect(() => {
+    if (!onRecommend) return;
+    if (!config) { onRecommend(null); return; }
+    const q = parseInt(quantity) || 1;
+    const b = parseInt(bendCount) || 0;
+    const mult = (config.handlingMultipliers && config.handlingMultipliers[handlingClass]) || 1;
+    const rate = Number(config.shopRate) || 0;
+    if (!(b > 0 && rate > 0)) { onRecommend(null); return; }
+    const runSec = b * (Number(config.secondsPerBend) || 0) * mult * q;
+    const totalHours = ((Number(config.setupTimeSec) || 0) + runSec) / 3600;
+    const rec = Math.max(totalHours * rate, Number(config.minimumCharge) || 0);
+    onRecommend(Number(rec.toFixed(2)));
+  }, [config, bendCount, handlingClass, quantity]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!config) return null;
 
   const qty = parseInt(quantity) || 1;
@@ -105,13 +123,6 @@ export default function PressBrakeSuggestion({ thickness, width, length, materia
   }
 
   const canRecommend = bends > 0 && shopRate > 0;
-
-  // Report the current recommendation up to the form so it can be stored at save time even if
-  // the employee never clicks "Apply" — that's how Step 4 captures overrides (recommended vs
-  // entered). Fires whenever the computed value changes.
-  useEffect(() => {
-    if (onRecommend) onRecommend(canRecommend ? Number(recommended.toFixed(2)) : null);
-  }, [canRecommend, recommended]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ marginTop: 5 }}>
