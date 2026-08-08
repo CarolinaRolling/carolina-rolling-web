@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import HeatNumberInput from './HeatNumberInput';
+import PressBrakeSuggestion from './PressBrakeSuggestion';
 import TrackingExtraFields from './TrackingExtraFields';
 const THICKNESS_OPTIONS = [
   '16 ga', '14 ga', '12 ga', '11 ga', '10 ga', '7 ga',
@@ -142,10 +143,13 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
         <select className="form-select" value={partData.handlingClass || ''}
           onChange={(e) => setPartData(prev => ({ ...prev, handlingClass: e.target.value || null }))}>
           <option value="">— select —</option>
-          <option value="one-hand">One-hand (small part)</option>
-          <option value="two-hand">Two-hand</option>
-          <option value="two-person">Two-person (large/long part)</option>
+          <option value="one-operator">One operator</option>
+          <option value="two-person">Two person (large / long part)</option>
+          <option value="two-person-crane">Two person + crane (needs lifting per bend)</option>
         </select>
+        <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 3 }}>
+          Based on labor it takes, not part weight alone — crane parts are slowest (lift to reposition each bend).
+        </div>
       </div>
 
       {/* === PRINT UPLOAD === */}
@@ -275,7 +279,13 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
             <input type="number" step="any" className="form-input"
               value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')}
               onFocus={(e) => e.target.select()}
-              onChange={(e) => setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value })} placeholder="0.00" /></div>
+              onChange={(e) => setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value })} placeholder="0.00" />
+            <PressBrakeSuggestion
+              thickness={partData.thickness} width={partData.width} length={partData.length}
+              material={partData.material} bendCount={partData.bendCount}
+              handlingClass={partData.handlingClass} quantity={partData.quantity}
+              onApply={(price) => setPartData(prev => ({ ...prev, _baseLaborTotal: String(price), laborTotal: String(price), recommendedLabor: price }))} />
+          </div>
         </div>
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material Cost (ea)</span><span>${materialCost.toFixed(2)}</span></div>

@@ -527,6 +527,8 @@ export const deleteTodo = (id) => api.delete(`/todos/${id}`);
 // Scrap Pickup
 export const getScrapConfig = () => api.get('/settings/scrap-config');
 export const getHtsCodes = () => api.get('/settings/hts-codes');
+export const getPressBrakeConfig = () => api.get('/settings/press-brake-config');
+export const savePressBrakeConfig = (config) => api.put('/settings/press-brake-config', { config });
 export const saveHtsCodes = (codes) => api.put('/settings/hts-codes', { codes });
 export const updateScrapConfig = (data) => api.put('/settings/scrap-config', data);
 export const getScrapLog = () => api.get('/settings/scrap-log');
