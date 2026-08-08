@@ -163,6 +163,19 @@ function AdminPage({ section = 'users-logs' }) {
     }
   }, [section]);
 
+  // The pricing section (which includes the Press Brake config tab) has no per-tab loader in the
+  // activeTab switch below, so load its config here whenever the pricing section is shown.
+  useEffect(() => {
+    if (section !== 'pricing') return;
+    getPricingConfig().then(pres => setPricingCfg({
+      newClientUpliftPct: pres.data.data.newClientUpliftPct ?? 0,
+      targetGrowthPct: pres.data.data.targetGrowthPct ?? 0,
+      minLaborCharge: pres.data.data.minLaborCharge ?? 150,
+      partTypes: pres.data.data.partTypes || {}
+    })).catch(() => {});
+    getPressBrakeConfig().then(pb => setPbConfig(pb.data.data)).catch(() => {});
+  }, [section]);
+
   useEffect(() => {
     if (!isAdmin()) {
       navigate('/inventory');
