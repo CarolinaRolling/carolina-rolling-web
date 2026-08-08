@@ -15,7 +15,7 @@ import { getPressBrakeConfig } from '../services/api';
  * Inputs are plain values, so they can come from manual entry OR a future STEP-file auto-fill
  * with no change to this calculation.
  */
-export default function PressBrakeSuggestion({ thickness, width, length, material, bendCount, handlingClass, quantity, onApply }) {
+export default function PressBrakeSuggestion({ thickness, width, length, material, bendCount, handlingClass, quantity, onApply, onRecommend }) {
   const [config, setConfig] = useState(null);
   const [open, setOpen] = useState(false);
 
@@ -105,6 +105,13 @@ export default function PressBrakeSuggestion({ thickness, width, length, materia
   }
 
   const canRecommend = bends > 0 && shopRate > 0;
+
+  // Report the current recommendation up to the form so it can be stored at save time even if
+  // the employee never clicks "Apply" — that's how Step 4 captures overrides (recommended vs
+  // entered). Fires whenever the computed value changes.
+  useEffect(() => {
+    if (onRecommend) onRecommend(canRecommend ? Number(recommended.toFixed(2)) : null);
+  }, [canRecommend, recommended]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ marginTop: 5 }}>

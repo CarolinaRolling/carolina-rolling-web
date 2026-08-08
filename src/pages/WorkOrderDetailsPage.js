@@ -4097,6 +4097,19 @@ function WorkOrderDetailsPage() {
                         Completed by {part.completedBy.replace(/\s*\(.*\)\s*$/, '')} on {part.completedAt ? new Date(part.completedAt).toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' ' + new Date(part.completedAt).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) : ''}
                       </span>
                     )}
+                    {part.partType === 'press_brake' && part.status === 'completed' && (
+                      <span style={{ fontSize: '0.72rem', color: '#666', display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                        title="Actual run time — used to calibrate the recommendation over time">
+                        ⏱️ Actual min:
+                        <input type="number" step="0.1" min="0" defaultValue={part.actualRunTimeMin ?? ''}
+                          onBlur={async (e) => {
+                            const v = e.target.value === '' ? null : parseFloat(e.target.value);
+                            try { await updateWorkOrderPart(id, part.id, { actualRunTimeMin: v }); }
+                            catch { /* non-critical */ }
+                          }}
+                          style={{ width: 60, padding: '2px 4px', fontSize: '0.72rem', border: '1px solid #ccc', borderRadius: 4 }} />
+                      </span>
+                    )}
                     <select className="form-select" value={part.status} onChange={(e) => handlePartStatusChange(part.id, e.target.value)} style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}>
                       <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>
                     </select>

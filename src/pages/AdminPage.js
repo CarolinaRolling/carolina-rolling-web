@@ -37,7 +37,8 @@ function AdminPage({ section = 'users-logs' }) {
   // Tab groups by section
   const SECTION_TABS = {
     'users-logs': ['users', 'logs', 'schedule', 'apikeys', 'system'],
-    'shop-config': ['general', 'tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates', 'sectionsizes', 'printer', 'scrap', 'emailscanner']
+    'shop-config': ['general', 'tax', 'minimums', 'rolllimits', 'mandreldies', 'grades', 'weldrates', 'sectionsizes', 'printer', 'scrap', 'emailscanner'],
+    'pricing': ['pricing']
   };
   const allowedTabs = SECTION_TABS[section] || SECTION_TABS['users-logs'];
   const [activeTab, setActiveTab] = useState(() => {
@@ -1051,7 +1052,11 @@ function AdminPage({ section = 'users-logs' }) {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">{section === 'shop-config' || section === 'settings' ? '⚙️ Settings' : '👥 Users & Logs'}</h1>
+        <h1 className="page-title">{
+          section === 'shop-config' || section === 'settings' ? '⚙️ Settings'
+          : section === 'pricing' ? '💰 Pricing'
+          : '👥 Users & Logs'
+        }</h1>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -1396,7 +1401,7 @@ function AdminPage({ section = 'users-logs' }) {
         </>)}
       </div>
 
-      {loading ? (
+      {section !== 'pricing' && (loading ? (
         <div className="loading">
           <div className="spinner"></div>
         </div>
@@ -2222,7 +2227,7 @@ function AdminPage({ section = 'users-logs' }) {
             </div>
           </div>
         </div>
-      ) : null}
+      ) : null)}
 
       {/* System Logs Tab Content */}
       {activeTab === 'permits' && !loading && (

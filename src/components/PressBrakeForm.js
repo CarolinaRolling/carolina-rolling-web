@@ -284,6 +284,10 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
               thickness={partData.thickness} width={partData.width} length={partData.length}
               material={partData.material} bendCount={partData.bendCount}
               handlingClass={partData.handlingClass} quantity={partData.quantity}
+              onRecommend={(rec) => setPartData(prev => (
+                // Only update if it actually changed, to avoid a render loop.
+                prev.recommendedLabor === rec ? prev : { ...prev, recommendedLabor: rec }
+              ))}
               onApply={(price) => setPartData(prev => ({ ...prev, _baseLaborTotal: String(price), laborTotal: String(price), recommendedLabor: price }))} />
           </div>
         </div>
