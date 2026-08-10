@@ -163,9 +163,10 @@ export const cancelOutsideProcessingPO = (workOrderId, poNumber, reason) => api.
 export const updateOutsideProcessingStatus = (workOrderId, partId, status) => api.put(`/workorders/${workOrderId}/parts/${partId}/outside-processing-status`, { status });
 
 // Work Order Part Files
-export const uploadPartFiles = (workOrderId, partId, files) => {
+export const uploadPartFiles = (workOrderId, partId, files, fileType) => {
   const formData = new FormData();
   files.forEach((file) => formData.append('files', file));
+  if (fileType) formData.append('fileType', fileType);
   return api.post(`/workorders/${workOrderId}/parts/${partId}/files`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });

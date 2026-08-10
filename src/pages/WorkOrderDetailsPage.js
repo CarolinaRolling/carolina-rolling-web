@@ -1117,12 +1117,18 @@ function WorkOrderDetailsPage() {
         }
       }
 
-      // Auto-attach STEP/DXF from the CAD auto-fill (for operators to view the model).
+      // Auto-attach CAD files from the auto-fill, each with its ROLE so the bend-line DXF is
+      // typed 'press_dxf' (never shared to the cut vendor) and only the clean DXF is 'cut_file'.
       if (pendingCadFiles && pendingCadFiles.length && savedPartId) {
-        try {
-          await uploadPartFiles(id, savedPartId, pendingCadFiles);
-        } catch (fileErr) {
-          console.error('Auto-upload CAD files failed:', fileErr);
+        const roleToType = { step: 'step_file', bend_dxf: 'press_dxf', cut_dxf: 'cut_file' };
+        for (const cf of pendingCadFiles) {
+          const file = cf.file || cf;              // tolerate old shape
+          const type = roleToType[cf.role] || undefined;
+          try {
+            await uploadPartFiles(id, savedPartId, [file], type);
+          } catch (fileErr) {
+            console.error('Auto-upload CAD file failed:', fileErr);
+          }
         }
       }
       
@@ -4467,7 +4473,7 @@ function WorkOrderDetailsPage() {
                 
                 {/* DXF Cut File Section — plate_roll, shaped_plate, flat_stock, cone_roll, press_brake */}
                 {['plate_roll', 'shaped_plate', 'flat_stock', 'cone_roll', 'press_brake'].includes(part.partType) && (() => {
-                  const dxfFile = (part.files || []).find(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.dxf$/i));
+                  const dxfFile = (part.files || []).find(f => f.fileType === 'cut_file');
                   const hasCutPerPrint = part._cutPerPrint || (part.formData || {})._cutPerPrint;
                   return (
                     <div style={{ marginTop: 12, padding: 10, background: '#EDE7F6', borderRadius: 8, border: '1.5px solid #B39DDB' }}>
@@ -5097,21 +5103,27 @@ function WorkOrderDetailsPage() {
                       {part.files.map(file => {
                         const fname = (file.originalName || file.filename || '').toLowerCase();
                         const isStep = file.fileType === 'step_file' || fname.match(/\.(step|stp)$/i);
+                        const isPressDxf = file.fileType === 'press_dxf';   // bend-line DXF — NOT for the cut vendor
                         const isDxf = fname.match(/\.(dxf|dwg)$/i);
                         const isPdf = fname.match(/\.pdf$/i);
-                        const chipBg = isStep ? '#f3e5f5' : isDxf ? '#fff8e1' : isPdf ? '#e3f2fd' : '#f5f5f5';
-                        const chipColor = isStep ? '#7b1fa2' : isDxf ? '#f57f17' : isPdf ? '#1565c0' : '#555';
+                        const chipBg = isPressDxf ? '#ffebee' : isStep ? '#f3e5f5' : isDxf ? '#fff8e1' : isPdf ? '#e3f2fd' : '#f5f5f5';
+                        const chipColor = isPressDxf ? '#c62828' : isStep ? '#7b1fa2' : isDxf ? '#f57f17' : isPdf ? '#1565c0' : '#555';
                         const isShared = file.vendorPortalVisible === true;
                         return (
                           <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: chipBg, borderRadius: 4, fontSize: '0.8rem' }}>
                             <span style={{ color: chipColor, fontWeight: 600, marginRight: 4 }}>
-                              {isStep ? '🧊' : isDxf ? '📐' : isPdf ? '📄' : '📎'}
+                              {isPressDxf ? '⚠️' : isStep ? '🧊' : isDxf ? '📐' : isPdf ? '📄' : '📎'}
                             </span>
                             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: chipColor }}>
                               {file.originalName || file.filename}
+                              {isPressDxf && <span style={{ fontSize: '0.68rem', marginLeft: 6, fontWeight: 700 }}>bend lines — press only, don't send to cutter</span>}
                             </span>
                             <button
                               onClick={async () => {
+                                if (isPressDxf && !isShared) {
+                                  const ok = window.confirm('This DXF has BEND LINES (for the press brake), not a clean cut file. Sharing it with the cut vendor could confuse them or cause a bad cut. Share anyway?');
+                                  if (!ok) return;
+                                }
                                 try {
                                   await toggleVendorShare(id, part.id, file.id, !isShared);
                                   showMessage(isShared ? 'File unshared from vendor portal' : 'File shared with vendor portal');

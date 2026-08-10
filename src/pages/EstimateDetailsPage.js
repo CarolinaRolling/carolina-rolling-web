@@ -1262,11 +1262,15 @@ function EstimateDetailsPage() {
         }
       }
 
-      // Auto-attach STEP/DXF from the CAD auto-fill (for operators to view the model).
+      // Auto-attach CAD files from the auto-fill, each with its ROLE. bend-line DXF -> 'press_dxf'
+      // (never shared to the cut vendor); clean DXF -> 'cut_file' (the only file the vendor sees).
       if (pendingCadFiles && pendingCadFiles.length && savedPartId) {
-        for (const cadFile of pendingCadFiles) {
+        const roleToType = { step: 'step_file', bend_dxf: 'press_dxf', cut_dxf: 'cut_file' };
+        for (const cf of pendingCadFiles) {
+          const file = cf.file || cf;               // tolerate old shape
+          const type = roleToType[cf.role] || 'other';
           try {
-            await uploadEstimatePartFile(id, savedPartId, cadFile, 'cad');
+            await uploadEstimatePartFile(id, savedPartId, file, type);
           } catch (fileErr) {
             console.error('Auto-upload CAD file failed:', fileErr);
           }
@@ -2907,7 +2911,7 @@ function EstimateDetailsPage() {
                         </div>
                       );
                     }
-                    const dxfFile = (part.files || []).find(f => f.fileType === 'cut_file' || (f.originalName || '').match(/\.dxf$/i));
+                    const dxfFile = (part.files || []).find(f => f.fileType === 'cut_file' || (f.fileType !== 'press_dxf' && (f.originalName || '').match(/\.dxf$/i)));
                     const hasCutPerPrint = part._cutPerPrint || fd._cutPerPrint;
                     return (
                       <div style={{ marginTop: 12, padding: 10, background: '#EDE7F6', borderRadius: 8, border: '1.5px solid #B39DDB' }}>
@@ -3002,9 +3006,9 @@ function EstimateDetailsPage() {
                         </span>
                       </label>
                     </div>
-                    {part.files && part.files.filter(f => f.fileType !== 'cut_file' && !(f.originalName || '').match(/\.dxf$/i)).length > 0 ? (
+                    {part.files && part.files.filter(f => f.fileType === 'press_dxf' || (f.fileType !== 'cut_file' && !(f.originalName || '').match(/\.dxf$/i))).length > 0 ? (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {part.files.filter(f => f.fileType !== 'cut_file' && !(f.originalName || '').match(/\.dxf$/i)).map(file => {
+                        {part.files.filter(f => f.fileType === 'press_dxf' || (f.fileType !== 'cut_file' && !(f.originalName || '').match(/\.dxf$/i))).map(file => {
                           const fname = (file.originalName || file.filename || '').toLowerCase();
                           const isStep = file.fileType === 'step_file' || fname.match(/\.(step|stp)$/i);
                           const isPdf = fname.match(/\.pdf$/i);

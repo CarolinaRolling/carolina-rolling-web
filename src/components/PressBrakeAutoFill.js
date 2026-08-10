@@ -50,6 +50,7 @@ export default function PressBrakeAutoFill({ partData, setPartData, onError }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);          // last parse summary
   const [note, setNote] = useState(null);
+  const [slots, setSlots] = useState({ step: null, bend_dxf: null, cut_dxf: null });
 
   const parserUrl = config?.parserUrl && String(config.parserUrl).trim()
     ? config.parserUrl.replace(/\/+$/, '')
@@ -114,42 +115,23 @@ export default function PressBrakeAutoFill({ partData, setPartData, onError }) {
     return snappedLabel;
   }, [setPartData, suggestHandling]);
 
-  const handleFiles = useCallback(async (fileList) => {
-    if (!parserUrl || !fileList || fileList.length === 0) return;
-    const files = Array.from(fileList);
-    const step = files.find(f => /\.(step|stp)$/i.test(f.name));
-    const dxf = files.find(f => /\.dxf$/i.test(f.name));
-    if (!step && !dxf) {
-      setNote({ type: 'err', msg: 'Please choose a STEP (.step/.stp) and/or DXF (.dxf) file.' });
-      return;
-    }
+  // Parse using the bend-line DXF (has the BEND layer the parser needs) plus the STEP if given.
+  const runParse = useCallback(async (stepFile, bendDxfFile) => {
+    if (!parserUrl) return;
+    if (!stepFile && !bendDxfFile) return;
     setBusy(true); setNote(null); setResult(null);
     try {
       const material = partData.material || 'steel';
-      // Stash the uploaded file(s) so the part-save flow attaches them to the part documents.
-      // Overwrite behavior: replace any previously stashed CAD files of the same kind.
-      setPartData(prev => {
-        const keep = (prev._cadFiles || []).filter(f => {
-          const isStep = /\.(step|stp)$/i.test(f.name);
-          const isDxf = /\.dxf$/i.test(f.name);
-          // drop a prior file of a kind we're now replacing
-          if (step && isStep) return false;
-          if (dxf && isDxf) return false;
-          return true;
-        });
-        const add = [step, dxf].filter(Boolean);
-        return { ...prev, _cadFiles: [...keep, ...add] };
-      });
       let data;
-      if (step && dxf) {
+      if (stepFile && bendDxfFile) {
         const fd = new FormData();
-        fd.append('step', step); fd.append('dxf', dxf); fd.append('material', material);
+        fd.append('step', stepFile); fd.append('dxf', bendDxfFile); fd.append('material', material);
         const r = await fetch(`${parserUrl}/analyze`, { method: 'POST', body: fd });
         if (!r.ok) throw new Error(await r.text());
         data = await r.json();
-      } else if (dxf) {
+      } else if (bendDxfFile) {
         const fd = new FormData();
-        fd.append('file', dxf);
+        fd.append('file', bendDxfFile);
         if (partData.thickness) fd.append('thickness_in', String(parseFloat(partData.thickness) || ''));
         fd.append('material', material);
         const r = await fetch(`${parserUrl}/analyze-dxf`, { method: 'POST', body: fd });
@@ -157,7 +139,7 @@ export default function PressBrakeAutoFill({ partData, setPartData, onError }) {
         data = await r.json();
       } else {
         const fd = new FormData();
-        fd.append('file', step);
+        fd.append('file', stepFile);
         const r = await fetch(`${parserUrl}/analyze-step`, { method: 'POST', body: fd });
         if (!r.ok) throw new Error(await r.text());
         data = await r.json();
@@ -169,7 +151,7 @@ export default function PressBrakeAutoFill({ partData, setPartData, onError }) {
       } else if (snapped && data.thickness_in != null && Math.abs(Number(data.thickness_in) - ({'24 ga':0.0239,'20 ga':0.0359,'16 ga':0.0598,'14 ga':0.0747,'12 ga':0.1046,'11 ga':0.1196,'10 ga':0.1345}[snapped] ?? Number(data.thickness_in))) > 0.0005) {
         setNote({ type: 'ok', msg: `Values pre-filled. Measured ${data.thickness_in}" → snapped to ${snapped}. Verify before saving.` });
       } else {
-        setNote({ type: 'ok', msg: 'Values pre-filled from your file(s). Verify before saving.' });
+        setNote({ type: 'ok', msg: 'Values pre-filled. Verify before saving.' });
       }
     } catch (e) {
       setNote({ type: 'err', msg: 'Couldn\'t parse the file(s). Enter values manually below.' });
@@ -179,21 +161,63 @@ export default function PressBrakeAutoFill({ partData, setPartData, onError }) {
     }
   }, [parserUrl, partData.material, partData.thickness, applyResult, onError]);
 
+  // Handle a file dropped into a specific role slot. Roles:
+  //   'step'      -> STEP model (attached as step_file, for operators)
+  //   'bend_dxf'  -> DXF WITH bend lines (parsed + attached for the press; NEVER shared to cut vendor)
+  //   'cut_dxf'   -> clean DXF WITHOUT bend lines (attached as cut_file, the ONLY file the vendor sees)
+  const handleSlot = useCallback((role, file) => {
+    if (!file) return;
+    const nextSlots = { ...slots, [role]: file };
+    setSlots(nextSlots);
+    // Push the three files (with their roles) into partData so the save flow attaches them.
+    const cadFiles = [];
+    if (nextSlots.step)     cadFiles.push({ file: nextSlots.step, role: 'step' });
+    if (nextSlots.bend_dxf) cadFiles.push({ file: nextSlots.bend_dxf, role: 'bend_dxf' });
+    if (nextSlots.cut_dxf)  cadFiles.push({ file: nextSlots.cut_dxf, role: 'cut_dxf' });
+    setPartData(prev => ({
+      ...prev,
+      _cadFiles: cadFiles,
+      _cad_step_name: nextSlots.step?.name || null,
+      _cad_bend_dxf_name: nextSlots.bend_dxf?.name || null,
+      _cad_cut_dxf_name: nextSlots.cut_dxf?.name || null,
+    }));
+    // Re-parse when a parsing-relevant file changes (STEP or the bend DXF).
+    if (role === 'step' || role === 'bend_dxf') {
+      runParse(nextSlots.step, nextSlots.bend_dxf);
+    }
+  }, [slots, setPartData, runParse]);
+
   // Hidden while checking, or if the parser isn't reachable.
   if (reachable !== true) return null;
 
+  const slotName = (role) => partData[`_cad_${role}_name`];
+  const Slot = ({ role, label, hint, accept }) => (
+    <div style={{ marginBottom: 8 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', border: '2px dashed #7cb342', borderRadius: 8, cursor: busy ? 'wait' : 'pointer', fontSize: '0.8rem', color: '#558b2f', background: '#fff' }}>
+        <Upload size={15} /> {slotName(role) ? `Replace ${label}…` : `${label}…`}
+        <input type="file" accept={accept} style={{ display: 'none' }} disabled={busy}
+          onChange={(e) => { const f = e.target.files[0]; e.target.value = ''; if (f) handleSlot(role, f); }} />
+      </label>
+      <div style={{ fontSize: '0.68rem', color: '#7a9a5a', marginTop: 2 }}>{hint}</div>
+      {slotName(role) && <div style={{ fontSize: '0.72rem', color: '#2e7d32', marginTop: 2, fontWeight: 600 }}>📎 {slotName(role)}</div>}
+    </div>
+  );
+
   return (
     <div style={{ border: '1px solid #c5e1a5', background: '#f1f8e9', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#33691e' }}>⚡ Auto-fill from CAD</span>
-        <span style={{ fontSize: '0.72rem', color: '#689f38' }}>upload STEP + DXF (flat pattern)</span>
+        <span style={{ fontSize: '0.72rem', color: '#689f38' }}>upload the part files by role</span>
       </div>
-      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '2px dashed #7cb342', borderRadius: 8, cursor: busy ? 'wait' : 'pointer', fontSize: '0.85rem', color: '#558b2f', background: '#fff' }}>
-        <Upload size={16} /> {busy ? 'Analyzing…' : 'Choose STEP and/or DXF…'}
-        <input type="file" accept=".step,.stp,.dxf" multiple style={{ display: 'none' }}
-          disabled={busy}
-          onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }} />
-      </label>
+
+      <Slot role="step" label="STEP model" accept=".step,.stp"
+        hint="3D model — for operators to view the part." />
+      <Slot role="bend_dxf" label="DXF with bend lines" accept=".dxf"
+        hint="Flat pattern WITH bend lines — used to read bends/size and for the press. Not sent to the cut vendor." />
+      <Slot role="cut_dxf" label="DXF clean cut file" accept=".dxf"
+        hint="Flat pattern WITHOUT bend lines — the ONLY file shared to the cut vendor." />
+
+      {busy && <div style={{ fontSize: '0.75rem', color: '#558b2f', marginTop: 4 }}>Analyzing…</div>}
 
       {result && (
         <div style={{ fontSize: '0.75rem', color: '#33691e', marginTop: 8, lineHeight: 1.6 }}>
