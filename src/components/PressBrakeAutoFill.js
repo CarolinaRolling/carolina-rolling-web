@@ -2,6 +2,35 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import { getPressBrakeConfig } from '../services/api';
 
+// Standard stock thicknesses (label -> decimal inches). Matches the form's thickness dropdown so
+// a snapped value selects cleanly instead of landing as a "Custom" decimal.
+const STOCK_THICKNESS = [
+  ['24 ga', 0.0239], ['20 ga', 0.0359], ['16 ga', 0.0598], ['14 ga', 0.0747],
+  ['12 ga', 0.1046], ['11 ga', 0.1196], ['10 ga', 0.1345],
+  ['1/8"', 0.125], ['3/16"', 0.1875], ['1/4"', 0.25], ['5/16"', 0.3125],
+  ['3/8"', 0.375], ['1/2"', 0.5], ['5/8"', 0.625], ['3/4"', 0.75], ['7/8"', 0.875],
+  ['1"', 1.0], ['1-1/4"', 1.25], ['1-1/2"', 1.5], ['2"', 2.0],
+];
+
+// Snap a measured thickness (decimal in) to the nearest stock value, IF it's within tolerance.
+// Real sheet measures slightly off nominal (e.g. 14 ga is 0.0747 but a part may read 0.0768), so
+// we snap when close. If it's not near any stock size (a genuinely custom thickness), return null
+// and let the raw value stand as Custom.
+function snapThickness(decimalIn) {
+  const v = Number(decimalIn);
+  if (!v || v <= 0) return null;
+  let best = null, bestDiff = Infinity;
+  for (const [label, dec] of STOCK_THICKNESS) {
+    const diff = Math.abs(dec - v);
+    if (diff < bestDiff) { bestDiff = diff; best = { label, dec }; }
+  }
+  if (!best) return null;
+  // Tolerance: within 10% of the stock value, or 0.006" absolute (covers gauge measurement spread),
+  // whichever is larger. Keeps 0.0768->14ga but won't force a truly odd thickness onto a stock size.
+  const tol = Math.max(best.dec * 0.10, 0.006);
+  return bestDiff <= tol ? best.label : null;
+}
+
 /**
  * Auto-fill control for the press-brake form.
  *
@@ -64,9 +93,14 @@ export default function PressBrakeAutoFill({ partData, setPartData, onError }) {
   }, [config]);
 
   const applyResult = useCallback((data) => {
+    let snappedLabel = null;
     setPartData(prev => {
       const next = { ...prev };
-      if (data.thickness_in != null) next.thickness = String(data.thickness_in);
+      if (data.thickness_in != null) {
+        const snap = snapThickness(data.thickness_in);
+        if (snap) { next.thickness = snap; snappedLabel = snap; }
+        else { next.thickness = String(data.thickness_in); }
+      }
       if (data.flat_length_in != null) next.length = `${data.flat_length_in}"`;
       if (data.flat_width_in != null) next.width = String(data.flat_width_in);
       if (data.bend_count != null) next.bendCount = data.bend_count;
@@ -77,6 +111,7 @@ export default function PressBrakeAutoFill({ partData, setPartData, onError }) {
       if (suggested && !prev.handlingClass) next.handlingClass = suggested;
       return next;
     });
+    return snappedLabel;
   }, [setPartData, suggestHandling]);
 
   const handleFiles = useCallback(async (fileList) => {
@@ -113,10 +148,12 @@ export default function PressBrakeAutoFill({ partData, setPartData, onError }) {
         if (!r.ok) throw new Error(await r.text());
         data = await r.json();
       }
-      applyResult(data);
+      const snapped = applyResult(data);
       setResult(data);
       if (data.cross_check && data.cross_check.bend_mismatch) {
         setNote({ type: 'warn', msg: `Heads up: STEP counted ${data.cross_check.step_bend_count} bends, DXF counted ${data.cross_check.dxf_bend_count}. Using DXF — verify.` });
+      } else if (snapped && data.thickness_in != null && Math.abs(Number(data.thickness_in) - ({'24 ga':0.0239,'20 ga':0.0359,'16 ga':0.0598,'14 ga':0.0747,'12 ga':0.1046,'11 ga':0.1196,'10 ga':0.1345}[snapped] ?? Number(data.thickness_in))) > 0.0005) {
+        setNote({ type: 'ok', msg: `Values pre-filled. Measured ${data.thickness_in}" → snapped to ${snapped}. Verify before saving.` });
       } else {
         setNote({ type: 'ok', msg: 'Values pre-filled from your file(s). Verify before saving.' });
       }

@@ -83,9 +83,6 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
 
   return (
     <>
-      {/* === CAD AUTO-FILL (hidden if parser unreachable) === */}
-      <PressBrakeAutoFill partData={partData} setPartData={setPartData} onError={setError} />
-
       {/* === DIMENSIONS === */}
       <div className="form-group">
         <label className="form-label">Quantity *</label>
@@ -94,6 +91,9 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
           onBlur={(e) => { const q = parseInt(e.target.value, 10); if (!q || q < 1) setPartData({ ...partData, quantity: 1 }); }}
           onFocus={(e) => e.target.select()} min="1" />
       </div>
+
+      {/* === CAD AUTO-FILL (hidden if parser unreachable) === */}
+      <PressBrakeAutoFill partData={partData} setPartData={setPartData} onError={setError} />
 
       <div className="form-group">
         <label className="form-label">Thickness *</label>
