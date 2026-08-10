@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, assignInvoiceNumber, exportBatchIIF, exportBatchWithReconciliation, generateInvoicePDF, getNextInvoiceNumber, skipInvoice, restoreInvoice, markInvoiceSent } from '../services/api';
+import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, previewWorkOrderIIF, assignInvoiceNumber, exportBatchIIF, exportBatchWithReconciliation, generateInvoicePDF, getNextInvoiceNumber, skipInvoice, restoreInvoice, markInvoiceSent } from '../services/api';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -94,6 +94,14 @@ const InvoiceCenterPage = ({ embedded = false }) => {
 
   const handleExportIIF = async (wo) => {
     try {
+      // Pre-check: warn if the client has no QuickBooks Name set (duplicate-customer risk).
+      try {
+        const pre = await previewWorkOrderIIF(wo.id);
+        const warns = pre.data?.data?.warnings || [];
+        const qbWarn = warns.find(w => w.type === 'no_quickbooks_name');
+        if (qbWarn && !window.confirm(qbWarn.message + '\n\nExport anyway?')) return;
+      } catch { /* preview is best-effort; don't block export if it fails */ }
+
       if (!wo.invoiceNumber) {
         const r = await assignInvoiceNumber(wo.id);
         wo.invoiceNumber = r.data.data.invoiceNumber;

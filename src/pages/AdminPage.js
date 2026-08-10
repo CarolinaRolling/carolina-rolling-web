@@ -1225,6 +1225,40 @@ function AdminPage({ section = 'users-logs' }) {
                       </table>
                       <button className="btn btn-sm" onClick={() => { setPbSaved(false); setPbConfig(prev => ({ ...prev, vDieTable: [...(prev.vDieTable||[]), { thickness: '', vOpening: '' }] })); }}>+ Add die</button>
 
+                      {/* CAD parser + handling thresholds */}
+                      <div style={{ fontWeight: 700, margin: '20px 0 10px', color: '#333' }}>CAD Auto-fill & Handling</div>
+                      <div style={{ marginBottom: 14 }}>
+                        <label className="form-label">STEP/DXF parser URL (NAS)</label>
+                        <input type="text" className="form-input" style={{ maxWidth: 420 }}
+                          placeholder="https://…:8201  (blank = auto-fill off)"
+                          value={c.parserUrl || ''} onChange={(e) => setPb({ parserUrl: e.target.value })} />
+                        <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 3 }}>
+                          The press-brake parser service. Leave blank to disable CAD auto-fill (manual entry only).
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: '#555', marginBottom: 6 }}>
+                        Handling-class limits — a part is bumped up a class if it exceeds <b>either</b> the weight or size limit.
+                      </div>
+                      <table style={{ fontSize: '0.85rem', marginBottom: 8 }}>
+                        <thead><tr><th style={{ textAlign: 'left', padding: '2px 10px' }}>Class</th><th style={{ padding: '2px 10px' }}>Max weight (lb)</th><th style={{ padding: '2px 10px' }}>Max size (in)</th></tr></thead>
+                        <tbody>
+                          {['one-operator', 'two-person'].map(cls => {
+                            const t = (c.handlingThresholds || {})[cls] || {};
+                            const setTh = (field, val) => { setPbSaved(false); setPbConfig(prev => ({ ...prev, handlingThresholds: { ...(prev.handlingThresholds||{}), [cls]: { ...((prev.handlingThresholds||{})[cls]||{}), [field]: val } } })); };
+                            return (
+                              <tr key={cls}>
+                                <td style={{ padding: '2px 10px' }}>{cls === 'one-operator' ? 'One operator' : 'Two person'}</td>
+                                <td style={{ padding: '2px 10px' }}><input type="number" className="form-input" style={{ maxWidth: 100 }} value={num(t.maxWeightLb)} onChange={(e) => setTh('maxWeightLb', e.target.value)} /></td>
+                                <td style={{ padding: '2px 10px' }}><input type="number" className="form-input" style={{ maxWidth: 100 }} value={num(t.maxSizeIn)} onChange={(e) => setTh('maxSizeIn', e.target.value)} /></td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div style={{ fontSize: '0.72rem', color: '#888', marginBottom: 4 }}>
+                        Above the "two person" limits → two person + crane. Size = longest flat dimension.
+                      </div>
+
                       <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
                         <button className="btn btn-primary" disabled={pbSaving} onClick={async () => {
                           setPbSaving(true);
@@ -1236,6 +1270,8 @@ function AdminPage({ section = 'users-logs' }) {
                               handlingMultipliers: Object.fromEntries(Object.entries(pbConfig.handlingMultipliers||{}).map(([k,v])=>[k,Number(v)||0])),
                               materialFactors: Object.fromEntries(Object.entries(pbConfig.materialFactors||{}).map(([k,v])=>[k,Number(v)||0])),
                               vDieTable: (pbConfig.vDieTable||[]).filter(r=>r.thickness!==''&&r.vOpening!=='').map(r=>({thickness:Number(r.thickness),vOpening:Number(r.vOpening)})),
+                              parserUrl: (pbConfig.parserUrl || '').trim(),
+                              handlingThresholds: Object.fromEntries(Object.entries(pbConfig.handlingThresholds||{}).map(([k,v])=>[k,{ maxWeightLb: Number(v.maxWeightLb)||0, maxSizeIn: Number(v.maxSizeIn)||0 }])),
                             };
                             const res = await savePressBrakeConfig(clean);
                             setPbConfig(res.data.data); setPbSaved(true);

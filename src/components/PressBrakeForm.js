@@ -3,6 +3,7 @@ import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import HeatNumberInput from './HeatNumberInput';
 import PressBrakeSuggestion from './PressBrakeSuggestion';
+import PressBrakeAutoFill from './PressBrakeAutoFill';
 import TrackingExtraFields from './TrackingExtraFields';
 const THICKNESS_OPTIONS = [
   '16 ga', '14 ga', '12 ga', '11 ga', '10 ga', '7 ga',
@@ -82,6 +83,9 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
 
   return (
     <>
+      {/* === CAD AUTO-FILL (hidden if parser unreachable) === */}
+      <PressBrakeAutoFill partData={partData} setPartData={setPartData} onError={setError} />
+
       {/* === DIMENSIONS === */}
       <div className="form-group">
         <label className="form-label">Quantity *</label>
@@ -135,6 +139,17 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
           placeholder="number of bends" />
         <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 3 }}>
           Number of bends in the part — a 1-bend and a 9-bend part are very different jobs.
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">False bends</label>
+        <input type="number" min="0" step="1" className="form-input" value={partData.falseBends ?? ''}
+          onChange={(e) => setPartData(prev => ({ ...prev, falseBends: e.target.value === '' ? null : parseInt(e.target.value) }))}
+          placeholder="0" />
+        <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 3 }}>
+          Tooling-clearance workarounds (bend in the web to clear the dies, then flatten). Each
+          false bend counts as <b>2 extra bends</b> of labor. Set from your machine sim / experience.
         </div>
       </div>
 
@@ -282,7 +297,8 @@ export default function PressBrakeForm({ partData, setPartData, vendorSuggestion
               onChange={(e) => setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value })} placeholder="0.00" />
             <PressBrakeSuggestion
               thickness={partData.thickness} width={partData.width} length={partData.length}
-              material={partData.material} bendCount={partData.bendCount}
+              material={partData.material}
+              bendCount={(parseInt(partData.bendCount) || 0) + (parseInt(partData.falseBends) || 0) * 2}
               handlingClass={partData.handlingClass} quantity={partData.quantity}
               onRecommend={(rec) => setPartData(prev => (
                 // Only update if it actually changed, to avoid a render loop.
