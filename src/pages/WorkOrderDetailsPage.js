@@ -32,6 +32,7 @@ import {
   createOutsideProcessingPO, createOutsideProcessingPOsAuto, createServicePOsAuto, regenServicePO, deleteServicePO, updateOutsideProcessingStatus, createTransportPO,
   editOutsideProcessingPO, regenOutsideProcessingPO, cancelOutsideProcessingPO,
   toggleVendorShare, resolveVendorIssue,
+  getOperators, assignWorkOrder, unassignWorkOrder,
   uploadPartFiles, getPartFileSignedUrl, downloadPartFile, deletePartFile,
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, downloadWorkOrderDocument, deleteWorkOrderDocument, regeneratePODocument, createPODocument, toggleDocumentPortal,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
@@ -93,6 +94,7 @@ function WorkOrderDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const [operators, setOperators] = useState([]);
   // Display numbers (1, 2, 3 for production parts; 1.1, 1.2 for their services) — derived, stored data untouched
   const partDispNum = useMemo(() => computeDisplayNumbers(order?.parts || []).display, [order]);
   const [inspectionJobs, setInspectionJobs] = useState([]);
@@ -349,6 +351,14 @@ function WorkOrderDetailsPage() {
   const [shipmentSearchQuery, setShipmentSearchQuery] = useState('');
   const [shipmentLinking, setShipmentLinking] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    getOperators()
+      .then(res => { if (!cancelled) setOperators(res.data?.data || []); })
+      .catch(() => { if (!cancelled) setOperators([]); });
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     if (!lightboxUrl) return;
     const onKey = (e) => { if (e.key === 'Escape') setLightboxUrl(null); };
@@ -2819,6 +2829,25 @@ function WorkOrderDetailsPage() {
                 <option value="normal">Normal Priority</option>
                 <option value="high">⚡ High Priority</option>
                 <option value="urgent">🔴 Urgent</option>
+              </select>
+              <select className="form-select"
+                value={order.assignedOperator || ''}
+                onChange={async (e) => {
+                  const op = e.target.value;
+                  try {
+                    if (op) await assignWorkOrder(order.id, op);
+                    else await unassignWorkOrder(order.id);
+                    setOrder({ ...order, assignedOperator: op || null });
+                    showMessage(op ? `Assigned to ${op}` : 'Operator unassigned');
+                  } catch (err) {
+                    setError('Failed to assign operator: ' + (err.response?.data?.error?.message || err.message));
+                  }
+                }}
+                style={{ width: 'auto', fontWeight: order.assignedOperator ? 600 : 400,
+                  color: order.assignedOperator ? '#1565c0' : '#888' }}
+                title="Assign this work order to an operator">
+                <option value="">👤 Unassigned</option>
+                {operators.map(op => { const n = op.operatorName || op.name || String(op); return <option key={n} value={n}>{n}</option>; })}
               </select>
               {(order.status === 'stored' || (order.pickupHistory?.length > 0 && getPickupSummary().some(p => p.remaining > 0))) && (
                 <button className="btn btn-success" onClick={() => handleCODCheck('pickup')}>
