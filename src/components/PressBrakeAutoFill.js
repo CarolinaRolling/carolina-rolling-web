@@ -126,6 +126,20 @@ export default function PressBrakeAutoFill({ partData, setPartData, onError }) {
     setBusy(true); setNote(null); setResult(null);
     try {
       const material = partData.material || 'steel';
+      // Stash the uploaded file(s) so the part-save flow attaches them to the part documents.
+      // Overwrite behavior: replace any previously stashed CAD files of the same kind.
+      setPartData(prev => {
+        const keep = (prev._cadFiles || []).filter(f => {
+          const isStep = /\.(step|stp)$/i.test(f.name);
+          const isDxf = /\.dxf$/i.test(f.name);
+          // drop a prior file of a kind we're now replacing
+          if (step && isStep) return false;
+          if (dxf && isDxf) return false;
+          return true;
+        });
+        const add = [step, dxf].filter(Boolean);
+        return { ...prev, _cadFiles: [...keep, ...add] };
+      });
       let data;
       if (step && dxf) {
         const fd = new FormData();

@@ -43,7 +43,10 @@ export default function PressBrakeSuggestion({ thickness, width, length, materia
     const runSecEach = b * (Number(config.secondsPerBend) || 0) * mult;
     const setupSecEach = q > 0 ? (Number(config.setupTimeSec) || 0) / q : (Number(config.setupTimeSec) || 0);
     const totalHoursEach = (setupSecEach + runSecEach) / 3600;
-    const rec = Math.max(totalHoursEach * rate, Number(config.minimumCharge) || 0);
+    const rawEach = totalHoursEach * rate;
+    // Minimum applies to the JOB TOTAL, then back to per-each (see render for rationale).
+    const jobTotal = Math.max(rawEach * q, Number(config.minimumCharge) || 0);
+    const rec = q > 0 ? jobTotal / q : jobTotal;
     onRecommend(Number(rec.toFixed(2)));
   }, [config, bendCount, handlingClass, quantity]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -95,9 +98,14 @@ export default function PressBrakeSuggestion({ thickness, width, length, materia
   const setupSecEach = qty > 0 ? setupSec / qty : setupSec; // one-time setup spread over the run
   const totalSecEach = setupSecEach + runSecEach;
   const totalHoursEach = totalSecEach / 3600;
-  const rawLabor = totalHoursEach * shopRate;             // per piece
-  const recommended = Math.max(rawLabor, minCharge);
-  const hitMinimum = rawLabor < minCharge;
+  const rawLabor = totalHoursEach * shopRate;             // per piece (before minimum)
+  // Minimum charge is a floor on the JOB TOTAL, not per piece — otherwise a 100-pc run would be
+  // 100 × the minimum. Apply the floor to the total, then convert back to a per-each figure for
+  // the "Labor (each)" field.
+  const rawJobTotal = rawLabor * qty;
+  const jobTotal = Math.max(rawJobTotal, minCharge);
+  const recommended = qty > 0 ? jobTotal / qty : jobTotal;  // per piece, after job-total floor
+  const hitMinimum = rawJobTotal < minCharge;
 
   // ---- capacity warning (Step 3) ----
   const warnings = [];
@@ -148,7 +156,7 @@ export default function PressBrakeSuggestion({ thickness, width, length, materia
           </button>
           {hitMinimum && (
             <span style={{ fontSize: '0.7rem', background: '#fff8e1', color: '#8d6e63', padding: '2px 8px', borderRadius: 12 }}>
-              at minimum charge
+              at job minimum
             </span>
           )}
           <button type="button" onClick={() => setOpen(!open)}
@@ -172,7 +180,8 @@ export default function PressBrakeSuggestion({ thickness, width, length, materia
           </div>
           <div style={{ marginBottom: 5 }}>
             {(totalHoursEach).toFixed(3)} hr × <strong>${shopRate}/hr</strong> = ${rawLabor.toFixed(2)}/pc
-            {hitMinimum && <> → raised to <strong>${minCharge.toFixed(2)}</strong> minimum</>}.
+            {qty > 1 && <> × {qty} pcs = ${(rawLabor * qty).toFixed(2)} job</>}
+            {hitMinimum && <> → below <strong>${minCharge.toFixed(2)}</strong> job minimum, so ${recommended.toFixed(2)}/pc ({qty > 1 ? `$${(recommended*qty).toFixed(2)} total` : 'min'})</>}.
           </div>
           {requiredTons != null && (
             <div style={{ color: '#777' }}>

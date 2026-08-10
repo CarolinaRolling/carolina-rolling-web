@@ -1043,6 +1043,8 @@ function WorkOrderDetailsPage() {
       // Capture shape file before cleaning
       const pendingShapeFile = dataToSend._shapeFile;
       delete dataToSend._shapeFile; // File objects can't be serialized
+      const pendingCadFiles = dataToSend._cadFiles;
+      delete dataToSend._cadFiles; // File objects can't be serialized
       
       // Sanitize ENUM fields - empty strings break Postgres ENUMs
       if (!dataToSend.rollType) dataToSend.rollType = null;
@@ -1112,6 +1114,15 @@ function WorkOrderDetailsPage() {
           await uploadPartFiles(id, savedPartId, [pendingShapeFile]);
         } catch (fileErr) {
           console.error('Auto-upload file failed:', fileErr);
+        }
+      }
+
+      // Auto-attach STEP/DXF from the CAD auto-fill (for operators to view the model).
+      if (pendingCadFiles && pendingCadFiles.length && savedPartId) {
+        try {
+          await uploadPartFiles(id, savedPartId, pendingCadFiles);
+        } catch (fileErr) {
+          console.error('Auto-upload CAD files failed:', fileErr);
         }
       }
       

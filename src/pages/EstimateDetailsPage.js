@@ -1133,6 +1133,8 @@ function EstimateDetailsPage() {
       // Capture the shape file before cleaning dataToSend
       const pendingShapeFile = dataToSend._shapeFile;
       delete dataToSend._shapeFile; // File objects can't be serialized to JSON
+      const pendingCadFiles = dataToSend._cadFiles;
+      delete dataToSend._cadFiles; // File objects can't be serialized to JSON
       if (!dataToSend.materialSource || !['we_order', 'customer_supplied', 'in_stock'].includes(dataToSend.materialSource)) {
         dataToSend.materialSource = 'customer_supplied';
       }
@@ -1257,6 +1259,17 @@ function EstimateDetailsPage() {
           await uploadEstimatePartFile(id, savedPartId, pendingShapeFile, 'drawing');
         } catch (fileErr) {
           console.error('Auto-upload file failed:', fileErr);
+        }
+      }
+
+      // Auto-attach STEP/DXF from the CAD auto-fill (for operators to view the model).
+      if (pendingCadFiles && pendingCadFiles.length && savedPartId) {
+        for (const cadFile of pendingCadFiles) {
+          try {
+            await uploadEstimatePartFile(id, savedPartId, cadFile, 'cad');
+          } catch (fileErr) {
+            console.error('Auto-upload CAD file failed:', fileErr);
+          }
         }
       }
 
