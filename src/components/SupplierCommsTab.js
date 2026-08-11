@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getSupplierEmails, linkSupplierEmail, unlinkSupplierEmail, searchEstimatesForLink } from '../services/api';
+import { getSupplierEmails, linkSupplierEmail, unlinkSupplierEmail, searchEstimatesForLink, updateCommEmailCategory } from '../services/api';
 
 /**
  * Supplier Communications tab (Review Center).
@@ -67,6 +67,17 @@ export default function SupplierCommsTab() {
     setBusy(true);
     try { await unlinkSupplierEmail(emailId); await load(); }
     catch (e) { alert('Failed to unlink: ' + (e.response?.data?.error?.message || e.message)); }
+    finally { setBusy(false); }
+  };
+
+  // Remove an email from the supplier queue (e.g. the AI mis-caught it, or you went with a
+  // different supplier). Recategorizes it to 'general' — the record survives, it just leaves this
+  // tab. Not a hard delete.
+  const doDismiss = async (emailId) => {
+    if (!window.confirm('Remove this from the supplier list? (It wasn\'t a supplier quote, or you went another way.)')) return;
+    setBusy(true);
+    try { await updateCommEmailCategory(emailId, 'general'); await load(); }
+    catch (e) { alert('Failed to remove: ' + (e.response?.data?.error?.message || e.message)); }
     finally { setBusy(false); }
   };
 
@@ -179,6 +190,11 @@ export default function SupplierCommsTab() {
                           Open in Gmail
                         </a>
                       )}
+                      <button onClick={() => doDismiss(em.id)} disabled={busy}
+                        title="Not a supplier quote, or you went with a different supplier — remove from this list"
+                        style={{ fontSize: '0.78rem', padding: '4px 12px', borderRadius: 5, border: '1px solid #ddd', background: 'white', color: '#c62828', cursor: 'pointer', marginLeft: 'auto' }}>
+                        ✕ Not a supplier quote
+                      </button>
                     </div>
                   ) : (
                     <div style={{ padding: 10, background: '#fafafa', borderRadius: 6, border: '1px solid #eee' }}>

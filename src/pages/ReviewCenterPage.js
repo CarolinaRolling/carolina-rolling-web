@@ -65,10 +65,10 @@ export default function ReviewCenterPage() {
   // Order requested: estimates, email, orders, bills
   const tabs = [
     { key: 'estimates', title: 'Estimates', icon: FileText, color: '#1565c0', items: estimateItems },
+    { key: 'suppliers', title: 'Suppliers', icon: Mail, color: '#00838f', items: [], selfManaged: true },
     { key: 'email', title: 'Email', icon: Mail, color: '#2e7d32', items: quoteItems },
     { key: 'orders', title: 'Orders', icon: ShoppingCart, color: '#e65100', items: orderItems },
     { key: 'bills', title: 'Bills', icon: Receipt, color: '#6a1b9a', items: bills },
-    { key: 'suppliers', title: 'Suppliers', icon: Mail, color: '#00838f', items: [], selfManaged: true },
   ];
   const total = tabs.reduce((n, t) => n + t.items.length, 0);
   const active = tabs.find(t => t.key === activeTab) || tabs[0];

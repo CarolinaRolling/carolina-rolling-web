@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import LinkedSupplierEmails from '../components/LinkedSupplierEmails';
 import { ArrowLeft, Plus, Trash2, Save, Upload, Eye, X, Printer, Check, FileDown, Package, FileText, Edit, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
 import {
   getEstimateById, createEstimate, updateEstimate,
@@ -2520,6 +2521,7 @@ function EstimateDetailsPage() {
                 onChange={(e) => setFormData({ ...formData, internalNotes: e.target.value })}
                 rows={3} style={{ background: 'white' }}
                 placeholder="Internal notes about this estimate..." />
+              <LinkedSupplierEmails estimateId={id} />
             </div>
           )}
 

@@ -489,6 +489,7 @@ export const getEmailScanHistory = () => api.get('/email-scanner/history');
 export const getSupplierEmails = (linked) => api.get('/email-scanner/supplier-emails', { params: linked !== undefined ? { linked } : {} });
 export const linkSupplierEmail = (id, estimateId) => api.post(`/email-scanner/supplier-emails/${id}/link`, { estimateId });
 export const unlinkSupplierEmail = (id) => api.post(`/email-scanner/supplier-emails/${id}/unlink`);
+export const getEstimateSupplierEmails = (estimateId) => api.get(`/email-scanner/estimate/${estimateId}/supplier-emails`);
 export const getPendingOrders = (status) => api.get('/email-scanner/pending-orders', { params: { status } });
 export const approvePendingOrder = (id, data) => api.post(`/email-scanner/pending-orders/${id}/approve`, data);
 export const rejectPendingOrder = (id, data) => api.post(`/email-scanner/pending-orders/${id}/reject`, data);

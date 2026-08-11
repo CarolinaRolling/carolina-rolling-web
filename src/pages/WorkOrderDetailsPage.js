@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import LinkedSupplierEmails from '../components/LinkedSupplierEmails';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
   Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink, RefreshCw
@@ -32,8 +33,7 @@ import {
   createOutsideProcessingPO, createOutsideProcessingPOsAuto, createServicePOsAuto, regenServicePO, deleteServicePO, updateOutsideProcessingStatus, createTransportPO,
   editOutsideProcessingPO, regenOutsideProcessingPO, cancelOutsideProcessingPO,
   toggleVendorShare, resolveVendorIssue,
-  getOperators, assignWorkOrder, unassignWorkOrder,
-  uploadPartFiles, getPartFileSignedUrl, downloadPartFile, deletePartFile,
+  getOperators, assignWorkOrder, unassignWorkOrder,  uploadPartFiles, getPartFileSignedUrl, downloadPartFile, deletePartFile,
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, downloadWorkOrderDocument, deleteWorkOrderDocument, regeneratePODocument, createPODocument, toggleDocumentPortal,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
@@ -3560,6 +3560,7 @@ function WorkOrderDetailsPage() {
               <div className="detail-item"><div className="detail-item-label"><Clock size={14} /> Created</div><div className="detail-item-value">{formatDate(order.createdAt)}</div></div>
             </div>
             {order.notes && <div style={{ marginTop: 16, padding: 12, background: '#f9f9f9', borderRadius: 8 }}><strong>Notes:</strong> {order.notes}</div>}
+            {order.estimateId && <LinkedSupplierEmails estimateId={order.estimateId} />}
             {/* Collapsible accounting contact — for billing reference */}
             {order._clientObj && (order._clientObj.accountingContactName || order._clientObj.accountingContactEmail) && (
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #eee' }}>
