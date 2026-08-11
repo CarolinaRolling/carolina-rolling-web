@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, ShoppingCart, Receipt, Mail, ChevronRight, CheckCircle2, RefreshCw, ExternalLink } from 'lucide-react';
 import { getEstimates, getPendingOrders, getCommBills, getCommCoverage, getMonitoredClients, updateBillStatus, updateCommEmailCategory } from '../services/api';
+import EstimateProgressBoard from '../components/EstimateProgressBoard';
 import { formatDate } from '../utils/dates';
 
 // One hub for everything waiting on a human decision, split into tabs:
@@ -52,7 +53,7 @@ export default function ReviewCenterPage() {
 
   const estimateItems = [...estimates]
     .sort((a, b) => (Number(isMonitored(b.clientName)) - Number(isMonitored(a.clientName))) || byDateAsc(a.createdAt, b.createdAt))
-    .map(e => ({ id: e.id, label: e.estimateNumber || 'Estimate', sub: e.clientName || 'Unknown client', date: e.createdAt, priority: isMonitored(e.clientName), onClick: () => navigate(`/estimates/${e.id}`) }));
+    .map(e => ({ id: e.id, label: e.estimateNumber || 'Estimate', sub: e.clientName || 'Unknown client', date: e.createdAt, priority: isMonitored(e.clientName), stage: e.workflowStage || 'created', onClick: () => navigate(`/estimates/${e.id}`) }));
 
   const orderItems = [...orders].sort((a, b) => byDateAsc(a.createdAt, b.createdAt))
     .map(o => ({ id: o.id, label: o.clientName || 'Client order', sub: o.poNumber ? `PO ${o.poNumber}` : 'Client-submitted order', date: o.createdAt, onClick: () => navigate('/pending-orders') }));
@@ -157,6 +158,11 @@ export default function ReviewCenterPage() {
                   {it.priority && <span title="Email-monitor client" style={{ marginRight: 6 }}>📧</span>}{it.label}
                 </div>
                 {it.sub && <div style={{ fontSize: '0.8rem', color: it.priority ? PRIORITY_COLOR : '#888', fontWeight: it.priority ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.sub}</div>}
+                {it.stage && (
+                  <div style={{ marginTop: 6 }}>
+                    <EstimateProgressBoard estimateId={it.id} stage={it.stage} compact />
+                  </div>
+                )}
               </div>
               <span style={{ fontSize: '0.78rem', color: '#aaa', whiteSpace: 'nowrap' }}>{formatDate(it.date)}</span>
               <ChevronRight size={16} style={{ color: '#ccc', flexShrink: 0 }} />
