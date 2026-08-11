@@ -486,7 +486,7 @@ export const toggleGmailAccount = (id) => api.put(`/email-scanner/accounts/${id}
 export const triggerEmailScan = (hoursBack = 0) => api.post('/email-scanner/scan-now', hoursBack ? { hoursBack } : {});
 export const getEmailScanHistory = () => api.get('/email-scanner/history');
 // Supplier Communications tab
-export const getSupplierEmails = (linked) => api.get('/email-scanner/supplier-emails', { params: linked !== undefined ? { linked } : {} });
+export const getSupplierEmails = (linked, days) => api.get('/email-scanner/supplier-emails', { params: { ...(linked !== undefined ? { linked } : {}), ...(days !== undefined ? { days } : {}) } });
 export const linkSupplierEmail = (id, estimateId) => api.post(`/email-scanner/supplier-emails/${id}/link`, { estimateId });
 export const unlinkSupplierEmail = (id) => api.post(`/email-scanner/supplier-emails/${id}/unlink`);
 export const getEstimateSupplierEmails = (estimateId) => api.get(`/email-scanner/estimate/${estimateId}/supplier-emails`);

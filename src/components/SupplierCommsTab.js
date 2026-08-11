@@ -17,6 +17,7 @@ export default function SupplierCommsTab() {
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('unlinked'); // 'unlinked' | 'linked' | 'all'
+  const [windowDays, setWindowDays] = useState('14'); // recency window: '7' | '14' | '30' | 'all'
   const [expanded, setExpanded] = useState(null);    // email id whose body is expanded
   const [linkingFor, setLinkingFor] = useState(null); // email id being linked
   const [search, setSearch] = useState('');
@@ -27,14 +28,14 @@ export default function SupplierCommsTab() {
     setLoading(true);
     try {
       const linkedParam = filter === 'all' ? undefined : (filter === 'linked' ? 'true' : 'false');
-      const res = await getSupplierEmails(linkedParam);
+      const res = await getSupplierEmails(linkedParam, windowDays);
       setEmails(res.data?.data || []);
     } catch (e) {
       setEmails([]);
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, windowDays]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -109,6 +110,14 @@ export default function SupplierCommsTab() {
         <span style={{ fontSize: '0.78rem', color: '#999', marginLeft: 4 }}>
           {loading ? 'Loading…' : `${emails.length} supplier email${emails.length === 1 ? '' : 's'}`}
         </span>
+        <select value={windowDays} onChange={e => setWindowDays(e.target.value)}
+          title="How far back to show supplier emails"
+          style={{ marginLeft: 'auto', padding: '4px 8px', borderRadius: 6, border: '1px solid #ddd', fontSize: '0.78rem', color: '#555', cursor: 'pointer' }}>
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="all">All time</option>
+        </select>
       </div>
 
       {!loading && emails.length === 0 && (
