@@ -44,9 +44,9 @@ export default function EstimateProgressBoard({ estimateId, stage, onChange, com
     }
   };
 
-  const dot = compact ? 8 : 12;
-  const fontSize = compact ? '0.62rem' : '0.72rem';
-  const gap = compact ? 4 : 8;
+  const dot = compact ? 12 : 14;
+  const fontSize = compact ? '0.75rem' : '0.8rem';
+  const gap = compact ? 7 : 9;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap, flexWrap: 'wrap', opacity: saving ? 0.7 : 1 }}
@@ -57,7 +57,7 @@ export default function EstimateProgressBoard({ estimateId, stage, onChange, com
         return (
           <React.Fragment key={s.key}>
             {i > 0 && (
-              <span style={{ width: compact ? 10 : 18, height: 2, background: reached ? '#43a047' : '#d0d0d0', flexShrink: 0 }} />
+              <span style={{ width: compact ? 16 : 22, height: 2, background: reached ? '#43a047' : '#d0d0d0', flexShrink: 0 }} />
             )}
             <span
               onClick={() => setStage(s.key)}

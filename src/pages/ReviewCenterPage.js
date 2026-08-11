@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { FileText, ShoppingCart, Receipt, Mail, ChevronRight, CheckCircle2, RefreshCw, ExternalLink } from 'lucide-react';
 import { getEstimates, getPendingOrders, getCommBills, getCommCoverage, getMonitoredClients, updateBillStatus, updateCommEmailCategory } from '../services/api';
 import EstimateProgressBoard from '../components/EstimateProgressBoard';
+import SupplierCommsTab from '../components/SupplierCommsTab';
 import { formatDate } from '../utils/dates';
 
 // One hub for everything waiting on a human decision, split into tabs:
@@ -67,6 +68,7 @@ export default function ReviewCenterPage() {
     { key: 'email', title: 'Email', icon: Mail, color: '#2e7d32', items: quoteItems },
     { key: 'orders', title: 'Orders', icon: ShoppingCart, color: '#e65100', items: orderItems },
     { key: 'bills', title: 'Bills', icon: Receipt, color: '#6a1b9a', items: bills },
+    { key: 'suppliers', title: 'Suppliers', icon: Mail, color: '#00838f', items: [], selfManaged: true },
   ];
   const total = tabs.reduce((n, t) => n + t.items.length, 0);
   const active = tabs.find(t => t.key === activeTab) || tabs[0];
@@ -105,6 +107,8 @@ export default function ReviewCenterPage() {
 
       {loading ? (
         <div className="card" style={{ textAlign: 'center', padding: 60, color: '#888' }}>Loading review items…</div>
+      ) : activeTab === 'suppliers' ? (
+        <SupplierCommsTab />
       ) : active.items.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 50, color: '#2e7d32' }}>
           <CheckCircle2 size={36} style={{ marginBottom: 10 }} />
