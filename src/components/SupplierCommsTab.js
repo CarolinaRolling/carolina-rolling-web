@@ -18,6 +18,7 @@ export default function SupplierCommsTab() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('unlinked'); // 'unlinked' | 'linked' | 'all'
   const [windowDays, setWindowDays] = useState('14'); // recency window: '7' | '14' | '30' | 'all'
+  const [includeAll, setIncludeAll] = useState(false); // show all vendor mail, not just AI-detected quotes
   const [expanded, setExpanded] = useState(null);    // email id whose body is expanded
   const [linkingFor, setLinkingFor] = useState(null); // email id being linked
   const [search, setSearch] = useState('');
@@ -28,14 +29,14 @@ export default function SupplierCommsTab() {
     setLoading(true);
     try {
       const linkedParam = filter === 'all' ? undefined : (filter === 'linked' ? 'true' : 'false');
-      const res = await getSupplierEmails(linkedParam, windowDays);
+      const res = await getSupplierEmails(linkedParam, windowDays, includeAll);
       setEmails(res.data?.data || []);
     } catch (e) {
       setEmails([]);
     } finally {
       setLoading(false);
     }
-  }, [filter, windowDays]);
+  }, [filter, windowDays, includeAll]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -118,7 +119,17 @@ export default function SupplierCommsTab() {
           <option value="30">Last 30 days</option>
           <option value="all">All time</option>
         </select>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: '#666', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          title="By default only emails the AI identified as material/service quotes are shown. Check to include all vendor mail (invoices, confirmations, etc.).">
+          <input type="checkbox" checked={includeAll} onChange={e => setIncludeAll(e.target.checked)} />
+          Show all vendor mail
+        </label>
       </div>
+      {!includeAll && (
+        <div style={{ fontSize: '0.72rem', color: '#999', marginBottom: 8 }}>
+          Showing only emails the AI identified as supplier price quotes. Invoices, order confirmations, and shipping notices are hidden.
+        </div>
+      )}
 
       {!loading && emails.length === 0 && (
         <div style={{ padding: 24, textAlign: 'center', color: '#999', fontSize: '0.85rem' }}>
