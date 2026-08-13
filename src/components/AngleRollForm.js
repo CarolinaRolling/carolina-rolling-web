@@ -213,6 +213,8 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
         _kerfWidth: kerfWidth,
         _ringSticksNeeded: ringCalc.sticksNeeded,
         _ringRingsPerStick: ringCalc.ringsPerStick || 0,
+        _ringCutLengthPerRing: ringCalc.cutLengthPerRing || 0,
+        _ringStockLengthIn: ringCalc.stockLength || 0,
         _ringMultiSegment: ringCalc.multiSegment || false,
         _cutServiceType: cutServiceType,
         _ringCircumference: ringCalc.circumference || 0,
@@ -231,11 +233,22 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
     const descParts = [];
-    
-    // Quantity
-    descParts.push(completeRings && ringCalc && !ringCalc.error
-      ? `${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' length(s):`
-      : `${qty}pc:`);
+
+    // Quantity — lead with the FINISHED-PIECE count and per-piece cut length (what the operator
+    // needs), not the stock-length count. The stock info goes in a trailing note below.
+    if (completeRings && ringCalc && !ringCalc.error) {
+      const numRings = parseInt(ringsNeeded) || 1;
+      if (ringCalc.multiSegment) {
+        descParts.push(`${numRings}pc:`);
+      } else {
+        const cutLen = ringCalc.cutLengthPerRing || 0;
+        descParts.push(cutLen > 0
+          ? `${numRings}pc @ ${cutLen.toFixed(2)}" cut:`
+          : `${numRings}pc:`);
+      }
+    } else {
+      descParts.push(`${qty}pc:`);
+    }
     
     // Angle size
     if (partData._angleSize && partData._angleSize !== 'Custom') {
@@ -266,8 +279,20 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     // Origin
     const origin = partData._materialOrigin || '';
     if (origin) descParts.push(origin);
-    
-    return descParts.join(' ');
+
+    let desc = descParts.join(' ');
+    // Trailing stock note (operator reference): how many lengths of raw stock are available and
+    // what they're for. Kept separate from the lead so the operator sees pieces+cut length first.
+    if (completeRings && ringCalc && !ringCalc.error) {
+      const numRings = parseInt(ringsNeeded) || 1;
+      const stockFt = (ringCalc.stockLength / 12).toFixed(0);
+      if (ringCalc.multiSegment) {
+        desc += ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' (${ringCalc.segmentsPerRing} segments/ring) to make ${numRings} complete ring(s)`;
+      } else {
+        desc += ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' to make ${numRings} complete ring(s)`;
+      }
+    }
+    return desc;
   }, [partData._angleSize, partData._customAngleSize, partData.thickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, completeRings, ringCalc]);
 
   // Build rolling description

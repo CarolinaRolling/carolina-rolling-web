@@ -207,7 +207,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
         _kerfWidth: kerfWidth,
         _ringSticksNeeded: ringCalc.sticksNeeded,
         _ringRingsPerStick: ringCalc.ringsPerStick || 0,
-        _ringMultiSegment: ringCalc.multiSegment || false,
+        _ringMultiSegment: ringCalc.multiSegment || false, _ringCutLengthPerRing: ringCalc.cutLengthPerRing || 0,
         _cutServiceType: cutServiceType,
         _ringCircumference: ringCalc.circumference || 0,
         _ringSegmentsPerRing: ringCalc.segmentsPerRing || 1,
@@ -223,9 +223,13 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   // Build material description
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
+    const cr = completeRings && ringCalc && !ringCalc.error;
+    const numRings = parseInt(partData._ringsNeeded || partData.quantity) || 1;
     const descParts = [];
-    descParts.push(completeRings && ringCalc && !ringCalc.error
-      ? `${ringCalc.sticksNeeded} × ${(ringCalc.stockLength / 12).toFixed(0)}' length(s):`
+    descParts.push(cr
+      ? (ringCalc.multiSegment || !(ringCalc.cutLengthPerRing > 0)
+          ? `${numRings}pc:`
+          : `${numRings}pc @ ${ringCalc.cutLengthPerRing.toFixed(2)}" cut:`)
       : `${qty}pc:`);
 
     if (partData._tubeSize && partData._tubeSize !== 'CustomSq' && partData._tubeSize !== 'CustomRect') {
@@ -251,8 +255,15 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     const origin = partData._materialOrigin || '';
     if (origin) descParts.push(origin);
 
-    return descParts.join(' ');
-  }, [partData._tubeSize, partData._customTubeSize, partData.thickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, isRectangular, completeRings, ringCalc]);
+    let desc = descParts.join(' ');
+    if (cr) {
+      const stockFt = (ringCalc.stockLength / 12).toFixed(0);
+      desc += ringCalc.multiSegment
+        ? ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' (${ringCalc.segmentsPerRing} segments/ring) to make ${numRings} complete ring(s)`
+        : ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' to make ${numRings} complete ring(s)`;
+    }
+    return desc;
+  }, [partData._tubeSize, partData._customTubeSize, partData.thickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, partData._ringsNeeded, isRectangular, completeRings, ringCalc]);
 
   // Build rolling description
   const rollingDescription = useMemo(() => {
