@@ -95,6 +95,7 @@ function WorkOrderDetailsPage() {
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
   const [operators, setOperators] = useState([]);
+  const [internalNotesDraft, setInternalNotesDraft] = useState('');
   // Display numbers (1, 2, 3 for production parts; 1.1, 1.2 for their services) — derived, stored data untouched
   const partDispNum = useMemo(() => computeDisplayNumbers(order?.parts || []).display, [order]);
   const [inspectionJobs, setInspectionJobs] = useState([]);
@@ -440,6 +441,7 @@ function WorkOrderDetailsPage() {
       const response = await getWorkOrderById(id);
       const data = response.data.data;
       setOrder(data);
+      setInternalNotesDraft(data.internalNotes || '');
 
       // Determine correct tax rate: WO stored > client-specific > admin default
       let effectiveTaxRate = adminTaxRate;
@@ -3560,6 +3562,23 @@ function WorkOrderDetailsPage() {
               <div className="detail-item"><div className="detail-item-label"><Clock size={14} /> Created</div><div className="detail-item-value">{formatDate(order.createdAt)}</div></div>
             </div>
             {order.notes && <div style={{ marginTop: 16, padding: 12, background: '#f9f9f9', borderRadius: 8 }}><strong>Notes:</strong> {order.notes}</div>}
+            {/* Internal Notes (office only) — carried over from the estimate, editable here. */}
+            <div style={{ marginTop: 16, padding: 12, background: '#FFFDE7', border: '1px solid #FFF9C4', borderRadius: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <strong style={{ fontSize: '0.9rem' }}>📝 Internal Notes <span style={{ fontWeight: 400, fontSize: '0.78rem', color: '#888' }}>(office only — not on client portal)</span></strong>
+                <button className="btn btn-sm" onClick={async () => {
+                  try {
+                    await updateWorkOrder(id, { internalNotes: internalNotesDraft });
+                    showMessage('Internal notes saved');
+                    await loadOrder();
+                  } catch { setError('Failed to save internal notes'); }
+                }} style={{ fontSize: '0.75rem', padding: '4px 12px' }}>💾 Save Notes</button>
+              </div>
+              <textarea className="form-textarea" value={internalNotesDraft}
+                onChange={(e) => setInternalNotesDraft(e.target.value)}
+                rows={6} style={{ background: 'white', resize: 'vertical', minHeight: 110, width: '100%', fontSize: '0.9rem', lineHeight: 1.5 }}
+                placeholder="Internal notes about this work order (carried over from the estimate)..." />
+            </div>
             {order.estimateId && <LinkedSupplierEmails estimateId={order.estimateId} />}
             {/* Collapsible accounting contact — for billing reference */}
             {order._clientObj && (order._clientObj.accountingContactName || order._clientObj.accountingContactEmail) && (

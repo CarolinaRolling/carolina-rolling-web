@@ -195,6 +195,7 @@ function EstimateDetailsPage() {
   const [clientEditing, setClientEditing] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null); // full client object with contacts
   const [clientLocked, setClientLocked] = useState(false);
+  const [clientInfoCollapsed, setClientInfoCollapsed] = useState(false);
   const [clientContacts, setClientContacts] = useState([]); // contacts from selected client
   const [nextDR, setNextDR] = useState(null);
   const [useCustomDR, setUseCustomDR] = useState(false);
@@ -360,6 +361,9 @@ function EstimateDetailsPage() {
           } else {
             setClientLocked(!!data.clientName);
           }
+          // Collapse the client-info card by default when the estimate already has a client, to
+          // free up screen space (it expands on click for editing).
+          if (data.clientName) setClientInfoCollapsed(true);
           // Auto tax exempt for verified resale clients (only if not already saved on estimate)
           if (client && !data.taxExempt) {
             const clientIsExempt = client.taxStatus === 'resale' || client.taxStatus === 'exempt' ||
@@ -2239,6 +2243,28 @@ function EstimateDetailsPage() {
         <div>
           {/* Client Info */}
           <div className="card">
+            {(!isNew && clientInfoCollapsed) ? (
+              // Compact collapsed view — one line, click to expand for editing.
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', cursor: 'pointer' }}
+                onClick={() => setClientInfoCollapsed(false)}
+                title="Click to edit client information">
+                <h3 className="card-title" style={{ margin: 0, fontSize: '0.9rem' }}>Client</h3>
+                <span style={{ fontWeight: 700, color: '#111', fontSize: '0.95rem' }}>{formData.clientName || '—'}</span>
+                {formData.contactName && <span style={{ color: '#666', fontSize: '0.85rem' }}>· {formData.contactName}</span>}
+                {formData.contactPhone && <span style={{ color: '#666', fontSize: '0.85rem' }}>· {formData.contactPhone}</span>}
+                {formData.contactEmail && <span style={{ color: '#888', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>· {formData.contactEmail}</span>}
+                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#1565c0', fontWeight: 600 }}>✏️ Edit</span>
+              </div>
+            ) : (
+            <>
+            {!isNew && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -8 }}>
+                <button type="button" onClick={() => setClientInfoCollapsed(true)}
+                  style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', fontSize: '0.78rem' }}>
+                  ▲ Collapse
+                </button>
+              </div>
+            )}
             <h3 className="card-title" style={{ marginBottom: 16 }}>Client Information</h3>
             {isNew && (
               <div className="form-group" style={{ marginBottom: 12 }}>
@@ -2440,6 +2466,8 @@ function EstimateDetailsPage() {
                   onChange={(e) => setFormData({ ...formData, projectDescription: e.target.value })} />
               </div>
             </div>
+            </>
+            )}
           </div>
 
           {/* Tab Navigation */}
@@ -2519,7 +2547,7 @@ function EstimateDetailsPage() {
               </div>
               <textarea className="form-textarea" value={formData.internalNotes || ''}
                 onChange={(e) => setFormData({ ...formData, internalNotes: e.target.value })}
-                rows={3} style={{ background: 'white' }}
+                rows={8} style={{ background: 'white', resize: 'vertical', minHeight: 140, fontSize: '0.9rem', lineHeight: 1.5 }}
                 placeholder="Internal notes about this estimate..." />
               <LinkedSupplierEmails estimateId={id} />
             </div>
