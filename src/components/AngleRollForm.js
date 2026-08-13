@@ -61,7 +61,7 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
   const [cutServiceType, setCutServiceType] = useState(partData._cutServiceType || ''); // '' | 'cut_to_ring' | 'cut_to_ring_overlap' | 'cut_to_size'
   const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
   const [tangentLength, setTangentLength] = useState(partData._tangentLength || '12');
-  const [ringOverlap, setRingOverlap] = useState(partData._ringOverlap != null ? String(partData._ringOverlap) : '1.5');
+  const [ringOverlap, setRingOverlap] = useState(parseFloat(partData._ringOverlap) > 0 ? String(partData._ringOverlap) : '1.5');
   const kerfWidth = 0.125; // Standard saw blade kerf — hardcoded
   const [showDiaFind, setShowDiaFind] = useState(false);
   const [showDiamondOptions, setShowDiamondOptions] = useState(!!(partData._diamondOrientation));

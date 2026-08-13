@@ -1169,9 +1169,22 @@ function WorkOrderDetailsPage() {
         } catch (e) { console.warn('Failed to set promise date:', e); }
       }
 
-      // Auto-add cut fabrication service when complete rings is selected (new parts only)
-      if (!editingPart && partData._completeRings && savedPartId && partData._cutServiceType && partData._cutServiceType !== '') {
+      // Auto-add cut fabrication service when complete rings + a cut service is selected. Runs on
+      // CREATE and on EDIT (e.g. re-adding a cut service to an existing part). A duplicate-guard
+      // below prevents creating a second fab service if one is already linked.
+      if (partData._completeRings && savedPartId && partData._cutServiceType && partData._cutServiceType !== '') {
         try {
+          // Duplicate guard: skip if a cut fab service is already linked to this part.
+          const alreadyLinked = (order.parts || []).some(p =>
+            p.partType === 'fab_service' &&
+            ((p.formData || {})._linkedPartId === savedPartId || p._linkedPartId === savedPartId) &&
+            (
+              (p.formData || {})._serviceType === 'cut_to_size' ||
+              (p.specialInstructions || '').toLowerCase().includes('cut to ring') ||
+              (p.specialInstructions || '').toLowerCase().includes('cut to size')
+            )
+          );
+          if (alreadyLinked) throw 'skip-duplicate';
           const numRings = parseInt(partData.quantity) || parseInt(partData._ringsNeeded) || 1;
           const sticksNeeded = partData._ringSticksNeeded || 0;
           const cutType = partData._cutServiceType;
@@ -1214,7 +1227,7 @@ function WorkOrderDetailsPage() {
               status: 'pending',
             });
           }
-        } catch (e) { console.warn('Auto cut service failed:', e); }
+        } catch (e) { if (e !== 'skip-duplicate') console.warn('Auto cut service failed:', e); }
       }
       await loadOrder();
       

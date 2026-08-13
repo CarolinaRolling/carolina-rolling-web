@@ -60,7 +60,7 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
   const [cutServiceType, setCutServiceType] = useState(partData._cutServiceType || ''); // '' | 'cut_to_ring' | 'cut_to_ring_overlap' | 'cut_to_size'
   const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
   const [tangentLength, setTangentLength] = useState(partData._tangentLength || '12');
-  const [ringOverlap, setRingOverlap] = useState(partData._ringOverlap != null ? String(partData._ringOverlap) : '1.5');
+  const [ringOverlap, setRingOverlap] = useState(parseFloat(partData._ringOverlap) > 0 ? String(partData._ringOverlap) : '1.5');
   const [kerfWidth, setKerfWidth] = useState(partData._kerfWidth || '0.125');
   const [isCamber, setIsCamber] = useState(!!(partData._isCamber));
   const [showDiaFind, setShowDiaFind] = useState(false);
