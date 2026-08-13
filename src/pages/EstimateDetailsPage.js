@@ -2244,16 +2244,52 @@ function EstimateDetailsPage() {
           {/* Client Info */}
           <div className="card">
             {(!isNew && clientInfoCollapsed) ? (
-              // Compact collapsed view — one line, click to expand for editing.
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', cursor: 'pointer' }}
-                onClick={() => setClientInfoCollapsed(false)}
-                title="Click to edit client information">
-                <h3 className="card-title" style={{ margin: 0, fontSize: '0.9rem' }}>Client</h3>
-                <span style={{ fontWeight: 700, color: '#111', fontSize: '0.95rem' }}>{formData.clientName || '—'}</span>
-                {formData.contactName && <span style={{ color: '#666', fontSize: '0.85rem' }}>· {formData.contactName}</span>}
-                {formData.contactPhone && <span style={{ color: '#666', fontSize: '0.85rem' }}>· {formData.contactPhone}</span>}
-                {formData.contactEmail && <span style={{ color: '#888', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>· {formData.contactEmail}</span>}
-                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#1565c0', fontWeight: 600 }}>✏️ Edit</span>
+              // Compact view styled like the work order's "Order Details" card — labeled boxes,
+              // with an Edit button to expand the full editor.
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <h3 className="card-title" style={{ margin: 0 }}>Client Details</h3>
+                  <button type="button" onClick={() => setClientInfoCollapsed(false)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'white', border: '1px solid #90caf9', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, color: '#1565c0' }}>
+                    ✏️ Edit
+                  </button>
+                </div>
+                <div className="detail-grid" style={{ marginBottom: 0 }}>
+                  <div className="detail-item">
+                    <div className="detail-item-label">Client</div>
+                    <div className="detail-item-value" style={{ fontWeight: 700 }}>{formData.clientName || '—'}</div>
+                  </div>
+                  {clientPaymentTerms && (
+                    <div className="detail-item">
+                      <div className="detail-item-label">Payment Terms</div>
+                      <div className="detail-item-value" style={{ fontWeight: 600 }}>{clientPaymentTerms}</div>
+                    </div>
+                  )}
+                  {formData.clientPurchaseOrderNumber && (
+                    <div className="detail-item">
+                      <div className="detail-item-label">Client PO#</div>
+                      <div className="detail-item-value" style={{ color: '#1976d2', fontWeight: 600 }}>{formData.clientPurchaseOrderNumber}</div>
+                    </div>
+                  )}
+                  {formData.contactName && (
+                    <div className="detail-item">
+                      <div className="detail-item-label">Contact Name</div>
+                      <div className="detail-item-value">{formData.contactName}</div>
+                    </div>
+                  )}
+                  {formData.contactPhone && (
+                    <div className="detail-item">
+                      <div className="detail-item-label">Contact Phone</div>
+                      <div className="detail-item-value">{formData.contactPhone}</div>
+                    </div>
+                  )}
+                  {formData.contactEmail && (
+                    <div className="detail-item">
+                      <div className="detail-item-label">Contact Email</div>
+                      <div className="detail-item-value" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{formData.contactEmail}</div>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
             <>

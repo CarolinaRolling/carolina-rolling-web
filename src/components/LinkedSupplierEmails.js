@@ -44,8 +44,14 @@ export default function LinkedSupplierEmails({ estimateId }) {
           <span style={{ color: '#999', fontSize: '0.7rem', whiteSpace: 'nowrap' }}>{fmtDate(em.receivedAt)}</span>
           {em.gmailLink && (
             <a href={em.gmailLink} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: '0.72rem', color: '#00838f', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}>
-              Open ↗
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: '0.72rem', color: 'white', textDecoration: 'none', fontWeight: 600,
+                whiteSpace: 'nowrap', background: '#00838f', padding: '4px 10px',
+                borderRadius: 5, border: '1px solid #00695c',
+              }}
+              title="Open this supplier email in Gmail">
+              📧 View email ↗
             </a>
           )}
         </div>
