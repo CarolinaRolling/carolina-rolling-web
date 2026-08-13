@@ -23,7 +23,7 @@ const STAGES = [
   { key: 'ready_to_send',   label: 'Ready to Send' },
 ];
 
-export default function EstimateProgressBoard({ estimateId, stage, onChange, compact = false, readOnly = false }) {
+export default function EstimateProgressBoard({ estimateId, stage, onChange, compact = false, readOnly = false, quoteCount = 0 }) {
   const [current, setCurrent] = useState(stage || 'created');
   const [saving, setSaving] = useState(false);
 
@@ -76,6 +76,11 @@ export default function EstimateProgressBoard({ estimateId, stage, onChange, com
                 flexShrink: 0,
               }} />
               {s.label}
+              {s.key === 'pricing_received' && reached && quoteCount > 0 && (
+                <span style={{ marginLeft: 3, fontSize: compact ? '0.68rem' : '0.72rem', fontWeight: 700, color: '#00838f', background: '#e0f7fa', borderRadius: 8, padding: '0 6px' }}>
+                  {quoteCount} quote{quoteCount === 1 ? '' : 's'}
+                </span>
+              )}
             </span>
           </React.Fragment>
         );
