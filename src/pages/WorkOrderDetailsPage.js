@@ -1179,6 +1179,9 @@ function WorkOrderDetailsPage() {
           const clDia = circ > 0 ? (circ / Math.PI).toFixed(3) : null;
           const segmentsPerRing = partData._ringSegmentsPerRing || 1;
           const segLength = circ > 0 && segmentsPerRing > 1 ? (circ / segmentsPerRing).toFixed(3) : null;
+          // Per-ring cut length (circumference + tangents) — lives here on the cut/fab order.
+          const cutLen = parseFloat(partData._ringCutLengthPerRing) || 0;
+          const cutLenStr = cutLen > 0 ? ` — cut length per ring: ${cutLen.toFixed(3)}"` : '';
 
           // Map cut type to fab service _serviceType
           const fabServiceType = (cutType === 'cut_to_ring' || cutType === 'cut_to_ring_overlap' || cutType === 'cut_to_size')
@@ -1186,10 +1189,10 @@ function WorkOrderDetailsPage() {
 
           let cutNotes = '';
           if (cutType === 'cut_to_ring') {
-            cutNotes = `Cut to ring — ${numRings} ring(s) from ${sticksNeeded} length(s)` +
+            cutNotes = `Cut to ring — ${numRings} ring(s) from ${sticksNeeded} length(s)` + cutLenStr +
               (circ ? ` — CL Circumference: ${circ.toFixed(3)}" (pi x ${clDia}")` : '');
           } else if (cutType === 'cut_to_ring_overlap') {
-            cutNotes = `Cut to ring with overlap — ${numRings} ring(s) from ${sticksNeeded} length(s)` +
+            cutNotes = `Cut to ring with overlap — ${numRings} ring(s) from ${sticksNeeded} length(s)` + cutLenStr +
               (circ ? ` — CL Circumference: ${circ.toFixed(3)}" (pi x ${clDia}")` : '');
           } else if (cutType === 'cut_to_size') {
             cutNotes = `Cut to size — ${sticksNeeded} lengths to make ${numRings} complete ring(s), ${segmentsPerRing} segments/ring` +

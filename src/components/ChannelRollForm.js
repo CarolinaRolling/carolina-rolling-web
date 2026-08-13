@@ -174,11 +174,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
     const qty = parseInt(partData.quantity) || 1;
     const cr = completeRings && ringCalc && !ringCalc.error;
     const numRings = parseInt(partData._ringsNeeded || partData.quantity) || 1;
-    const leadQty = cr
-      ? (ringCalc.multiSegment || !(ringCalc.cutLengthPerRing > 0)
-          ? `${numRings}pc:`
-          : `${numRings}pc @ ${ringCalc.cutLengthPerRing.toFixed(2)}" cut:`)
-      : `${qty}pc:`;
+    const leadQty = cr ? `${ringCalc.sticksNeeded}pc:` : `${qty}pc:`;
     const parts = [leadQty];
     if (partData._channelSize && partData._channelSize !== 'Custom') parts.push(partData._channelSize);
     else if (partData._customChannelSize) parts.push(partData._customChannelSize);
@@ -188,10 +184,9 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
     if (partData._materialOrigin) parts.push(partData._materialOrigin);
     let desc = parts.join(' ');
     if (cr) {
-      const stockFt = (ringCalc.stockLength / 12).toFixed(0);
       desc += ringCalc.multiSegment
-        ? ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' (${ringCalc.segmentsPerRing} segments/ring) to make ${numRings} complete ring(s)`
-        : ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' to make ${numRings} complete ring(s)`;
+        ? ` — ${numRings} complete ring(s) required (${ringCalc.segmentsPerRing} segments/ring)`
+        : ` — ${numRings} complete ring(s) required`;
     }
     return desc;
   }, [partData._channelSize, partData._customChannelSize, partData.length, partData.material, partData._materialOrigin, partData.quantity, partData._ringsNeeded, completeRings, ringCalc]);

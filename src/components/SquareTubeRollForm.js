@@ -226,11 +226,7 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     const cr = completeRings && ringCalc && !ringCalc.error;
     const numRings = parseInt(partData._ringsNeeded || partData.quantity) || 1;
     const descParts = [];
-    descParts.push(cr
-      ? (ringCalc.multiSegment || !(ringCalc.cutLengthPerRing > 0)
-          ? `${numRings}pc:`
-          : `${numRings}pc @ ${ringCalc.cutLengthPerRing.toFixed(2)}" cut:`)
-      : `${qty}pc:`);
+    descParts.push(cr ? `${ringCalc.sticksNeeded}pc:` : `${qty}pc:`);
 
     if (partData._tubeSize && partData._tubeSize !== 'CustomSq' && partData._tubeSize !== 'CustomRect') {
       const parsed = parseTubeSize(partData._tubeSize);
@@ -257,10 +253,9 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
 
     let desc = descParts.join(' ');
     if (cr) {
-      const stockFt = (ringCalc.stockLength / 12).toFixed(0);
       desc += ringCalc.multiSegment
-        ? ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' (${ringCalc.segmentsPerRing} segments/ring) to make ${numRings} complete ring(s)`
-        : ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' to make ${numRings} complete ring(s)`;
+        ? ` — ${numRings} complete ring(s) required (${ringCalc.segmentsPerRing} segments/ring)`
+        : ` — ${numRings} complete ring(s) required`;
     }
     return desc;
   }, [partData._tubeSize, partData._customTubeSize, partData.thickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, partData._ringsNeeded, isRectangular, completeRings, ringCalc]);

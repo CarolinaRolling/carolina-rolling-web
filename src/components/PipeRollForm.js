@@ -266,12 +266,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     const parts = [];
     // For complete rings, use stored sticks info from partData instead of ringCalc
     if (completeRings && partData._ringSticksNeeded) {
-      const numRings = parseInt(partData._ringsNeeded || partData.quantity) || 1;
-      const cutLen = parseFloat(partData._ringCutLengthPerRing) || 0;
-      const multi = partData._ringMultiSegment;
-      parts.push((multi || !(cutLen > 0))
-        ? `${numRings}pc:`
-        : `${numRings}pc @ ${cutLen.toFixed(2)}" cut:`);
+      parts.push(`${partData._ringSticksNeeded}pc:`);
     } else {
       parts.push(`${qty}pc:`);
     }
@@ -301,17 +296,12 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     let desc = parts.join(' ');
     if (completeRings && partData._ringSticksNeeded) {
       const numRings = parseInt(partData._ringsNeeded || partData.quantity) || 1;
-      const rawLen = partData.length || '';
-      const lenMatch = rawLen.match(/([\d.]+)/);
-      const lenVal = lenMatch ? parseFloat(lenMatch[1]) : 0;
-      const lenIn = (rawLen.includes("'") || rawLen.includes('ft')) ? lenVal * 12 : lenVal;
-      const stLen = lenIn > 0 ? (lenIn / 12).toFixed(0) : '?';
       desc += partData._ringMultiSegment && partData._ringSegmentsPerRing
-        ? ` — ${partData._ringSticksNeeded} lengths @ ${stLen}' (${partData._ringSegmentsPerRing} segments/ring) to make ${numRings} complete ring(s)`
-        : ` — ${partData._ringSticksNeeded} lengths @ ${stLen}' to make ${numRings} complete ring(s)`;
+        ? ` — ${numRings} complete ring(s) required (${partData._ringSegmentsPerRing} segments/ring)`
+        : ` — ${numRings} complete ring(s) required`;
     }
     return desc;
-  }, [partData._pipeSize, partData._schedule, partData.outerDiameter, partData.wallThickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, partData._ringSticksNeeded, partData._ringsNeeded, partData._ringCutLengthPerRing, partData._ringMultiSegment, partData._ringSegmentsPerRing, selectedSize, completeRings]);
+  }, [partData._pipeSize, partData._schedule, partData.outerDiameter, partData.wallThickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, partData._ringSticksNeeded, partData._ringsNeeded, partData._ringMultiSegment, partData._ringSegmentsPerRing, selectedSize, completeRings]);
 
   // Parse length to inches
   const lengthInches = useMemo(() => {

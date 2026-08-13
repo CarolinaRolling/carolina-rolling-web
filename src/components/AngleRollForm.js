@@ -234,18 +234,12 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     const qty = parseInt(partData.quantity) || 1;
     const descParts = [];
 
-    // Quantity — lead with the FINISHED-PIECE count and per-piece cut length (what the operator
-    // needs), not the stock-length count. The stock info goes in a trailing note below.
-    if (completeRings && ringCalc && !ringCalc.error) {
-      const numRings = parseInt(ringsNeeded) || 1;
-      if (ringCalc.multiSegment) {
-        descParts.push(`${numRings}pc:`);
-      } else {
-        const cutLen = ringCalc.cutLengthPerRing || 0;
-        descParts.push(cutLen > 0
-          ? `${numRings}pc @ ${cutLen.toFixed(2)}" cut:`
-          : `${numRings}pc:`);
-      }
+    // Quantity — for complete rings, lead with the number of LENGTHS the operator receives (reads
+    // like a standard angle job). The ring requirement goes in a clean trailing note; the per-ring
+    // cut length lives on the auto-generated cut fabrication order, not here.
+    const cr = completeRings && ringCalc && !ringCalc.error;
+    if (cr) {
+      descParts.push(`${ringCalc.sticksNeeded}pc:`);
     } else {
       descParts.push(`${qty}pc:`);
     }
@@ -281,19 +275,16 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
     if (origin) descParts.push(origin);
 
     let desc = descParts.join(' ');
-    // Trailing stock note (operator reference): how many lengths of raw stock are available and
-    // what they're for. Kept separate from the lead so the operator sees pieces+cut length first.
-    if (completeRings && ringCalc && !ringCalc.error) {
+    // Trailing note: the ring requirement (operator reference). Reads like "— 8 complete rings
+    // required". Multi-segment notes the segments per ring.
+    if (cr) {
       const numRings = parseInt(ringsNeeded) || 1;
-      const stockFt = (ringCalc.stockLength / 12).toFixed(0);
-      if (ringCalc.multiSegment) {
-        desc += ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' (${ringCalc.segmentsPerRing} segments/ring) to make ${numRings} complete ring(s)`;
-      } else {
-        desc += ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' to make ${numRings} complete ring(s)`;
-      }
+      desc += ringCalc.multiSegment
+        ? ` — ${numRings} complete ring(s) required (${ringCalc.segmentsPerRing} segments/ring)`
+        : ` — ${numRings} complete ring(s) required`;
     }
     return desc;
-  }, [partData._angleSize, partData._customAngleSize, partData.thickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, completeRings, ringCalc]);
+  }, [partData._angleSize, partData._customAngleSize, partData.thickness, partData.length, partData.material, partData._materialOrigin, partData.quantity, ringsNeeded, completeRings, ringCalc]);
 
   // Build rolling description
   const rollingDescription = useMemo(() => {

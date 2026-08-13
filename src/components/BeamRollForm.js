@@ -183,15 +183,11 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
 
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
-    // Lead with the finished-piece count + per-piece cut length (operator view); stock lengths go
-    // in a trailing note.
+    // Complete rings: lead with the LENGTHS received (reads like a standard job); ring requirement
+    // in a clean note; cut length lives on the fab order.
     const cr = completeRings && ringCalc && !ringCalc.error;
     const numRings = parseInt(partData._ringsNeeded || partData.quantity) || 1;
-    const leadQty = cr
-      ? (ringCalc.multiSegment || !(ringCalc.cutLengthPerRing > 0)
-          ? `${numRings}pc:`
-          : `${numRings}pc @ ${ringCalc.cutLengthPerRing.toFixed(2)}" cut:`)
-      : `${qty}pc:`;
+    const leadQty = cr ? `${ringCalc.sticksNeeded}pc:` : `${qty}pc:`;
     const parts = [leadQty];
     if (partData._beamSize && partData._beamSize !== 'Custom') parts.push(partData._beamSize);
     else if (partData._customBeamSize) parts.push(partData._customBeamSize);
@@ -201,10 +197,9 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
     if (partData._materialOrigin) parts.push(partData._materialOrigin);
     let desc = parts.join(' ');
     if (cr) {
-      const stockFt = (ringCalc.stockLength / 12).toFixed(0);
       desc += ringCalc.multiSegment
-        ? ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' (${ringCalc.segmentsPerRing} segments/ring) to make ${numRings} complete ring(s)`
-        : ` — ${ringCalc.sticksNeeded} lengths @ ${stockFt}' to make ${numRings} complete ring(s)`;
+        ? ` — ${numRings} complete ring(s) required (${ringCalc.segmentsPerRing} segments/ring)`
+        : ` — ${numRings} complete ring(s) required`;
     }
     return desc;
   }, [partData._beamSize, partData._customBeamSize, partData.length, partData.material, partData._materialOrigin, partData.quantity, partData._ringsNeeded, completeRings, ringCalc]);
