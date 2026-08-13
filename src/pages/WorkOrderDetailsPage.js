@@ -1182,6 +1182,9 @@ function WorkOrderDetailsPage() {
           // Per-ring cut length (circumference + tangents) — lives here on the cut/fab order.
           const cutLen = parseFloat(partData._ringCutLengthPerRing) || 0;
           const cutLenStr = cutLen > 0 ? ` — cut length per ring: ${cutLen.toFixed(3)}"` : '';
+          // Weld overlap amount — called out so the operator can verify it during inspection.
+          const overlap = parseFloat(partData._ringOverlap) || 0;
+          const overlapStr = overlap > 0 ? ` — OVERLAP: ${overlap.toFixed(3)}"` : '';
 
           // Map cut type to fab service _serviceType
           const fabServiceType = (cutType === 'cut_to_ring' || cutType === 'cut_to_ring_overlap' || cutType === 'cut_to_size')
@@ -1192,7 +1195,7 @@ function WorkOrderDetailsPage() {
             cutNotes = `Cut to ring — ${numRings} ring(s) from ${sticksNeeded} length(s)` + cutLenStr +
               (circ ? ` — CL Circumference: ${circ.toFixed(3)}" (pi x ${clDia}")` : '');
           } else if (cutType === 'cut_to_ring_overlap') {
-            cutNotes = `Cut to ring with overlap — ${numRings} ring(s) from ${sticksNeeded} length(s)` + cutLenStr +
+            cutNotes = `Cut to ring with overlap — ${numRings} ring(s) from ${sticksNeeded} length(s)` + cutLenStr + overlapStr +
               (circ ? ` — CL Circumference: ${circ.toFixed(3)}" (pi x ${clDia}")` : '');
           } else if (cutType === 'cut_to_size') {
             cutNotes = `Cut to size — ${sticksNeeded} lengths to make ${numRings} complete ring(s), ${segmentsPerRing} segments/ring` +

@@ -66,6 +66,7 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
   const [cutServiceType, setCutServiceType] = useState(partData._cutServiceType || ''); // '' | 'cut_to_ring' | 'cut_to_ring_overlap' | 'cut_to_size'
   const [ringsNeeded, setRingsNeeded] = useState(partData._ringsNeeded || 1);
   const [tangentLength, setTangentLength] = useState(partData._tangentLength || '12');
+  const [ringOverlap, setRingOverlap] = useState(partData._ringOverlap != null ? String(partData._ringOverlap) : '1.5');
   const kerfWidth = 0.125; // Standard saw blade kerf — hardcoded
 
   useEffect(() => {
@@ -134,8 +135,9 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
     const tang = parseFloat(tangentLength) || 0;
     const kerf = parseFloat(kerfWidth) || 0.125;
     const numRings = parseInt(ringsNeeded) || 1;
-    // Each ring piece = circumference + tangent on each end for machine grip
-    const cutLengthPerRing = circumference + (2 * tang);
+    const overlap = cutServiceType === 'cut_to_ring_overlap' ? (parseFloat(ringOverlap) || 0) : 0;
+    // Each ring piece = circumference + tangent on each end for machine grip + weld overlap (if any)
+    const cutLengthPerRing = circumference + (2 * tang) + overlap;
     if (cutLengthPerRing <= 0) return { error: 'Invalid ring dimensions' };
     if (circumference <= lengthInches) {
       // Rings fit within stock length — how many per stick?
@@ -144,16 +146,16 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
       const totalMaterialUsed = sticksNeeded * lengthInches;
       const usefulMaterial = numRings * cutLengthPerRing;
       const wastePercent = totalMaterialUsed > 0 ? ((totalMaterialUsed - usefulMaterial) / totalMaterialUsed * 100) : 0;
-      return { circumference, cutLengthPerRing, ringsPerStick, sticksNeeded, tangent: tang, kerf, multiSegment: false, wastePercent, stockLength: lengthInches };
+      return { circumference, cutLengthPerRing, ringsPerStick, sticksNeeded, tangent: tang, kerf, overlap, multiSegment: false, wastePercent, stockLength: lengthInches };
     } else {
       // Ring is larger than stock length — need multiple segments per ring
       const usablePerStick = lengthInches - (2 * tang);
       if (usablePerStick <= 0) return { error: 'Stock too short for tangents' };
       const segmentsPerRing = Math.ceil(circumference / usablePerStick);
       const sticksNeeded = segmentsPerRing * numRings;
-      return { circumference, cutLengthPerRing, segmentsPerRing, sticksNeeded, tangent: tang, kerf, multiSegment: true, stockLength: lengthInches };
+      return { circumference, cutLengthPerRing, segmentsPerRing, sticksNeeded, tangent: tang, kerf, overlap, multiSegment: true, stockLength: lengthInches };
     }
-  }, [completeRings, clDiameter, lengthInches, tangentLength, kerfWidth, ringsNeeded]);
+  }, [completeRings, clDiameter, lengthInches, tangentLength, kerfWidth, ringsNeeded, cutServiceType, ringOverlap]);
 
   useEffect(() => {
     if (completeRings && ringCalc && !ringCalc.error) {
@@ -165,7 +167,7 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
       const matPerRing = numRings > 0 ? totalMat / numRings : 0;
       return { ...prev,
         quantity: String(numRings), _completeRings: true, _ringsNeeded: ringsNeeded, _tangentLength: tangentLength,
-        _kerfWidth: kerfWidth, _ringSticksNeeded: ringCalc.sticksNeeded, _ringRingsPerStick: ringCalc.ringsPerStick || 0, _ringMultiSegment: ringCalc.multiSegment || false, _ringCutLengthPerRing: ringCalc.cutLengthPerRing || 0,
+        _kerfWidth: kerfWidth, _ringSticksNeeded: ringCalc.sticksNeeded, _ringRingsPerStick: ringCalc.ringsPerStick || 0, _ringMultiSegment: ringCalc.multiSegment || false, _ringCutLengthPerRing: ringCalc.cutLengthPerRing || 0, _ringOverlap: cutServiceType === 'cut_to_ring_overlap' ? (parseFloat(ringOverlap) || 0) : 0,
         _cutServiceType: cutServiceType,
         _ringCircumference: ringCalc.circumference || 0,
         _ringSegmentsPerRing: ringCalc.segmentsPerRing || 1,
@@ -175,7 +177,7 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
       };
     });
     } else { setPartData(prev => ({ ...prev, _completeRings: false })); }
-  }, [completeRings, ringCalc, ringsNeeded, tangentLength, partData._ringMaterialPerLength, partData._ringLaborPerUnit, cutServiceType]);
+  }, [completeRings, ringCalc, ringsNeeded, tangentLength, partData._ringMaterialPerLength, partData._ringLaborPerUnit, cutServiceType, ringOverlap]);
 
   const materialDescription = useMemo(() => {
     const qty = parseInt(partData.quantity) || 1;
@@ -408,6 +410,15 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
                             <div style={{ fontSize: '0.75rem', color: '#888' }}>
                               CL dia: {ringCalc.circumference ? (ringCalc.circumference / Math.PI).toFixed(3) : '?'}" (CL dia) — CL Circumference: {ringCalc.circumference?.toFixed(3)}" (pi x CL dia) — with weld overlap
                             </div>
+                            {cutServiceType === 'cut_to_ring_overlap' && (
+                              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <label style={{ fontSize: '0.75rem', color: '#555', fontWeight: 600 }}>Overlap amount:</label>
+                                <input type="number" step="0.25" min="0" className="form-input" value={ringOverlap}
+                                  onChange={(e) => { setRingOverlap(e.target.value); setPartData(prev => ({ ...prev, _ringOverlap: parseFloat(e.target.value) || 0 })); }}
+                                  style={{ width: 80, padding: '4px 8px', fontSize: '0.8rem' }} />
+                                <span style={{ fontSize: '0.75rem', color: '#888' }}>inches (added to cut length)</span>
+                              </div>
+                            )}
                           </div>
                         </label>
                       </div>

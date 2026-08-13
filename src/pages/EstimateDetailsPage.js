@@ -1324,12 +1324,15 @@ function EstimateDetailsPage() {
             // on the material line. This is the length the operator cuts each ring piece to.
             const cutLen = parseFloat(dataToSend._ringCutLengthPerRing) || 0;
             const cutLenStr = cutLen > 0 ? ` — cut length per ring: ${cutLen.toFixed(3)}"` : '';
+            // Weld overlap amount — called out so the operator can verify it during inspection.
+            const overlap = parseFloat(dataToSend._ringOverlap) || 0;
+            const overlapStr = overlap > 0 ? ` — OVERLAP: ${overlap.toFixed(3)}"` : '';
 
             let cutNotes = '';
             if (cutType === 'cut_to_ring') {
               cutNotes = `Cut to ring — ${ringCount} ring(s) from ${sticksNeeded} length(s)` + cutLenStr + (circ ? ` — CL Circumference: ${circ.toFixed(3)}" (pi x ${clDia}")` : '');
             } else if (cutType === 'cut_to_ring_overlap') {
-              cutNotes = `Cut to ring with overlap — ${ringCount} ring(s) from ${sticksNeeded} length(s)` + cutLenStr + (circ ? ` — CL Circumference: ${circ.toFixed(3)}" (pi x ${clDia}")` : '');
+              cutNotes = `Cut to ring with overlap — ${ringCount} ring(s) from ${sticksNeeded} length(s)` + cutLenStr + overlapStr + (circ ? ` — CL Circumference: ${circ.toFixed(3)}" (pi x ${clDia}")` : '');
             } else if (cutType === 'cut_to_size') {
               cutNotes = `Cut to size — ${sticksNeeded} lengths to make ${ringCount} complete ring(s), ${segs} segments/ring` + (segLength ? ` — each segment: ${segLength}" (${circ.toFixed(3)}" / ${segs})` : '');
             }
