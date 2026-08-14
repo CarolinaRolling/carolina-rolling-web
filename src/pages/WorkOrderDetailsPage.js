@@ -38,7 +38,7 @@ import {
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
   searchClients, getSettings, getHtsCodes, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
-  getWorkOrderPrintPackage, updateDRNumber, recordPickup, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
+  getWorkOrderPrintPackage, updateDRNumber, recordPickup, getFrequentDrivers, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
   generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo,
   addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge, getWOShipmentCharges, getInspectionJobs
@@ -130,6 +130,7 @@ function WorkOrderDetailsPage() {
   const [uploadingDocs, setUploadingDocs] = useState(false);
   const [uploadingMtrs, setUploadingMtrs] = useState(false);
   const [showPickupModal, setShowPickupModal] = useState(false);
+  const [frequentDrivers, setFrequentDrivers] = useState([]);
   const [pickupData, setPickupData] = useState({ pickedUpBy: '', type: null, items: {} });
   const sigCanvasRef = useRef(null);
   const sigDrawing = useRef(false);
@@ -381,6 +382,16 @@ function WorkOrderDetailsPage() {
     getInspectionJobs(id).then(r => setInspectionJobs(r.data.data || [])).catch(() => {});
   }, [id]);
   useEffect(() => { loadInsp(); }, [loadInsp]);
+  // Load this client's frequent pickup drivers when the pickup modal opens (self-updating from
+  // pickup history — helps the clerk pick a regular driver by name without asking each time).
+  useEffect(() => {
+    if (!showPickupModal || !id) return;
+    let cancelled = false;
+    getFrequentDrivers(id)
+      .then(res => { if (!cancelled) setFrequentDrivers(res.data?.data || []); })
+      .catch(() => { if (!cancelled) setFrequentDrivers([]); });
+    return () => { cancelled = true; };
+  }, [showPickupModal, id]);
   // Pauses while the tab is hidden, refreshes immediately on return.
   usePolling(loadInsp, 15000, { enabled: Boolean(id) });
 
@@ -6525,6 +6536,30 @@ function WorkOrderDetailsPage() {
               {/* Step 1: Picked Up By */}
               <div className="form-group" style={{ marginBottom: 16 }}>
                 <label className="form-label">Picked Up By</label>
+                {frequentDrivers.length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: '0.72rem', color: '#888', marginBottom: 4 }}>
+                      Frequent drivers for {order.clientName || 'this client'}:
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {frequentDrivers.map((d) => (
+                        <button key={d.name} type="button"
+                          onClick={() => setPickupData(prev => ({ ...prev, pickedUpBy: d.name }))}
+                          title={`Picked up ${d.count} time${d.count === 1 ? '' : 's'}`}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            padding: '5px 12px', borderRadius: 16, cursor: 'pointer', fontSize: '0.82rem',
+                            border: pickupData.pickedUpBy === d.name ? '1px solid #1976d2' : '1px solid #ddd',
+                            background: pickupData.pickedUpBy === d.name ? '#e3f2fd' : 'white',
+                            color: pickupData.pickedUpBy === d.name ? '#1565c0' : '#444',
+                            fontWeight: pickupData.pickedUpBy === d.name ? 600 : 400,
+                          }}>
+                          <User size={13} /> {d.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <input className="form-input" value={pickupData.pickedUpBy} 
                   onChange={(e) => setPickupData(prev => ({ ...prev, pickedUpBy: e.target.value }))} 
                   placeholder="Name of person picking up" />
