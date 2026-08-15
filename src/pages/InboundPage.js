@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Search, ChevronDown, ChevronRight, Package, FileText, User } from 'lucide-react';
-import { getInboundOrders, createInboundOrder, deleteInboundOrder } from '../services/api';
+import { Plus, Trash2, Search, ChevronDown, ChevronRight, Package, FileText, User, ScanLine, X } from 'lucide-react';
+import { getInboundOrders, createInboundOrder, deleteInboundOrder, scanPurchaseOrder } from '../services/api';
 import usePolling from '../hooks/usePolling';
 
 function InboundPage() {
@@ -11,6 +11,11 @@ function InboundPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+  const [scanError, setScanError] = useState(null);
+  const [scanFileName, setScanFileName] = useState('');
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSuppliers, setExpandedSuppliers] = useState({});
@@ -95,6 +100,22 @@ function InboundPage() {
     }));
   };
 
+  const handleScanFile = async (file) => {
+    if (!file) return;
+    setScanning(true);
+    setScanError(null);
+    setScanResult(null);
+    setScanFileName(file.name || '');
+    try {
+      const res = await scanPurchaseOrder(file);
+      setScanResult(res.data?.data || null);
+    } catch (err) {
+      setScanError(err.response?.data?.error?.message || 'Could not read the purchase order — try a clearer scan or photo.');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!newOrder.supplierName.trim() || !newOrder.clientName.trim() || 
@@ -163,10 +184,16 @@ function InboundPage() {
             {totalOrders} orders from {supplierCount} suppliers
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowNewModal(true)}>
-          <Plus size={18} />
-          New Inbound Order
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={() => { setShowScanModal(true); setScanResult(null); setScanError(null); setScanFileName(''); }}>
+            <ScanLine size={18} />
+            Scan Purchase Order
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowNewModal(true)}>
+            <Plus size={18} />
+            New Inbound Order
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -374,6 +401,98 @@ function InboundPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Scan Purchase Order modal (Stage 1: extract + review) */}
+      {showScanModal && (
+        <div className="modal-overlay" onClick={() => !scanning && setShowScanModal(false)}>
+          <div className="modal-content" style={{ maxWidth: 640 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ScanLine size={20} /> Scan Purchase Order
+              </h3>
+              <button className="modal-close" onClick={() => setShowScanModal(false)} disabled={scanning}>&times;</button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: 14 }}>
+                Upload a PDF or photo of the customer's purchase order. The system will read it and show
+                what it found so you can verify it and match it to an estimate.
+              </p>
+
+              {!scanResult && (
+                <label style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 8, padding: 30, border: '2px dashed #bbb', borderRadius: 10, cursor: scanning ? 'default' : 'pointer',
+                  background: scanning ? '#f5f5f5' : '#fafafa', color: '#666',
+                }}>
+                  {scanning ? (
+                    <><div className="spinner" style={{ width: 28, height: 28 }}></div><span>Reading purchase order…</span></>
+                  ) : (
+                    <>
+                      <ScanLine size={32} color="#999" />
+                      <span style={{ fontWeight: 600 }}>Choose a PDF or photo</span>
+                      <span style={{ fontSize: '0.78rem', color: '#999' }}>PDF, JPG, or PNG</span>
+                    </>
+                  )}
+                  <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} disabled={scanning}
+                    onChange={(e) => { if (e.target.files?.[0]) handleScanFile(e.target.files[0]); }} />
+                </label>
+              )}
+
+              {scanError && (
+                <div className="alert alert-error" style={{ marginTop: 12 }}>
+                  {scanError}
+                  <button className="btn btn-sm btn-outline" style={{ marginTop: 8 }} onClick={() => { setScanError(null); }}>Try another file</button>
+                </div>
+              )}
+
+              {scanResult && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <FileText size={16} color="#666" />
+                    <span style={{ fontSize: '0.82rem', color: '#666' }}>{scanFileName}</span>
+                    <span style={{
+                      marginLeft: 'auto', fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 8,
+                      background: scanResult.confidence === 'high' ? '#e8f5e9' : scanResult.confidence === 'low' ? '#ffebee' : '#fff8e1',
+                      color: scanResult.confidence === 'high' ? '#2e7d32' : scanResult.confidence === 'low' ? '#c62828' : '#e65100',
+                    }}>{scanResult.confidence || 'medium'} confidence</span>
+                  </div>
+
+                  <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 14, marginBottom: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                      <div><div style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase' }}>Client</div><div style={{ fontWeight: 600 }}>{scanResult.clientName || '—'}</div></div>
+                      <div><div style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase' }}>PO Number</div><div style={{ fontWeight: 600, color: '#1565c0' }}>{scanResult.poNumber || '—'}</div></div>
+                      {scanResult.poDate && <div><div style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase' }}>PO Date</div><div>{scanResult.poDate}</div></div>}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase', marginBottom: 4 }}>Line Items ({scanResult.lineItems?.length || 0})</div>
+                    {scanResult.lineItems?.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {scanResult.lineItems.map((li, i) => (
+                          <div key={i} style={{ background: 'white', border: '1px solid #eee', borderRadius: 6, padding: '8px 10px', fontSize: '0.82rem' }}>
+                            <div style={{ fontWeight: 600 }}>{li.quantity != null ? `${li.quantity}${li.unit ? ' ' + li.unit : ''} — ` : ''}{li.description || '(no description)'}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#777', marginTop: 2 }}>
+                              {[li.shape, li.dimensions, li.diameter && `⌀ ${li.diameter}`, li.material].filter(Boolean).join('  ·  ')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <div style={{ fontSize: '0.82rem', color: '#999' }}>No line items detected.</div>}
+                    {scanResult.notes && <div style={{ fontSize: '0.78rem', color: '#777', marginTop: 8 }}><strong>Notes:</strong> {scanResult.notes}</div>}
+                  </div>
+
+                  <div style={{ background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, padding: '10px 12px', fontSize: '0.8rem', color: '#795548', marginBottom: 12 }}>
+                    This is what the AI read from the document — please verify it against the actual PO. Estimate matching is coming next; for now this confirms the read.
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button className="btn btn-outline" onClick={() => { setScanResult(null); setScanError(null); setScanFileName(''); }}>Scan another</button>
+                    <button className="btn btn-secondary" onClick={() => setShowScanModal(false)}>Close</button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

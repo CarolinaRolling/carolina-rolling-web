@@ -119,6 +119,11 @@ export const updateLocation = (id, location) => api.put(`/settings/locations/${i
 export const getInboundOrders = () => api.get('/inbound');
 export const getInboundOrderById = (id) => api.get(`/inbound/${id}`);
 export const createInboundOrder = (data) => api.post('/inbound', data);
+export const scanPurchaseOrder = (file) => {
+  const formData = new FormData();
+  formData.append('po', file);
+  return api.post('/inbound/scan-po', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
 export const updateInboundOrder = (id, data) => api.put(`/inbound/${id}`, data);
 export const deleteInboundOrder = (id) => api.delete(`/inbound/${id}`);
 

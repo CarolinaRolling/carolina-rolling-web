@@ -344,6 +344,7 @@ function WorkOrderDetailsPage() {
   const [laborMinimums, setLaborMinimums] = useState([]);
   const fileInputRefs = useRef({});
   const docInputRef = useRef(null);
+  const clientPOInputRef = useRef(null);
   const mtrInputRef = useRef(null);
   const shippingDocInputRef = useRef(null);
   const [uploadingShippingDoc, setUploadingShippingDoc] = useState(false);
@@ -757,6 +758,20 @@ function WorkOrderDetailsPage() {
       showMessage('Documents uploaded');
     } catch (err) {
       setError('Failed to upload documents');
+    } finally {
+      setUploadingDocs(false);
+    }
+  };
+
+  // Client PO upload (internal only — the customer's purchase order copy)
+  const handleClientPOUpload = async (files) => {
+    try {
+      setUploadingDocs(true);
+      await uploadWorkOrderDocuments(id, files, 'customer_po', false);
+      await loadOrder();
+      showMessage('Client PO uploaded');
+    } catch (err) {
+      setError('Failed to upload client PO');
     } finally {
       setUploadingDocs(false);
     }
@@ -4974,8 +4989,13 @@ function WorkOrderDetailsPage() {
           {/* Order Documents */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-header">
-              <h3 className="card-title"><File size={20} style={{ marginRight: 8 }} />Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc' && d.documentType !== 'usmca').length || 0})</h3>
+              <h3 className="card-title"><File size={20} style={{ marginRight: 8 }} />Documents ({order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc' && d.documentType !== 'usmca' && d.documentType !== 'customer_po').length || 0})</h3>
               <div>
+                <button className="btn btn-sm btn-outline" onClick={() => clientPOInputRef.current?.click()} disabled={uploadingDocs} style={{ marginRight: 6 }}>
+                  <ShoppingCart size={14} />Upload Client PO
+                </button>
+                <input type="file" multiple accept=".pdf,.doc,.docx,image/*" ref={clientPOInputRef} style={{ display: 'none' }}
+                  onChange={(e) => handleClientPOUpload(Array.from(e.target.files))} />
                 <button className="btn btn-sm btn-outline" onClick={() => docInputRef.current?.click()} disabled={uploadingDocs}>
                   <Upload size={14} />{uploadingDocs ? 'Uploading...' : 'Upload'}
                 </button>
@@ -4984,9 +5004,9 @@ function WorkOrderDetailsPage() {
               </div>
             </div>
             <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>Customer POs, supplier quotes, drawings, COCs, etc.</p>
-            {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc' && d.documentType !== 'usmca').length > 0 ? (
+            {order.documents?.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc' && d.documentType !== 'usmca' && d.documentType !== 'customer_po').length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc' && d.documentType !== 'usmca').map(doc => (
+                {order.documents.filter(d => d.documentType !== 'purchase_order' && d.documentType !== 'outside_processing_po' && d.documentType !== 'mtr' && d.documentType !== 'shipping_doc' && d.documentType !== 'usmca' && d.documentType !== 'customer_po').map(doc => (
                   <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: doc.documentType === 'invoice' ? '#fff8f0' : doc.portalVisible ? '#e8f5e9' : '#f5f5f5', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', border: doc.documentType === 'invoice' ? '1px solid #e65100' : doc.portalVisible ? '1px solid #a5d6a7' : '1px solid #eee' }}>
                     <File size={16} color="#1976d2" />
                     <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
@@ -5038,6 +5058,33 @@ function WorkOrderDetailsPage() {
               <div style={{ background: '#fafafa', padding: 20, borderRadius: 8, textAlign: 'center', color: '#999' }}>No documents uploaded yet</div>
             )}
           </div>
+
+          {/* Customer PO Section (internal only — the client's purchase order copy) */}
+          {order.documents?.filter(d => d.documentType === 'customer_po').length > 0 && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, color: '#6a1b9a' }}>
+                <ShoppingCart size={18} /> Customer Purchase Orders
+                <span style={{ fontSize: '0.7rem', fontWeight: 400, color: '#999', background: '#f3e5f5', padding: '1px 8px', borderRadius: 8 }}>internal only 🔒</span>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: '#888', marginBottom: 12 }}>The client's PO paperwork. Not visible on the client portal.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {order.documents.filter(d => d.documentType === 'customer_po').map(doc => (
+                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f3e5f5', padding: '10px 14px', borderRadius: 8, fontSize: '0.85rem', border: '1px solid #ce93d8' }}>
+                    <ShoppingCart size={16} color="#6a1b9a" />
+                    <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.originalName}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#999' }}>
+                      {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }) : ''}
+                    </span>
+                    <span style={{ background: '#6a1b9a', color: 'white', padding: '1px 6px', borderRadius: 3, fontSize: '0.65rem', fontWeight: 700 }}>CLIENT PO</span>
+                    <button onClick={() => handleViewDocument(doc.id)} style={{ background: '#6a1b9a', color: 'white', border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>
+                      <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
+                    </button>
+                    <button onClick={() => handleDeleteDocument(doc.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#d32f2f' }}><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
 
 
