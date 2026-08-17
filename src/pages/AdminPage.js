@@ -7,7 +7,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings, getAvailableModels, getPricingConfig, updatePricingConfig, getPricingWorksheet, submitPricingWorksheet, getPressBrakeConfig, savePressBrakeConfig } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, scanDraftPricing, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings, getAvailableModels, getPricingConfig, updatePricingConfig, getPricingWorksheet, submitPricingWorksheet, getPressBrakeConfig, savePressBrakeConfig } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import SectionSizesPage from './SectionSizesPage';
 import SettingsPage from './SettingsPage';
@@ -790,6 +790,19 @@ function AdminPage({ section = 'users-logs' }) {
       loadEmailScanner();
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleCheckDraftPricing = async () => {
+    try {
+      setScanning(true);
+      const res = await scanDraftPricing();
+      setSuccess(res.data?.message || 'Draft pricing check complete');
+      loadEmailScanner();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Draft pricing check failed');
     } finally {
       setScanning(false);
     }
@@ -3040,6 +3053,10 @@ function AdminPage({ section = 'users-logs' }) {
                 <button className="btn btn-outline" onClick={() => handleScanNow(24)} disabled={scanning || scannerAccounts.length === 0}
                   style={{ fontSize: '0.8rem' }}>
                   🔄 Rescan 24h
+                </button>
+                <button className="btn btn-outline" onClick={handleCheckDraftPricing} disabled={scanning || scannerAccounts.length === 0}
+                  style={{ fontSize: '0.8rem' }} title="Check draft estimates' email threads for pricing you quoted the client">
+                  💲 Check Draft Pricing
                 </button>
               </div>
             </div>
