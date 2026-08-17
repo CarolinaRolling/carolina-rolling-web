@@ -54,7 +54,7 @@ export default function ReviewCenterPage() {
 
   const estimateItems = [...estimates]
     .sort((a, b) => (Number(isMonitored(b.clientName)) - Number(isMonitored(a.clientName))) || byDateAsc(a.createdAt, b.createdAt))
-    .map(e => ({ id: e.id, label: e.estimateNumber || 'Estimate', sub: e.clientName || 'Unknown client', date: e.createdAt, priority: isMonitored(e.clientName), stage: e.workflowStage || 'created', quoteCount: e.quoteCount || 0, onClick: () => navigate(`/estimates/${e.id}`) }));
+    .map(e => ({ id: e.id, label: e.estimateNumber || 'Estimate', sub: e.clientName || 'Unknown client', date: e.createdAt, priority: isMonitored(e.clientName), stage: e.workflowStage || 'created', quoteCount: e.quoteCount || 0, pricingQuotedNeedsEntry: e.pricingQuotedNeedsEntry, onClick: () => navigate(`/estimates/${e.id}`) }));
 
   const orderItems = [...orders].sort((a, b) => byDateAsc(a.createdAt, b.createdAt))
     .map(o => ({ id: o.id, label: o.clientName || 'Client order', sub: o.poNumber ? `PO ${o.poNumber}` : 'Client-submitted order', date: o.createdAt, onClick: () => navigate('/pending-orders') }));
@@ -164,7 +164,7 @@ export default function ReviewCenterPage() {
                 {it.sub && <div style={{ fontSize: '0.8rem', color: it.priority ? PRIORITY_COLOR : '#888', fontWeight: it.priority ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.sub}</div>}
                 {it.stage && (
                   <div style={{ marginTop: 6 }}>
-                    <EstimateProgressBoard estimateId={it.id} stage={it.stage} quoteCount={it.quoteCount} compact />
+                    <EstimateProgressBoard estimateId={it.id} stage={it.stage} quoteCount={it.quoteCount} pricingQuotedNeedsEntry={it.pricingQuotedNeedsEntry} compact />
                   </div>
                 )}
               </div>

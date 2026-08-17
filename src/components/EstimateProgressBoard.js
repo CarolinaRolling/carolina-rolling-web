@@ -23,7 +23,7 @@ const STAGES = [
   { key: 'ready_to_send',   label: 'Ready to Send' },
 ];
 
-export default function EstimateProgressBoard({ estimateId, stage, onChange, compact = false, readOnly = false, quoteCount = 0 }) {
+export default function EstimateProgressBoard({ estimateId, stage, onChange, compact = false, readOnly = false, quoteCount = 0, pricingQuotedNeedsEntry = false }) {
   const [current, setCurrent] = useState(stage || 'created');
   const [saving, setSaving] = useState(false);
 
@@ -85,6 +85,17 @@ export default function EstimateProgressBoard({ estimateId, stage, onChange, com
           </React.Fragment>
         );
       })}
+      {pricingQuotedNeedsEntry && (
+        <span title="You emailed the client pricing — verify and enter it, then generate the PDF"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: compact ? 4 : 8,
+            fontSize: compact ? '0.68rem' : '0.72rem', fontWeight: 700,
+            color: '#e65100', background: '#fff3e0', border: '1px solid #ffcc80',
+            borderRadius: 10, padding: '1px 8px',
+          }}>
+          💲 Pricing quoted — needs entry
+        </span>
+      )}
     </div>
   );
 }

@@ -14,6 +14,7 @@ function InboundPage() {
   const [showScanModal, setShowScanModal] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
+  const [scanMatches, setScanMatches] = useState([]);
   const [scanError, setScanError] = useState(null);
   const [scanFileName, setScanFileName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -109,6 +110,7 @@ function InboundPage() {
     try {
       const res = await scanPurchaseOrder(file);
       setScanResult(res.data?.data || null);
+      setScanMatches(res.data?.matches || []);
     } catch (err) {
       setScanError(err.response?.data?.error?.message || 'Could not read the purchase order — try a clearer scan or photo.');
     } finally {
@@ -185,7 +187,7 @@ function InboundPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline" onClick={() => { setShowScanModal(true); setScanResult(null); setScanError(null); setScanFileName(''); }}>
+          <button className="btn btn-outline" onClick={() => { setShowScanModal(true); setScanResult(null); setScanError(null); setScanFileName(''); setScanMatches([]); }}>
             <ScanLine size={18} />
             Scan Purchase Order
           </button>
@@ -483,11 +485,54 @@ function InboundPage() {
                   </div>
 
                   <div style={{ background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8, padding: '10px 12px', fontSize: '0.8rem', color: '#795548', marginBottom: 12 }}>
-                    This is what the AI read from the document — please verify it against the actual PO. Estimate matching is coming next; for now this confirms the read.
+                    This is what the AI read from the document — please verify it against the actual PO.
+                  </div>
+
+                  {/* Matched estimates (Stage 2) */}
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#555', textTransform: 'uppercase', marginBottom: 6 }}>
+                      Possible matching estimates {scanMatches.length > 0 ? `(${scanMatches.length})` : ''}
+                    </div>
+                    {scanMatches.length === 0 ? (
+                      <div style={{ background: '#fafafa', border: '1px solid #eee', borderRadius: 8, padding: 14, fontSize: '0.82rem', color: '#999', textAlign: 'center' }}>
+                        No confident estimate matches found. You can search estimates manually.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {scanMatches.map((m, i) => {
+                          const strong = m.score >= 60;
+                          return (
+                            <div key={m.estimateId} style={{
+                              border: i === 0 ? '2px solid #2e7d32' : '1px solid #ddd', borderRadius: 8, padding: '10px 12px',
+                              background: i === 0 ? '#f1f8e9' : 'white',
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontWeight: 700, color: '#1565c0' }}>{m.estimateNumber}</span>
+                                <span style={{ fontSize: '0.8rem', color: '#666' }}>{m.clientName}</span>
+                                <span style={{ fontSize: '0.68rem', color: '#999', background: '#f0f0f0', padding: '1px 6px', borderRadius: 6, textTransform: 'capitalize' }}>{m.status}</span>
+                                <span style={{
+                                  marginLeft: 'auto', fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 8,
+                                  background: strong ? '#e8f5e9' : '#fff8e1', color: strong ? '#2e7d32' : '#e65100',
+                                }}>{strong ? 'Strong' : 'Possible'} match · {m.score}</span>
+                              </div>
+                              {m.reasons?.length > 0 && (
+                                <div style={{ fontSize: '0.74rem', color: '#777', marginTop: 4 }}>
+                                  {m.reasons.join('  ·  ')}
+                                </div>
+                              )}
+                              <button className="btn btn-sm btn-outline" style={{ marginTop: 8 }}
+                                onClick={() => navigate(`/estimates/${m.estimateId}`)}>
+                                <FileText size={13} /> Open estimate to verify
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <button className="btn btn-outline" onClick={() => { setScanResult(null); setScanError(null); setScanFileName(''); }}>Scan another</button>
+                    <button className="btn btn-outline" onClick={() => { setScanResult(null); setScanError(null); setScanFileName(""); setScanMatches([]); }}>Scan another</button>
                     <button className="btn btn-secondary" onClick={() => setShowScanModal(false)}>Close</button>
                   </div>
                 </div>

@@ -2574,6 +2574,19 @@ function EstimateDetailsPage() {
           {/* ===== PARTS TAB ===== */}
           {(isNew || estimateTab === 'parts') && (
           <>
+          {/* Pricing quoted — needs entry (scanner detected an emailed quote) */}
+          {!isNew && estimate?.pricingQuotedNeedsEntry && (
+            <div className="card" style={{ background: '#fff3e0', border: '1px solid #ffcc80', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: '1.3rem' }}>💲</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, color: '#e65100' }}>Pricing was quoted to the client by email</div>
+                <div style={{ fontSize: '0.83rem', color: '#8d6e63' }}>
+                  Your quoted prices are in the internal notes below. Verify them, enter the pricing on the parts, then generate the PDF. This flag clears automatically once a total is entered.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Internal Notes */}
           {!isNew && (
             <div className="card" style={{ background: '#FFFDE7', border: '1px solid #FFF9C4' }}>
