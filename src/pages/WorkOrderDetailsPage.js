@@ -3443,7 +3443,19 @@ function WorkOrderDetailsPage() {
               <button className="btn btn-secondary btn-sm" onClick={() => setIsEditing(false)}><X size={16} />Cancel</button>
             </div>
           ) : (
-            <button className="btn btn-outline btn-sm" onClick={() => setIsEditing(true)}><Edit size={16} />Edit</button>
+            <button className="btn btn-outline btn-sm" onClick={async () => {
+              setIsEditing(true);
+              // Refresh the client's contacts so any contact added to the client AFTER this work
+              // order was created shows up in the picker (the client is otherwise loaded once on
+              // page open).
+              if (order?.clientId) {
+                try {
+                  const cr = await searchClients(order.clientName || '');
+                  const fresh = (cr.data?.data || []).find(c => c.id === order.clientId);
+                  if (fresh) setOrder(prev => prev ? { ...prev, _clientObj: fresh } : prev);
+                } catch (e) { /* ignore — keep whatever we had */ }
+              }
+            }}><Edit size={16} />Edit</button>
           )}
         </div>
         {isEditing ? (
