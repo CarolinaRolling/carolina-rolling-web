@@ -3548,36 +3548,46 @@ function WorkOrderDetailsPage() {
             <div className="form-group"><label className="form-label">Client PO#</label><input className="form-input" value={editData.clientPurchaseOrderNumber} onChange={(e) => setEditData({ ...editData, clientPurchaseOrderNumber: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Job Number</label><input className="form-input" value={editData.jobNumber} onChange={(e) => setEditData({ ...editData, jobNumber: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Storage Location</label><input className="form-input" value={editData.storageLocation} onChange={(e) => setEditData({ ...editData, storageLocation: e.target.value })} /></div>
-            {/* Contact picker — uses client contacts array if available */}
+            {/* Contact picker — pick a known client contact, or type a new one. Always editable. */}
             {(() => {
               const clientObj = order?._clientObj || null;
-              const contacts = clientObj ? (clientObj.contacts || []).filter(c => c.name) : [];
-              if (contacts.length > 1) {
-                return (
+              let contacts = clientObj ? (clientObj.contacts || []).filter(c => c.name) : [];
+              // Fall back to the client's single legacy contact fields if no contacts array.
+              if (contacts.length === 0 && clientObj && clientObj.contactName) {
+                contacts = [{ name: clientObj.contactName, email: clientObj.contactEmail || '', phone: clientObj.contactPhone || '', isPrimary: true }];
+              }
+              const currentIsKnown = contacts.some(c => c.name === editData.contactName);
+              return <>
+                {contacts.length > 0 && (
                   <div className="form-group">
-                    <label className="form-label">Contact Person</label>
-                    <select className="form-select" value={editData.contactName || ''}
+                    <label className="form-label">Contact</label>
+                    <select className="form-select"
+                      value={currentIsKnown ? editData.contactName : '__other__'}
                       onChange={(e) => {
+                        if (e.target.value === '__other__') {
+                          // Switch to manual entry — clear so the name field is ready to type in.
+                          setEditData({ ...editData, contactName: '', contactEmail: '', contactPhone: '', contactExtension: '' });
+                          return;
+                        }
                         const c = contacts.find(ct => ct.name === e.target.value);
                         if (c) setEditData({ ...editData, contactName: c.name, contactEmail: c.email || '', contactPhone: c.phone || '', contactExtension: c.extension || '' });
-                        else setEditData({ ...editData, contactName: e.target.value });
                       }}>
                       {contacts.map((c, i) => (
                         <option key={i} value={c.name}>{c.name}{c.isPrimary ? ' ★' : ''}{c.role ? ` · ${c.role}` : ''}{c.extension ? ` x${c.extension}` : ''}</option>
                       ))}
+                      <option value="__other__">Other (enter manually)…</option>
                     </select>
                   </div>
-                );
-              }
-              return <>
-                <div className="form-group"><label className="form-label">Contact Name</label><input className="form-input" value={editData.contactName} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} placeholder="John Smith" /></div>
-                <div className="form-group"><label className="form-label">Contact Phone</label>
+                )}
+                {/* Always show the editable name/phone/email — so you can type a new contact or tweak one. */}
+                <div className="form-group"><label className="form-label">{contacts.length > 0 ? 'Name' : 'Contact'}</label><input className="form-input" value={editData.contactName || ''} onChange={(e) => setEditData({ ...editData, contactName: e.target.value })} placeholder="John Smith" /></div>
+                <div className="form-group"><label className="form-label">{contacts.length > 0 ? 'Phone' : 'Contact Phone'}</label>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <input className="form-input" style={{ flex: 1 }} value={formatPhone(editData.contactPhone || '')} onChange={(e) => setEditData({ ...editData, contactPhone: formatPhone(e.target.value) })} placeholder="(555) 123-4567" />
                     {editData.contactExtension && <span style={{ fontSize: '0.85rem', color: '#555', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 4, padding: '4px 8px', whiteSpace: 'nowrap' }}>x{editData.contactExtension}</span>}
                   </div>
                 </div>
-                <div className="form-group"><label className="form-label">Contact Email</label><input type="email" className="form-input" value={editData.contactEmail} onChange={(e) => setEditData({ ...editData, contactEmail: e.target.value })} placeholder="john@example.com" /></div>
+                <div className="form-group"><label className="form-label">{contacts.length > 0 ? 'Email' : 'Contact Email'}</label><input type="email" className="form-input" value={editData.contactEmail || ''} onChange={(e) => setEditData({ ...editData, contactEmail: e.target.value })} placeholder="john@example.com" /></div>
               </>;
             })()}
             <div className="form-group"><label className="form-label">Requested Due Date</label><input type="date" className="form-input" value={editData.requestedDueDate} onChange={(e) => setEditData({ ...editData, requestedDueDate: e.target.value })} /></div>
@@ -3597,7 +3607,7 @@ function WorkOrderDetailsPage() {
                 const clientContact = (order._clientObj?.contacts || []).find(c => c.name === order.contactName);
                 const ext = order.contactExtension || clientContact?.extension || '';
                 return <>
-                  <div className="detail-item"><div className="detail-item-label">Contact Name</div><div className="detail-item-value">{order.contactName}</div></div>
+                  <div className="detail-item"><div className="detail-item-label">Contact</div><div className="detail-item-value">{order.contactName}</div></div>
                   {order.contactPhone && <div className="detail-item"><div className="detail-item-label">Contact Phone</div><div className="detail-item-value">{formatPhone(order.contactPhone)}{ext ? <span style={{ color: '#888', marginLeft: 4 }}>x{ext}</span> : null}</div></div>}
                 </>;
               })()}
