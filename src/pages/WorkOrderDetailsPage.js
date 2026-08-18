@@ -458,11 +458,14 @@ function WorkOrderDetailsPage() {
       // Determine correct tax rate: WO stored > client-specific > admin default
       let effectiveTaxRate = adminTaxRate;
       let loadedClient = null;
-      if (data.clientId) {
+      if (data.clientId || data.clientName) {
         try {
           const clientRes = await searchClients(data.clientName || '');
           const clients = clientRes.data?.data || [];
-          loadedClient = clients.find(c => c.id === data.clientId);
+          // Prefer an exact id match; fall back to an exact (case-insensitive) name match, so a work
+          // order that isn't linked by clientId still finds its client's contacts.
+          loadedClient = clients.find(c => data.clientId && c.id === data.clientId)
+            || clients.find(c => (c.name || '').toLowerCase() === (data.clientName || '').toLowerCase());
           if (loadedClient?.paymentTerms) {
             setClientPaymentTerms(loadedClient.paymentTerms);
           }
@@ -3446,12 +3449,14 @@ function WorkOrderDetailsPage() {
             <button className="btn btn-outline btn-sm" onClick={async () => {
               setIsEditing(true);
               // Refresh the client's contacts so any contact added to the client AFTER this work
-              // order was created shows up in the picker (the client is otherwise loaded once on
-              // page open).
-              if (order?.clientId) {
+              // order was created shows up in the picker. Match by id, falling back to name — a WO not
+              // linked by clientId still finds its client.
+              if (order?.clientId || order?.clientName) {
                 try {
                   const cr = await searchClients(order.clientName || '');
-                  const fresh = (cr.data?.data || []).find(c => c.id === order.clientId);
+                  const list = cr.data?.data || [];
+                  const fresh = list.find(c => order.clientId && c.id === order.clientId)
+                    || list.find(c => (c.name || '').toLowerCase() === (order.clientName || '').toLowerCase());
                   if (fresh) setOrder(prev => prev ? { ...prev, _clientObj: fresh } : prev);
                 } catch (e) { /* ignore — keep whatever we had */ }
               }
