@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getInvoiceNumbers, voidInvoiceNumber, getNextInvoiceNumber, setNextInvoiceNumber, createManualInvoiceNumber, importInvoiceNumbers } from '../services/api';
+import { getInvoiceNumbers, voidInvoiceNumber, getNextInvoiceNumber, setNextInvoiceNumber, createManualInvoiceNumber, importInvoiceNumbers, backfillInvoiceNumbers } from '../services/api';
 
 const InvoiceNumbersPage = ({ embedded = false }) => {
   const navigate = useNavigate();
@@ -64,6 +64,20 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Failed to void');
     } finally { setSaving(false); }
+  };
+
+  const [backfilling, setBackfilling] = useState(false);
+  const handleBackfill = async () => {
+    try {
+      setBackfilling(true);
+      const res = await backfillInvoiceNumbers();
+      setSuccess(res.data?.message || 'Backfill complete');
+      loadData();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Backfill failed');
+    } finally {
+      setBackfilling(false);
+    }
   };
 
   const handleManualCreate = async () => {
@@ -227,6 +241,11 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
             <button className="btn" onClick={() => { setManualOpen(true); setManualForm({ invoiceNumber: nextNum, clientName: '' }); }}
               style={{ background: '#1565C0', color: 'white', border: 'none', fontWeight: 600 }}>
               + Manual Entry
+            </button>
+            <button className="btn" onClick={handleBackfill} disabled={backfilling}
+              title="Find invoices that were recorded on work orders but are missing from this list, and add them"
+              style={{ background: '#f5f5f5', color: '#444', border: '1px solid #ddd', fontWeight: 600 }}>
+              {backfilling ? 'Scanning…' : '↻ Backfill Missing'}
             </button>
           </div>
         </div>

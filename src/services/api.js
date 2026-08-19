@@ -563,6 +563,7 @@ export const getNextInvoiceNumber = () => api.get('/quickbooks/next-invoice-numb
 export const setNextInvoiceNumber = (nextNumber) => api.put('/quickbooks/next-invoice-number', { nextNumber });
 export const assignInvoiceNumber = (woId) => api.post(`/quickbooks/assign-invoice-number/${woId}`);
 export const getInvoiceNumbers = () => api.get('/quickbooks/invoice-numbers');
+export const backfillInvoiceNumbers = () => api.post('/quickbooks/invoice-numbers/backfill');
 export const voidInvoiceNumber = (id, reason) => api.post(`/quickbooks/invoice-numbers/${id}/void`, { reason });
 export const createManualInvoiceNumber = (data) => api.post('/quickbooks/invoice-numbers/manual', data);
 export const importInvoiceNumbers = (pairs) => api.post('/quickbooks/import-invoice-numbers', { pairs });
