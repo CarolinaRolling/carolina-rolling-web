@@ -72,6 +72,8 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
       setBackfilling(true);
       const res = await backfillInvoiceNumbers();
       setSuccess(res.data?.message || 'Backfill complete');
+      const errs = res.data?.data?.errors || [];
+      if (errs.length) setError('Some rows could not be added: ' + errs.join(' | '));
       loadData();
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Backfill failed');
