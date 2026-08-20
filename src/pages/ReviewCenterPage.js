@@ -22,7 +22,7 @@ export default function ReviewCenterPage() {
   const [quotes, setQuotes] = useState([]);
   const [monitored, setMonitored] = useState(new Set());
 
-  const load = async () => {
+  const load = async (dispatchAfter = true) => {
     setRefreshing(true);
     const [est, ord, bil, cov, mon] = await Promise.allSettled([
       getEstimates({ status: 'draft' }),
@@ -37,15 +37,19 @@ export default function ReviewCenterPage() {
     if (bil.status === 'fulfilled') setBills((bil.value.data.data || []).filter(b => (b.billStatus || 'pending') === 'pending'));
     if (cov.status === 'fulfilled') setQuotes((cov.value.data.data || []).filter(e => !e.commResponded && !e.commHandledManually));
     setLoading(false); setRefreshing(false);
-    window.dispatchEvent(new Event('reviewcount:refresh')); // keep sidebar badge in sync
+    // Only broadcast when this load was triggered by a real user action, NOT when it was itself
+    // triggered by a reviewcount:refresh event — otherwise load->dispatch->listener->load loops forever.
+    if (dispatchAfter) window.dispatchEvent(new Event('reviewcount:refresh')); // keep sidebar badge in sync
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { load(false); /* eslint-disable-next-line */ }, []);
 
   // Reload the board when something elsewhere changes review state — e.g. an estimate is marked sent
   // (which removes it from the draft list), a bill is handled, etc. Without this the board only
   // loaded on mount, so a just-sent estimate lingered until a manual page reload.
+  // NOTE: this reload passes dispatchAfter=false so it does NOT re-broadcast the event it's reacting
+  // to (that would create an infinite refresh loop and hammer the API).
   useEffect(() => {
-    const onRefresh = () => { load(); };
+    const onRefresh = () => { load(false); };
     window.addEventListener('reviewcount:refresh', onRefresh);
     // Also refresh when the tab regains focus, so returning to the board shows current state.
     window.addEventListener('focus', onRefresh);
