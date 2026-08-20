@@ -41,7 +41,7 @@ import {
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, getFrequentDrivers, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
   generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo,
-  addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge, getWOShipmentCharges, getInspectionJobs
+  addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge, getWOShipmentCharges, getInspectionJobs, backfillWorkOrderPricing
 } from '../services/api';
 import usePolling from '../hooks/usePolling';
 import { COUNTRIES as USMCA_COUNTRY_LIST } from '../constants/countries';
@@ -335,6 +335,7 @@ function WorkOrderDetailsPage() {
   const [vendorSuggestions, setVendorSuggestions] = useState([]);
   const [showVendorSuggestions, setShowVendorSuggestions] = useState(false);
   const [showLinkEstimateModal, setShowLinkEstimateModal] = useState(false);
+  const [backfillingPricing, setBackfillingPricing] = useState(false);
   const [estimateSearchQuery, setEstimateSearchQuery] = useState('');
   const [estimateSearchResults, setEstimateSearchResults] = useState([]);
   const [searchingEstimates, setSearchingEstimates] = useState(false);
@@ -4008,6 +4009,31 @@ function WorkOrderDetailsPage() {
             )}
           </div>
         </div>
+        {/* Backfill banner: shows only when a part is missing its price (older conversions left the
+            pricing columns null even though the material/labor data is present). One click recomputes
+            from the linked estimate. */}
+        {order.estimateNumber && (order.parts || []).some(p => p.partTotal === null || p.partTotal === undefined || p.partTotal === '' || parseFloat(p.partTotal) === 0) && (
+          <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '10px 14px', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+            <div style={{ flex: 1, fontSize: '0.85rem', color: '#8d6e63' }}>
+              Some parts are missing their pricing (this can happen on work orders converted before a pricing fix). You can recompute it from the linked estimate.
+            </div>
+            <button className="btn btn-sm" disabled={backfillingPricing} onClick={async () => {
+              try {
+                setBackfillingPricing(true);
+                const res = await backfillWorkOrderPricing(order.id);
+                showMessage(res.data?.message || 'Pricing recomputed');
+                await loadOrder();
+              } catch (e) {
+                setError(e.response?.data?.error?.message || 'Could not backfill pricing');
+              } finally {
+                setBackfillingPricing(false);
+              }
+            }} style={{ background: '#ef6c00', color: 'white', whiteSpace: 'nowrap' }}>
+              {backfillingPricing ? 'Fixing…' : 'Fix Pricing'}
+            </button>
+          </div>
+        )}
         {/* Progress Bar */}
         {order.parts?.length > 0 && (() => {
           const SERVICE_TYPES = ['fab_service', 'shop_rate', 'rush_service'];
