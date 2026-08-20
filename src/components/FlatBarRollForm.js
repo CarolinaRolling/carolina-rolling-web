@@ -295,6 +295,10 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
         if (p) { updates.sectionSize = `${partData._barSize}x${partData._barSize}`; updates.width = String(p.width); updates.thickness = String(p.thickness); }
       } else if (partData._customBarSize) {
         updates.sectionSize = partData._customBarSize;
+        // Parse the custom square bar (e.g. "2-1/2" or "2.5") so width/thickness are populated —
+        // otherwise downstream (weld seam options, weld passes) can't see the bar's dimensions.
+        const p = parseSquareBarSize(partData._customBarSize);
+        if (p) { updates.width = String(p.width); updates.thickness = String(p.thickness); }
       }
     } else {
       if (partData._barSize && partData._barSize !== 'Custom') {
@@ -302,6 +306,9 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
         if (parsedSize) { updates.width = String(parsedSize.width); updates.thickness = String(parsedSize.thickness); }
       } else if (partData._customBarSize) {
         updates.sectionSize = partData._customBarSize;
+        // Parse the custom flat bar (e.g. "4x3/4") so width/thickness are populated.
+        const p = parseFlatBarSize(partData._customBarSize);
+        if (p) { updates.width = String(p.width); updates.thickness = String(p.thickness); }
       }
     }
     setPartData(prev => ({ ...prev, ...updates }));

@@ -95,6 +95,10 @@ function extractPartInfo(part) {
       info.seamOptions.push({ label: 'Circumference (OD ' + od + '" = ' + circ.toFixed(2) + '")', lengthInches: circ });
     }
   } else if (['angle_roll', 'channel_roll', 'beam_roll', 'flat_bar', 'tee_bar'].includes(ptype)) {
+    // Width seam — for a rolled bar/section the butt weld runs across the bar's width (e.g. a
+    // 1.5" flat bar has a 1.5" seam). Offer it when we know the width.
+    const w = parseFloat(part.width) || 0;
+    if (w > 0) info.seamOptions.push({ label: 'Width Seam (' + w + '")', lengthInches: w });
     const rollVal = parseFloat(part._rollValue || part.diameter || part.radius) || 0;
     const measureType = part._rollMeasureType || 'diameter';
     let dia = rollVal;

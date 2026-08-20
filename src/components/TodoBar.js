@@ -39,6 +39,14 @@ function TodoBar() {
   }, [loadTodos]);
   usePolling(loadTodos, 30000);
 
+  // Refresh immediately when review state changes elsewhere (e.g. an estimate marked sent auto-closes
+  // its "Review pricing" task on the backend) instead of waiting for the 30s poll.
+  useEffect(() => {
+    const onRefresh = () => { loadTodos(); };
+    window.addEventListener('reviewcount:refresh', onRefresh);
+    return () => window.removeEventListener('reviewcount:refresh', onRefresh);
+  }, [loadTodos]);
+
   // Estimate review tasks only visible to head estimator or admin
   const canSeeEstimateReviews = isHeadEstimator() || isAdmin();
   const visibleTodos = todos.filter(t => {
