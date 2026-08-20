@@ -83,7 +83,53 @@ const DEFAULTS = {
   sq_rect_tube: {
     square: ['0.5x0.5', '0.75x0.75', '1x1', '1.25x1.25', '1.5x1.5', '2x2', '2.5x2.5', '3x3', '4x4', '5x5', '6x6'],
     rectangular: ['1x2', '1x3', '1.5x2', '1.5x3', '2x3', '2x4', '3x4', '3x5', '4x6']
-  }
+  },
+  flat_bar: [
+    '1/2x1/4', '3/4x1/4', '3/4x3/8',
+    '1x1/4', '1x3/8', '1x1/2',
+    '1-1/2x1/4', '1-1/2x3/8', '1-1/2x1/2',
+    '2x1/4', '2x3/8', '2x1/2', '2x3/4',
+    '2-1/2x1/4', '2-1/2x3/8', '2-1/2x1/2',
+    '3x1/4', '3x3/8', '3x1/2', '3x3/4', '3x1',
+    '4x3/8', '4x1/2', '4x3/4', '4x1',
+    '5x3/8', '5x1/2', '5x3/4', '5x1',
+    '6x3/8', '6x1/2', '6x3/4', '6x1',
+    '8x1/2', '8x3/4', '8x1',
+    '10x1/2', '10x3/4', '10x1',
+    '12x1/2', '12x3/4', '12x1'
+  ],
+  square_bar: [
+    '1/4', '3/8', '1/2', '5/8', '3/4', '7/8',
+    '1', '1-1/4', '1-1/2', '1-3/4',
+    '2', '2-1/2', '3', '3-1/2', '4'
+  ],
+  tee: [
+    'WT2x6.5', 'WT2.5x8', 'WT3x4.5', 'WT3x6', 'WT3x7.5', 'WT3x8', 'WT3x10',
+    'WT4x5', 'WT4x6.5', 'WT4x7.5', 'WT4x9', 'WT4x10.5', 'WT4x12', 'WT4x14',
+    'WT4x15.5', 'WT4x17.5', 'WT4x20', 'WT4x24', 'WT4x29',
+    'WT5x6', 'WT5x7.5', 'WT5x8.5', 'WT5x9.5', 'WT5x11', 'WT5x13', 'WT5x15',
+    'WT5x16.5', 'WT5x19.5', 'WT5x22.5', 'WT5x24.5', 'WT5x27', 'WT5x30', 'WT5x34', 'WT5x38.5',
+    'WT5x44', 'WT5x50', 'WT5x56',
+    'WT6x7', 'WT6x8', 'WT6x9.5', 'WT6x11', 'WT6x13', 'WT6x15', 'WT6x17.5',
+    'WT6x20', 'WT6x22.5', 'WT6x25', 'WT6x26.5', 'WT6x29', 'WT6x32.5', 'WT6x36',
+    'WT6x39.5', 'WT6x43.5', 'WT6x48', 'WT6x53', 'WT6x60',
+    'WT7x11', 'WT7x13', 'WT7x15', 'WT7x17', 'WT7x19', 'WT7x21.5', 'WT7x24',
+    'WT7x26.5', 'WT7x30.5', 'WT7x34', 'WT7x37', 'WT7x41', 'WT7x45', 'WT7x49.5',
+    'WT7x54.5', 'WT7x60', 'WT7x66', 'WT7x72.5', 'WT7x79.5',
+    'WT8x13', 'WT8x15.5', 'WT8x18', 'WT8x20', 'WT8x22.5', 'WT8x25',
+    'WT8x28.5', 'WT8x33.5', 'WT8x38.5', 'WT8x44.5', 'WT8x50',
+    'WT9x17.5', 'WT9x20', 'WT9x23', 'WT9x25', 'WT9x27.5', 'WT9x30',
+    'WT9x32.5', 'WT9x35.5', 'WT9x38.5', 'WT9x43', 'WT9x48.5', 'WT9x53',
+    'WT10.5x22', 'WT10.5x25', 'WT10.5x28.5', 'WT10.5x31', 'WT10.5x34',
+    'WT10.5x36.5', 'WT10.5x41.5', 'WT10.5x46.5', 'WT10.5x50.5', 'WT10.5x55.5',
+    'WT12x27.5', 'WT12x31', 'WT12x34', 'WT12x38', 'WT12x42', 'WT12x47',
+    'WT12x52', 'WT12x58.5', 'WT12x65.5', 'WT12x73',
+    'ST1.5x2.85', 'ST1.5x3.75', 'ST2x3.85', 'ST2x4.75', 'ST2.5x5', 'ST2.5x6.25',
+    'ST3x6.25', 'ST3x8.625', 'ST4x9.2', 'ST4x11.5', 'ST5x12.7', 'ST5x17.5',
+    'ST6x15.9', 'ST6x17.5', 'ST6x20.4', 'ST6x25', 'ST7.5x21.45', 'ST7.5x25',
+    'ST9x27.35', 'ST9x35', 'ST10x33', 'ST10x37.5', 'ST10x48',
+    'ST12x40', 'ST12x45', 'ST12x50', 'ST12x60'
+  ]
 };
 
 const TABS = [
@@ -91,7 +137,10 @@ const TABS = [
   { key: 'channel', label: 'Channel', icon: '🔩', hint: 'Format: C or MC prefix (e.g. C6x8.2, MC10x22)' },
   { key: 'beam', label: 'Beam', icon: '🏗️', hint: 'Format: W or S prefix (e.g. W8x31, S6x12.5)' },
   { key: 'pipe', label: 'Pipe & Tube', icon: '🔧', hint: 'Round tube, pipe, and solid bar with OD values' },
-  { key: 'sq_rect_tube', label: 'Sq/Rect Tube', icon: '⬜', hint: 'Format: Side1xSide2 (e.g. 2x2 for square, 2x4 for rect)' }
+  { key: 'sq_rect_tube', label: 'Sq/Rect Tube', icon: '⬜', hint: 'Format: Side1xSide2 (e.g. 2x2 for square, 2x4 for rect)' },
+  { key: 'flat_bar', label: 'Flat Bar', icon: '➖', hint: 'Format: WidthxThickness (e.g. 2x0.25, 3x0.5)' },
+  { key: 'square_bar', label: 'Square Bar', icon: '⬛', hint: 'Format: SidexSide (e.g. 1x1, 1.5x1.5)' },
+  { key: 'tee', label: 'Tee', icon: '⊤', hint: 'Format: WT or ST prefix (e.g. WT5x6, ST3x8.625)' }
 ];
 
 function SectionSizesPage({ embedded = false }) {

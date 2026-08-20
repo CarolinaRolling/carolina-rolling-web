@@ -5,7 +5,8 @@ import { searchVendors, getSettings, createVendor } from '../services/api';
 import PitchSection, { getPitchDescriptionLines } from './PitchSection';
 import HeatNumberInput from './HeatNumberInput';
 import TrackingExtraFields from './TrackingExtraFields';
-const FLAT_BAR_SIZES = [
+import { useSectionSizes } from '../hooks/useSectionSizes';
+const FLAT_BAR_SIZES_DEFAULT = [
   '1/2x1/4', '3/4x1/4', '3/4x3/8',
   '1x1/4', '1x3/8', '1x1/2',
   '1-1/2x1/4', '1-1/2x3/8', '1-1/2x1/2',
@@ -17,15 +18,13 @@ const FLAT_BAR_SIZES = [
   '6x3/8', '6x1/2', '6x3/4', '6x1',
   '8x1/2', '8x3/4', '8x1',
   '10x1/2', '10x3/4', '10x1',
-  '12x1/2', '12x3/4', '12x1',
-  'Custom'
+  '12x1/2', '12x3/4', '12x1'
 ];
 
-const SQUARE_BAR_SIZES = [
+const SQUARE_BAR_SIZES_DEFAULT = [
   '1/4', '3/8', '1/2', '5/8', '3/4', '7/8',
   '1', '1-1/4', '1-1/2', '1-3/4',
-  '2', '2-1/2', '3', '3-1/2', '4',
-  'Custom'
+  '2', '2-1/2', '3', '3-1/2', '4'
 ];
 
 const DEFAULT_GRADE_OPTIONS = ['A36', '304 S/S', '316 S/S', 'AR400', 'Custom'];
@@ -84,6 +83,11 @@ function parseSquareBarSize(sizeStr) {
 
 export default function FlatBarRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const [barShape, setBarShape] = useState(partData._barShape || 'flat');
+  // Live section-size lists from admin settings (falls back to defaults). 'Custom' always appended.
+  const flatBarLoaded = useSectionSizes('flat_bar', FLAT_BAR_SIZES_DEFAULT);
+  const squareBarLoaded = useSectionSizes('square_bar', SQUARE_BAR_SIZES_DEFAULT);
+  const FLAT_BAR_SIZES = useMemo(() => [...(flatBarLoaded || FLAT_BAR_SIZES_DEFAULT), 'Custom'], [flatBarLoaded]);
+  const SQUARE_BAR_SIZES = useMemo(() => [...(squareBarLoaded || SQUARE_BAR_SIZES_DEFAULT), 'Custom'], [squareBarLoaded]);
   const [customGrade, setCustomGrade] = useState('');
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
   const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');

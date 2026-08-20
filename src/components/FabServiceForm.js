@@ -196,6 +196,21 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
 
   const weldPricePerFoot = parseFloat(partData._weldPricePerFoot) || 0;
 
+  // Passes × seam-feet, computed independent of price, so unit-price mode can back-calc the per-foot
+  // rate. (weldCalc below returns null when price is 0, so we can't rely on it for the back-calc.)
+  const weldUnits = useMemo(() => {
+    if (!serviceConfig || !serviceConfig.hasWeldCalc || !partInfo) return null;
+    const thickness = partInfo.thickness;
+    if (thickness <= 0 || seamLength <= 0) return null;
+    const passes = Math.ceil(thickness / 0.125);
+    const seamFeet = Math.ceil(seamLength / 12);
+    const denom = passes * seamFeet;
+    return { passes, seamFeet, denom };
+  }, [serviceConfig, partInfo, seamLength]);
+
+  // Weld pricing entry mode: 'per_foot' (default) or 'unit' (enter per-piece price, back-calc rate).
+  const weldPriceMode = partData._weldPriceMode || 'per_foot';
+
   // Weld calc
   const weldCalc = useMemo(() => {
     if (!serviceConfig || !serviceConfig.hasWeldCalc || !partInfo) return null;
@@ -571,7 +586,20 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
       {serviceType === 'weld_100' && linkedPart && partInfo && (
         <div style={{ ...sectionStyle }}>
           {sTitle('💰', 'Weld Pricing', '#c62828')}
+          {/* Mode toggle: enter a per-foot rate, or a per-piece unit price (which back-calcs the rate) */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+            {[['per_foot', 'Per Foot'], ['unit', 'Unit Price']].map(([m, lbl]) => (
+              <button key={m} type="button" onClick={() => update({ _weldPriceMode: m })}
+                style={{
+                  padding: '4px 12px', borderRadius: 14, fontSize: '0.78rem', cursor: 'pointer',
+                  fontWeight: weldPriceMode === m ? 700 : 500,
+                  border: '1px solid ' + (weldPriceMode === m ? '#c62828' : '#ddd'),
+                  background: weldPriceMode === m ? '#c62828' : 'white', color: weldPriceMode === m ? 'white' : '#555'
+                }}>{lbl}</button>
+            ))}
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {weldPriceMode === 'per_foot' ? (
             <div className="form-group">
               <label className="form-label">Weld Price Per Foot</label>
               <div style={{ position: 'relative' }}>
@@ -594,6 +622,37 @@ export default function FabServiceForm({ partData, setPartData, estimateParts = 
                 </div>
               )}
             </div>
+            ) : (
+            <div className="form-group">
+              <label className="form-label">Weld Unit Price (per piece)</label>
+              <div style={{ position: 'relative' }}>
+                <input type="number" step="any" className="form-input"
+                  value={partData._weldUnitPriceInput ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const up = { _weldUnitPriceInput: val, _weldPriceManualOverride: true };
+                    // Back-calc the per-foot rate from the per-piece price so the stored source of
+                    // truth stays a single value: rate = unitPrice / (passes × seamFeet).
+                    const unit = parseFloat(val);
+                    if (weldUnits && weldUnits.denom > 0 && !isNaN(unit) && unit > 0) {
+                      up._weldPricePerFoot = (unit / weldUnits.denom).toFixed(4);
+                    } else if (!val) {
+                      up._weldPricePerFoot = '';
+                    }
+                    update(up);
+                  }}
+                  onFocus={() => { isEditingPriceRef.current = true; }}
+                  onBlur={() => { isEditingPriceRef.current = false; }}
+                  placeholder="0.00" style={{ paddingLeft: 20 }} />
+                <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: '#666', fontWeight: 600 }}>$</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#666', marginTop: 2 }}>
+                {weldUnits
+                  ? <>Implied rate: <strong>${weldPricePerFoot.toFixed(2)}/ft</strong> ({weldUnits.passes} passes × {weldUnits.seamFeet} ft)</>
+                  : 'Enter thickness & seam length to compute the rate.'}
+              </div>
+            </div>
+            )}
             <div className="form-group">
               <label className="form-label">Bevel / Weld Notes</label>
               <input type="text" className="form-input" value={partData._bevelNotes || ''}

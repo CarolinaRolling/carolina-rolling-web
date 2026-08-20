@@ -4,7 +4,8 @@ import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
 import HeatNumberInput from './HeatNumberInput';
 import TrackingExtraFields from './TrackingExtraFields';
-const TEE_SIZES = [
+import { useSectionSizes } from '../hooks/useSectionSizes';
+const TEE_SIZES_DEFAULT = [
   'WT2x6.5', 'WT2.5x8', 'WT3x4.5', 'WT3x6', 'WT3x7.5', 'WT3x8', 'WT3x10',
   'WT4x5', 'WT4x6.5', 'WT4x7.5', 'WT4x9', 'WT4x10.5', 'WT4x12', 'WT4x14',
   'WT4x15.5', 'WT4x17.5', 'WT4x20', 'WT4x24', 'WT4x29',
@@ -35,8 +36,7 @@ const TEE_SIZES = [
   'ST7.5x21.45', 'ST7.5x25',
   'ST9x27.35', 'ST9x35',
   'ST10x33', 'ST10x37.5', 'ST10x48',
-  'ST12x40', 'ST12x45', 'ST12x50', 'ST12x60',
-  'Custom'
+  'ST12x40', 'ST12x45', 'ST12x50', 'ST12x60'
 ];
 
 const DEFAULT_GRADE_OPTIONS = ['A36', 'A572 Gr 50', '304 S/S', '316 S/S', 'Custom'];
@@ -57,6 +57,9 @@ function calculateRise(radiusInches, chordInches) {
 
 export default function TeeBarRollForm({ partData, setPartData, vendorSuggestions, setVendorSuggestions, showVendorSuggestions, setShowVendorSuggestions, showMessage, setError }) {
   const [customGrade, setCustomGrade] = useState('');
+  // Live tee sizes from admin settings (falls back to the standard AISI list). 'Custom' appended.
+  const teeLoaded = useSectionSizes('tee', TEE_SIZES_DEFAULT);
+  const TEE_SIZES = useMemo(() => [...(teeLoaded || TEE_SIZES_DEFAULT), 'Custom'], [teeLoaded]);
   const [rollValue, setRollValue] = useState(partData._rollValue || '');
   const [rollToMethod, setRollToMethod] = useState(partData._rollToMethod || '');
   const [rollMeasureType, setRollMeasureType] = useState(partData._rollMeasureType || 'diameter');

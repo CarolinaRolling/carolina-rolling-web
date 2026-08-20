@@ -41,6 +41,21 @@ export default function ReviewCenterPage() {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
+  // Reload the board when something elsewhere changes review state — e.g. an estimate is marked sent
+  // (which removes it from the draft list), a bill is handled, etc. Without this the board only
+  // loaded on mount, so a just-sent estimate lingered until a manual page reload.
+  useEffect(() => {
+    const onRefresh = () => { load(); };
+    window.addEventListener('reviewcount:refresh', onRefresh);
+    // Also refresh when the tab regains focus, so returning to the board shows current state.
+    window.addEventListener('focus', onRefresh);
+    return () => {
+      window.removeEventListener('reviewcount:refresh', onRefresh);
+      window.removeEventListener('focus', onRefresh);
+    };
+    /* eslint-disable-next-line */
+  }, []);
+
   const money = (n, c) => (n == null || isNaN(n)) ? '' : `${c === 'CAD' ? 'C$' : '$'}${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const byDateAsc = (a, b) => new Date(a) - new Date(b);
   const isMonitored = (name) => monitored.has((name || '').trim().toLowerCase());
