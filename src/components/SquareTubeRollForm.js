@@ -93,6 +93,9 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
     } else if (partData.diameter) {
       setRollValue(partData.diameter);
       setRollMeasureType('diameter');
+    } else if (partData._rollValue) {
+      setRollValue(partData._rollValue);
+      if (partData._rollMeasureType) setRollMeasureType(partData._rollMeasureType);
     }
     if (partData._rollMeasureType) setRollMeasureType(partData._rollMeasureType);
     if (partData._rollMeasurePoint) setRollMeasurePoint(partData._rollMeasurePoint);

@@ -171,6 +171,9 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
     } else if (partData.diameter) {
       setRollValue(partData.diameter);
       setRollMeasureType('diameter');
+    } else if (partData._rollValue) {
+      setRollValue(partData._rollValue);
+      if (partData._rollMeasureType) setRollMeasureType(partData._rollMeasureType);
     }
     if (partData._rollMeasurePoint) setRollMeasurePoint(partData._rollMeasurePoint);
   }, []);

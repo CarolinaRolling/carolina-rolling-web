@@ -74,6 +74,11 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
     } else if (partData.diameter) {
       setRollValue(partData.diameter);
       setRollMeasureType('diameter');
+    } else if (partData._rollValue) {
+      // AI-imported parts (and some older saves) store the roll value only in _rollValue, with the
+      // diameter/radius columns left blank. Fall back to it so the field isn't empty on edit.
+      setRollValue(partData._rollValue);
+      if (partData._rollMeasureType) setRollMeasureType(partData._rollMeasureType);
     }
     if (partData.arcDegrees) {
       setShowAngle(true);
