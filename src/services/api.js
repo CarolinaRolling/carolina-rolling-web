@@ -19,15 +19,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 errors
+// Handle auth + rate-limit errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    if (status === 401) {
       localStorage.removeItem('token');
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
+    } else if (status === 429) {
+      // A rate-limit is NOT an auth failure — do NOT log the user out (that used to cascade into a
+      // forced re-login during a request storm). Just surface a gentle notice and let the caller's
+      // own catch handle the rejected promise. A global toast avoids every page needing its own.
+      try {
+        window.dispatchEvent(new CustomEvent('api:ratelimited'));
+      } catch { /* ignore */ }
     }
     return Promise.reject(error);
   }

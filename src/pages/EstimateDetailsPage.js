@@ -16,6 +16,7 @@ import {
 } from '../services/api';
 import ShipmentChargesSection from '../components/ShipmentChargesSection';
 import { computeDisplayNumbers } from '../utils/partNumbers';
+import { inch, dedupeInch } from '../utils/dimensions';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
 import FlatStockForm from '../components/FlatStockForm';
@@ -2742,11 +2743,11 @@ function EstimateDetailsPage() {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
                       <span><strong>Qty:</strong> {part.quantity}</span>
                       {part.sectionSize && <span style={{ color: '#555' }}>| <strong>Size:</strong> {part.partType === 'pipe_roll' && (part.formData || {})._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${(part.formData || {})._schedule} Pipe`) : part.sectionSize}</span>}
-                      {part.thickness && <span style={{ color: '#555' }}>| <strong>Thk:</strong> {part.thickness}</span>}
-                      {part.outerDiameter && <span style={{ color: '#555' }}>| <strong>OD:</strong> {part.outerDiameter}"</span>}
+                      {part.thickness && <span style={{ color: '#555' }}>| <strong>Thk:</strong> {inch(part.thickness)}</span>}
+                      {part.outerDiameter && <span style={{ color: '#555' }}>| <strong>OD:</strong> {inch(part.outerDiameter)}</span>}
                       {part.wallThickness && part.wallThickness !== 'SOLID' && <span style={{ color: '#555' }}>| <strong>Wall:</strong> {part.wallThickness}</span>}
                       {part.wallThickness === 'SOLID' && <span style={{ color: '#e65100', fontWeight: 600 }}>| Solid Bar</span>}
-                      {part.width && <span style={{ color: '#555' }}>| <strong>Width:</strong> {part.width}"</span>}
+                      {part.width && <span style={{ color: '#555' }}>| <strong>Width:</strong> {inch(part.width)}</span>}
                       {part.length && <span style={{ color: '#555' }}>| <strong>Length:</strong> {part.length}</span>}
                       {part.material && <span style={{ color: '#555' }}>| <strong>Grade:</strong> {part.material}</span>}
                     </div>
@@ -2765,7 +2766,7 @@ function EstimateDetailsPage() {
                     )}
                     {!(part.formData || {})._rollToMethod && (part.diameter || part.radius) && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, color: '#1565c0', fontSize: '0.82rem' }}>
-                        🔄 {part.diameter || part.radius}" {(() => {
+                        🔄 {inch(part.diameter || part.radius)} {(() => {
                           const mp = part._rollMeasurePoint || 'inside';
                           const isRad = !!part.radius && !part.diameter;
                           if (mp === 'inside') return isRad ? 'ISR' : 'ID';
@@ -2836,7 +2837,7 @@ function EstimateDetailsPage() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <strong>📦 Material supplied by: Carolina Rolling Company</strong>
                       </div>
-                      <div style={{ fontSize: '0.875rem' }}>{part.materialDescription} (Qty: {part.quantity})</div>
+                      <div style={{ fontSize: '0.875rem' }}>{dedupeInch(part.materialDescription)} (Qty: {part.quantity})</div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: '0.85rem' }}>
                         <span>Cost: {formatCurrency(calc.materialCost)} + {part.materialMarkupPercent}% markup</span>
                         <strong style={{ color: '#e65100' }}>{formatCurrency(calc.materialTotal)}</strong>
@@ -2861,7 +2862,7 @@ function EstimateDetailsPage() {
                       )}
                       {part.materialDescription && (
                         <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
-                          📦 {part.materialDescription}
+                          📦 {dedupeInch(part.materialDescription)}
                           {!['fab_service', 'shop_rate'].includes(part.partType) && (
                             <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>
                               {part.materialSource === 'we_order' ? 'Material supplied by: Carolina Rolling Company'

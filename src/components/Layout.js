@@ -30,8 +30,26 @@ function Layout({ children }) {
     const interval = setInterval(loadPending, 60000);
     // Pages dispatch this after completing a review item (approve/reject/handle/send)
     // so the sidebar count updates immediately instead of waiting for the next poll.
-    window.addEventListener('reviewcount:refresh', loadPending);
-    return () => { clearInterval(interval); window.removeEventListener('reviewcount:refresh', loadPending); };
+    // Throttled: even if the event fires rapidly (e.g. a bug elsewhere), this heavy 6-call refresh
+    // runs at most once every 2s, so it can't storm the API and trip the rate limiter.
+    let lastRun = 0;
+    let pendingTimer = null;
+    const throttledLoad = () => {
+      const now = Date.now();
+      const since = now - lastRun;
+      if (since >= 2000) {
+        lastRun = now;
+        loadPending();
+      } else if (!pendingTimer) {
+        pendingTimer = setTimeout(() => {
+          pendingTimer = null;
+          lastRun = Date.now();
+          loadPending();
+        }, 2000 - since);
+      }
+    };
+    window.addEventListener('reviewcount:refresh', throttledLoad);
+    return () => { clearInterval(interval); if (pendingTimer) clearTimeout(pendingTimer); window.removeEventListener('reviewcount:refresh', throttledLoad); };
   }, []);
 
   const handleConfirmPickup = async (type) => {

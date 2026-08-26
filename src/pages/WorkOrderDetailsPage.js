@@ -25,6 +25,7 @@ import HeatNumberInput from '../components/HeatNumberInput';
 import ShipmentChargesSection from '../components/ShipmentChargesSection';
 import InspectionPanel, { specIssues } from '../components/InspectionPanel';
 import { computeDisplayNumbers } from '../utils/partNumbers';
+import { inch, dedupeInch } from '../utils/dimensions';
 import WorkOrderLifecycleBar from '../components/WorkOrderLifecycleBar';
 import { 
 
@@ -4349,7 +4350,7 @@ function WorkOrderDetailsPage() {
                           {part.materialSource === 'we_order' ? 'We Order' : part.materialSource === 'in_stock' ? 'In Stock' : 'Customer'}
                         </span>
                         {part.materialDescription && (
-                          <strong style={{ color: part.materialOrdered ? '#2e7d32' : '#333' }}>📦 {part.materialDescription}</strong>
+                          <strong style={{ color: part.materialOrdered ? '#2e7d32' : '#333' }}>📦 {dedupeInch(part.materialDescription)}</strong>
                         )}
                         {(part.vendor?.name || part.supplierName) && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#666' }}>from {part.vendor?.name || part.supplierName}</span>}
                         {part.vendorEstimateNumber && <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#1565c0', fontWeight: 600 }}>Est# {part.vendorEstimateNumber}</span>}
@@ -4405,11 +4406,11 @@ function WorkOrderDetailsPage() {
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
                     {part.partType !== 'rush_service' && <span><strong>Qty:</strong> {part.quantity}</span>}
                     {part.sectionSize && <span style={{ color: '#555' }}>| <strong>Size:</strong> {part.partType === 'pipe_roll' && (part.formData || {})._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${(part.formData || {})._schedule} Pipe`) : part.sectionSize}</span>}
-                    {part.thickness && <span style={{ color: '#555' }}>| <strong>Thk:</strong> {part.thickness}"</span>}
-                    {part.outerDiameter && <span style={{ color: '#555' }}>| <strong>OD:</strong> {part.outerDiameter}"</span>}
+                    {part.thickness && <span style={{ color: '#555' }}>| <strong>Thk:</strong> {inch(part.thickness)}</span>}
+                    {part.outerDiameter && <span style={{ color: '#555' }}>| <strong>OD:</strong> {inch(part.outerDiameter)}</span>}
                     {part.wallThickness && part.wallThickness !== 'SOLID' && <span style={{ color: '#555' }}>| <strong>Wall:</strong> {part.wallThickness}</span>}
                     {part.wallThickness === 'SOLID' && <span style={{ color: '#e65100', fontWeight: 600 }}>| Solid Bar</span>}
-                    {part.width && <span style={{ color: '#555' }}>| <strong>Width:</strong> {part.width}"</span>}
+                    {part.width && <span style={{ color: '#555' }}>| <strong>Width:</strong> {inch(part.width)}</span>}
                     {part.length && <span style={{ color: '#555' }}>| <strong>Length:</strong> {part.length}</span>}
                     {part.material && <span style={{ color: '#555' }}>| <strong>Grade:</strong> {part.material}</span>}
                   </div>
@@ -4437,7 +4438,7 @@ function WorkOrderDetailsPage() {
                   })()}
                   {!(part.formData || {})._rollToMethod && (part.diameter || part.radius) && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, color: '#1565c0', fontSize: '0.82rem', marginBottom: 2 }}>
-                      🔄 {part.diameter || part.radius}" {(() => {
+                      🔄 {inch(part.diameter || part.radius)} {(() => {
                         const mp = (part.formData || {})._rollMeasurePoint || part._rollMeasurePoint || 'inside';
                         const isRad = !!part.radius && !part.diameter;
                         if (mp === 'inside') return isRad ? 'ISR' : 'ID';
@@ -4590,7 +4591,7 @@ function WorkOrderDetailsPage() {
                   <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12, marginTop: 8 }}>
                     {part.materialDescription && !['fab_service', 'shop_rate'].includes(part.partType) && (
                       <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
-                        📦 {part.materialDescription}
+                        📦 {dedupeInch(part.materialDescription)}
                         {part.materialSource && (
                           <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#2e7d32', fontWeight: 600 }}>
                             {part.materialSource === 'we_order' || part.materialSource === 'in_stock'
@@ -4813,7 +4814,7 @@ function WorkOrderDetailsPage() {
                       {hiddenFromCustomer && <span style={{ color: '#C62828', marginRight: 4, fontSize: '0.75rem', fontWeight: 700 }}>🔒</span>}
                       <span style={{ color: hiddenFromCustomer ? '#C62828' : (isLinkedService ? '#7b1fa2' : 'inherit') }}>{PART_TYPES[part.partType]?.label || part.partType}</span>
                       {hiddenFromCustomer && <span style={{ marginLeft: 6, fontSize: '0.7rem', color: '#C62828', fontStyle: 'italic' }}>(hidden — internal cost only)</span>}
-                      {part.materialDescription && <div style={{ fontSize: '0.8rem', color: '#666' }}>{part.materialDescription}</div>}
+                      {part.materialDescription && <div style={{ fontSize: '0.8rem', color: '#666' }}>{dedupeInch(part.materialDescription)}</div>}
                     </td>
                     <td style={{ padding: 8, textAlign: 'right' }}>{part.quantity}</td>
                     <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(adjLabor)}</td>

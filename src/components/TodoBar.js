@@ -42,9 +42,18 @@ function TodoBar() {
   // Refresh immediately when review state changes elsewhere (e.g. an estimate marked sent auto-closes
   // its "Review pricing" task on the backend) instead of waiting for the 30s poll.
   useEffect(() => {
-    const onRefresh = () => { loadTodos(); };
+    let lastRun = 0;
+    let pendingTimer = null;
+    const onRefresh = () => {
+      const now = Date.now();
+      const since = now - lastRun;
+      if (since >= 2000) { lastRun = now; loadTodos(); }
+      else if (!pendingTimer) {
+        pendingTimer = setTimeout(() => { pendingTimer = null; lastRun = Date.now(); loadTodos(); }, 2000 - since);
+      }
+    };
     window.addEventListener('reviewcount:refresh', onRefresh);
-    return () => window.removeEventListener('reviewcount:refresh', onRefresh);
+    return () => { if (pendingTimer) clearTimeout(pendingTimer); window.removeEventListener('reviewcount:refresh', onRefresh); };
   }, [loadTodos]);
 
   // Estimate review tasks only visible to head estimator or admin

@@ -49,11 +49,21 @@ export default function ReviewCenterPage() {
   // NOTE: this reload passes dispatchAfter=false so it does NOT re-broadcast the event it's reacting
   // to (that would create an infinite refresh loop and hammer the API).
   useEffect(() => {
-    const onRefresh = () => { load(false); };
+    let lastRun = 0;
+    let pendingTimer = null;
+    const onRefresh = () => {
+      const now = Date.now();
+      const since = now - lastRun;
+      if (since >= 2000) { lastRun = now; load(false); }
+      else if (!pendingTimer) {
+        pendingTimer = setTimeout(() => { pendingTimer = null; lastRun = Date.now(); load(false); }, 2000 - since);
+      }
+    };
     window.addEventListener('reviewcount:refresh', onRefresh);
     // Also refresh when the tab regains focus, so returning to the board shows current state.
     window.addEventListener('focus', onRefresh);
     return () => {
+      if (pendingTimer) clearTimeout(pendingTimer);
       window.removeEventListener('reviewcount:refresh', onRefresh);
       window.removeEventListener('focus', onRefresh);
     };
