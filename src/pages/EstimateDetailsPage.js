@@ -10,7 +10,7 @@ import {
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile, toggleEstimateFilePortal,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
   getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
-  sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument, getAiParseStatus,
+  sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument, aiParseDocuments, aiParseEmail, attachAiPrint, getAiParseStatus,
   addEstimateShipmentCharge, updateEstimateShipmentCharge, deleteEstimateShipmentCharge, getEstimateShipmentCharges,
   deleteEstimate
 } from '../services/api';
@@ -112,6 +112,11 @@ function EstimateDetailsPage() {
   const [aiParseResults, setAiParseResults] = useState(null);
   const [aiParseNotes, setAiParseNotes] = useState('');
   const [aiSelectedFile, setAiSelectedFile] = useState(null);
+  const [aiFiles, setAiFiles] = useState([]); // multi-file: array of File
+  const [aiQuoteIndex, setAiQuoteIndex] = useState(-1); // which file is the quote/part list
+  const [aiEmailRef, setAiEmailRef] = useState(''); // Gmail id or URL
+  const [aiInputMode, setAiInputMode] = useState('files'); // 'files' | 'email'
+  const [aiJobId, setAiJobId] = useState(null); // for attaching held prints on accept
   const [aiPhase, setAiPhase] = useState('select'); // select | parsing | ready | error
   const [aiElapsed, setAiElapsed] = useState(0);
   const [aiJobMsg, setAiJobMsg] = useState('');
@@ -120,38 +125,55 @@ function EstimateDetailsPage() {
   const resetAiParse = () => {
     setAiSelectedFile(null); setAiPhase('select'); setAiElapsed(0);
     setAiJobMsg(''); setAiPendingResult(null); setAiParseResults(null); setAiParseNotes('');
+    setAiFiles([]); setAiQuoteIndex(-1); setAiEmailRef(''); setAiInputMode('files'); setAiJobId(null);
+  };
+
+  // Poll a started parse job to completion, updating phase/state.
+  const pollAiJob = async (jobId, timer) => {
+    let finished = false;
+    for (let attempt = 0; attempt < 100 && !finished; attempt++) {
+      await new Promise(r => setTimeout(r, 3000));
+      const st = await getAiParseStatus(id, jobId);
+      if (st.data.status === 'done') {
+        const d = st.data.data;
+        if (!d.parts || d.parts.length === 0) {
+          setAiJobMsg('The AI read the document but found 0 parts.\n\nAI notes: ' + (d.aiNotes || d.notes || '(none)') + (d.aiRawSnippet ? '\n\nRaw reply from AI:\n' + d.aiRawSnippet : ''));
+          setAiPhase('error');
+        } else {
+          setAiJobId(jobId);
+          setAiPendingResult(d);
+          setAiPhase('ready');
+        }
+        finished = true;
+      } else if (st.data.status === 'error') {
+        setAiJobMsg(st.data.error || 'Parsing failed.');
+        setAiPhase('error');
+        finished = true;
+      }
+    }
+    if (!finished) { setAiJobMsg('Parsing is taking longer than expected (over 5 minutes) — please try again.'); setAiPhase('error'); }
   };
 
   const submitAiParse = async () => {
-    if (!aiSelectedFile) return;
+    // Validate input based on mode
+    if (aiInputMode === 'files' && aiFiles.length === 0 && !aiSelectedFile) return;
+    if (aiInputMode === 'email' && !aiEmailRef.trim()) return;
     setAiPhase('parsing'); setAiJobMsg(''); setAiElapsed(0);
     const t0 = Date.now();
     const timer = setInterval(() => setAiElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
     try {
-      const startRes = await aiParseDocument(id, aiSelectedFile, aiParseNotes);
+      let startRes;
+      if (aiInputMode === 'email') {
+        startRes = await aiParseEmail(id, aiEmailRef.trim(), aiQuoteIndex, aiParseNotes);
+      } else if (aiFiles.length > 0) {
+        startRes = await aiParseDocuments(id, aiFiles, aiQuoteIndex, aiParseNotes);
+      } else {
+        // legacy single-file path
+        startRes = await aiParseDocument(id, aiSelectedFile, aiParseNotes);
+      }
       const jobId = startRes.data?.data?.jobId;
       if (!jobId) throw new Error('Could not start parsing.');
-      let finished = false;
-      for (let attempt = 0; attempt < 80 && !finished; attempt++) {
-        await new Promise(r => setTimeout(r, 3000));
-        const st = await getAiParseStatus(id, jobId);
-        if (st.data.status === 'done') {
-          const d = st.data.data;
-          if (!d.parts || d.parts.length === 0) {
-            setAiJobMsg('The AI read the document but found 0 parts.\n\nAI notes: ' + (d.aiNotes || d.notes || '(none)') + (d.aiRawSnippet ? '\n\nRaw reply from AI:\n' + d.aiRawSnippet : ''));
-            setAiPhase('error');
-          } else {
-            setAiPendingResult(d);
-            setAiPhase('ready');
-          }
-          finished = true;
-        } else if (st.data.status === 'error') {
-          setAiJobMsg(st.data.error || 'Parsing failed.');
-          setAiPhase('error');
-          finished = true;
-        }
-      }
-      if (!finished) { setAiJobMsg('Parsing is taking longer than expected (over 4 minutes) — please try again.'); setAiPhase('error'); }
+      await pollAiJob(jobId, timer);
     } catch (err) {
       setAiJobMsg(err.response?.data?.error?.message || err.message || 'AI parsing failed.');
       setAiPhase('error');
@@ -4664,7 +4686,7 @@ function EstimateDetailsPage() {
         <div className="modal-overlay" onClick={() => aiPhase !== 'parsing' && setShowAiParseModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
             <div className="modal-header">
-              <h3>🤖 Upload Document to AI</h3>
+              <h3>🤖 AI Parse — quote + prints</h3>
               <button className="btn btn-icon" onClick={() => aiPhase !== 'parsing' && setShowAiParseModal(false)}><X size={20} /></button>
             </div>
             <div style={{ padding: '16px 20px', maxHeight: '70vh', overflowY: 'auto' }}>
@@ -4672,36 +4694,83 @@ function EstimateDetailsPage() {
                 <div>
                   {aiPhase === 'select' && (
                     <>
-                      <p style={{ color: '#555', marginBottom: 16 }}>
-                        Choose a drawing, RFQ, spec sheet, or PO, add any notes, then submit. The AI reads it in the background and shows the parts when done.
-                      </p>
-                      <label style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                        padding: 28, border: '2px dashed #00838f', borderRadius: 12, cursor: 'pointer',
-                        background: '#e0f7fa', minHeight: 110
-                      }}>
-                        <div style={{ fontSize: '2.2rem', marginBottom: 8 }}>📄</div>
-                        {aiSelectedFile ? (
-                          <div style={{ fontWeight: 700, color: '#00695c' }}>✓ {aiSelectedFile.name}</div>
-                        ) : (
-                          <>
-                            <div style={{ fontWeight: 600, color: '#00838f', fontSize: '1rem' }}>Click to choose a PDF, image, or drawing</div>
-                            <div style={{ color: '#888', fontSize: '0.8rem', marginTop: 4 }}>PDF, PNG, JPG — max 50MB</div>
-                          </>
-                        )}
-                        <input type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" hidden
-                          onChange={(e) => { const f = e.target.files?.[0]; if (f) setAiSelectedFile(f); e.target.value = ''; }} />
-                      </label>
-                      {aiSelectedFile && (
-                        <button className="btn btn-sm btn-outline" style={{ marginTop: 8 }} onClick={() => setAiSelectedFile(null)}>Choose a different file</button>
+                      {/* Mode toggle: upload files vs. pull from an email */}
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                        <button className="btn btn-sm" style={{ flex: 1, background: aiInputMode === 'files' ? '#00838f' : '#eee', color: aiInputMode === 'files' ? 'white' : '#555', borderColor: '#00838f' }}
+                          onClick={() => setAiInputMode('files')}>📄 Upload files</button>
+                        <button className="btn btn-sm" style={{ flex: 1, background: aiInputMode === 'email' ? '#00838f' : '#eee', color: aiInputMode === 'email' ? 'white' : '#555', borderColor: '#00838f' }}
+                          onClick={() => setAiInputMode('email')}>✉️ From email</button>
+                      </div>
+
+                      {aiInputMode === 'files' && (
+                        <>
+                          <p style={{ color: '#555', marginBottom: 12 }}>
+                            Upload the <strong>quote/part list</strong> plus all the <strong>print PDFs</strong>. The AI reads the parts from the quote and auto-attaches each print to its part by the client part number. Mark which file is the quote below.
+                          </p>
+                          <label style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                            padding: 20, border: '2px dashed #00838f', borderRadius: 12, cursor: 'pointer',
+                            background: '#e0f7fa', minHeight: 80
+                          }}>
+                            <div style={{ fontSize: '1.8rem', marginBottom: 6 }}>📄</div>
+                            <div style={{ fontWeight: 600, color: '#00838f', fontSize: '0.95rem' }}>Click to add files (you can select several)</div>
+                            <div style={{ color: '#888', fontSize: '0.8rem', marginTop: 4 }}>PDF, PNG, JPG — up to 25 files</div>
+                            <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" hidden
+                              onChange={(e) => {
+                                const picked = Array.from(e.target.files || []);
+                                if (picked.length) setAiFiles(prev => {
+                                  const next = [...prev, ...picked];
+                                  // Auto-mark the first file as the quote if none chosen yet
+                                  if (aiQuoteIndex < 0 && next.length) setAiQuoteIndex(0);
+                                  return next;
+                                });
+                                e.target.value = '';
+                              }} />
+                          </label>
+
+                          {aiFiles.length > 0 && (
+                            <div style={{ marginTop: 12, border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden' }}>
+                              <div style={{ padding: '6px 10px', background: '#f5f5f5', fontSize: '0.8rem', color: '#666', fontWeight: 600 }}>
+                                {aiFiles.length} file(s) — select which one is the quote/part list:
+                              </div>
+                              {aiFiles.map((f, idx) => (
+                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderTop: '1px solid #eee' }}>
+                                  <input type="radio" name="quoteFile" checked={aiQuoteIndex === idx} onChange={() => setAiQuoteIndex(idx)} title="This is the quote / part list" />
+                                  <span style={{ flex: 1, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {aiQuoteIndex === idx && <span style={{ color: '#00695c', fontWeight: 700 }}>QUOTE · </span>}
+                                    {f.name}
+                                  </span>
+                                  <button className="btn btn-icon btn-sm" onClick={() => {
+                                    setAiFiles(prev => prev.filter((_, i) => i !== idx));
+                                    setAiQuoteIndex(qi => qi === idx ? -1 : qi > idx ? qi - 1 : qi);
+                                  }} title="Remove"><X size={14} /></button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       )}
+
+                      {aiInputMode === 'email' && (
+                        <>
+                          <p style={{ color: '#555', marginBottom: 12 }}>
+                            Paste a <strong>Gmail message ID or URL</strong>. The AI pulls the email's PDF/image attachments and parses them — quote plus prints — the same way.
+                          </p>
+                          <input className="form-input" value={aiEmailRef} onChange={(e) => setAiEmailRef(e.target.value)}
+                            placeholder="https://mail.google.com/…  or  message id" style={{ width: '100%' }} />
+                          <div style={{ color: '#888', fontSize: '0.78rem', marginTop: 6 }}>
+                            Tip: open the email in Gmail and copy the URL from the address bar, or paste the message id.
+                          </div>
+                        </>
+                      )}
+
                       <div className="form-group" style={{ marginTop: 16 }}>
                         <label className="form-label">Additional context for AI <span style={{ color: '#999', fontWeight: 400 }}>(optional)</span></label>
                         <textarea className="form-textarea" value={aiParseNotes} onChange={(e) => setAiParseNotes(e.target.value)}
-                          rows={2} placeholder='e.g. "These are all A36 material", "Client wants everything rolled to 48&quot; OD", "Ignore the header row"' />
+                          rows={2} placeholder='e.g. "These are all A36 material", "Ignore the header row"' />
                       </div>
                       <button className="btn btn-primary" style={{ marginTop: 16, width: '100%', background: '#00838f', borderColor: '#00838f' }}
-                        disabled={!aiSelectedFile} onClick={submitAiParse}>
+                        disabled={aiInputMode === 'files' ? aiFiles.length === 0 : !aiEmailRef.trim()} onClick={submitAiParse}>
                         🤖 Submit to AI
                       </button>
                     </>
@@ -4710,7 +4779,9 @@ function EstimateDetailsPage() {
                   {aiPhase === 'parsing' && (
                     <div style={{ textAlign: 'center', padding: '32px 16px' }}>
                       <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🔄</div>
-                      <div style={{ fontWeight: 700, color: '#00838f', fontSize: '1.15rem' }}>AI is reading {aiSelectedFile?.name}…</div>
+                      <div style={{ fontWeight: 700, color: '#00838f', fontSize: '1.15rem' }}>
+                        AI is reading {aiInputMode === 'email' ? 'the email attachments' : aiFiles.length > 1 ? `${aiFiles.length} files` : (aiFiles[0]?.name || aiSelectedFile?.name || 'your document')}…
+                      </div>
                       <div style={{ color: '#888', marginTop: 6 }}>Running in the background — <strong>{aiElapsed}s</strong> elapsed. This usually takes 30–90 seconds.</div>
                       <div style={{ color: '#aaa', fontSize: '0.8rem', marginTop: 10 }}>Leave this open; it'll switch to your parts automatically when done.</div>
                     </div>
@@ -4796,9 +4867,27 @@ function EstimateDetailsPage() {
                               ⚠ Missing: {p.missingFieldNotes || p.missingFields.join(', ')}
                             </div>
                           )}
+                          {p.matchedPrint && (
+                            <div style={{ fontSize: '0.78rem', color: '#00695c', marginTop: 6, background: '#e0f2f1', padding: '4px 8px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                              📎 Print auto-matched: <strong>{p.matchedPrint.fileName}</strong>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
+                    {aiParseResults.unmatchedPrints?.length > 0 && (
+                      <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: '#FFF3E0', border: '1px solid #ffcc80' }}>
+                        <div style={{ fontWeight: 700, color: '#e65100', fontSize: '0.85rem', marginBottom: 4 }}>
+                          ⚠️ {aiParseResults.unmatchedPrints.length} print(s) couldn't be matched confidently
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#8d5a00', marginBottom: 6 }}>
+                          These prints were left unattached so the wrong drawing doesn't end up on a part. Add the parts, then attach these manually to the right one:
+                        </div>
+                        {aiParseResults.unmatchedPrints.map((up, ui) => (
+                          <div key={ui} style={{ fontSize: '0.8rem', color: '#555', padding: '2px 0' }}>• {up.fileName}</div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {aiParseResults.notes && (
@@ -4816,6 +4905,7 @@ function EstimateDetailsPage() {
                   onClick={async () => {
                     try {
                       setAiAddingParts(true);
+                      let attachedCount = 0;
                       // Add each part to the estimate
                       for (const p of aiParseResults.parts) {
                         // Build formData with roll measurement point from AI
@@ -4865,9 +4955,19 @@ function EstimateDetailsPage() {
                           laborTotal: fd.laborTotal || '',
                           formData: fd
                         };
-                        await addEstimatePart(id, partPayload);
+                        const createRes = await addEstimatePart(id, partPayload);
+                        // If the AI confidently matched a print to this part, attach it now.
+                        const createdPart = createRes?.data?.data;
+                        if (createdPart?.id && p.matchedPrint && aiJobId) {
+                          try {
+                            await attachAiPrint(id, createdPart.id, aiJobId, p.matchedPrint.fileIndex);
+                            attachedCount++;
+                          } catch (attachErr) {
+                            console.warn('Print attach failed for part', p.partNumber, attachErr);
+                          }
+                        }
                       }
-                      showMessage(`Added ${aiParseResults.parts.length} parts from AI`);
+                      showMessage(`Added ${aiParseResults.parts.length} parts from AI${attachedCount ? ` · ${attachedCount} print(s) attached` : ''}`);
                       if (aiParseResults.notes && !formData.projectDescription) {
                         setFormData(prev => ({ ...prev, projectDescription: aiParseResults.notes }));
                       }

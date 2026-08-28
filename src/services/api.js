@@ -283,6 +283,23 @@ export const aiParseDocument = (estimateId, file, additionalNotes = '') => {
     timeout: 30000 // upload only — parsing now runs in the background and is polled
   });
 };
+// Multi-file: files[] plus which index is the quote/part-list.
+export const aiParseDocuments = (estimateId, files, quoteIndex = -1, additionalNotes = '') => {
+  const formData = new FormData();
+  files.forEach(f => formData.append('files', f));
+  if (quoteIndex >= 0) formData.append('quoteIndex', String(quoteIndex));
+  if (additionalNotes) formData.append('additionalNotes', additionalNotes);
+  return api.post(`/estimates/${estimateId}/ai-parse-document`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000
+  });
+};
+// Parse from a Gmail message id or URL (fetches the email's attachments server-side).
+export const aiParseEmail = (estimateId, emailRef, quoteIndex = -1, notes = '') =>
+  api.post(`/estimates/${estimateId}/ai-parse-email`, { emailRef, quoteIndex: quoteIndex >= 0 ? quoteIndex : undefined, notes }, { timeout: 60000 });
+// Attach an AI-held print (from a parse job) to a part.
+export const attachAiPrint = (estimateId, partId, jobId, fileIndex) =>
+  api.post(`/estimates/${estimateId}/parts/${partId}/attach-ai-print`, { jobId, fileIndex });
 export const getAiParseStatus = (estimateId, jobId) =>
   api.get(`/estimates/${estimateId}/ai-parse-status/${jobId}`, { timeout: 20000 });
 export const deleteEstimatePartFile = (estimateId, partId, fileId) => 
