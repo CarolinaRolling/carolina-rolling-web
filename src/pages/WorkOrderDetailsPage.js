@@ -753,6 +753,13 @@ function WorkOrderDetailsPage() {
     setSuccess(msg);
     setTimeout(() => setSuccess(null), 3000);
   };
+  // Auto-dismiss error toasts after a few seconds (they can also be closed with the × button).
+  useEffect(() => {
+    if (error) {
+      const t = setTimeout(() => setError(null), 6000);
+      return () => clearTimeout(t);
+    }
+  }, [error]);
 
   // Document upload for order
   const handleDocumentUpload = async (files) => {
@@ -2255,10 +2262,10 @@ function WorkOrderDetailsPage() {
     const remainingParts = hasPartialHistory 
       ? regularParts.map(p => {
           const summary = pickupSummary.find(s => s.id === p.id);
-          return { ...p, displayQty: summary ? summary.remaining : (p.quantity || 1), totalQty: p.quantity || 1, alreadyShipped: summary ? summary.picked : 0 };
+          return { ...p, displayQty: summary ? summary.remaining : (parseInt(p.quantity) || 1), totalQty: parseInt(p.quantity) || 1, alreadyShipped: summary ? summary.picked : 0 };
         }).filter(p => p.displayQty > 0)
-      : regularParts.map(p => ({ ...p, displayQty: p.quantity || 1, totalQty: p.quantity || 1, alreadyShipped: 0 }));
-    const totalPieces = remainingParts.reduce((s, p) => s + p.displayQty, 0);
+      : regularParts.map(p => ({ ...p, displayQty: parseInt(p.quantity) || 1, totalQty: parseInt(p.quantity) || 1, alreadyShipped: 0 }));
+    const totalPieces = remainingParts.reduce((s, p) => s + (parseInt(p.displayQty) || 0), 0);
 
     printWindow.document.write(`<!DOCTYPE html><html><head><title>Pickup Checklist - ${drLabel}</title>
     <style>
@@ -2703,6 +2710,25 @@ function WorkOrderDetailsPage() {
 
   return (
     <div>
+      {/* Global toast for success/error messages (showMessage/setError). Previously these states were
+          set but never rendered, so confirmations AND errors — e.g. a duplicate invoice number — failed
+          silently. Fixed-position so it's visible regardless of scroll. */}
+      {(success || error) && (
+        <div style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 11000, maxWidth: 520, width: 'calc(100% - 32px)' }}>
+          {success && (
+            <div style={{ background: '#2e7d32', color: 'white', padding: '10px 16px', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.25)', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontWeight: 600 }}>✓ {success}</span>
+              <span onClick={() => setSuccess(null)} style={{ cursor: 'pointer', fontWeight: 700, opacity: 0.8 }}>×</span>
+            </div>
+          )}
+          {error && (
+            <div style={{ background: '#c62828', color: 'white', padding: '10px 16px', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontWeight: 600 }}>⚠️ {error}</span>
+              <span onClick={() => setError(null)} style={{ cursor: 'pointer', fontWeight: 700, opacity: 0.8 }}>×</span>
+            </div>
+          )}
+        </div>
+      )}
       {/* INSPECTION OUT-OF-SPEC banner — pinned at the very top so it's caught immediately */}
       {inspectionSpecIssues.length > 0 && (
         <div style={{ borderRadius: '8px 8px 0 0', border: '3px solid #7f0000', borderBottom: 'none', overflow: 'hidden' }}>
@@ -4044,10 +4070,11 @@ function WorkOrderDetailsPage() {
           const isShippedOrArchived = ['shipped', 'archived'].includes(order.status);
 
           // Piece-level progress
-          const totalPieces = productionParts.reduce((s, p) => s + (p.quantity || 1), 0);
+          const totalPieces = productionParts.reduce((s, p) => s + (parseInt(p.quantity) || 1), 0);
           const completedPieces = isShippedOrArchived ? totalPieces : productionParts.reduce((s, p) => {
-            if (p.status === 'completed') return s + (p.quantity || 1);
-            if ((p.quantity || 1) > 20 && (p.progressCount || 0) > 0) return s + p.progressCount;
+            const q = parseInt(p.quantity) || 1;
+            if (p.status === 'completed') return s + q;
+            if (q > 20 && (parseInt(p.progressCount) || 0) > 0) return s + (parseInt(p.progressCount) || 0);
             return s;
           }, 0);
           const piecePct = totalPieces > 0 ? Math.round((completedPieces / totalPieces) * 100) : 0;
@@ -5436,7 +5463,7 @@ function WorkOrderDetailsPage() {
             ) : (
               (order.pickupHistory || []).map((entry, idx) => {
                 const entryDate = new Date(entry.date);
-                const totalItems = (entry.items || []).reduce((s, i) => s + (i.quantity || 0), 0);
+                const totalItems = (entry.items || []).reduce((s, i) => s + (parseInt(i.quantity) || 0), 0);
                 return (
                   <div key={idx} style={{ 
                     marginBottom: 12, borderRadius: 8, overflow: 'hidden',
@@ -5643,7 +5670,7 @@ function WorkOrderDetailsPage() {
                         <input value={invoiceNumInput} onChange={e => setInvoiceNumInput(e.target.value)}
                           onKeyDown={async e => {
                             if (e.key === 'Enter') {
-                              try { await updateInvoiceNumber(order.id, invoiceNumInput); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput}`); loadOrder(); }
+                              try { await updateInvoiceNumber(order.id, invoiceNumInput); setError(null); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput}`); loadOrder(); }
                               catch (err) { setError(err.response?.data?.error?.message || 'Failed to update invoice number'); }
                             }
                             if (e.key === 'Escape') setEditingInvoiceNum(false);
@@ -5651,7 +5678,7 @@ function WorkOrderDetailsPage() {
                           autoFocus
                           style={{ width: 100, fontFamily: 'Courier New, monospace', fontSize: '1rem', fontWeight: 700, padding: '4px 8px', border: '2px solid #e65100', borderRadius: 6, textAlign: 'center' }} />
                         <button style={{ padding: '4px 8px', background: '#e65100', border: 'none', borderRadius: 4, cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center' }} onClick={async () => {
-                          try { await updateInvoiceNumber(order.id, invoiceNumInput); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput}`); loadOrder(); }
+                          try { await updateInvoiceNumber(order.id, invoiceNumInput); setError(null); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput}`); loadOrder(); }
                           catch (err) { setError(err.response?.data?.error?.message || 'Failed to update invoice number'); }
                         }}><Check size={14} /></button>
                         <button style={{ padding: '4px 8px', background: 'white', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={() => setEditingInvoiceNum(false)}><X size={14} /></button>

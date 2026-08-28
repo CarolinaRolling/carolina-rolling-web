@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Package, Truck, CheckCircle, Clock, FileText, Inbox, Image, AlertCircle } from 'lucide-react';
-import { getWorkOrders, getUnlinkedShipments, getRecentlyCompletedOrders, getLowStockSupplies } from '../services/api';
+import { getWorkOrders, getUnlinkedShipments, getRecentlyCompletedOrders, getLowStockSupplies, getActivePresence } from '../services/api';
 
 // Status configuration
 const STATUSES = {
@@ -22,6 +22,8 @@ const STATUSES = {
 function InventoryPage() {
   const navigate = useNavigate();
   const [workOrders, setWorkOrders] = useState([]);
+  // Presence: map of workOrderId -> { viewers: [names] } for jobs currently open on a tablet.
+  const [presence, setPresence] = useState({});
   const [unlinkedShipments, setUnlinkedShipments] = useState([]);
   const [recentlyCompleted, setRecentlyCompleted] = useState([]);
   const [lowStockSupplies, setLowStockSupplies] = useState([]);
@@ -110,12 +112,23 @@ function InventoryPage() {
 
   useEffect(() => {
     loadWorkOrders();
+    loadPresence();
     // Auto-refresh every 30 seconds for live progress updates
     const interval = setInterval(() => {
       loadWorkOrders(true);
+      loadPresence();
     }, 30000);
     return () => clearInterval(interval);
   }, [statusFilter]);
+
+  const loadPresence = async () => {
+    try {
+      const res = await getActivePresence();
+      const map = {};
+      for (const p of (res.data?.data || [])) map[p.workOrderId] = { viewers: p.viewers || [] };
+      setPresence(map);
+    } catch { /* presence is best-effort; never block the page */ }
+  };
 
   const loadWorkOrders = async (silent = false) => {
     try {
@@ -225,7 +238,9 @@ function InventoryPage() {
       } else if (statusFilter === 'received') {
         filtered = filtered.filter(o => o.status === 'received' || o.status === 'draft');
       } else if (statusFilter === 'processing') {
-        filtered = filtered.filter(o => o.status === 'processing' || o.status === 'in_progress');
+        // Show anything the shop is actively on: the normal processing/in_progress statuses, PLUS any
+        // WO an operator currently has open on a tablet ("in machine") even if no part is completed yet.
+        filtered = filtered.filter(o => o.status === 'processing' || o.status === 'in_progress' || presence[o.id]);
       } else if (statusFilter === 'stored') {
         filtered = filtered.filter(o => o.status === 'stored' || o.status === 'completed');
       } else if (statusFilter === 'active') {
@@ -255,7 +270,13 @@ function InventoryPage() {
 
     // Sort
     filtered.sort((a, b) => {
-      // Rush orders always go to top
+      // Currently open on a tablet ("in machine") floats to the very top so the office can always
+      // see what the operators are working on right now.
+      const aOpen = !!presence[a.id];
+      const bOpen = !!presence[b.id];
+      if (aOpen && !bOpen) return -1;
+      if (!aOpen && bOpen) return 1;
+      // Rush orders next
       const aRush = a.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'archived'].includes(a.status);
       const bRush = b.parts?.some(p => p.partType === 'rush_service') && !['stored', 'completed', 'shipped', 'archived'].includes(b.status);
       if (aRush && !bRush) return -1;
@@ -722,6 +743,7 @@ function InventoryPage() {
                 onClick={() => navigate(`/workorder/${order.id}`)}
                 style={{ 
                   cursor: 'pointer',
+                  position: 'relative',
                   borderLeft: `4px solid ${order.isVoided ? '#b71c1c' : getStatusColor(order.status)}`,
                   opacity: order.isVoided ? 0.55 : 1,
                   background: order.isVoided ? '#fafafa' : undefined,
@@ -738,6 +760,20 @@ function InventoryPage() {
                   e.currentTarget.style.boxShadow = '';
                 }}
               >
+                {/* "In Machine" overlay — a tablet currently has this WO open. */}
+                {presence[order.id] && (
+                  <div style={{
+                    position: 'absolute', top: 8, left: 8, zIndex: 2,
+                    background: '#00897b', color: 'white', fontWeight: 700, fontSize: '0.72rem',
+                    padding: '3px 9px', borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                    display: 'flex', alignItems: 'center', gap: 5, maxWidth: 'calc(100% - 16px)'
+                  }} title={`In machine — open on: ${(presence[order.id].viewers || []).join(', ')}`}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#b2ff59', boxShadow: '0 0 4px #b2ff59', flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      In Machine{(presence[order.id].viewers || []).length ? ` · ${presence[order.id].viewers.join(', ')}` : ''}
+                    </span>
+                  </div>
+                )}
                 {/* Image thumbnail */}
                 {orderImage ? (
                   <div style={{ 

@@ -562,6 +562,7 @@ export const getInvoiceQueue = () => api.get('/workorders/invoicing/queue');
 export const getInvoiceHistory = () => api.get('/workorders/invoicing/history');
 export const recordInvoice = (id, formData) => api.post(`/workorders/${id}/invoice`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const backfillWorkOrderPricing = (id) => api.post(`/workorders/${id}/backfill-pricing`);
+export const getActivePresence = () => api.get('/workorders/presence/active');
 export const uploadInvoicePdf = (id, formData) => api.post(`/workorders/${id}/invoice-pdf`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const clearInvoice = (id) => api.delete(`/workorders/${id}/invoice`);
 export const skipInvoice = (id, reason) => api.post(`/workorders/${id}/skip-invoice`, { reason });
