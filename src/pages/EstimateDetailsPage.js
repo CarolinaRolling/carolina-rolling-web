@@ -114,6 +114,8 @@ function EstimateDetailsPage() {
   const [aiSelectedFile, setAiSelectedFile] = useState(null);
   const [aiFiles, setAiFiles] = useState([]); // multi-file: array of File
   const [aiQuoteIndex, setAiQuoteIndex] = useState(-1); // which file is the quote/part list
+  const [aiQuoteSource, setAiQuoteSource] = useState('text'); // 'text' (paste list) | 'file' (a file is the quote)
+  const [aiQuoteText, setAiQuoteText] = useState(''); // pasted part list with quantities
   const [aiEmailRef, setAiEmailRef] = useState(''); // Gmail id or URL
   const [aiInputMode, setAiInputMode] = useState('files'); // 'files' | 'email'
   const [aiJobId, setAiJobId] = useState(null); // for attaching held prints on accept
@@ -126,6 +128,7 @@ function EstimateDetailsPage() {
     setAiSelectedFile(null); setAiPhase('select'); setAiElapsed(0);
     setAiJobMsg(''); setAiPendingResult(null); setAiParseResults(null); setAiParseNotes('');
     setAiFiles([]); setAiQuoteIndex(-1); setAiEmailRef(''); setAiInputMode('files'); setAiJobId(null);
+    setAiQuoteSource('text'); setAiQuoteText('');
   };
 
   // Poll a started parse job to completion, updating phase/state.
@@ -156,7 +159,10 @@ function EstimateDetailsPage() {
 
   const submitAiParse = async () => {
     // Validate input based on mode
-    if (aiInputMode === 'files' && aiFiles.length === 0 && !aiSelectedFile) return;
+    if (aiInputMode === 'files') {
+      const haveList = aiQuoteSource === 'text' ? aiQuoteText.trim() : (aiQuoteIndex >= 0);
+      if (aiFiles.length === 0 && !aiSelectedFile && !haveList) return;
+    }
     if (aiInputMode === 'email' && !aiEmailRef.trim()) return;
     setAiPhase('parsing'); setAiJobMsg(''); setAiElapsed(0);
     const t0 = Date.now();
@@ -165,8 +171,10 @@ function EstimateDetailsPage() {
       let startRes;
       if (aiInputMode === 'email') {
         startRes = await aiParseEmail(id, aiEmailRef.trim(), aiQuoteIndex, aiParseNotes);
-      } else if (aiFiles.length > 0) {
-        startRes = await aiParseDocuments(id, aiFiles, aiQuoteIndex, aiParseNotes);
+      } else if (aiFiles.length > 0 || aiQuoteText.trim()) {
+        // Pasted part list => quoteText, all files are prints (quoteIndex -1). File-quote => quoteIndex.
+        const useText = aiQuoteSource === 'text' && aiQuoteText.trim();
+        startRes = await aiParseDocuments(id, aiFiles, useText ? -1 : aiQuoteIndex, aiParseNotes, useText ? aiQuoteText : '');
       } else {
         // legacy single-file path
         startRes = await aiParseDocument(id, aiSelectedFile, aiParseNotes);
@@ -4705,23 +4713,43 @@ function EstimateDetailsPage() {
                       {aiInputMode === 'files' && (
                         <>
                           <p style={{ color: '#555', marginBottom: 12 }}>
-                            Upload the <strong>quote/part list</strong> plus all the <strong>print PDFs</strong>. The AI reads the parts from the quote and auto-attaches each print to its part by the client part number. Mark which file is the quote below.
+                            Give the AI your <strong>part list</strong> (with quantities) plus all the <strong>print PDFs</strong>. It reads the parts, then auto-attaches each print to its part by the client part number.
                           </p>
+
+                          {/* Where does the part list come from? */}
+                          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                            <button className="btn btn-sm" style={{ flex: 1, background: aiQuoteSource === 'text' ? '#00695c' : '#eee', color: aiQuoteSource === 'text' ? 'white' : '#555', borderColor: '#00695c' }}
+                              onClick={() => setAiQuoteSource('text')}>⌨️ Paste the part list</button>
+                            <button className="btn btn-sm" style={{ flex: 1, background: aiQuoteSource === 'file' ? '#00695c' : '#eee', color: aiQuoteSource === 'file' ? 'white' : '#555', borderColor: '#00695c' }}
+                              onClick={() => setAiQuoteSource('file')}>📄 A file is the quote</button>
+                          </div>
+
+                          {aiQuoteSource === 'text' && (
+                            <div className="form-group" style={{ marginBottom: 12 }}>
+                              <textarea className="form-textarea" value={aiQuoteText} onChange={(e) => setAiQuoteText(e.target.value)}
+                                rows={5} placeholder={'Paste the part list with quantities and print numbers, e.g.\n\n2x  400-4169  bracket\n5x  400-4170  ring, 24" OD\n1x  400-4171  flange'} />
+                              <div style={{ color: '#888', fontSize: '0.78rem', marginTop: 4 }}>
+                                Then add all the print PDFs below — the AI matches each one to a part by its number.
+                              </div>
+                            </div>
+                          )}
+
                           <label style={{
                             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                             padding: 20, border: '2px dashed #00838f', borderRadius: 12, cursor: 'pointer',
                             background: '#e0f7fa', minHeight: 80
                           }}>
                             <div style={{ fontSize: '1.8rem', marginBottom: 6 }}>📄</div>
-                            <div style={{ fontWeight: 600, color: '#00838f', fontSize: '0.95rem' }}>Click to add files (you can select several)</div>
+                            <div style={{ fontWeight: 600, color: '#00838f', fontSize: '0.95rem' }}>
+                              {aiQuoteSource === 'text' ? 'Click to add all the print PDFs' : 'Click to add files (quote + prints)'}
+                            </div>
                             <div style={{ color: '#888', fontSize: '0.8rem', marginTop: 4 }}>PDF, PNG, JPG — up to 25 files</div>
                             <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" hidden
                               onChange={(e) => {
                                 const picked = Array.from(e.target.files || []);
                                 if (picked.length) setAiFiles(prev => {
                                   const next = [...prev, ...picked];
-                                  // Auto-mark the first file as the quote if none chosen yet
-                                  if (aiQuoteIndex < 0 && next.length) setAiQuoteIndex(0);
+                                  if (aiQuoteSource === 'file' && aiQuoteIndex < 0 && next.length) setAiQuoteIndex(0);
                                   return next;
                                 });
                                 e.target.value = '';
@@ -4731,13 +4759,15 @@ function EstimateDetailsPage() {
                           {aiFiles.length > 0 && (
                             <div style={{ marginTop: 12, border: '1px solid #e0e0e0', borderRadius: 8, overflow: 'hidden' }}>
                               <div style={{ padding: '6px 10px', background: '#f5f5f5', fontSize: '0.8rem', color: '#666', fontWeight: 600 }}>
-                                {aiFiles.length} file(s) — select which one is the quote/part list:
+                                {aiFiles.length} file(s){aiQuoteSource === 'file' ? ' — select which one is the quote/part list:' : ' — all treated as prints'}
                               </div>
                               {aiFiles.map((f, idx) => (
                                 <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderTop: '1px solid #eee' }}>
-                                  <input type="radio" name="quoteFile" checked={aiQuoteIndex === idx} onChange={() => setAiQuoteIndex(idx)} title="This is the quote / part list" />
+                                  {aiQuoteSource === 'file' && (
+                                    <input type="radio" name="quoteFile" checked={aiQuoteIndex === idx} onChange={() => setAiQuoteIndex(idx)} title="This is the quote / part list" />
+                                  )}
                                   <span style={{ flex: 1, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {aiQuoteIndex === idx && <span style={{ color: '#00695c', fontWeight: 700 }}>QUOTE · </span>}
+                                    {aiQuoteSource === 'file' && aiQuoteIndex === idx && <span style={{ color: '#00695c', fontWeight: 700 }}>QUOTE · </span>}
                                     {f.name}
                                   </span>
                                   <button className="btn btn-icon btn-sm" onClick={() => {
@@ -4770,7 +4800,9 @@ function EstimateDetailsPage() {
                           rows={2} placeholder='e.g. "These are all A36 material", "Ignore the header row"' />
                       </div>
                       <button className="btn btn-primary" style={{ marginTop: 16, width: '100%', background: '#00838f', borderColor: '#00838f' }}
-                        disabled={aiInputMode === 'files' ? aiFiles.length === 0 : !aiEmailRef.trim()} onClick={submitAiParse}>
+                        disabled={aiInputMode === 'files'
+                          ? (aiQuoteSource === 'text' ? (!aiQuoteText.trim() && aiFiles.length === 0) : (aiFiles.length === 0))
+                          : !aiEmailRef.trim()} onClick={submitAiParse}>
                         🤖 Submit to AI
                       </button>
                     </>

@@ -283,12 +283,13 @@ export const aiParseDocument = (estimateId, file, additionalNotes = '') => {
     timeout: 30000 // upload only — parsing now runs in the background and is polled
   });
 };
-// Multi-file: files[] plus which index is the quote/part-list.
-export const aiParseDocuments = (estimateId, files, quoteIndex = -1, additionalNotes = '') => {
+// Multi-file: files[] plus which index is the quote/part-list, OR a pasted quote text.
+export const aiParseDocuments = (estimateId, files, quoteIndex = -1, additionalNotes = '', quoteText = '') => {
   const formData = new FormData();
   files.forEach(f => formData.append('files', f));
   if (quoteIndex >= 0) formData.append('quoteIndex', String(quoteIndex));
   if (additionalNotes) formData.append('additionalNotes', additionalNotes);
+  if (quoteText && quoteText.trim()) formData.append('quoteText', quoteText.trim());
   return api.post(`/estimates/${estimateId}/ai-parse-document`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 60000
