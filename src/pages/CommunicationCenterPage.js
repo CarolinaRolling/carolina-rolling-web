@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap, CheckCircle, Clock, CheckCheck } from 'lucide-react';
-import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage, reclassifyComm, getCommGmailUrl, cleanupStaleComm, getCommBills, updateBillStatus, scanCommBills } from '../services/api';
+import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage, reclassifyComm, getCommGmailUrl, cleanupStaleComm, getCommBills, updateBillStatus, scanCommBills, convertEmailToEstimate, getClients } from '../services/api';
 
 const CATEGORIES = [
   { key: 'all',            label: 'All',            color: '#555',    bg: '#f5f5f5', icon: '✉️' },
@@ -162,6 +163,41 @@ export default function CommunicationCenterPage() {
       setCoverage((prev) => prev.map(patch));
       if (wasAwaiting) setCoverageAwaiting((n) => Math.max(n - 1, 0));
     } catch {}
+  };
+
+  // --- Convert email to estimate ---
+  const navigate = useNavigate();
+  const [convertingId, setConvertingId] = useState(null);
+  const [clientPicker, setClientPicker] = useState(null); // { email, notes, options:[clients] } when no match
+  const [clientPickerSel, setClientPickerSel] = useState('');
+
+  const doConvert = async (scannedEmailId, clientId) => {
+    setConvertingId(scannedEmailId);
+    try {
+      const res = await convertEmailToEstimate(scannedEmailId, clientId);
+      const d = res.data?.data;
+      setClientPicker(null);
+      setMessage(`Estimate ${d?.estimateNumber || ''} created for ${d?.clientName || 'client'} — parsing attachments…`);
+      // Go straight to the new estimate; the AI parse continues in the background there.
+      if (d?.estimateId) navigate(`/estimates/${d.estimateId}`);
+    } catch (err) {
+      const code = err.response?.data?.error?.code;
+      if (code === 'NO_CLIENT') {
+        // No confident client match — prompt to pick an existing one (never auto-create).
+        const info = err.response?.data?.data || {};
+        try {
+          const cl = await getClients();
+          setClientPicker({ scannedEmailId, ...info, options: (cl.data?.data || []) });
+          setClientPickerSel('');
+        } catch {
+          setError('No matching client, and the client list could not be loaded.');
+        }
+      } else {
+        setError(err.response?.data?.error?.message || 'Could not convert this email.');
+      }
+    } finally {
+      setConvertingId(null);
+    }
   };
 
   const loadBills = useCallback(async () => {
@@ -431,6 +467,11 @@ export default function CommunicationCenterPage() {
                       <ExternalLink size={13} /> Open
                     </a>
                   )}
+                  <button onClick={() => doConvert(e.id)} disabled={convertingId === e.id}
+                    title="AI-parse this email's attachments into a draft estimate"
+                    style={{ background: e.commLooksLikeEstimate ? '#00838f' : '#eceff1', color: e.commLooksLikeEstimate ? 'white' : '#00695c', border: '1px solid #00838f', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>
+                    {convertingId === e.id ? '⏳…' : '📝 Convert to Estimate'}
+                  </button>
                   {!answered && (
                     <button onClick={() => handleMarkHandled(e.id, e.gmailThreadId)}
                       style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 600, flexShrink: 0 }}>
@@ -443,6 +484,43 @@ export default function CommunicationCenterPage() {
           </div>
         )}
       </div>
+
+
+      {/* Client picker — shown when Convert found no confident client match (never auto-creates) */}
+      {clientPicker && (
+        <div className="modal-overlay" onClick={() => setClientPicker(null)}>
+          <div className="modal" onClick={ev => ev.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <h3>📝 Which client is this for?</h3>
+              <button className="btn btn-icon" onClick={() => setClientPicker(null)}>✕</button>
+            </div>
+            <div style={{ padding: '16px 20px' }}>
+              <div style={{ background: '#fff8ec', border: '1px solid #ffe0b2', borderRadius: 8, padding: 10, marginBottom: 14, fontSize: '0.85rem' }}>
+                No existing client matched <strong>{clientPicker.fromName || clientPicker.fromEmail}</strong>
+                {clientPicker.fromEmail ? <span style={{ color: '#777' }}> ({clientPicker.fromEmail})</span> : null}.
+                Pick the right client below, or create the client first and then convert. The AI won't create clients on its own.
+              </div>
+              <label className="form-label">Existing clients</label>
+              <select className="form-input" value={clientPickerSel} onChange={ev => setClientPickerSel(ev.target.value)} style={{ width: '100%' }}>
+                <option value="">— select a client —</option>
+                {(clientPicker.options || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'space-between' }}>
+                <button className="btn btn-secondary" onClick={() => { setClientPicker(null); navigate('/clients'); }}>
+                  + Create a client first
+                </button>
+                <button className="btn btn-primary" disabled={!clientPickerSel || convertingId}
+                  style={{ background: '#00838f', borderColor: '#00838f' }}
+                  onClick={() => doConvert(clientPicker.scannedEmailId, clientPickerSel)}>
+                  {convertingId ? '⏳ Converting…' : 'Convert with this client'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
 
       {/* Scan Logs Panel */}

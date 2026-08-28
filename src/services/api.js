@@ -521,6 +521,10 @@ export const getEmailScanHistory = () => api.get('/email-scanner/history');
 // Supplier Communications tab
 export const getSupplierEmails = (linked, days, includeAll) => api.get('/email-scanner/supplier-emails', { params: { ...(linked !== undefined ? { linked } : {}), ...(days !== undefined ? { days } : {}), ...(includeAll ? { includeAll: 'true' } : {}) } });
 export const linkSupplierEmail = (id, estimateId) => api.post(`/email-scanner/supplier-emails/${id}/link`, { estimateId });
+// Convert a scanned email into a draft estimate (AI-parses its attachments). Pass clientId to resolve
+// the client when there was no confident match (a 409 with NO_CLIENT is returned in that case).
+export const convertEmailToEstimate = (scannedEmailId, clientId, notes) =>
+  api.post(`/email-scanner/convert-to-estimate/${scannedEmailId}`, { ...(clientId ? { clientId } : {}), ...(notes ? { notes } : {}) }, { timeout: 30000 });
 export const unlinkSupplierEmail = (id) => api.post(`/email-scanner/supplier-emails/${id}/unlink`);
 export const getEstimateSupplierEmails = (estimateId) => api.get(`/email-scanner/estimate/${estimateId}/supplier-emails`);
 export const getPendingOrders = (status) => api.get('/email-scanner/pending-orders', { params: { status } });
