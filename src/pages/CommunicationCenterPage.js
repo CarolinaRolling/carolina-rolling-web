@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap, CheckCircle, Clock, CheckCheck } from 'lucide-react';
-import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage, reclassifyComm, getCommGmailUrl, cleanupStaleComm, getCommBills, updateBillStatus, scanCommBills, convertEmailToEstimate, getClients } from '../services/api';
+import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage, reclassifyComm, getCommGmailUrl, cleanupStaleComm, getCommBills, updateBillStatus, scanCommBills, convertEmailToEstimate, getClients, getAiParseStatus } from '../services/api';
 
 const CATEGORIES = [
   { key: 'all',            label: 'All',            color: '#555',    bg: '#f5f5f5', icon: '✉️' },
@@ -177,13 +177,31 @@ export default function CommunicationCenterPage() {
       const res = await convertEmailToEstimate(scannedEmailId, clientId);
       const d = res.data?.data;
       setClientPicker(null);
-      setMessage(`Estimate ${d?.estimateNumber || ''} created for ${d?.clientName || 'client'} — parsing attachments…`);
-      // Go straight to the new estimate; the AI parse continues in the background there.
-      if (d?.estimateId) navigate(`/estimates/${d.estimateId}`);
+      setMessage(`Estimate ${d?.estimateNumber || ''} created for ${d?.clientName || 'client'} — AI is reading ${d?.attachmentCount || 0} attachment(s)…`);
+      // Poll the parse job so we land on a populated estimate rather than an empty one.
+      if (d?.estimateId && d?.jobId) {
+        let done = false;
+        for (let i = 0; i < 60 && !done; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          try {
+            const st = await getAiParseStatus(d.estimateId, d.jobId);
+            if (st.data.status === 'done') {
+              const n = st.data.data?.autoCreated ?? st.data.data?.parts?.length ?? 0;
+              setMessage(`Estimate ${d.estimateNumber} ready — ${n} part(s) added.`);
+              done = true;
+            } else if (st.data.status === 'error') {
+              setMessage(`Estimate ${d.estimateNumber} created, but parsing failed: ${st.data.error || 'unknown error'}. Open it to add parts manually.`);
+              done = true;
+            }
+          } catch { /* keep polling */ }
+        }
+        navigate(`/estimates/${d.estimateId}`);
+      } else if (d?.estimateId) {
+        navigate(`/estimates/${d.estimateId}`);
+      }
     } catch (err) {
       const code = err.response?.data?.error?.code;
       if (code === 'NO_CLIENT') {
-        // No confident client match — prompt to pick an existing one (never auto-create).
         const info = err.response?.data?.data || {};
         try {
           const cl = await getClients();
