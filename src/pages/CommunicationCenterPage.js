@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Archive, ExternalLink, Tag, Mail, AlertCircle, DollarSign, Megaphone, Shield, MessageSquare, Users, Zap, CheckCircle, Clock, CheckCheck } from 'lucide-react';
-import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage, reclassifyComm, getCommGmailUrl, cleanupStaleComm, getCommBills, updateBillStatus, scanCommBills, convertEmailToEstimate, getClients, getAiParseStatus } from '../services/api';
+import { getCommEmails, archiveCommEmail, updateCommEmailCategory, scanCommNow, getCommScanLogs, testCommConnection, cancelCommScan, getCommCoverage, markCommHandled, scanCommCoverage, reclassifyComm, getCommGmailUrl, cleanupStaleComm, getCommBills, updateBillStatus, scanCommBills, convertEmailToEstimate, getClients, getAiParseStatus, enqueueConvert, getConvertQueue, resolveConvertQueueItem, dismissConvertQueueItem } from '../services/api';
 
 const CATEGORIES = [
   { key: 'all',            label: 'All',            color: '#555',    bg: '#f5f5f5', icon: '✉️' },
@@ -165,57 +165,68 @@ export default function CommunicationCenterPage() {
     } catch {}
   };
 
-  // --- Convert email to estimate ---
+  // --- Convert email to estimate (queue-based) ---
   const navigate = useNavigate();
-  const [convertingId, setConvertingId] = useState(null);
-  const [clientPicker, setClientPicker] = useState(null); // { email, notes, options:[clients] } when no match
+  const [clientPicker, setClientPicker] = useState(null); // { scannedEmailId? | queueItemId?, options }
   const [clientPickerSel, setClientPickerSel] = useState('');
+  const [queue, setQueue] = useState([]);
+  const [queueCounts, setQueueCounts] = useState({});
 
-  const doConvert = async (scannedEmailId, clientId) => {
-    setConvertingId(scannedEmailId);
+  const loadQueue = useCallback(async () => {
     try {
-      const res = await convertEmailToEstimate(scannedEmailId, clientId);
-      const d = res.data?.data;
-      setClientPicker(null);
-      setMessage(`Estimate ${d?.estimateNumber || ''} created for ${d?.clientName || 'client'} — AI is reading ${d?.attachmentCount || 0} attachment(s)…`);
-      // Poll the parse job so we land on a populated estimate rather than an empty one.
-      if (d?.estimateId && d?.jobId) {
-        let done = false;
-        for (let i = 0; i < 60 && !done; i++) {
-          await new Promise(r => setTimeout(r, 3000));
-          try {
-            const st = await getAiParseStatus(d.estimateId, d.jobId);
-            if (st.data.status === 'done') {
-              const n = st.data.data?.autoCreated ?? st.data.data?.parts?.length ?? 0;
-              setMessage(`Estimate ${d.estimateNumber} ready — ${n} part(s) added.`);
-              done = true;
-            } else if (st.data.status === 'error') {
-              setMessage(`Estimate ${d.estimateNumber} created, but parsing failed: ${st.data.error || 'unknown error'}. Open it to add parts manually.`);
-              done = true;
-            }
-          } catch { /* keep polling */ }
-        }
-        navigate(`/estimates/${d.estimateId}`);
-      } else if (d?.estimateId) {
-        navigate(`/estimates/${d.estimateId}`);
-      }
+      const res = await getConvertQueue();
+      setQueue(res.data?.data || []);
+      setQueueCounts(res.data?.counts || {});
+    } catch { /* quiet */ }
+  }, []);
+
+  // Poll the queue while the page is open so buttons + the Queue tab reflect background progress.
+  useEffect(() => {
+    loadQueue();
+    const iv = setInterval(loadQueue, 4000);
+    return () => clearInterval(iv);
+  }, [loadQueue]);
+
+  // scannedEmailId -> its most-recent queue item, for per-row button state.
+  const queueByEmail = React.useMemo(() => {
+    const m = {};
+    for (const it of queue) { if (!m[it.scannedEmailId]) m[it.scannedEmailId] = it; }
+    return m;
+  }, [queue]);
+
+  const handleConvertClick = async (scannedEmailId) => {
+    try {
+      await enqueueConvert(scannedEmailId);
+      setMessage('Added to the convert queue — processing in the background.');
+      loadQueue();
     } catch (err) {
-      const code = err.response?.data?.error?.code;
-      if (code === 'NO_CLIENT') {
-        const info = err.response?.data?.data || {};
-        try {
-          const cl = await getClients();
-          setClientPicker({ scannedEmailId, ...info, options: (cl.data?.data || []) });
-          setClientPickerSel('');
-        } catch {
-          setError('No matching client, and the client list could not be loaded.');
-        }
-      } else {
-        setError(err.response?.data?.error?.message || 'Could not convert this email.');
-      }
-    } finally {
-      setConvertingId(null);
+      setError(err.response?.data?.error?.message || 'Could not add to the queue.');
     }
+  };
+
+  const openClientPicker = async (opts) => {
+    try {
+      const cl = await getClients();
+      setClientPicker({ ...opts, options: (cl.data?.data || []) });
+      setClientPickerSel('');
+    } catch { setError('Could not load the client list.'); }
+  };
+
+  const submitClientPick = async () => {
+    if (!clientPickerSel || !clientPicker) return;
+    try {
+      if (clientPicker.queueItemId) await resolveConvertQueueItem(clientPicker.queueItemId, clientPickerSel);
+      else if (clientPicker.scannedEmailId) await enqueueConvert(clientPicker.scannedEmailId, clientPickerSel);
+      setClientPicker(null);
+      setMessage('Client set — the item is back in the queue.');
+      loadQueue();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Could not set the client.');
+    }
+  };
+
+  const dismissQueueItem = async (id) => {
+    try { await dismissConvertQueueItem(id); loadQueue(); } catch {}
   };
 
   const loadBills = useCallback(async () => {
@@ -485,11 +496,34 @@ export default function CommunicationCenterPage() {
                       <ExternalLink size={13} /> Open
                     </a>
                   )}
-                  <button onClick={() => doConvert(e.id)} disabled={convertingId === e.id}
-                    title="AI-parse this email's attachments into a draft estimate"
-                    style={{ background: e.commLooksLikeEstimate ? '#00838f' : '#eceff1', color: e.commLooksLikeEstimate ? 'white' : '#00695c', border: '1px solid #00838f', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>
-                    {convertingId === e.id ? '⏳…' : '📝 Convert to Estimate'}
-                  </button>
+                  {(() => {
+                    const qi = queueByEmail[e.id];
+                    if (qi && (qi.status === 'queued' || qi.status === 'processing')) {
+                      return <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#00695c', flexShrink: 0 }} title="In the convert queue">⏳ {qi.status === 'processing' ? 'Converting…' : 'Queued'}</span>;
+                    }
+                    if (qi && qi.status === 'needs_client') {
+                      return <button onClick={() => openClientPicker({ queueItemId: qi.id, fromEmail: qi.fromEmail, fromName: qi.fromName, subject: qi.subject })}
+                        style={{ background: '#ef6c00', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>⚠️ Pick client</button>;
+                    }
+                    if (qi && qi.status === 'done' && qi.estimateId) {
+                      return (
+                        <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                          <button onClick={() => navigate(`/estimates/${qi.estimateId}`)}
+                            style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700 }}>
+                            ✅ {qi.estimateNumber || 'Estimate'}{qi.partsCreated != null ? ` · ${qi.partsCreated}p` : ''}
+                          </button>
+                          <button onClick={() => handleConvertClick(e.id)} title="Re-run conversion" style={{ background: '#eceff1', color: '#00695c', border: '1px solid #b0bec5', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600 }}>↻ Rescan</button>
+                        </span>
+                      );
+                    }
+                    if (qi && qi.status === 'error') {
+                      return <button onClick={() => handleConvertClick(e.id)} title={qi.errorMessage || 'Conversion failed — retry'}
+                        style={{ background: '#c62828', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>⚠️ Retry</button>;
+                    }
+                    return <button onClick={() => handleConvertClick(e.id)}
+                      title="AI-parse this email's attachments into a draft estimate"
+                      style={{ background: e.commLooksLikeEstimate ? '#00838f' : '#eceff1', color: e.commLooksLikeEstimate ? 'white' : '#00695c', border: '1px solid #00838f', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>📝 Convert to Estimate</button>;
+                  })()}
                   {!answered && (
                     <button onClick={() => handleMarkHandled(e.id, e.gmailThreadId)}
                       style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 600, flexShrink: 0 }}>
@@ -529,10 +563,10 @@ export default function CommunicationCenterPage() {
                 <button className="btn btn-secondary" onClick={() => { setClientPicker(null); navigate('/clients'); }}>
                   + Create a client first
                 </button>
-                <button className="btn btn-primary" disabled={!clientPickerSel || convertingId}
+                <button className="btn btn-primary" disabled={!clientPickerSel}
                   style={{ background: '#00838f', borderColor: '#00838f' }}
-                  onClick={() => doConvert(clientPicker.scannedEmailId, clientPickerSel)}>
-                  {convertingId ? '⏳ Converting…' : 'Convert with this client'}
+                  onClick={submitClientPick}>
+                  Use this client
                 </button>
               </div>
             </div>
@@ -619,6 +653,28 @@ export default function CommunicationCenterPage() {
               )}
             </button>
           ))}
+          {/* Convert Queue tab */}
+          {(() => {
+            const active = (queueCounts.queued || 0) + (queueCounts.processing || 0) + (queueCounts.needs_client || 0);
+            return (
+              <button onClick={() => setActiveCategory('convert_queue')} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+                padding: '10px 16px', border: 'none', cursor: 'pointer', textAlign: 'left',
+                borderLeft: activeCategory === 'convert_queue' ? '3px solid #00838f' : '3px solid transparent',
+                background: activeCategory === 'convert_queue' ? 'white' : 'transparent',
+                color: activeCategory === 'convert_queue' ? '#00838f' : '#555',
+                fontWeight: activeCategory === 'convert_queue' ? 700 : 400,
+                fontSize: '0.84rem', borderBottom: '1px solid #f0f0f0'
+              }}>
+                <span>📝 Convert Queue</span>
+                {active > 0 && (
+                  <span style={{ background: activeCategory === 'convert_queue' ? '#00838f' : '#e0e0e0', color: activeCategory === 'convert_queue' ? 'white' : '#666', borderRadius: 99, padding: '1px 7px', fontSize: '0.68rem', fontWeight: 700 }}>
+                    {active}
+                  </span>
+                )}
+              </button>
+            );
+          })()}
         </div>
 
         {/* List */}
@@ -626,6 +682,58 @@ export default function CommunicationCenterPage() {
           {activeCategory === 'bill' && (
             <BillsView bills={bills} pending={billsPending} scanning={billsScanning}
               onScan={handleScanBills} onReload={loadBills} onStatus={handleBillStatus} onOpen={handleOpenEmail} />
+          )}
+          {/* Convert Queue view */}
+          {activeCategory === 'convert_queue' && (
+            <div style={{ padding: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', color: '#00695c' }}>Convert Queue</h3>
+                <button onClick={loadQueue} style={{ padding: '5px 12px', background: 'white', color: '#555', border: '1px solid #ddd', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>Refresh</button>
+              </div>
+              {queue.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 70, color: '#bbb' }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>The queue is empty</div>
+                  <div style={{ fontSize: '0.85rem' }}>Click “Convert to Estimate” on an email to add it here.</div>
+                </div>
+              ) : (
+                queue.map(it => {
+                  const S = {
+                    queued: { bg: '#eceff1', bd: '#cfd8dc', label: '⏳ Queued', col: '#455a64' },
+                    processing: { bg: '#e0f7fa', bd: '#80deea', label: '⚙️ Processing…', col: '#00838f' },
+                    needs_client: { bg: '#fff3e0', bd: '#ffcc80', label: '⚠️ Needs client', col: '#e65100' },
+                    done: { bg: '#e8f5e9', bd: '#a5d6a7', label: '✅ Done', col: '#2e7d32' },
+                    error: { bg: '#ffebee', bd: '#ef9a9a', label: '⚠️ Error', col: '#c62828' },
+                  }[it.status] || { bg: '#fff', bd: '#ddd', label: it.status, col: '#555' };
+                  return (
+                    <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', marginBottom: 6, borderRadius: 8, background: S.bg, border: `1px solid ${S.bd}` }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.subject || '(no subject)'}</div>
+                        <div style={{ fontSize: '0.74rem', color: '#777' }}>
+                          {it.fromName || it.fromEmail}
+                          {it.clientName ? ` · ${it.clientName}` : ''}
+                          {it.status === 'error' && it.errorMessage ? ` · ${it.errorMessage}` : ''}
+                          {it.status === 'done' && it.partsCreated != null ? ` · ${it.partsCreated} part(s)` : ''}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '0.74rem', fontWeight: 700, color: S.col, flexShrink: 0 }}>{S.label}</span>
+                      {it.status === 'needs_client' && (
+                        <button onClick={() => openClientPicker({ queueItemId: it.id, fromEmail: it.fromEmail, fromName: it.fromName, subject: it.subject })}
+                          style={{ background: '#ef6c00', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>Pick client</button>
+                      )}
+                      {it.status === 'done' && it.estimateId && (
+                        <button onClick={() => navigate(`/estimates/${it.estimateId}`)}
+                          style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>Open {it.estimateNumber || 'estimate'}</button>
+                      )}
+                      {(it.status === 'done' || it.status === 'error') && (
+                        <button onClick={() => dismissQueueItem(it.id)} title="Remove from list"
+                          style={{ background: 'transparent', color: '#999', border: 'none', cursor: 'pointer', fontSize: '1rem', flexShrink: 0 }}>✕</button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           )}
           {/* Client Inquiry sub-tabs */}
           {activeCategory === 'client_inquiry' && (
@@ -636,7 +744,7 @@ export default function CommunicationCenterPage() {
               </button>
             </div>
           )}
-          {activeCategory !== 'bill' && (loading ? (
+          {activeCategory !== 'bill' && activeCategory !== 'convert_queue' && (loading ? (
             <div style={{ textAlign: 'center', padding: 80, color: '#bbb' }}>Loading emails...</div>
           ) : displayEmails.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 80, color: '#bbb' }}>

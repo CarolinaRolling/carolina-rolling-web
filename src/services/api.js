@@ -525,6 +525,12 @@ export const linkSupplierEmail = (id, estimateId) => api.post(`/email-scanner/su
 // the client when there was no confident match (a 409 with NO_CLIENT is returned in that case).
 export const convertEmailToEstimate = (scannedEmailId, clientId, notes) =>
   api.post(`/email-scanner/convert-to-estimate/${scannedEmailId}`, { ...(clientId ? { clientId } : {}), ...(notes ? { notes } : {}) }, { timeout: 30000 });
+// Convert QUEUE (batch, background): enqueue, list, resolve a parked item, dismiss.
+export const enqueueConvert = (scannedEmailId, clientId) =>
+  api.post('/email-scanner/convert-queue', { scannedEmailId, ...(clientId ? { clientId } : {}) });
+export const getConvertQueue = () => api.get('/email-scanner/convert-queue');
+export const resolveConvertQueueItem = (id, clientId) => api.post(`/email-scanner/convert-queue/${id}/resolve`, { clientId });
+export const dismissConvertQueueItem = (id) => api.delete(`/email-scanner/convert-queue/${id}`);
 export const unlinkSupplierEmail = (id) => api.post(`/email-scanner/supplier-emails/${id}/unlink`);
 export const getEstimateSupplierEmails = (estimateId) => api.get(`/email-scanner/estimate/${estimateId}/supplier-emails`);
 export const getPendingOrders = (status) => api.get('/email-scanner/pending-orders', { params: { status } });
