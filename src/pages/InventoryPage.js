@@ -671,7 +671,7 @@ function InventoryPage() {
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {unlinkedShipments.map(s => (
+            {unlinkedShipments.slice(0, 3).map(s => (
               <div key={s.id} style={{ 
                 background: 'white', 
                 borderRadius: 6, 
@@ -718,6 +718,13 @@ function InventoryPage() {
               </div>
             ))}
           </div>
+          {unlinkedShipments.length > 3 && (
+            <button
+              onClick={() => navigate('/review-center?tab=waiting')}
+              style={{ marginTop: 10, width: '100%', background: 'white', color: '#e65100', border: '1px solid #ffb74d', borderRadius: 6, padding: '9px 14px', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 700 }}>
+              View all {unlinkedShipments.length} in Review Center →
+            </button>
+          )}
         </div>
       )}
 

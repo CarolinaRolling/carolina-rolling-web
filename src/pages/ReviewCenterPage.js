@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, ShoppingCart, Receipt, Mail, ChevronRight, CheckCircle2, RefreshCw, ExternalLink } from 'lucide-react';
-import { getEstimates, getPendingOrders, getCommBills, getCommCoverage, getMonitoredClients, updateBillStatus, updateCommEmailCategory } from '../services/api';
+import { FileText, ShoppingCart, Receipt, Mail, ChevronRight, CheckCircle2, RefreshCw, ExternalLink, PackageOpen } from 'lucide-react';
+import { getEstimates, getPendingOrders, getCommBills, getCommCoverage, getMonitoredClients, updateBillStatus, updateCommEmailCategory, getUnlinkedShipments } from '../services/api';
 import EstimateProgressBoard from '../components/EstimateProgressBoard';
 import SupplierCommsTab from '../components/SupplierCommsTab';
 import { formatDate } from '../utils/dates';
@@ -15,27 +15,33 @@ export default function ReviewCenterPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('estimates');
+  const [activeTab, setActiveTab] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('tab') || 'estimates'; }
+    catch { return 'estimates'; }
+  });
   const [estimates, setEstimates] = useState([]);
   const [orders, setOrders] = useState([]);
   const [bills, setBills] = useState([]);
   const [quotes, setQuotes] = useState([]);
+  const [unlinked, setUnlinked] = useState([]);
   const [monitored, setMonitored] = useState(new Set());
 
   const load = async (dispatchAfter = true) => {
     setRefreshing(true);
-    const [est, ord, bil, cov, mon] = await Promise.allSettled([
+    const [est, ord, bil, cov, mon, unl] = await Promise.allSettled([
       getEstimates({ status: 'draft' }),
       getPendingOrders('pending'),
       getCommBills(),
       getCommCoverage({ quotesOnly: true }),
       getMonitoredClients(),
+      getUnlinkedShipments(),
     ]);
     if (mon.status === 'fulfilled') setMonitored(new Set((mon.value.data.data || []).map(c => (c.name || '').trim().toLowerCase()).filter(Boolean)));
     if (est.status === 'fulfilled') setEstimates((est.value.data.data || []).filter(e => e.status === 'draft'));
     if (ord.status === 'fulfilled') setOrders(ord.value.data.data || []);
     if (bil.status === 'fulfilled') setBills((bil.value.data.data || []).filter(b => (b.billStatus || 'pending') === 'pending'));
     if (cov.status === 'fulfilled') setQuotes((cov.value.data.data || []).filter(e => !e.commResponded && !e.commHandledManually));
+    if (unl.status === 'fulfilled') setUnlinked(unl.value.data.data || []);
     setLoading(false); setRefreshing(false);
     // Only broadcast when this load was triggered by a real user action, NOT when it was itself
     // triggered by a reviewcount:refresh event — otherwise load->dispatch->listener->load loops forever.
@@ -89,7 +95,7 @@ export default function ReviewCenterPage() {
     .map(o => ({ id: o.id, label: o.clientName || 'Client order', sub: o.poNumber ? `PO ${o.poNumber}` : 'Client-submitted order', date: o.createdAt, onClick: () => navigate('/pending-orders') }));
 
   const quoteItems = [...quotes].sort((a, b) => byDateAsc(a.commLastMessageAt || a.receivedAt, b.commLastMessageAt || b.receivedAt))
-    .map(e => ({ id: e.id, label: e.subject || '(no subject)', sub: e.fromName || e.fromEmail || '', date: e.commLastMessageAt || e.receivedAt, priority: isMonitored(e.fromName) || isMonitored(e.clientName), onClick: () => navigate('/com-center') }));
+    .map(e => ({ id: e.id, label: e.subject || '(no subject)', sub: e.fromName || e.fromEmail || '', date: e.commLastMessageAt || e.receivedAt, priority: isMonitored(e.fromName) || isMonitored(e.clientName), onClick: () => navigate(`/com-center?focus=${e.id}`) }));
 
   // Order requested: estimates, email, orders, bills
   const tabs = [
@@ -97,6 +103,7 @@ export default function ReviewCenterPage() {
     { key: 'suppliers', title: 'Suppliers', icon: Mail, color: '#00838f', items: [], selfManaged: true },
     { key: 'email', title: 'Email', icon: Mail, color: '#2e7d32', items: quoteItems },
     { key: 'orders', title: 'Orders', icon: ShoppingCart, color: '#e65100', items: orderItems },
+    { key: 'waiting', title: 'Waiting for Instructions', icon: PackageOpen, color: '#e65100', items: unlinked },
     { key: 'bills', title: 'Bills', icon: Receipt, color: '#6a1b9a', items: bills },
   ];
   const total = tabs.reduce((n, t) => n + t.items.length, 0);
@@ -143,6 +150,27 @@ export default function ReviewCenterPage() {
           <CheckCircle2 size={36} style={{ marginBottom: 10 }} />
           <div style={{ fontWeight: 600, fontSize: '1.02rem' }}>All clear.</div>
           <div style={{ fontSize: '0.85rem', color: '#888', marginTop: 4 }}>Nothing in {active.title.toLowerCase()} needs review right now.</div>
+        </div>
+      ) : activeTab === 'waiting' ? (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {unlinked.map(s => (
+            <div key={s.id} className="card" style={{ padding: 14, borderLeft: '4px solid #e65100', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{s.clientName}</div>
+                {s.description && <div style={{ fontSize: '0.82rem', color: '#666' }}>{s.description.length > 90 ? s.description.slice(0, 90) + '…' : s.description}</div>}
+                <div style={{ fontSize: '0.78rem', color: '#999', marginTop: 2 }}>
+                  Received {formatDate(s.receivedAt || s.createdAt)}
+                  {s.clientPurchaseOrderNumber && <span style={{ color: '#1976d2', marginLeft: 8 }}>PO# {s.clientPurchaseOrderNumber}</span>}
+                  {s.location && ` • ${s.location}`}
+                  {s.receivedBy && ` • by ${s.receivedBy}`}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button style={ghostBtn} onClick={() => navigate(`/shipment/${s.id}`)}>Details</button>
+                <button style={{ ...solidBtn, background: '#e65100' }} onClick={() => navigate(`/shipment/${s.id}`)}>Create Work Order</button>
+              </div>
+            </div>
+          ))}
         </div>
       ) : activeTab === 'bills' ? (
         <div style={{ display: 'grid', gap: 10 }}>

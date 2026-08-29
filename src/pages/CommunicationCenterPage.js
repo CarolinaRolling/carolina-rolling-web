@@ -137,6 +137,13 @@ export default function CommunicationCenterPage() {
   const [showCoverage, setShowCoverage] = useState(true);
   const logsRef = React.useRef(null);
   const userScrolledUp = React.useRef(false);
+  // Focus/highlight a specific email when arriving from the Review Center (/com-center?focus=<id>).
+  const [focusId, setFocusId] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('focus') || null; } catch { return null; }
+  });
+  const emailRowRefs = React.useRef({});
+  // Accordion: which email row is expanded to show its body (one at a time).
+  const [expandedId, setExpandedId] = useState(null);
 
   const loadCoverage = useCallback(async () => {
     try {
@@ -229,6 +236,38 @@ export default function CommunicationCenterPage() {
     try { await dismissConvertQueueItem(id); loadQueue(); } catch {}
   };
 
+  // Renders the Convert-to-Estimate control for an email, reflecting its queue state. Returns null when
+  // the email isn't an RFQ and isn't already in the queue. Shared by the merged inquiry list.
+  const renderConvertControl = (e) => {
+    const qi = queueByEmail[e.id];
+    if (!qi && !e.isRfq) return null;
+    if (qi && (qi.status === 'queued' || qi.status === 'processing')) {
+      return <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#00695c', flexShrink: 0 }} title="In the convert queue">⏳ {qi.status === 'processing' ? 'Converting…' : 'Queued'}</span>;
+    }
+    if (qi && qi.status === 'needs_client') {
+      return <button onClick={(ev) => { ev.stopPropagation(); openClientPicker({ queueItemId: qi.id, fromEmail: qi.fromEmail, fromName: qi.fromName, subject: qi.subject }); }}
+        style={{ background: '#ef6c00', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>⚠️ Pick client</button>;
+    }
+    if (qi && qi.status === 'done' && qi.estimateId) {
+      return (
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+          <button onClick={(ev) => { ev.stopPropagation(); navigate(`/estimates/${qi.estimateId}`); }}
+            style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700 }}>
+            ✅ {qi.estimateNumber || 'Estimate'}{qi.partsCreated != null ? ` · ${qi.partsCreated}p` : ''}
+          </button>
+          <button onClick={(ev) => { ev.stopPropagation(); handleConvertClick(e.id); }} title="Re-run conversion" style={{ background: '#eceff1', color: '#00695c', border: '1px solid #b0bec5', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600 }}>↻ Rescan</button>
+        </span>
+      );
+    }
+    if (qi && qi.status === 'error') {
+      return <button onClick={(ev) => { ev.stopPropagation(); handleConvertClick(e.id); }} title={qi.errorMessage || 'Conversion failed — retry'}
+        style={{ background: '#c62828', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>⚠️ Retry</button>;
+    }
+    return <button onClick={(ev) => { ev.stopPropagation(); handleConvertClick(e.id); }}
+      title="AI-parse this RFQ's attachments into a draft estimate"
+      style={{ background: '#00838f', color: 'white', border: '1px solid #00838f', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>📝 Convert to Estimate</button>;
+  };
+
   const loadBills = useCallback(async () => {
     try {
       const res = await getCommBills();
@@ -307,6 +346,26 @@ export default function CommunicationCenterPage() {
   useEffect(() => { if (activeCategory === 'bill') loadBills(); }, [activeCategory, loadBills]);
   useEffect(() => { if (message) { const t = setTimeout(() => setMessage(null), 4000); return () => clearTimeout(t); } }, [message]);
 
+  // When arriving with ?focus=<id>, land on the Client Inquiry tab, then scroll to and briefly
+  // highlight that email in the merged list once it has loaded and rendered.
+  useEffect(() => {
+    if (focusId) { setActiveCategory('client_inquiry'); setClientSubTab('all'); }
+  }, [focusId]);
+  useEffect(() => {
+    if (!focusId) return;
+    if (activeCategory !== 'client_inquiry') return;
+    if (!emails || emails.length === 0) return; // wait until the list has loaded
+    const t = setTimeout(() => {
+      const el = emailRowRefs.current[focusId];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const clear = setTimeout(() => setFocusId(null), 3500);
+        return () => clearTimeout(clear);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [focusId, activeCategory, emails]);
+
   const fetchLogs = async () => {
     setLogsLoading(true);
     try {
@@ -380,16 +439,34 @@ export default function CommunicationCenterPage() {
   })();
   const isResponded = (e) => e.commResponded || e.commHandledManually;
 
-  // Quote Coverage order: awaiting replies first, oldest waiting at the very top
-  const sortedCoverage = [...coverage].sort((a, b) => {
-    const aAns = isResponded(a), bAns = isResponded(b);
-    if (aAns !== bAns) return aAns ? 1 : -1;
-    return new Date(a.commLastMessageAt || a.receivedAt) - new Date(b.commLastMessageAt || b.receivedAt);
-  });
   const respondToCount = dedupedEmails.filter(e => !isResponded(e)).length;
-  const displayEmails = (activeCategory === 'client_inquiry' && clientSubTab === 'respond_to')
-    ? dedupedEmails.filter(e => !isResponded(e))
-    : dedupedEmails;
+
+  // Set of email ids that are quote requests (from the coverage feed). On the Client Inquiry tab these
+  // float to the top, highlighted, and carry the Convert control — replacing the old separate panel.
+  const quoteIds = new Set(coverage.map(c => c.id));
+  const quoteById = new Map(coverage.map(c => [c.id, c]));
+  const decorate = (e) => {
+    const rawRfq = e.emailType === 'rfq' || e.commIsQuoteRequest === true;
+    if (quoteById.has(e.id)) return { ...e, isRfq: e.isRfq ?? quoteById.get(e.id).isRfq ?? rawRfq, _isQuote: true };
+    return { ...e, isRfq: e.isRfq ?? rawRfq, _isQuote: false };
+  };
+
+  let displayEmails;
+  if (activeCategory === 'client_inquiry' && clientSubTab === 'respond_to') {
+    displayEmails = dedupedEmails.filter(e => !isResponded(e)).map(decorate);
+  } else {
+    displayEmails = dedupedEmails.map(decorate);
+  }
+  // On the inquiry tab, float quote requests (esp. unanswered) to the very top.
+  if (activeCategory === 'client_inquiry') {
+    displayEmails = [...displayEmails].sort((a, b) => {
+      const aq = a._isQuote, bq = b._isQuote;
+      if (aq !== bq) return aq ? -1 : 1;                       // quotes first
+      const aAns = isResponded(a), bAns = isResponded(b);
+      if (aq && bq && aAns !== bAns) return aAns ? 1 : -1;     // among quotes, unanswered first
+      return new Date(b.receivedAt || 0) - new Date(a.receivedAt || 0); // then newest
+    });
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', overflow: 'hidden', width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
@@ -450,94 +527,20 @@ export default function CommunicationCenterPage() {
       {message && <div style={{ padding: '7px 24px', background: '#e8f5e9', borderBottom: '1px solid #a5d6a7', color: '#2e7d32', fontSize: '0.82rem', fontWeight: 600, flexShrink: 0 }}>{message}</div>}
       {error && <div style={{ padding: '7px 24px', background: '#ffebee', borderBottom: '1px solid #ef9a9a', color: '#c62828', fontSize: '0.82rem', flexShrink: 0 }}>{error}</div>}
 
-      {/* Quote Coverage — did every quote request get answered? */}
-      <div style={{ flexShrink: 0, borderBottom: '1px solid #e0e0e0', background: '#fff' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 24px', cursor: 'pointer' }}
-          onClick={() => setShowCoverage(v => !v)}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700, fontSize: '0.95rem' }}>
-            📋 Quote Coverage
-            {coverageAwaiting > 0
-              ? <span style={{ background: '#fff3e0', color: '#e65100', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>{coverageAwaiting} awaiting reply</span>
-              : <span style={{ background: '#e8f5e9', color: '#2e7d32', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>All answered</span>}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={(e) => { e.stopPropagation(); handleRescanCoverage(); }} disabled={coverageScanning}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid #1976d2', color: '#1976d2', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.78rem' }}>
-              <RefreshCw size={13} className={coverageScanning ? 'spin' : ''} /> {coverageScanning ? 'Checking…' : 'Re-check'}
-            </button>
-            <span style={{ color: '#999', fontSize: '0.8rem' }}>{showCoverage ? '▾' : '▸'}</span>
-          </div>
+      {/* Quote coverage status bar — the quote requests themselves now live in the list below,
+          floated to the top and highlighted. This bar just summarizes + offers a re-check. */}
+      <div style={{ flexShrink: 0, borderBottom: '1px solid #e0e0e0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700, fontSize: '0.9rem' }}>
+          📋 Quote Coverage
+          {coverageAwaiting > 0
+            ? <span style={{ background: '#fff3e0', color: '#e65100', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>{coverageAwaiting} awaiting reply</span>
+            : <span style={{ background: '#e8f5e9', color: '#2e7d32', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>All answered</span>}
+          <span style={{ color: '#aaa', fontSize: '0.76rem', fontWeight: 400 }}>— shown at the top of the list below</span>
         </div>
-        {showCoverage && (
-          <div style={{ maxHeight: '32vh', overflowY: 'auto', padding: '0 24px 12px' }}>
-            {coverage.length === 0 ? (
-              <div style={{ padding: '8px 0 14px', color: '#999', fontSize: '0.85rem' }}>No quote requests in the last 45 days.</div>
-            ) : sortedCoverage.map((e) => {
-              const answered = e.commResponded || e.commHandledManually;
-              return (
-                <div key={e.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', marginBottom: 6,
-                  borderRadius: 8, background: answered ? '#f1f8f1' : '#fff8ec',
-                  border: `1px solid ${answered ? '#c8e6c9' : '#ffe0b2'}`,
-                }}>
-                  {answered
-                    ? <CheckCircle size={18} style={{ color: '#2e7d32', flexShrink: 0 }} />
-                    : <Clock size={18} style={{ color: '#e65100', flexShrink: 0 }} />}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.86rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.subject || '(no subject)'}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#777' }}>
-                      {e.fromName || e.fromEmail} · {formatDate(e.commLastMessageAt || e.receivedAt)}
-                      {!answered && <span style={{ color: '#e65100', fontWeight: 600 }}> · awaiting your reply</span>}
-                    </div>
-                  </div>
-                  {e.gmailLink && (
-                    <a href={e.gmailLink} onClick={(ev) => handleOpenEmail(ev, e.id, e.gmailLink)} target="_blank" rel="noopener noreferrer"
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#1565c0', fontSize: '0.75rem', textDecoration: 'none', flexShrink: 0 }}>
-                      <ExternalLink size={13} /> Open
-                    </a>
-                  )}
-                  {(() => {
-                    const qi = queueByEmail[e.id];
-                    // Only offer Convert on emails the AI flagged as an RFQ. But if an item is already in
-                    // the queue (any status), keep showing its state regardless.
-                    if (!qi && !e.isRfq) return null;
-                    if (qi && (qi.status === 'queued' || qi.status === 'processing')) {
-                      return <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#00695c', flexShrink: 0 }} title="In the convert queue">⏳ {qi.status === 'processing' ? 'Converting…' : 'Queued'}</span>;
-                    }
-                    if (qi && qi.status === 'needs_client') {
-                      return <button onClick={() => openClientPicker({ queueItemId: qi.id, fromEmail: qi.fromEmail, fromName: qi.fromName, subject: qi.subject })}
-                        style={{ background: '#ef6c00', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>⚠️ Pick client</button>;
-                    }
-                    if (qi && qi.status === 'done' && qi.estimateId) {
-                      return (
-                        <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                          <button onClick={() => navigate(`/estimates/${qi.estimateId}`)}
-                            style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700 }}>
-                            ✅ {qi.estimateNumber || 'Estimate'}{qi.partsCreated != null ? ` · ${qi.partsCreated}p` : ''}
-                          </button>
-                          <button onClick={() => handleConvertClick(e.id)} title="Re-run conversion" style={{ background: '#eceff1', color: '#00695c', border: '1px solid #b0bec5', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600 }}>↻ Rescan</button>
-                        </span>
-                      );
-                    }
-                    if (qi && qi.status === 'error') {
-                      return <button onClick={() => handleConvertClick(e.id)} title={qi.errorMessage || 'Conversion failed — retry'}
-                        style={{ background: '#c62828', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>⚠️ Retry</button>;
-                    }
-                    return <button onClick={() => handleConvertClick(e.id)}
-                      title="AI-parse this RFQ's attachments into a draft estimate"
-                      style={{ background: '#00838f', color: 'white', border: '1px solid #00838f', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>📝 Convert to Estimate</button>;
-                  })()}
-                  {!answered && (
-                    <button onClick={() => handleMarkHandled(e.id, e.gmailThreadId)}
-                      style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 600, flexShrink: 0 }}>
-                      Mark handled
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <button onClick={(e) => { e.stopPropagation(); handleRescanCoverage(); }} disabled={coverageScanning}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid #1976d2', color: '#1976d2', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.78rem' }}>
+          <RefreshCw size={13} className={coverageScanning ? 'spin' : ''} /> {coverageScanning ? 'Checking…' : 'Re-check'}
+        </button>
       </div>
 
 
@@ -761,59 +764,86 @@ export default function CommunicationCenterPage() {
             </div>
           ) : (
             <div style={{ background: 'white', margin: 16, borderRadius: 10, border: '1px solid #e4e4e4', overflow: 'hidden' }}>
-              {displayEmails.map((email, idx) => (
-                <div key={email.id} style={{ padding: '12px 16px', borderBottom: idx < displayEmails.length - 1 ? '1px solid #f2f2f2' : 'none', display: 'flex', gap: 12, alignItems: 'center', background: email.commArchived ? '#fafafa' : 'white', opacity: email.commArchived ? 0.6 : 1 }}>
-                  {email.commCategory === 'client_inquiry' && (
-                    <div title={isResponded(email) ? 'Responded' : 'Awaiting your reply'} style={{ flexShrink: 0, display: 'flex' }}>
-                      <CheckCircle size={30} color={isResponded(email) ? '#2e7d32' : '#d4d4d4'} />
+              {displayEmails.map((email, idx) => {
+                const isQuote = email._isQuote;
+                const unanswered = email.commCategory === 'client_inquiry' && !isResponded(email);
+                const isOpen = expandedId === email.id;
+                const isFocused = focusId === email.id;
+                const rowBg = isFocused ? '#fff3cd' : email.commArchived ? '#fafafa' : (isQuote && unanswered) ? '#fff8ec' : 'white';
+                return (
+                <div key={email.id} ref={el => { if (el) emailRowRefs.current[email.id] = el; }}
+                  style={{ borderBottom: idx < displayEmails.length - 1 ? '1px solid #f2f2f2' : 'none',
+                    borderLeft: isFocused ? '3px solid #ff9800' : isQuote ? '3px solid #f57c00' : '3px solid transparent',
+                    background: rowBg, opacity: email.commArchived ? 0.6 : 1,
+                    boxShadow: isFocused ? 'inset 0 0 0 2px rgba(255,152,0,0.25)' : 'none', transition: 'background 0.3s' }}>
+                  {/* Header row — click to expand/collapse the body */}
+                  <div onClick={() => setExpandedId(isOpen ? null : email.id)}
+                    style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', cursor: 'pointer' }}>
+                    <span style={{ flexShrink: 0, color: '#bbb', fontSize: '0.8rem', width: 12 }}>{isOpen ? '▾' : '▸'}</span>
+                    {email.commCategory === 'client_inquiry' && (
+                      <div title={isResponded(email) ? 'Responded' : 'Awaiting your reply'} style={{ flexShrink: 0, display: 'flex' }}>
+                        <CheckCircle size={28} color={isResponded(email) ? '#2e7d32' : '#d4d4d4'} />
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.87rem', color: '#111' }}>{email.fromName || email.fromEmail}</span>
+                        <span style={{ fontSize: '0.72rem', color: '#bbb' }}>{email.fromEmail}</span>
+                        <CategoryBadge category={email.commCategory} />
+                        {isQuote && <span style={{ background: '#fff3e0', color: '#e65100', borderRadius: 99, padding: '1px 8px', fontSize: '0.68rem', fontWeight: 700 }}>QUOTE</span>}
+                        {isQuote && unanswered && <span style={{ color: '#e65100', fontWeight: 700, fontSize: '0.68rem' }}>· awaiting reply</span>}
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: '0.83rem', color: '#222', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.subject}</div>
+                      {!isOpen && email.commSnippet && <div style={{ fontSize: '0.76rem', color: '#aaa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.commSnippet}</div>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                      <span style={{ fontSize: '0.72rem', color: '#ccc', minWidth: 52, textAlign: 'right' }}>{formatDate(email.receivedAt)}</span>
+                      {renderConvertControl(email)}
+                      {unanswered && (
+                        <button onClick={() => handleMarkHandled(email.id, email.gmailThreadId)} title="Mark this inquiry as handled"
+                          style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontSize: '0.73rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          ✓ Handled
+                        </button>
+                      )}
+                      {email.gmailLink && (
+                        <a href={email.gmailLink} onClick={(ev) => handleOpenEmail(ev, email.id, email.gmailLink)} target="_blank" rel="noopener noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '4px 10px', background: '#f0f4ff', border: '1px solid #c5cae9', borderRadius: 5, fontSize: '0.74rem', color: '#3949ab', textDecoration: 'none', fontWeight: 600 }}>
+                          <ExternalLink size={11} /> Open
+                        </a>
+                      )}
+                      <div style={{ position: 'relative' }}>
+                        <button onClick={(e) => { e.stopPropagation(); setCategoryMenuId(categoryMenuId === email.id ? null : email.id); }}
+                          style={{ padding: '4px 8px', background: '#f5f5f5', border: '1px solid #e0e0e0', borderRadius: 5, cursor: 'pointer', fontSize: '0.8rem' }}>
+                          🏷️
+                        </button>
+                        {categoryMenuId === email.id && (
+                          <div style={{ position: 'absolute', right: 0, top: '110%', background: 'white', border: '1px solid #ddd', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.13)', zIndex: 200, minWidth: 155, overflow: 'hidden' }}>
+                            {CATEGORIES.filter(c => c.key !== 'all').map(cat => (
+                              <button key={cat.key} onClick={(e) => { e.stopPropagation(); handleCategoryChange(email.id, cat.key); }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 14px', border: 'none', background: email.commCategory === cat.key ? cat.bg : 'white', cursor: 'pointer', fontSize: '0.81rem', color: cat.color, fontWeight: email.commCategory === cat.key ? 700 : 400, borderBottom: '1px solid #f5f5f5' }}>
+                                {cat.icon} {cat.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button onClick={() => handleArchive(email.id)} title={email.commArchived ? 'Restore' : 'Archive'}
+                        style={{ padding: '4px 8px', background: '#f5f5f5', border: '1px solid #e0e0e0', borderRadius: 5, cursor: 'pointer', fontSize: '0.8rem', color: email.commArchived ? '#2e7d32' : '#aaa' }}>
+                        📦
+                      </button>
+                    </div>
+                  </div>
+                  {/* Expanded body */}
+                  {isOpen && (
+                    <div style={{ padding: '0 16px 14px 40px', borderTop: '1px solid #f2f2f2' }}>
+                      {email.rawBody
+                        ? <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.82rem', color: '#333', lineHeight: 1.5, marginTop: 10, maxHeight: '45vh', overflowY: 'auto', background: '#fafafa', border: '1px solid #eee', borderRadius: 8, padding: 12 }}>{email.rawBody}</div>
+                        : <div style={{ fontSize: '0.8rem', color: '#999', marginTop: 10 }}>No preview available — use “Open” to view the full email in Gmail.</div>}
                     </div>
                   )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.87rem', color: '#111' }}>{email.fromName || email.fromEmail}</span>
-                      <span style={{ fontSize: '0.72rem', color: '#bbb' }}>{email.fromEmail}</span>
-                      <CategoryBadge category={email.commCategory} />
-                    </div>
-                    <div style={{ fontWeight: 600, fontSize: '0.83rem', color: '#222', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.subject}</div>
-                    {email.commSnippet && <div style={{ fontSize: '0.76rem', color: '#aaa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.commSnippet}</div>}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <span style={{ fontSize: '0.72rem', color: '#ccc', minWidth: 52, textAlign: 'right' }}>{formatDate(email.receivedAt)}</span>
-                    {email.commCategory === 'client_inquiry' && !isResponded(email) && (
-                      <button onClick={() => handleMarkHandled(email.id, email.gmailThreadId)} title="Mark this inquiry as handled"
-                        style={{ background: '#2e7d32', color: 'white', border: 'none', borderRadius: 5, padding: '4px 10px', cursor: 'pointer', fontSize: '0.73rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        ✓ Handled
-                      </button>
-                    )}
-                    {email.gmailLink && (
-                      <a href={email.gmailLink} onClick={(ev) => handleOpenEmail(ev, email.id, email.gmailLink)} target="_blank" rel="noopener noreferrer"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '4px 10px', background: '#f0f4ff', border: '1px solid #c5cae9', borderRadius: 5, fontSize: '0.74rem', color: '#3949ab', textDecoration: 'none', fontWeight: 600 }}>
-                        <ExternalLink size={11} /> Open
-                      </a>
-                    )}
-                    <div style={{ position: 'relative' }}>
-                      <button onClick={(e) => { e.stopPropagation(); setCategoryMenuId(categoryMenuId === email.id ? null : email.id); }}
-                        style={{ padding: '4px 8px', background: '#f5f5f5', border: '1px solid #e0e0e0', borderRadius: 5, cursor: 'pointer', fontSize: '0.8rem' }}>
-                        🏷️
-                      </button>
-                      {categoryMenuId === email.id && (
-                        <div style={{ position: 'absolute', right: 0, top: '110%', background: 'white', border: '1px solid #ddd', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.13)', zIndex: 200, minWidth: 155, overflow: 'hidden' }}>
-                          {CATEGORIES.filter(c => c.key !== 'all').map(cat => (
-                            <button key={cat.key} onClick={(e) => { e.stopPropagation(); handleCategoryChange(email.id, cat.key); }}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 14px', border: 'none', background: email.commCategory === cat.key ? cat.bg : 'white', cursor: 'pointer', fontSize: '0.81rem', color: cat.color, fontWeight: email.commCategory === cat.key ? 700 : 400, borderBottom: '1px solid #f5f5f5' }}>
-                              {cat.icon} {cat.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <button onClick={() => handleArchive(email.id)} title={email.commArchived ? 'Restore' : 'Archive'}
-                      style={{ padding: '4px 8px', background: '#f5f5f5', border: '1px solid #e0e0e0', borderRadius: 5, cursor: 'pointer', fontSize: '0.8rem', color: email.commArchived ? '#2e7d32' : '#aaa' }}>
-                      📦
-                    </button>
-                  </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ))}
         </div>
