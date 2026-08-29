@@ -838,7 +838,12 @@ export default function CommunicationCenterPage() {
                     <div style={{ padding: '0 16px 14px 40px', borderTop: '1px solid #f2f2f2' }}>
                       {email.rawBody
                         ? <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.82rem', color: '#333', lineHeight: 1.5, marginTop: 10, maxHeight: '45vh', overflowY: 'auto', background: '#fafafa', border: '1px solid #eee', borderRadius: 8, padding: 12 }}>{email.rawBody}</div>
-                        : <div style={{ fontSize: '0.8rem', color: '#999', marginTop: 10 }}>No preview available — use “Open” to view the full email in Gmail.</div>}
+                        : email.commSnippet
+                          ? <div style={{ marginTop: 10 }}>
+                              <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.82rem', color: '#333', lineHeight: 1.5, background: '#fafafa', border: '1px solid #eee', borderRadius: 8, padding: 12 }}>{email.commSnippet}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 6 }}>Preview only — use “Open” for the full email. (Full text is saved on newly scanned emails.)</div>
+                            </div>
+                          : <div style={{ fontSize: '0.8rem', color: '#999', marginTop: 10 }}>No preview available — use “Open” to view the full email in Gmail.</div>}
                     </div>
                   )}
                 </div>
