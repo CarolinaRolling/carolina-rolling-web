@@ -498,6 +498,9 @@ export default function CommunicationCenterPage() {
                   )}
                   {(() => {
                     const qi = queueByEmail[e.id];
+                    // Only offer Convert on emails the AI flagged as an RFQ. But if an item is already in
+                    // the queue (any status), keep showing its state regardless.
+                    if (!qi && !e.isRfq) return null;
                     if (qi && (qi.status === 'queued' || qi.status === 'processing')) {
                       return <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#00695c', flexShrink: 0 }} title="In the convert queue">⏳ {qi.status === 'processing' ? 'Converting…' : 'Queued'}</span>;
                     }
@@ -521,8 +524,8 @@ export default function CommunicationCenterPage() {
                         style={{ background: '#c62828', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>⚠️ Retry</button>;
                     }
                     return <button onClick={() => handleConvertClick(e.id)}
-                      title="AI-parse this email's attachments into a draft estimate"
-                      style={{ background: e.commLooksLikeEstimate ? '#00838f' : '#eceff1', color: e.commLooksLikeEstimate ? 'white' : '#00695c', border: '1px solid #00838f', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>📝 Convert to Estimate</button>;
+                      title="AI-parse this RFQ's attachments into a draft estimate"
+                      style={{ background: '#00838f', color: 'white', border: '1px solid #00838f', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>📝 Convert to Estimate</button>;
                   })()}
                   {!answered && (
                     <button onClick={() => handleMarkHandled(e.id, e.gmailThreadId)}
