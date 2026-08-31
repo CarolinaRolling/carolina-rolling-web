@@ -150,17 +150,21 @@ export default function ReviewCenterPage() {
       const d = res.data?.data;
       setPwClientPicker(null);
       if (kind === 'estimate' && d?.estimateId) navigate(`/estimates/${d.estimateId}`);
-      else if (kind === 'order') { setMessage(d?.duplicate ? 'A pending order for this PO already exists.' : `Pending order created${d?.matchedEstimateNumber ? ` (matched ${d.matchedEstimateNumber})` : ''}.`); load(); }
-      else load();
+      else if (kind === 'order') {
+        window.alert(d?.duplicate
+          ? 'A pending order for this PO already exists.'
+          : `Pending order created${d?.matchedEstimateNumber ? ` — matched to ${d.matchedEstimateNumber}` : ''}. It's in the Orders tab.`);
+        load();
+      } else load();
     } catch (err) {
       if (err.response?.data?.error?.code === 'NO_CLIENT') {
         try {
           const cl = await getClients();
           setPwClientPicker({ id, kind, clientName: err.response?.data?.data?.clientName, options: (cl.data?.data || []) });
           setPwClientSel('');
-        } catch { setError('No matching client, and the client list could not be loaded.'); }
+        } catch { window.alert('No matching client, and the client list could not be loaded.'); }
       } else {
-        setError(err.response?.data?.error?.message || 'Could not convert.');
+        window.alert(err.response?.data?.error?.message || 'Could not convert.');
       }
     }
   };
