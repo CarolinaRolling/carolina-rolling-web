@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, ShoppingCart, Receipt, Mail, ChevronRight, CheckCircle2, RefreshCw, ExternalLink, PackageOpen, ScanLine } from 'lucide-react';
-import { getEstimates, getPendingOrders, getCommBills, getCommCoverage, getMonitoredClients, updateBillStatus, updateCommEmailCategory, getUnlinkedShipments, getInboundPaperwork, uploadInboundPaperwork, confirmInboundPaperwork, reclassifyInboundPaperwork, dismissInboundPaperwork } from '../services/api';
+import { getEstimates, getPendingOrders, getCommBills, getCommCoverage, getMonitoredClients, updateBillStatus, updateCommEmailCategory, getUnlinkedShipments, getInboundPaperwork, uploadInboundPaperwork, confirmInboundPaperwork, reclassifyInboundPaperwork, dismissInboundPaperwork, dismissAllInboundPaperwork, convertPaperworkToEstimate, convertPaperworkToOrder, clearPaperworkDockReceive, getClients } from '../services/api';
 import EstimateProgressBoard from '../components/EstimateProgressBoard';
 import SupplierCommsTab from '../components/SupplierCommsTab';
 import { formatDate } from '../utils/dates';
@@ -108,7 +108,7 @@ export default function ReviewCenterPage() {
     { key: 'email', title: 'Email', icon: Mail, color: '#2e7d32', items: quoteItems },
     { key: 'orders', title: 'Orders', icon: ShoppingCart, color: '#e65100', items: orderItems },
     { key: 'waiting', title: 'Waiting for Instructions', icon: PackageOpen, color: '#e65100', items: unlinked },
-    { key: 'paperwork', title: 'Inbound Paperwork', icon: ScanLine, color: '#00838f', items: paperwork.filter(p => p.status === 'needs_review' || p.status === 'queued' || p.status === 'processing' || p.status === 'error') },
+    { key: 'paperwork', title: 'Inbound Paperwork', icon: ScanLine, color: '#00838f', items: paperwork.filter(p => p.status === 'needs_review' || p.status === 'queued' || p.status === 'processing' || p.status === 'error' || p.status === 'awaiting_dock_receive') },
     { key: 'bills', title: 'Bills', icon: Receipt, color: '#6a1b9a', items: bills },
   ];
   const total = tabs.reduce((n, t) => n + t.items.length, 0);
@@ -136,6 +136,37 @@ export default function ReviewCenterPage() {
   const handleDismissPaperwork = async (id) => {
     try { await dismissInboundPaperwork(id); load(); } catch {}
   };
+  const handleDismissAllPaperwork = async () => {
+    if (!window.confirm('Dismiss all items in the Inbound Paperwork review list? (Confirmed/filed items are not affected.)')) return;
+    try { await dismissAllInboundPaperwork(); load(); } catch {}
+  };
+  const [pwClientPicker, setPwClientPicker] = useState(null); // { id, clientName, options }
+  const [pwClientSel, setPwClientSel] = useState('');
+  const handleConvertPaperwork = async (id, kind, clientId) => {
+    try {
+      const res = kind === 'order'
+        ? await convertPaperworkToOrder(id, clientId)
+        : await convertPaperworkToEstimate(id, clientId);
+      const d = res.data?.data;
+      setPwClientPicker(null);
+      if (kind === 'estimate' && d?.estimateId) navigate(`/estimates/${d.estimateId}`);
+      else if (kind === 'order') { setMessage(d?.duplicate ? 'A pending order for this PO already exists.' : `Pending order created${d?.matchedEstimateNumber ? ` (matched ${d.matchedEstimateNumber})` : ''}.`); load(); }
+      else load();
+    } catch (err) {
+      if (err.response?.data?.error?.code === 'NO_CLIENT') {
+        try {
+          const cl = await getClients();
+          setPwClientPicker({ id, kind, clientName: err.response?.data?.data?.clientName, options: (cl.data?.data || []) });
+          setPwClientSel('');
+        } catch { setError('No matching client, and the client list could not be loaded.'); }
+      } else {
+        setError(err.response?.data?.error?.message || 'Could not convert.');
+      }
+    }
+  };
+  const handleClearDockReceive = async (id) => {
+    try { await clearPaperworkDockReceive(id); load(); } catch {}
+  };
 
   const DOC_TYPE_LABELS = { estimate: 'Estimate', purchase_order: 'Purchase Order', delivery_form: 'Delivery Form', unknown: 'Unknown' };
   const ACTION_LABELS = {
@@ -144,6 +175,8 @@ export default function ReviewCenterPage() {
     receive_supplier_material: 'Receive supplier material',
     attach_to_order: 'Attach to order',
     needs_instructions: 'Flag: needs instructions',
+    converted_to_estimate: 'Converted to estimate',
+    converted_to_order: 'Converted to order',
     unknown: 'Review manually'
   };
 
@@ -187,11 +220,16 @@ export default function ReviewCenterPage() {
             <div style={{ fontSize: '0.85rem', color: '#666' }}>
               Upload a scanned estimate, purchase order, or delivery form. The AI classifies it and recommends what to do — you confirm each one.
             </div>
-            <label style={{ ...solidBtn, background: '#00838f', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: uploadingScan ? 'wait' : 'pointer' }}>
-              {uploadingScan ? 'Uploading…' : '⬆ Upload scan(s)'}
-              <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }}
-                onChange={(e) => { handleScanUpload(e.target.files); e.target.value = ''; }} disabled={uploadingScan} />
-            </label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {paperwork.length > 0 && (
+                <button onClick={handleDismissAllPaperwork} style={{ ...ghostBtn, fontSize: '0.78rem' }}>Dismiss all</button>
+              )}
+              <label style={{ ...solidBtn, background: '#00838f', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: uploadingScan ? 'wait' : 'pointer' }}>
+                {uploadingScan ? 'Uploading…' : '⬆ Upload scan(s)'}
+                <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }}
+                  onChange={(e) => { handleScanUpload(e.target.files); e.target.value = ''; }} disabled={uploadingScan} />
+              </label>
+            </div>
           </div>
           {paperwork.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 60, color: '#bbb' }}>
@@ -205,8 +243,11 @@ export default function ReviewCenterPage() {
                 const busy = p.status === 'queued' || p.status === 'processing';
                 const done = p.status === 'confirmed';
                 const err = p.status === 'error';
+                const awaiting = p.status === 'awaiting_dock_receive';
+                const isEstimate = p.docType === 'estimate';
+                const isPO = p.docType === 'purchase_order';
                 return (
-                  <div key={p.id} className="card" style={{ padding: 14, borderLeft: `4px solid ${err ? '#c62828' : done ? '#2e7d32' : '#00838f'}` }}>
+                  <div key={p.id} className="card" style={{ padding: 14, borderLeft: `4px solid ${err ? '#c62828' : awaiting ? '#ef6c00' : done ? '#2e7d32' : '#00838f'}` }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -223,24 +264,44 @@ export default function ReviewCenterPage() {
                             💡 {p.recommendationNote}
                           </div>
                         )}
+                        {awaiting && (
+                          <div style={{ fontSize: '0.82rem', color: '#e65100', marginTop: 6, background: '#fff3e0', borderRadius: 6, padding: '5px 9px', fontWeight: 600 }}>
+                            📦 {p.recommendationNote || 'Received from scan — no dock shipment registered.'}
+                          </div>
+                        )}
                         {done && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 6, fontWeight: 600 }}>✓ {ACTION_LABELS[p.resolvedAction] || p.resolvedAction}{p.resultRef && p.resultRef !== 'manual' ? ` · ${p.resultRef}` : ''}</div>}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, alignItems: 'flex-end' }}>
-                        {p.status === 'needs_review' && (
-                          <>
-                            <button style={{ ...solidBtn, background: '#2e7d32' }} onClick={() => handleConfirmPaperwork(p.id)}>
-                              ✓ {ACTION_LABELS[p.recommendedAction] || 'Confirm'}
-                            </button>
-                            <select defaultValue="" onChange={(e) => { if (e.target.value) handleReclassifyPaperwork(p.id, e.target.value); }}
-                              style={{ fontSize: '0.75rem', padding: '3px 6px', borderRadius: 5, border: '1px solid #ccc' }}>
-                              <option value="">Change type…</option>
-                              <option value="estimate">Estimate</option>
-                              <option value="purchase_order">Purchase Order</option>
-                              <option value="delivery_form">Delivery Form</option>
-                            </select>
-                          </>
+                        {p.status === 'needs_review' && isEstimate && (
+                          <button style={{ ...solidBtn, background: '#00838f' }} onClick={() => handleConvertPaperwork(p.id, 'estimate')}>
+                            📝 Convert to Estimate
+                          </button>
                         )}
-                        {(err || p.status === 'needs_review' || done) && (
+                        {p.status === 'needs_review' && isPO && (
+                          <button style={{ ...solidBtn, background: '#e65100' }} onClick={() => handleConvertPaperwork(p.id, 'order')}>
+                            📋 Convert to Order
+                          </button>
+                        )}
+                        {p.status === 'needs_review' && !isEstimate && !isPO && (
+                          <button style={{ ...solidBtn, background: '#2e7d32' }} onClick={() => handleConfirmPaperwork(p.id)}>
+                            ✓ {ACTION_LABELS[p.recommendedAction] || 'Confirm'}
+                          </button>
+                        )}
+                        {p.status === 'needs_review' && (
+                          <select defaultValue="" onChange={(e) => { if (e.target.value) handleReclassifyPaperwork(p.id, e.target.value); }}
+                            style={{ fontSize: '0.75rem', padding: '3px 6px', borderRadius: 5, border: '1px solid #ccc' }}>
+                            <option value="">Change type…</option>
+                            <option value="estimate">Estimate</option>
+                            <option value="purchase_order">Purchase Order</option>
+                            <option value="delivery_form">Delivery Form</option>
+                          </select>
+                        )}
+                        {awaiting && (
+                          <button style={{ ...solidBtn, background: '#ef6c00' }} onClick={() => handleClearDockReceive(p.id)}>
+                            ✓ Confirm shipment received
+                          </button>
+                        )}
+                        {(err || p.status === 'needs_review' || awaiting || done) && (
                           <button style={{ ...ghostBtn, fontSize: '0.73rem' }} onClick={() => handleDismissPaperwork(p.id)}>Dismiss</button>
                         )}
                       </div>
@@ -248,6 +309,26 @@ export default function ReviewCenterPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+          {pwClientPicker && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setPwClientPicker(null)}>
+              <div className="card" style={{ maxWidth: 460, width: '90%', padding: 20 }} onClick={e => e.stopPropagation()}>
+                <h3 style={{ marginTop: 0 }}>Which client is this estimate for?</h3>
+                <div style={{ background: '#fff8ec', border: '1px solid #ffe0b2', borderRadius: 8, padding: 10, marginBottom: 14, fontSize: '0.85rem' }}>
+                  No client matched{pwClientPicker.clientName ? <strong> {pwClientPicker.clientName}</strong> : ''}. Pick one, or create the client first.
+                </div>
+                <select value={pwClientSel} onChange={e => setPwClientSel(e.target.value)} style={{ width: '100%', padding: 8 }}>
+                  <option value="">— select a client —</option>
+                  {(pwClientPicker.options || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'space-between' }}>
+                  <button style={ghostBtn} onClick={() => { setPwClientPicker(null); navigate('/clients-vendors'); }}>+ Create a client first</button>
+                  <button style={{ ...solidBtn, background: '#00838f' }} disabled={!pwClientSel} onClick={() => handleConvertPaperwork(pwClientPicker.id, pwClientPicker.kind || 'estimate', pwClientSel)}>Convert with this client</button>
+                </div>
+              </div>
             </div>
           )}
         </div>
