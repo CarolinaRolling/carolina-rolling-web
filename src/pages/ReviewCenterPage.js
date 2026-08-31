@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, ShoppingCart, Receipt, Mail, ChevronRight, CheckCircle2, RefreshCw, ExternalLink, PackageOpen } from 'lucide-react';
-import { getEstimates, getPendingOrders, getCommBills, getCommCoverage, getMonitoredClients, updateBillStatus, updateCommEmailCategory, getUnlinkedShipments } from '../services/api';
+import { FileText, ShoppingCart, Receipt, Mail, ChevronRight, CheckCircle2, RefreshCw, ExternalLink, PackageOpen, ScanLine } from 'lucide-react';
+import { getEstimates, getPendingOrders, getCommBills, getCommCoverage, getMonitoredClients, updateBillStatus, updateCommEmailCategory, getUnlinkedShipments, getInboundPaperwork, uploadInboundPaperwork, confirmInboundPaperwork, reclassifyInboundPaperwork, dismissInboundPaperwork } from '../services/api';
 import EstimateProgressBoard from '../components/EstimateProgressBoard';
 import SupplierCommsTab from '../components/SupplierCommsTab';
 import { formatDate } from '../utils/dates';
@@ -24,17 +24,20 @@ export default function ReviewCenterPage() {
   const [bills, setBills] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [unlinked, setUnlinked] = useState([]);
+  const [paperwork, setPaperwork] = useState([]);
+  const [uploadingScan, setUploadingScan] = useState(false);
   const [monitored, setMonitored] = useState(new Set());
 
   const load = async (dispatchAfter = true) => {
     setRefreshing(true);
-    const [est, ord, bil, cov, mon, unl] = await Promise.allSettled([
+    const [est, ord, bil, cov, mon, unl, pap] = await Promise.allSettled([
       getEstimates({ status: 'draft' }),
       getPendingOrders('pending'),
       getCommBills(),
       getCommCoverage({ quotesOnly: true }),
       getMonitoredClients(),
       getUnlinkedShipments(),
+      getInboundPaperwork(),
     ]);
     if (mon.status === 'fulfilled') setMonitored(new Set((mon.value.data.data || []).map(c => (c.name || '').trim().toLowerCase()).filter(Boolean)));
     if (est.status === 'fulfilled') setEstimates((est.value.data.data || []).filter(e => e.status === 'draft'));
@@ -42,6 +45,7 @@ export default function ReviewCenterPage() {
     if (bil.status === 'fulfilled') setBills((bil.value.data.data || []).filter(b => (b.billStatus || 'pending') === 'pending'));
     if (cov.status === 'fulfilled') setQuotes((cov.value.data.data || []).filter(e => !e.commResponded && !e.commHandledManually));
     if (unl.status === 'fulfilled') setUnlinked(unl.value.data.data || []);
+    if (pap.status === 'fulfilled') setPaperwork(pap.value.data.data || []);
     setLoading(false); setRefreshing(false);
     // Only broadcast when this load was triggered by a real user action, NOT when it was itself
     // triggered by a reviewcount:refresh event — otherwise load->dispatch->listener->load loops forever.
@@ -104,6 +108,7 @@ export default function ReviewCenterPage() {
     { key: 'email', title: 'Email', icon: Mail, color: '#2e7d32', items: quoteItems },
     { key: 'orders', title: 'Orders', icon: ShoppingCart, color: '#e65100', items: orderItems },
     { key: 'waiting', title: 'Waiting for Instructions', icon: PackageOpen, color: '#e65100', items: unlinked },
+    { key: 'paperwork', title: 'Inbound Paperwork', icon: ScanLine, color: '#00838f', items: paperwork.filter(p => p.status === 'needs_review' || p.status === 'queued' || p.status === 'processing' || p.status === 'error') },
     { key: 'bills', title: 'Bills', icon: Receipt, color: '#6a1b9a', items: bills },
   ];
   const total = tabs.reduce((n, t) => n + t.items.length, 0);
@@ -111,6 +116,36 @@ export default function ReviewCenterPage() {
 
   const solidBtn = { border: 'none', color: 'white', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 };
   const ghostBtn = { border: '1px solid #ccc', background: 'white', color: '#555', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontSize: '0.8rem' };
+
+  const handleScanUpload = async (files) => {
+    const list = Array.from(files || []);
+    if (list.length === 0) return;
+    setUploadingScan(true);
+    try {
+      for (const f of list) { try { await uploadInboundPaperwork(f); } catch (e) { /* continue */ } }
+      // Give the background classifier a moment, then reload.
+      setTimeout(load, 1500);
+    } finally { setUploadingScan(false); }
+  };
+  const handleConfirmPaperwork = async (id, body) => {
+    try { await confirmInboundPaperwork(id, body); load(); } catch {}
+  };
+  const handleReclassifyPaperwork = async (id, docType) => {
+    try { await reclassifyInboundPaperwork(id, docType); load(); } catch {}
+  };
+  const handleDismissPaperwork = async (id) => {
+    try { await dismissInboundPaperwork(id); load(); } catch {}
+  };
+
+  const DOC_TYPE_LABELS = { estimate: 'Estimate', purchase_order: 'Purchase Order', delivery_form: 'Delivery Form', unknown: 'Unknown' };
+  const ACTION_LABELS = {
+    create_estimate: 'Create draft estimate',
+    create_pending_order: 'Create pending order',
+    receive_supplier_material: 'Receive supplier material',
+    attach_to_order: 'Attach to order',
+    needs_instructions: 'Flag: needs instructions',
+    unknown: 'Review manually'
+  };
 
   return (
     <div>
@@ -171,6 +206,77 @@ export default function ReviewCenterPage() {
               </div>
             </div>
           ))}
+        </div>
+      ) : activeTab === 'paperwork' ? (
+        <div>
+          {/* Upload bar */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '0.85rem', color: '#666' }}>
+              Upload a scanned estimate, purchase order, or delivery form. The AI classifies it and recommends what to do — you confirm each one.
+            </div>
+            <label style={{ ...solidBtn, background: '#00838f', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: uploadingScan ? 'wait' : 'pointer' }}>
+              {uploadingScan ? 'Uploading…' : '⬆ Upload scan(s)'}
+              <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" style={{ display: 'none' }}
+                onChange={(e) => { handleScanUpload(e.target.files); e.target.value = ''; }} disabled={uploadingScan} />
+            </label>
+          </div>
+          {paperwork.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 60, color: '#bbb' }}>
+              <ScanLine size={40} style={{ marginBottom: 10 }} />
+              <div style={{ fontWeight: 600 }}>No paperwork in the queue</div>
+              <div style={{ fontSize: '0.85rem' }}>Upload a scan to get started.</div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {paperwork.map(p => {
+                const busy = p.status === 'queued' || p.status === 'processing';
+                const done = p.status === 'confirmed';
+                const err = p.status === 'error';
+                return (
+                  <div key={p.id} className="card" style={{ padding: 14, borderLeft: `4px solid ${err ? '#c62828' : done ? '#2e7d32' : '#00838f'}` }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <strong style={{ fontSize: '0.9rem' }}>{p.originalName || 'scan'}</strong>
+                          {p.docType && <span style={{ fontSize: '0.72rem', fontWeight: 700, background: '#e0f7fa', color: '#00838f', borderRadius: 99, padding: '1px 8px' }}>{DOC_TYPE_LABELS[p.docType] || p.docType}</span>}
+                          {p.classifyConfidence === 'low' && <span style={{ fontSize: '0.7rem', color: '#e65100', fontWeight: 700 }}>⚠ low confidence</span>}
+                          {p.fileUrl && <a href={p.fileUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.74rem', color: '#3949ab' }}>view scan</a>}
+                        </div>
+                        {busy && <div style={{ fontSize: '0.82rem', color: '#00838f', marginTop: 4 }}>⏳ AI is reading this…</div>}
+                        {err && <div style={{ fontSize: '0.82rem', color: '#c62828', marginTop: 4 }}>Error: {p.errorMessage || 'classification failed'}</div>}
+                        {p.aiSummary && !busy && <div style={{ fontSize: '0.82rem', color: '#555', marginTop: 4 }}>{p.aiSummary}</div>}
+                        {p.recommendationNote && !busy && (
+                          <div style={{ fontSize: '0.82rem', color: '#00695c', marginTop: 6, background: '#e0f2f1', borderRadius: 6, padding: '5px 9px' }}>
+                            💡 {p.recommendationNote}
+                          </div>
+                        )}
+                        {done && <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 6, fontWeight: 600 }}>✓ {ACTION_LABELS[p.resolvedAction] || p.resolvedAction}{p.resultRef && p.resultRef !== 'manual' ? ` · ${p.resultRef}` : ''}</div>}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, alignItems: 'flex-end' }}>
+                        {p.status === 'needs_review' && (
+                          <>
+                            <button style={{ ...solidBtn, background: '#2e7d32' }} onClick={() => handleConfirmPaperwork(p.id)}>
+                              ✓ {ACTION_LABELS[p.recommendedAction] || 'Confirm'}
+                            </button>
+                            <select defaultValue="" onChange={(e) => { if (e.target.value) handleReclassifyPaperwork(p.id, e.target.value); }}
+                              style={{ fontSize: '0.75rem', padding: '3px 6px', borderRadius: 5, border: '1px solid #ccc' }}>
+                              <option value="">Change type…</option>
+                              <option value="estimate">Estimate</option>
+                              <option value="purchase_order">Purchase Order</option>
+                              <option value="delivery_form">Delivery Form</option>
+                            </select>
+                          </>
+                        )}
+                        {(err || p.status === 'needs_review' || done) && (
+                          <button style={{ ...ghostBtn, fontSize: '0.73rem' }} onClick={() => handleDismissPaperwork(p.id)}>Dismiss</button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       ) : activeTab === 'bills' ? (
         <div style={{ display: 'grid', gap: 10 }}>

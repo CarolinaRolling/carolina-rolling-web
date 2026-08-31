@@ -530,6 +530,16 @@ export const enqueueConvert = (scannedEmailId, clientId) =>
   api.post('/email-scanner/convert-queue', { scannedEmailId, ...(clientId ? { clientId } : {}) });
 export const getConvertQueue = () => api.get('/email-scanner/convert-queue');
 export const resolveConvertQueueItem = (id, clientId) => api.post(`/email-scanner/convert-queue/${id}/resolve`, { clientId });
+// Inbound Paperwork (AI scan intake review queue)
+export const uploadInboundPaperwork = (file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post('/inbound-paperwork', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60000 });
+};
+export const getInboundPaperwork = () => api.get('/inbound-paperwork');
+export const confirmInboundPaperwork = (id, body) => api.post(`/inbound-paperwork/${id}/confirm`, body || {});
+export const reclassifyInboundPaperwork = (id, docType) => api.post(`/inbound-paperwork/${id}/reclassify`, { docType });
+export const dismissInboundPaperwork = (id) => api.delete(`/inbound-paperwork/${id}`);
 export const dismissConvertQueueItem = (id) => api.delete(`/email-scanner/convert-queue/${id}`);
 export const unlinkSupplierEmail = (id) => api.post(`/email-scanner/supplier-emails/${id}/unlink`);
 export const getEstimateSupplierEmails = (estimateId) => api.get(`/email-scanner/estimate/${estimateId}/supplier-emails`);
