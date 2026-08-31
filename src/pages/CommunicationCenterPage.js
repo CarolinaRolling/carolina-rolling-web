@@ -566,7 +566,7 @@ export default function CommunicationCenterPage() {
                 ))}
               </select>
               <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'space-between' }}>
-                <button className="btn btn-secondary" onClick={() => { setClientPicker(null); navigate('/clients'); }}>
+                <button className="btn btn-secondary" onClick={() => { setClientPicker(null); navigate('/clients-vendors'); }}>
                   + Create a client first
                 </button>
                 <button className="btn btn-primary" disabled={!clientPickerSel}
