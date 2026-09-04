@@ -2927,12 +2927,17 @@ function EstimateDetailsPage() {
                           ⚠️ Pricing is an estimate based on predicted hours. Actual cost may vary depending on hours required to complete the job.
                         </div>
                       )}
+                      {part.specialInstructions && (
+                        <div style={{ marginTop: 8, padding: '8px 10px', background: '#fffde7', border: '1px solid #fff59d', borderRadius: 6, fontSize: '0.83rem', color: '#5d4037' }}>
+                          📝 <strong>Note:</strong> {part.specialInstructions}
+                        </div>
+                      )}
                     </div>
                   ) : (
                   /* Costs Section - old part types */
                   <div style={{ background: '#f9f9f9', borderRadius: 8, padding: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee' }}>
-                      <span>🔄 Rolling Cost</span>
+                      <span>{part.partType === 'other' ? '🔧 Service Cost' : '🔄 Rolling Cost'}</span>
                       <strong>{formatCurrency(part.rollingCost)}</strong>
                     </div>
                     {/* Additional Services */}
@@ -2970,6 +2975,11 @@ function EstimateDetailsPage() {
                       <strong>Part Total</strong>
                       <strong style={{ color: '#1976d2' }}>{formatCurrency(calc.partTotal)}</strong>
                     </div>
+                    {part.specialInstructions && (
+                      <div style={{ marginTop: 6, padding: '8px 10px', background: '#fffde7', border: '1px solid #fff59d', borderRadius: 6, fontSize: '0.83rem', color: '#5d4037' }}>
+                        📝 <strong>Note:</strong> {part.specialInstructions}
+                      </div>
+                    )}
                   </div>
                   )}
 
@@ -4354,10 +4364,10 @@ function EstimateDetailsPage() {
               )}
             </div>
 
-            <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>🔄 Rolling</h4>
+            <h4 style={{ margin: '20px 0 12px', borderBottom: '1px solid #eee', paddingBottom: 8 }}>{partData.partType === 'other' ? '🔧 Service' : '🔄 Rolling'}</h4>
             <div className="grid grid-2">
               <div className="form-group">
-                <label className="form-label">Rolling Cost *</label>
+                <label className="form-label">{partData.partType === 'other' ? 'Service Cost *' : 'Rolling Cost *'}</label>
                 <input type="number" className="form-input" value={partData.rollingCost || ''}
                   onChange={(e) => setPartData({ ...partData, rollingCost: e.target.value })}
                   step="0.01" placeholder="0.00" />
@@ -4729,7 +4739,7 @@ function EstimateDetailsPage() {
                               <textarea className="form-textarea" value={aiQuoteText} onChange={(e) => setAiQuoteText(e.target.value)}
                                 rows={5} placeholder={'Paste the part list with quantities and print numbers, e.g.\n\n2x  400-4169  bracket\n5x  400-4170  ring, 24" OD\n1x  400-4171  flange'} />
                               <div style={{ color: '#888', fontSize: '0.78rem', marginTop: 4 }}>
-                                Then add all the print PDFs below — the AI matches each one to a part by its number.
+                                Describe parts in plain English (e.g. "add a cone, 1/4&quot; steel, 30&quot; OD one end...") or paste a list. Print PDFs below are optional — the AI matches each to a part by its number.
                               </div>
                             </div>
                           )}
