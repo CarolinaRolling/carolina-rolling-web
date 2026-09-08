@@ -753,6 +753,31 @@ function WorkOrderDetailsPage() {
     setSuccess(msg);
     setTimeout(() => setSuccess(null), 3000);
   };
+
+  // Save the invoice number, handling the "already exported to QuickBooks" confirm gate. If the backend
+  // returns QB_EXPORTED, ask the user (reusing a QB-exported number can duplicate it in QuickBooks); on
+  // yes, re-send with the confirm flag.
+  const saveInvoiceNumber = async () => {
+    try {
+      await updateInvoiceNumber(order.id, invoiceNumInput);
+      setError(null); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput}`); loadOrder();
+    } catch (err) {
+      const e = err.response?.data?.error;
+      if (e?.code === 'QB_EXPORTED') {
+        if (window.confirm(e.message)) {
+          try {
+            await updateInvoiceNumber(order.id, invoiceNumInput, true);
+            setError(null); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput} (reused a QB-exported number — verify QuickBooks)`); loadOrder();
+          } catch (err2) {
+            setError(err2.response?.data?.error?.message || 'Failed to update invoice number');
+          }
+        }
+        // if they cancel, leave the editor open, no error
+      } else {
+        setError(e?.message || 'Failed to update invoice number');
+      }
+    }
+  };
   // Auto-dismiss error toasts after a few seconds (they can also be closed with the × button).
   useEffect(() => {
     if (error) {
@@ -5669,18 +5694,12 @@ function WorkOrderDetailsPage() {
                         <span style={{ fontWeight: 600, color: '#e65100' }}>#</span>
                         <input value={invoiceNumInput} onChange={e => setInvoiceNumInput(e.target.value)}
                           onKeyDown={async e => {
-                            if (e.key === 'Enter') {
-                              try { await updateInvoiceNumber(order.id, invoiceNumInput); setError(null); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput}`); loadOrder(); }
-                              catch (err) { setError(err.response?.data?.error?.message || 'Failed to update invoice number'); }
-                            }
+                            if (e.key === 'Enter') { saveInvoiceNumber(); }
                             if (e.key === 'Escape') setEditingInvoiceNum(false);
                           }}
                           autoFocus
                           style={{ width: 100, fontFamily: 'Courier New, monospace', fontSize: '1rem', fontWeight: 700, padding: '4px 8px', border: '2px solid #e65100', borderRadius: 6, textAlign: 'center' }} />
-                        <button style={{ padding: '4px 8px', background: '#e65100', border: 'none', borderRadius: 4, cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center' }} onClick={async () => {
-                          try { await updateInvoiceNumber(order.id, invoiceNumInput); setError(null); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput}`); loadOrder(); }
-                          catch (err) { setError(err.response?.data?.error?.message || 'Failed to update invoice number'); }
-                        }}><Check size={14} /></button>
+                        <button style={{ padding: '4px 8px', background: '#e65100', border: 'none', borderRadius: 4, cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center' }} onClick={saveInvoiceNumber}><Check size={14} /></button>
                         <button style={{ padding: '4px 8px', background: 'white', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={() => setEditingInvoiceNum(false)}><X size={14} /></button>
                       </div>
                     ) : (
