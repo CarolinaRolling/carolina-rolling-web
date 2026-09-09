@@ -4061,10 +4061,10 @@ function WorkOrderDetailsPage() {
             )}
           </div>
         </div>
-        {/* Backfill banner: shows only when a part is missing its price (older conversions left the
-            pricing columns null even though the material/labor data is present). One click recomputes
-            from the linked estimate. */}
-        {order.estimateNumber && (order.parts || []).some(p => p.partTotal === null || p.partTotal === undefined || p.partTotal === '' || parseFloat(p.partTotal) === 0) && (
+        {/* Backfill banner: shows ONLY when a part is missing its price on the WORK ORDER *and* the linked
+            estimate has a price to copy (backend-computed canBackfillPricing). No point offering it when
+            the estimate is also blank or nothing's missing. */}
+        {order.canBackfillPricing && (
           <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '10px 14px', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: '1.2rem' }}>⚠️</span>
             <div style={{ flex: 1, fontSize: '0.85rem', color: '#8d6e63' }}>
