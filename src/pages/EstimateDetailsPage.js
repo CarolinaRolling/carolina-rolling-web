@@ -1691,15 +1691,19 @@ function EstimateDetailsPage() {
         workOrder = response.data?.data?.workOrder || null;
       } catch (err) {
         // The request failed — but the work order may still have been created (a slow response,
-        // a dropped connection, a proxy timeout). Check before crying failure.
-        try {
-          const check = await getEstimateById(id);
-          const est = check.data?.data;
-          if (est?.workOrderId) {
-            // It DID convert — the response just never made it back to us.
-            workOrder = { id: est.workOrderId, drNumber: null };
-          }
-        } catch (_) { /* couldn't check — fall through to the real error */ }
+        // a dropped connection, a proxy timeout). The server may even still be committing right now,
+        // so re-check a few times with a short delay before reporting failure.
+        for (let attempt = 0; attempt < 4 && !workOrder; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 2500));
+          try {
+            const check = await getEstimateById(id);
+            const est = check.data?.data;
+            if (est?.workOrderId) {
+              // It DID convert — the response just never made it back to us.
+              workOrder = { id: est.workOrderId, drNumber: null };
+            }
+          } catch (_) { /* couldn't check this time — try again */ }
+        }
         if (!workOrder) {
           setError(err.response?.data?.error?.message || 'Failed to convert to work order');
           setConverting(false);

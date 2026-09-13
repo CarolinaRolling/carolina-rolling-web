@@ -333,7 +333,7 @@ export const deleteEstimateFile = (estimateId, fileId) => api.delete(`/estimates
 export const downloadEstimatePDF = (estimateId) => api.get(`/estimates/${estimateId}/pdf`, { responseType: 'blob' });
 
 // Convert Estimate to Work Order
-export const convertEstimateToWorkOrder = (estimateId, data) => api.post(`/estimates/${estimateId}/convert-to-workorder`, data, { timeout: 60000 });
+export const convertEstimateToWorkOrder = (estimateId, data) => api.post(`/estimates/${estimateId}/convert-to-workorder`, data, { timeout: 120000 });
 
 // Duplicate Estimate (for repeat orders)
 export const duplicateEstimate = (estimateId, data) => api.post(`/estimates/${estimateId}/duplicate`, data);
