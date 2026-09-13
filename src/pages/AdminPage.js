@@ -1143,7 +1143,12 @@ function AdminPage({ section = 'users-logs' }) {
               </p>
 
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12 }}>
-
+                {[
+                  ['plate_roll', 'Plate Roll'], ['cone_roll', 'Cone Roll'], ['shaped_plate', 'Shaped Plate'],
+                  ['angle_roll', 'Angle Roll'], ['channel_roll', 'Channel'], ['beam_roll', 'Beam'],
+                  ['pipe_roll', 'Pipes/Tubes/Round'], ['tube_roll', 'Square & Rect Tubing'], ['flat_bar', 'Flat & Square Bar'],
+                  ['press_brake', 'Press Brake'], ['flat_stock', 'Flat Stock'], ['fab_service', 'Fab Service']
+                ].map(([key, label]) => {
                   const active = pricingTab === key;
                   const hasOverride = !!pricingCfg.partTypes?.[key]?.enabled;
                   return (
