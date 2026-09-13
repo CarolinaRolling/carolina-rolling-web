@@ -119,6 +119,7 @@ function WorkOrderDetailsPage() {
   const [showPartModal, setShowPartModal] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderParts, setReorderParts] = useState([]);
+  const [partDrag, setPartDrag] = useState(null); // index being dragged in the reorder modal
   const [showServicesModal, setShowServicesModal] = useState(false);
   const [serviceModalSelected, setServiceModalSelected] = useState(new Set()); // vendor IDs to PO
   const [serviceModalSubmitting, setServiceModalSubmitting] = useState(false);
@@ -6926,31 +6927,26 @@ function WorkOrderDetailsPage() {
                   });
                   return (
                     <div key={part.id}>
-                      <div style={{
+                      <div
+                        draggable
+                        onDragStart={() => setPartDrag(idx)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          if (partDrag === null || partDrag === idx) { setPartDrag(null); return; }
+                          const arr = [...reorderParts];
+                          const [moved] = arr.splice(partDrag, 1);
+                          arr.splice(idx, 0, moved);
+                          setReorderParts(arr);
+                          setPartDrag(null);
+                        }}
+                        onDragEnd={() => setPartDrag(null)}
+                        style={{
                         display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
                         background: '#fff', border: '2px solid #e0e0e0', borderRadius: 8, marginBottom: 4,
+                        cursor: 'grab', opacity: partDrag === idx ? 0.4 : 1,
                         transition: 'all 0.2s ease'
                       }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <button onClick={() => {
-                            if (idx === 0) return;
-                            const arr = [...reorderParts];
-                            [arr[idx], arr[idx - 1]] = [arr[idx - 1], arr[idx]];
-                            setReorderParts(arr);
-                          }} disabled={idx === 0}
-                            style={{ background: 'none', border: '1px solid #ccc', borderRadius: 4, cursor: idx === 0 ? 'default' : 'pointer', padding: '4px 8px', color: idx === 0 ? '#ddd' : '#333', fontSize: '1rem', lineHeight: 1 }}>
-                            ▲
-                          </button>
-                          <button onClick={() => {
-                            if (idx === reorderParts.length - 1) return;
-                            const arr = [...reorderParts];
-                            [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
-                            setReorderParts(arr);
-                          }} disabled={idx === reorderParts.length - 1}
-                            style={{ background: 'none', border: '1px solid #ccc', borderRadius: 4, cursor: idx === reorderParts.length - 1 ? 'default' : 'pointer', padding: '4px 8px', color: idx === reorderParts.length - 1 ? '#ddd' : '#333', fontSize: '1rem', lineHeight: 1 }}>
-                            ▼
-                          </button>
-                        </div>
+                        <span title="Drag to reorder" style={{ color: '#bbb', fontSize: '1.2rem', cursor: 'grab', lineHeight: 1 }}>⠿</span>
                         <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1976d2', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>
                           {idx + 1}
                         </div>
