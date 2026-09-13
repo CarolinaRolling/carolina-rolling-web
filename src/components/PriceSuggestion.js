@@ -9,7 +9,7 @@ import { getPriceSuggestion } from '../services/api';
  *  - leads with the proven-high end of the range, not the median
  *  - labels thin data as thin instead of faking precision
  */
-export default function PriceSuggestion({ partType, material, thickness, width, length, diameter, quantity, clientName, onApply }) {
+export default function PriceSuggestion({ partType, material, thickness, width, length, diameter, outerDiameter, wallThickness, sectionSize, quantity, clientName, onApply }) {
   const [sug, setSug] = useState(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -20,13 +20,13 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
     const t = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await getPriceSuggestion({ partType, material, thickness, width, length, diameter, quantity, clientName });
+        const res = await getPriceSuggestion({ partType, material, thickness, width, length, diameter, outerDiameter, wallThickness, sectionSize, quantity, clientName });
         if (!cancelled) setSug(res.data.data);
       } catch { if (!cancelled) setSug(null); }
       finally { if (!cancelled) setLoading(false); }
     }, 400); // debounce while they're typing dimensions
     return () => { cancelled = true; clearTimeout(t); };
-  }, [partType, material, thickness, width, length, diameter, quantity, clientName]);
+  }, [partType, material, thickness, width, length, diameter, outerDiameter, wallThickness, sectionSize, quantity, clientName]);
 
   if (loading) return <div style={{ fontSize: '0.72rem', color: '#aaa', marginTop: 4 }}>checking past jobs…</div>;
   if (!sug) return null;

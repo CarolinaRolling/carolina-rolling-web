@@ -651,6 +651,7 @@ export default function BeamRollForm({ partData, setPartData, vendorSuggestions,
             <PriceSuggestion
               partType="beam_roll"
               material={partData.material}
+              sectionSize={partData.sectionSize}
               length={partData.length}
               diameter={partData.diameter}
               quantity={partData.quantity}

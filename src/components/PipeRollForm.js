@@ -1374,15 +1374,7 @@ export default function PipeRollForm({ partData, setPartData, vendorSuggestions,
               onFocus={(e) => e.target.select()}
               onChange={(e) => { if (!(completeRings && ringCalc && !ringCalc.error && parseFloat(partData._ringLaborPerUnit) > 0)) setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value }); }}
               placeholder="0.00" />
-            <PriceSuggestion
-              partType="pipe_roll"
-              material={partData.material}
-              thickness={partData.wallThickness}
-              diameter={partData.outerDiameter}
-              length={partData.length}
-              quantity={partData.quantity}
-              onApply={(price) => setPartData({ ...partData, _baseLaborTotal: String(price), laborTotal: String(price) })}
-            />
+
           </div>
         </div>
 
