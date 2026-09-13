@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import PriceSuggestion from './PriceSuggestion';
 import RollToOverride from './RollToOverride';
 import { Upload } from 'lucide-react';
 import { searchVendors, getSettings, createVendor } from '../services/api';
@@ -542,7 +543,15 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
               style={completeRings && ringCalc && !ringCalc.error && parseFloat(partData._ringLaborPerUnit) > 0 ? { background: '#e8f5e9', color: '#2e7d32', cursor: 'not-allowed', fontWeight: 600 } : {}}
               onFocus={(e) => e.target.select()}
               onChange={(e) => { if (!(completeRings && ringCalc && !ringCalc.error && parseFloat(partData._ringLaborPerUnit) > 0)) setPartData({ ...partData, _baseLaborTotal: e.target.value, laborTotal: e.target.value }); }}
-              placeholder="0.00" /></div>
+              placeholder="0.00" />
+            <PriceSuggestion
+              partType="tee_bar"
+              material={partData.material}
+              length={partData.length}
+              diameter={partData.diameter}
+              quantity={partData.quantity}
+              onApply={(price) => setPartData({ ...partData, _baseLaborTotal: String(price), laborTotal: String(price) })}
+            /></div>
         </div>
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.9rem', color: '#555' }}><span>Material Cost (ea)</span><span>${materialCost.toFixed(2)}</span></div>
