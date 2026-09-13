@@ -75,10 +75,14 @@ export default function OperatorAssignments() {
     try { if (newOp) await assignWorkOrder(woId, newOp); else await unassignWorkOrder(woId); await refresh(); }
     catch {} finally { setBusy(false); }
   };
-  const move = async (name, idx, dir) => {
-    const ids = queueFor(name).map(q => q.id); const j = idx + dir;
-    if (j < 0 || j >= ids.length) return;
-    [ids[idx], ids[j]] = [ids[j], ids[idx]];
+  // Drag-to-reorder: dragging job at `from` and dropping on `to` reorders that operator's queue.
+  const [drag, setDrag] = useState(null); // { name, from }
+  const dropReorder = async (name, to) => {
+    if (!drag || drag.name !== name || drag.from === to) { setDrag(null); return; }
+    const ids = queueFor(name).map(q => q.id);
+    const [moved] = ids.splice(drag.from, 1);
+    ids.splice(to, 0, moved);
+    setDrag(null);
     setBusy(true);
     try { await reorderAssignments(name, ids); await refresh(); } catch {} finally { setBusy(false); }
   };
@@ -137,24 +141,42 @@ export default function OperatorAssignments() {
                 {q.length === 0 ? (
                   <div style={{ color: '#bbb', fontSize: '0.82rem', textAlign: 'center', padding: '10px 0' }}>No jobs</div>
                 ) : q.map((job, idx) => (
-                  <div key={job.id} style={{ border: '1px solid #eee', borderRadius: 6, padding: '6px 8px', marginBottom: 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ color: '#999', fontSize: '0.72rem', width: 16 }}>{idx + 1}</span>
-                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                        <span onClick={() => navigate(`/workorders/${job.id}`)} title="Open work order" style={{ fontWeight: 600, color: '#1565c0', cursor: 'pointer', textDecoration: 'underline' }}>DR-{job.dr}</span> <span style={{ color: '#666' }}>{job.clientName}</span>
+                  <React.Fragment key={job.id}>
+                    {/* Divider marking where the tablet's visible Top 5 ends */}
+                    {idx === 5 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0 8px', color: '#e65100', fontSize: '0.68rem', fontWeight: 700 }}>
+                        <div style={{ flex: 1, height: 1, background: '#ffcc80' }} /> UPCOMING (not shown on tablet yet) <div style={{ flex: 1, height: 1, background: '#ffcc80' }} />
                       </div>
-                      <button onClick={() => move(name, idx, -1)} disabled={busy || idx === 0} style={arrowBtn} title="Up">▲</button>
-                      <button onClick={() => move(name, idx, 1)} disabled={busy || idx === q.length - 1} style={arrowBtn} title="Down">▼</button>
+                    )}
+                    <div
+                      draggable={!busy}
+                      onDragStart={() => setDrag({ name, from: idx })}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => dropReorder(name, idx)}
+                      style={{
+                        border: '1px solid #eee', borderRadius: 6, padding: '6px 8px', marginBottom: 6,
+                        cursor: busy ? 'default' : 'grab',
+                        background: idx < 5 ? '#f1f8f1' : '#fff',
+                        borderLeft: idx < 5 ? '3px solid #2e7d32' : '1px solid #eee',
+                        opacity: drag && drag.name === name && drag.from === idx ? 0.4 : 1,
+                      }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: '#bbb', fontSize: '0.9rem', cursor: 'grab' }} title="Drag to reorder">⠿</span>
+                        <span style={{ color: idx < 5 ? '#2e7d32' : '#999', fontSize: '0.72rem', width: 16, fontWeight: idx < 5 ? 700 : 400 }}>{idx + 1}</span>
+                        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                          <span onClick={() => navigate(`/workorders/${job.id}`)} title="Open work order" style={{ fontWeight: 600, color: '#1565c0', cursor: 'pointer', textDecoration: 'underline' }}>DR-{job.dr}</span> <span style={{ color: '#666' }}>{job.clientName}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                        <select defaultValue="" onChange={e => { const v = e.target.value; e.target.value = ''; if (v) reassign(job.id, v); }} disabled={busy}
+                          style={{ flex: 1, padding: '3px 4px', borderRadius: 5, border: '1px solid #ccc', fontSize: '0.72rem', cursor: 'pointer' }}>
+                          <option value="">Move to…</option>
+                          {others.map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                        <button onClick={() => reassign(job.id, '')} disabled={busy} style={{ ...arrowBtn, width: 24, color: '#c62828' }} title="Unassign">✕</button>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                      <select defaultValue="" onChange={e => { const v = e.target.value; e.target.value = ''; if (v) reassign(job.id, v); }} disabled={busy}
-                        style={{ flex: 1, padding: '3px 4px', borderRadius: 5, border: '1px solid #ccc', fontSize: '0.72rem', cursor: 'pointer' }}>
-                        <option value="">Move to…</option>
-                        {others.map(n => <option key={n} value={n}>{n}</option>)}
-                      </select>
-                      <button onClick={() => reassign(job.id, '')} disabled={busy} style={{ ...arrowBtn, width: 24, color: '#c62828' }} title="Unassign">✕</button>
-                    </div>
-                  </div>
+                  </React.Fragment>
                 ))}
                 {/* Tasks for this operator */}
                 <div style={{ borderTop: '1px dashed #e0e0e0', marginTop: 6, paddingTop: 6 }}>
