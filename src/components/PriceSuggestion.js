@@ -9,7 +9,21 @@ import { getPriceSuggestion } from '../services/api';
  *  - leads with the proven-high end of the range, not the median
  *  - labels thin data as thin instead of faking precision
  */
+
 export default function PriceSuggestion({ partType, material, thickness, width, length, diameter, outerDiameter, wallThickness, sectionSize, quantity, clientName, onApply }) {
+  // Describe a comparable's size the way its SHAPE reads (not always plate thickness x width).
+  const describeSize = (s, fam) => {
+    const dia = s.diameter ? ` \u00d7 ${s.diameter}"\u2300` : '';
+    const wall = s.wallThickness || s.rawThickness;
+    if (fam === 'round') {
+      return (`${s.outerDiameter ? s.outerDiameter + '" OD' : ''}${wall ? ` \u00d7 ${wall}" wall` : ''}${dia}`).trim() || '\u2014';
+    }
+    if (fam === 'tube' || fam === 'angle' || fam === 'channel' || fam === 'beam' || fam === 'bar') {
+      return (`${s.sectionSize || ''}${wall ? ` \u00d7 ${wall}" wall` : ''}${dia}`).trim() || '\u2014';
+    }
+    return (`${s.rawThickness || (s.thickness ? s.thickness + '"' : '')}${s.rawWidth ? ` \u00d7 ${s.rawWidth}"w` : ''}${dia}`).trim() || '\u2014';
+  };
+
   const [sug, setSug] = useState(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -52,7 +66,7 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
       <>
         {craneWarning}
         <div style={{ marginTop: 5, fontSize: '0.72rem', color: '#999' }}>
-          No comparable won jobs yet{sug.widthBand ? ` at ${sug.widthBand} width` : ''}.
+          No comparable won jobs yet{(sug.shapeFamily==='plate'||!sug.shapeFamily) && sug.widthBand ? ` at ${sug.widthBand} width` : ''}.
         </div>
       </>
     );
@@ -98,9 +112,11 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
       {open && (
         <div style={{ marginTop: 6, background: '#fafafa', border: '1px solid #eee', borderRadius: 8, padding: 10, fontSize: '0.75rem', color: '#555' }}>
           <div style={{ marginBottom: 6 }}>
-            Priced at <strong>{sug.billableWidth}" band width</strong> ({sug.widthBand}) — the machine setup is the same
-            across the band, so you charge band capacity, not literal inches.
-            That's <strong>{sug.billableWeightLbs?.toLocaleString()} lb</strong> billable
+            {(sug.shapeFamily === 'plate' || !sug.shapeFamily) ? (
+              <>Priced at <strong>{sug.billableWidth}" band width</strong> ({sug.widthBand}) — the machine setup is the same across the band, so you charge band capacity, not literal inches. That's <strong>{sug.billableWeightLbs?.toLocaleString()} lb</strong> billable</>
+            ) : (
+              <>Priced by weight for this size — <strong>{sug.billableWeightLbs?.toLocaleString()} lb</strong> billable</>
+            )}
             {sug.estWeightLbs != null && sug.estWeightLbs !== sug.billableWeightLbs && <> (actual steel: {sug.estWeightLbs.toLocaleString()} lb)</>},
             at <strong>${sug.ratePerLb}/lb</strong> from comparable won jobs.
           </div>
@@ -126,7 +142,7 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
             )}
           </div>
           <div style={{ color: '#777', marginBottom: 6 }}>
-            Based only on quotes you actually <strong>won</strong>{sug.widthBand ? ` at ${sug.widthBand} width` : ''} — recent jobs weighted more heavily.
+            Based only on quotes you actually <strong>won</strong>{(sug.shapeFamily==='plate'||!sug.shapeFamily) && sug.widthBand ? ` at ${sug.widthBand} width` : ''} — recent jobs weighted more heavily.
             {sug.estWeightLbs != null && <> Est. weight <strong>{sug.estWeightLbs.toLocaleString()} lb</strong>/pc.</>}
           </div>
           {sug.samples?.length > 0 && (
@@ -138,7 +154,7 @@ export default function PriceSuggestion({ partType, material, thickness, width, 
                     <td style={{ padding: '3px 4px', color: '#999' }}>×{s.qty || 1}</td>
                     <td style={{ padding: '3px 4px', color: '#777' }}>{s.material || '—'}</td>
                     <td style={{ padding: '3px 4px', color: '#777' }}>
-                      {s.thickness ? `${s.thickness}"` : ''}{s.width ? ` × ${s.width}"w` : ''}{s.diameter ? ` × ${s.diameter}"⌀` : ''}
+                      {describeSize(s, sug.shapeFamily)}
                     </td>
                     <td style={{ padding: '3px 4px', color: '#999' }}>{s.weight?.toLocaleString()} lb</td>
                     <td style={{ padding: '3px 4px', color: '#1565c0' }}>${s.rate}/lb</td>
