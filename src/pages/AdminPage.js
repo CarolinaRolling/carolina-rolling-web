@@ -7,7 +7,7 @@ import {
   Shield, User, Clock, ChevronLeft, ChevronRight, Key, Check, AlertTriangle, RefreshCw,
   Mail, Send, DollarSign
 } from 'lucide-react';
-import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, scanDraftPricing, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings, getAvailableModels, getPricingConfig, updatePricingConfig, getPricingWorksheet, submitPricingWorksheet, getPressBrakeConfig, savePressBrakeConfig, getAiUsage } from '../services/api';
+import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getScheduleEmailSettings, updateScheduleEmailSettings, sendScheduleEmailNow, getSettings, updateSettings, getPrinterConfig, updatePrinterConfig, startBatchVerification, getBatchStatus, downloadResaleReport, getApiKeys, getApiKeySetupQR, createApiKey, updateApiKey, revokeApiKey, deleteApiKeyPermanent, getOperatorSignatures, setOperatorSignature, getApprovedIPs, updateApprovedIPs, setup2FA, verify2FA, disable2FA, get2FAStatus, getScrapConfig, updateScrapConfig, getScrapLog, requestScrapPickup, confirmScrapPickup, getEmailScannerStatus, getEmailScannerAccounts, startGmailOAuth, disconnectGmailAccount, toggleGmailAccount, triggerEmailScan, scanDraftPricing, getEmailScanHistory, getMonitoredClients, retryScannedEmail, deleteScannedEmail, getGeneralParsingNotes, updateGeneralParsingNotes, getAiModelSettings, updateAiModelSettings, getAvailableModels, getPricingConfig, updatePricingConfig, getPricingWorksheet, submitPricingWorksheet, getPressBrakeConfig, savePressBrakeConfig } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import SectionSizesPage from './SectionSizesPage';
 import SettingsPage from './SettingsPage';
@@ -129,8 +129,6 @@ function AdminPage({ section = 'users-logs' }) {
   const [scannerStatus, setScannerStatus] = useState(null);
   const [aiModels, setAiModelsState] = useState({ parsingModel: '', triageModel: '', defaults: {} });
   const [aiModelsSaving, setAiModelsSaving] = useState(false);
-  const [aiUsage, setAiUsage] = useState(null);
-  const [aiUsageError, setAiUsageError] = useState(null);
   const [pricingCfg, setPricingCfg] = useState({ newClientUpliftPct: 0, targetGrowthPct: 0, minLaborCharge: 150, partTypes: {} });
   const [pricingTab, setPricingTab] = useState('plate_roll');
   // Press brake uses a bend-based formula, not the weight-based curve — its own config blob.
@@ -179,15 +177,6 @@ function AdminPage({ section = 'users-logs' }) {
     getPressBrakeConfig().then(pb => setPbConfig(pb.data.data)).catch(() => {});
   }, [section]);
 
-  useEffect(() => {
-    let alive = true;
-    const load = () => getAiUsage()
-      .then(r => { if (alive) { setAiUsage(r.data.data); setAiUsageError(null); } })
-      .catch(err => { if (alive) setAiUsageError((err.response && err.response.data && err.response.data.error && err.response.data.error.message) || err.message || 'Could not load AI usage.'); });
-    load();
-    const t = setInterval(load, 60000);
-    return () => { alive = false; clearInterval(t); };
-  }, []);
 
   useEffect(() => {
     if (!isAdmin()) {
@@ -3049,47 +3038,6 @@ function AdminPage({ section = 'users-logs' }) {
               Anthropic API key not configured. Set <code>ANTHROPIC_API_KEY</code> environment variable for AI email parsing.
             </div>
           )}
-
-          {/* AI Usage — which feature spends what */}
-          <div className="card" style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-              <h3 style={{ margin: 0 }}>📊 AI Token Usage (today) <span style={{ fontSize: '0.6rem', fontWeight: 400, color: '#cfd8dc' }}>v2</span></h3>
-              {aiUsage ? <span style={{ fontSize: '0.72rem', color: '#90a4ae' }}>{aiUsage.date}</span> : null}
-            </div>
-            <p style={{ color: '#666', fontSize: '0.8rem', marginTop: 0 }}>What each AI feature is spending today, so you can judge if it's worth the cost. Calls stop automatically once the daily budget is hit.</p>
-            {aiUsage ? (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: 4 }}>
-                  <span><strong>{(aiUsage.totalTokens || 0).toLocaleString()}</strong> / {(aiUsage.budget || 0).toLocaleString()} tokens · {aiUsage.calls || 0} calls</span>
-                  <span style={{ fontWeight: 700, color: (aiUsage.percentUsed || 0) >= 80 ? '#c62828' : (aiUsage.percentUsed || 0) >= 50 ? '#e08a1e' : '#2e7d32' }}>{aiUsage.percentUsed || 0}% of budget</span>
-                </div>
-                <div style={{ background: '#eceff1', borderRadius: 6, height: 10, overflow: 'hidden', marginBottom: 12 }}>
-                  <div style={{ width: Math.min(100, aiUsage.percentUsed || 0) + '%', height: '100%', background: (aiUsage.percentUsed || 0) >= 80 ? '#c62828' : (aiUsage.percentUsed || 0) >= 50 ? '#e08a1e' : '#2e7d32' }} />
-                </div>
-                {aiUsage.blockedCalls > 0 ? (
-                  <div style={{ color: '#c62828', fontSize: '0.78rem', marginBottom: 8 }}>⚠ {aiUsage.blockedCalls} call(s) blocked today — daily budget reached. Raise AI_DAILY_TOKEN_BUDGET if this is normal volume.</div>
-                ) : null}
-                {(aiUsage.features && aiUsage.features.length > 0) ? (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                    <tbody>
-                      {aiUsage.features.map((f, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                          <td style={{ padding: '4px 6px', fontWeight: i === 0 ? 700 : 400 }}>{({ 'commCenter.extractBill': 'Bill reader (PDF)', 'commCenter.classify': 'Email classifier', 'inboundPaperwork.classify': 'Paperwork scanner (PDF)', 'estimates.aiParse': 'Estimate AI parse', 'emailScanner.parse': 'Email → estimate parser' })[f.label] || f.label}</td>
-                          <td style={{ padding: '4px 6px', textAlign: 'right' }}>{f.totalTokens.toLocaleString()}</td>
-                          <td style={{ padding: '4px 6px', textAlign: 'right', color: f.percentOfDay >= 50 ? '#c62828' : '#607d8b' }}>{f.percentOfDay}%</td>
-                          <td style={{ padding: '4px 6px', textAlign: 'right' }}>{f.calls} calls</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div style={{ color: '#aaa', fontSize: '0.85rem' }}>No AI calls yet today.</div>
-                )}
-              </div>
-            ) : (
-              <div style={{ color: aiUsageError ? '#c62828' : '#aaa', fontSize: '0.85rem' }}>{aiUsageError ? ('Couldn\'t load AI usage: ' + aiUsageError) : 'Loading…'}</div>
-            )}
-          </div>
 
           {/* Connected Gmail Accounts */}
           <div className="card" style={{ marginBottom: 20 }}>
