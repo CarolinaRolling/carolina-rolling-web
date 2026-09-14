@@ -720,14 +720,16 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr', gap: 12 }}>
             <div className="form-group"><label className="form-label">Material Cost (each)</label><input type="number" step="any" className="form-input" value={partData.materialTotal || ''} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialTotal: e.target.value })); }} placeholder="0.00" /></div>
             <div className="form-group"><label className="form-label">Markup %</label><input type="number" step="1" className="form-input" value={partData.materialMarkupPercent ?? 20} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { materialMarkupPercent: e.target.value })); }} placeholder="20" /></div>
-            <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input" value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { _baseLaborTotal: e.target.value, laborTotal: e.target.value })); }} placeholder="0.00" /></div>
+            <div className="form-group"><label className="form-label">Labor (each)</label><input type="number" step="any" className="form-input" value={partData._baseLaborTotal !== undefined && partData._baseLaborTotal !== null && partData._baseLaborTotal !== '' ? partData._baseLaborTotal : (partData.laborTotal || '')} onFocus={(e) => e.target.select()} onChange={function(e) { setPartData(Object.assign({}, partData, { _baseLaborTotal: e.target.value, laborTotal: e.target.value })); }} placeholder="0.00" />
             <PriceSuggestion
               partType="cone_roll"
               material={partData.material}
               thickness={partData.thickness}
+              length={partData.length}
+              diameter={partData.diameter}
               quantity={partData.quantity}
               onApply={(price) => setPartData({ ...partData, _baseLaborTotal: String(price), laborTotal: String(price) })}
-            />
+            /></div>
           </div>
         )}
         <div style={{ background: '#f0f7ff', padding: 12, borderRadius: 8, marginTop: 12, border: '1px solid #bbdefb' }}>

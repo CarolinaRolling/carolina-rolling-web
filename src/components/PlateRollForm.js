@@ -793,9 +793,8 @@ export default function PlateRollForm({ partData, setPartData, vendorSuggestions
               thickness={partData.thickness}
               width={partData.width}
               length={partData.length}
+              diameter={partData.diameter}
               quantity={partData.quantity}
-              diameter={partData.diameter || partData.innerDiameter || partData.outerDiameter}
-              clientName={clientName}
               onApply={(price) => setPartData({ ...partData, _baseLaborTotal: String(price), laborTotal: String(price) })}
             />
           </div>

@@ -909,9 +909,9 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
               partType="tube_roll"
               material={partData.material}
               sectionSize={partData.sectionSize || partData._tubeSize || partData._customTubeSize}
+              thickness={partData.thickness}
               wallThickness={partData.wallThickness || partData.thickness}
               length={partData.length}
-              diameter={partData.diameter}
               quantity={partData.quantity}
               onApply={(price) => setPartData({ ...partData, _baseLaborTotal: String(price), laborTotal: String(price) })}
             />

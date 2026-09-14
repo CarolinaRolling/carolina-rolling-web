@@ -547,6 +547,8 @@ export default function TeeBarRollForm({ partData, setPartData, vendorSuggestion
             <PriceSuggestion
               partType="tee_bar"
               material={partData.material}
+              sectionSize={partData.sectionSize || partData._teeSize}
+              thickness={partData.thickness}
               length={partData.length}
               diameter={partData.diameter}
               quantity={partData.quantity}

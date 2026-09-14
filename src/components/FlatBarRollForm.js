@@ -786,6 +786,9 @@ export default function FlatBarRollForm({ partData, setPartData, vendorSuggestio
             <PriceSuggestion
               partType="flat_bar"
               material={partData.material}
+              sectionSize={partData.sectionSize || partData._barSize}
+              thickness={partData.thickness}
+              width={partData.width}
               length={partData.length}
               diameter={partData.diameter}
               quantity={partData.quantity}

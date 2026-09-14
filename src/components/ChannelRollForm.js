@@ -635,7 +635,8 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
             <PriceSuggestion
               partType="channel_roll"
               material={partData.material}
-              sectionSize={partData.sectionSize}
+              sectionSize={partData.sectionSize || partData._channelSize}
+              thickness={partData.thickness}
               length={partData.length}
               diameter={partData.diameter}
               quantity={partData.quantity}

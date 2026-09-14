@@ -1180,12 +1180,14 @@ export default function AngleRollForm({ partData, setPartData, vendorSuggestions
             <PriceSuggestion
               partType="angle_roll"
               material={partData.material}
+              sectionSize={partData.sectionSize || partData._angleSize || partData._customAngleSize}
               thickness={partData.thickness}
               length={partData.length}
               diameter={partData.diameter}
               quantity={partData.quantity}
               onApply={(price) => setPartData({ ...partData, _baseLaborTotal: String(price), laborTotal: String(price) })}
             />
+
           </div>
         </div>
 
