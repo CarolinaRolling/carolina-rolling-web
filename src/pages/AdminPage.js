@@ -3053,7 +3053,7 @@ function AdminPage({ section = 'users-logs' }) {
           {/* AI Usage — which feature spends what */}
           <div className="card" style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-              <h3 style={{ margin: 0 }}>📊 AI Token Usage (today)</h3>
+              <h3 style={{ margin: 0 }}>📊 AI Token Usage (today) <span style={{ fontSize: '0.6rem', fontWeight: 400, color: '#cfd8dc' }}>v2</span></h3>
               {aiUsage ? <span style={{ fontSize: '0.72rem', color: '#90a4ae' }}>{aiUsage.date}</span> : null}
             </div>
             <p style={{ color: '#666', fontSize: '0.8rem', marginTop: 0 }}>What each AI feature is spending today, so you can judge if it's worth the cost. Calls stop automatically once the daily budget is hit.</p>
