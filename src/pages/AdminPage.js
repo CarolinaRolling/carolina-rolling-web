@@ -130,6 +130,7 @@ function AdminPage({ section = 'users-logs' }) {
   const [aiModels, setAiModelsState] = useState({ parsingModel: '', triageModel: '', defaults: {} });
   const [aiModelsSaving, setAiModelsSaving] = useState(false);
   const [aiUsage, setAiUsage] = useState(null);
+  const [aiUsageError, setAiUsageError] = useState(null);
   const [pricingCfg, setPricingCfg] = useState({ newClientUpliftPct: 0, targetGrowthPct: 0, minLaborCharge: 150, partTypes: {} });
   const [pricingTab, setPricingTab] = useState('plate_roll');
   // Press brake uses a bend-based formula, not the weight-based curve — its own config blob.
@@ -180,7 +181,9 @@ function AdminPage({ section = 'users-logs' }) {
 
   useEffect(() => {
     let alive = true;
-    const load = () => getAiUsage().then(r => { if (alive) setAiUsage(r.data.data); }).catch(() => {});
+    const load = () => getAiUsage()
+      .then(r => { if (alive) { setAiUsage(r.data.data); setAiUsageError(null); } })
+      .catch(err => { if (alive) setAiUsageError((err.response && err.response.data && err.response.data.error && err.response.data.error.message) || err.message || 'Could not load AI usage.'); });
     load();
     const t = setInterval(load, 60000);
     return () => { alive = false; clearInterval(t); };
@@ -3084,7 +3087,7 @@ function AdminPage({ section = 'users-logs' }) {
                 )}
               </div>
             ) : (
-              <div style={{ color: '#aaa', fontSize: '0.85rem' }}>Loading…</div>
+              <div style={{ color: aiUsageError ? '#c62828' : '#aaa', fontSize: '0.85rem' }}>{aiUsageError ? ('Couldn\'t load AI usage: ' + aiUsageError) : 'Loading…'}</div>
             )}
           </div>
 
