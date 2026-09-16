@@ -3,11 +3,31 @@ import React from 'react';
 /**
  * Scans internal-notes text for Gmail links (dropped in when the AI captures RFQ pricing / supplier
  * quotes) and renders a clickable "Open in Gmail" button for each — no more copying URLs by hand.
+ * Each button is labeled from the NEAREST note header above its link, so two different vendors get
+ * two different names.
  */
 export default function NoteEmailLinks({ notes }) {
   if (!notes || typeof notes !== 'string') return null;
 
+  const urlRegex = /https:\/\/mail\.google\.com\/mail\/[^\s]+/g;
+  const links = [];
+  let m;
+  while ((m = urlRegex.exec(notes)) !== null) {
+    const url = m[0].replace(/[)\].,]+$/, '');
+    const before = notes.slice(0, m.index);
+    let label = 'Open email in Gmail';
 
+    // Find the NEAREST header line above THIS link (scan upward, closest first).
+    const linesAbove = before.split('\n');
+    for (let i = linesAbove.length - 1; i >= 0; i--) {
+      const line = linesAbove[i];
+      const sup = line.match(/\*\*\*Supplier quote:\s*([^(*]+?)\s*\(/i);
+      if (sup) { label = `Open ${sup[1].trim()}'s quote email`; break; }
+      if (/\*\*\*Pricing you quoted/i.test(line)) { label = 'Open the pricing email you sent'; break; }
+    }
+
+    if (!links.some((l) => l.url === url)) links.push({ url, label });
+  }
 
   if (links.length === 0) return null;
 
