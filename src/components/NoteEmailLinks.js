@@ -7,23 +7,7 @@ import React from 'react';
 export default function NoteEmailLinks({ notes }) {
   if (!notes || typeof notes !== 'string') return null;
 
-  const urlRegex = /https:\/\/mail\.google\.com\/mail\/[^\s]+/g;
-  const links = [];
-  let m;
-  while ((m = urlRegex.exec(notes)) !== null) {
-    const url = m[0].replace(/[)\].,]+$/, '');
-    const before = notes.slice(0, m.index);
-    let label = 'Open email in Gmail';
-    const supMatch = before.match(/\*\*\*Supplier quote:\s*([^(*]+?)\s*\(/i);
-    const lastSup = before.lastIndexOf('***Supplier quote:');
-    const lastQuote = before.lastIndexOf('***Pricing you quoted');
-    if (lastQuote > lastSup) {
-      label = 'Open the pricing email you sent';
-    } else if (supMatch) {
-      label = `Open ${supMatch[1].trim()}'s quote email`;
-    }
-    if (!links.some(l => l.url === url)) links.push({ url, label });
-  }
+
 
   if (links.length === 0) return null;
 
