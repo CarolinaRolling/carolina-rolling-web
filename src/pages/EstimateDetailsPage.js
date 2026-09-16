@@ -5020,8 +5020,20 @@ function EstimateDetailsPage() {
                         }
                       }
                       showMessage(`Added ${aiParseResults.parts.length} parts from AI${attachedCount ? ` · ${attachedCount} print(s) attached` : ''}`);
-                      if (aiParseResults.notes && !formData.projectDescription) {
-                        setFormData(prev => ({ ...prev, projectDescription: aiParseResults.notes }));
+                      // Put the AI's notes where the estimator looks for them: internal notes.
+                      // (Document "notes" + the AI's own aiNotes are appended; projectDescription only
+                      // gets filled if it's still empty, to preserve the old behavior.)
+                      {
+                        const aiNoteParts = [aiParseResults.notes, aiParseResults.aiNotes].filter(Boolean);
+                        if (aiNoteParts.length) {
+                          const block = aiNoteParts.join('\n\n');
+                          setFormData(prev => ({
+                            ...prev,
+                            internalNotes: prev.internalNotes ? (prev.internalNotes + '\n\n' + block) : block,
+                            projectDescription: prev.projectDescription || (aiParseResults.notes || '')
+                          }));
+                          try { await updateEstimate(id, { internalNotes: (formData.internalNotes ? formData.internalNotes + '\n\n' : '') + block }); } catch (e) {}
+                        }
                       }
                       setShowAiParseModal(false);
                       await loadEstimate();
