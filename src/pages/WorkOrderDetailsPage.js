@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import LinkedSupplierEmails from '../components/LinkedSupplierEmails';
+import NoteEmailLinks from '../components/NoteEmailLinks';
 import { 
   ArrowLeft, Edit, Save, X, Trash2, Plus, Package, FileText, User, 
   Calendar, Printer, Check, Upload, Eye, Tag, Truck, MapPin, Clock, File, ShoppingCart, Download, Link2, Unlink, RefreshCw
@@ -3715,6 +3716,7 @@ function WorkOrderDetailsPage() {
                 onChange={(e) => setInternalNotesDraft(e.target.value)}
                 rows={6} style={{ background: 'white', resize: 'vertical', minHeight: 110, width: '100%', fontSize: '0.9rem', lineHeight: 1.5 }}
                 placeholder="Internal notes about this work order (carried over from the estimate)..." />
+              <NoteEmailLinks notes={internalNotesDraft} />
             </div>
             {order.estimateId && <LinkedSupplierEmails estimateId={order.estimateId} />}
             {/* Collapsible accounting contact — for billing reference */}

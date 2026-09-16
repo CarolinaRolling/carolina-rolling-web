@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import LinkedSupplierEmails from '../components/LinkedSupplierEmails';
+import NoteEmailLinks from '../components/NoteEmailLinks';
 import { ArrowLeft, Plus, Trash2, Save, Upload, Eye, X, Printer, Check, FileDown, Package, FileText, Edit } from 'lucide-react';
 import {
   getEstimateById, createEstimate, updateEstimate,
@@ -10,7 +11,7 @@ import {
   uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile, toggleEstimateFilePortal,
   searchClients, searchVendors, getSettings, resetEstimateConversion,
   getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
-  sendVendorRfq, getVendorContacts, getVendorById, aiParseDocument, aiParseDocuments, aiParseEmail, attachAiPrint, getAiParseStatus,
+  sendVendorRfq, getVendorContacts, getVendorById, getEmailAccounts, aiParseDocument, aiParseDocuments, aiParseEmail, attachAiPrint, getAiParseStatus,
   addEstimateShipmentCharge, updateEstimateShipmentCharge, deleteEstimateShipmentCharge, getEstimateShipmentCharges,
   deleteEstimate
 } from '../services/api';
@@ -107,6 +108,8 @@ function EstimateDetailsPage() {
   const [rfqSelectedEmail, setRfqSelectedEmail] = useState('');
   const [rfqSelectedParts, setRfqSelectedParts] = useState([]);
   const [rfqSending, setRfqSending] = useState(false);
+  const [rfqAccounts, setRfqAccounts] = useState([]);
+  const [rfqFromAccountId, setRfqFromAccountId] = useState('');
   const [showAiParseModal, setShowAiParseModal] = useState(false);
   const [aiParsing, setAiParsing] = useState(false);
   const [aiParseResults, setAiParseResults] = useState(null);
@@ -2641,6 +2644,7 @@ function EstimateDetailsPage() {
                 onChange={(e) => setFormData({ ...formData, internalNotes: e.target.value })}
                 rows={8} style={{ background: 'white', resize: 'vertical', minHeight: 140, fontSize: '0.9rem', lineHeight: 1.5 }}
                 placeholder="Internal notes about this estimate..." />
+              <NoteEmailLinks notes={formData.internalNotes} />
               <LinkedSupplierEmails estimateId={id} />
             </div>
           )}
@@ -3353,6 +3357,12 @@ function EstimateDetailsPage() {
                                 try { const vRes = await searchVendors(vendorName); setRfqVendorResults(vRes.data.data || []); } catch {}
                               }
                               setShowRfqModal(true);
+                              try {
+                                const aRes = await getEmailAccounts();
+                                const accts = (aRes.data.data || []).filter(a => a.isActive);
+                                setRfqAccounts(accts);
+                                if (accts.length) setRfqFromAccountId(prev => prev || accts[0].id);
+                              } catch {}
                             }} style={{ background: '#7B1FA2', color: 'white', fontSize: '0.8rem' }}>
                               📤 Send RFQ
                             </button>
@@ -5152,6 +5162,15 @@ function EstimateDetailsPage() {
               )}
             </div>
             <div className="modal-footer">
+              {rfqAccounts.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 'auto' }}>
+                  <label style={{ fontSize: '0.82rem', color: '#555', fontWeight: 600 }}>Send from:</label>
+                  <select value={rfqFromAccountId} onChange={(e) => setRfqFromAccountId(e.target.value)}
+                    style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #ccc', fontSize: '0.82rem' }}>
+                    {rfqAccounts.map(a => (<option key={a.id} value={a.id}>{a.email}</option>))}
+                  </select>
+                </div>
+              )}
               <button className="btn btn-secondary" onClick={() => setShowRfqModal(false)}>Cancel</button>
               <button className="btn" disabled={!rfqSelectedVendor || !rfqSelectedEmail || rfqSelectedParts.length === 0 || rfqSending}
                 onClick={async () => {
@@ -5161,7 +5180,8 @@ function EstimateDetailsPage() {
                       vendorId: rfqSelectedVendor.id,
                       contactEmail: rfqSelectedEmail,
                       contactName: (rfqContacts.find(c => c.email === rfqSelectedEmail) || {}).name || '',
-                      partIds: rfqSelectedParts
+                      partIds: rfqSelectedParts,
+                      gmailAccountId: rfqFromAccountId || undefined
                     });
                     const draftUrl = res.data.data?.draftUrl;
                     setShowRfqModal(false);
