@@ -157,6 +157,23 @@ const InvoiceCenterPage = ({ embedded = false }) => {
     finally { setSaving(false); }
   };
 
+  // Bulk IIF export from the Invoiced tab — exports every invoice currently shown (respects the search filter).
+  const handleExportInvoicedIIF = async () => {
+    const ids = filteredHistory.map(wo => wo.id);
+    if (ids.length === 0) { setError('No invoiced work orders to export.'); return; }
+    try {
+      setSaving(true);
+      const response = await exportBatchIIF(ids);
+      const iifContent = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+      const blob = new Blob([iifContent], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url;
+      a.download = `quickbooks-invoiced-${new Date().toISOString().split('T')[0]}.iif`;
+      document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+      setSuccess(`Exported ${ids.length} invoice${ids.length !== 1 ? 's' : ''} to IIF`);
+    } catch (err) { setError(err.response?.data?.error?.message || 'Failed to export IIF'); }
+    finally { setSaving(false); }
+  };
+
   const handleMarkSent = async () => {
     try {
       setSaving(true);
@@ -302,6 +319,18 @@ const InvoiceCenterPage = ({ embedded = false }) => {
       /* ========== INVOICED TAB ========== */
       (
         <div>
+          {filteredHistory.length > 0 && (
+            <div style={{ background: '#E8F5E9', border: '2px solid #2E7D32', borderRadius: 8, padding: '12px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontWeight: 600, color: '#2E7D32' }}>
+                {search ? `${filteredHistory.length} matching invoice${filteredHistory.length !== 1 ? 's' : ''}` : `${filteredHistory.length} invoice${filteredHistory.length !== 1 ? 's' : ''}`}
+                {search ? ' (filtered)' : ''}
+              </span>
+              <button className="btn" onClick={handleExportInvoicedIIF} disabled={saving}
+                style={{ background: '#2E7D32', color: 'white', border: 'none', fontWeight: 700, padding: '10px 20px' }}>
+                {saving ? 'Exporting…' : `Bulk IIF Export (${filteredHistory.length})`}
+              </button>
+            </div>
+          )}
           {filteredHistory.length === 0 && skipped.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: 40, color: '#999' }}>No invoices yet.</div>
           ) : (
