@@ -167,23 +167,30 @@ const InvoiceCenterPage = ({ embedded = false }) => {
   };
   const invSelectedIds = () => filteredHistory.filter(wo => selectedInv.has(wo.id)).map(wo => wo.id);
 
-  // Export the SELECTED invoices to an IIF file (and mark them entered).
+  // Export the SELECTED invoices — downloads the IIF AND a reconciliation checklist PDF (invoice #, client,
+  // amount) to confirm the export matches, then marks them exported so they can't be entered twice.
   const handleExportSelectedIIF = async () => {
     const ids = invSelectedIds();
     if (ids.length === 0) { setError('Select at least one invoice to export.'); return; }
     try {
       setSaving(true);
-      const response = await exportBatchIIF(ids);
-      const iifContent = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-      const blob = new Blob([iifContent], { type: 'text/plain' });
-      const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url;
-      a.download = `quickbooks-invoices-${new Date().toISOString().split('T')[0]}.iif`;
-      document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
-      // Mark the exported ones as entered so they show as done.
-      try { await markInvoicesEntered(ids); } catch (e) {}
-      setSuccess(`Exported ${ids.length} invoice${ids.length !== 1 ? 's' : ''} to IIF`);
+      const response = await exportBatchWithReconciliation(ids);
+      const { iifContent, iifFilename, reconcPdf, reconcFilename } = response.data.data;
+      // Download the IIF
+      const iifBlob = new Blob([Uint8Array.from(atob(iifContent), c => c.charCodeAt(0))], { type: 'text/plain' });
+      const iifUrl = window.URL.createObjectURL(iifBlob);
+      const iifLink = document.createElement('a'); iifLink.href = iifUrl; iifLink.download = iifFilename;
+      document.body.appendChild(iifLink); iifLink.click(); window.URL.revokeObjectURL(iifUrl); iifLink.remove();
+      // Download the reconciliation checklist PDF
+      setTimeout(() => {
+        const pdfBlob = new Blob([Uint8Array.from(atob(reconcPdf), c => c.charCodeAt(0))], { type: 'application/pdf' });
+        const pdfUrl = window.URL.createObjectURL(pdfBlob);
+        const pdfLink = document.createElement('a'); pdfLink.href = pdfUrl; pdfLink.download = reconcFilename;
+        document.body.appendChild(pdfLink); pdfLink.click(); window.URL.revokeObjectURL(pdfUrl); pdfLink.remove();
+      }, 500);
+      setSuccess(`Exported ${ids.length} invoice${ids.length !== 1 ? 's' : ''} — IIF + reconciliation checklist downloaded. These are now marked exported.`);
       setSelectedInv(new Set()); loadData();
-    } catch (err) { setError(err.response?.data?.error?.message || 'Failed to export IIF'); }
+    } catch (err) { setError(err.response?.data?.error?.message || 'Failed to export'); }
     finally { setSaving(false); }
   };
 
@@ -364,7 +371,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn" onClick={handleExportSelectedIIF} disabled={saving || selectedInv.size === 0}
                   style={{ background: selectedInv.size ? '#2E7D32' : '#bbb', color: 'white', border: 'none', fontWeight: 700, padding: '10px 18px' }}>
-                  {saving ? 'Working…' : `Export Selected to IIF (${selectedInv.size})`}
+                  {saving ? 'Working…' : `Export to QB + Checklist (${selectedInv.size})`}
                 </button>
                 <button className="btn" onClick={handleMarkSelectedEntered} disabled={saving || selectedInv.size === 0}
                   style={{ background: selectedInv.size ? '#1565C0' : '#bbb', color: 'white', border: 'none', fontWeight: 700, padding: '10px 18px' }}>
