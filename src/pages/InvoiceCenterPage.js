@@ -163,7 +163,8 @@ const InvoiceCenterPage = ({ embedded = false }) => {
     setSelectedInv(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
   const toggleInvSelectAll = () => {
-    setSelectedInv(prev => prev.size === filteredHistory.length ? new Set() : new Set(filteredHistory.map(wo => wo.id)));
+    // Select all invoices that still need export to QuickBooks (the actionable set).
+    setSelectedInv(prev => prev.size === needsExport.length && needsExport.length > 0 ? new Set() : new Set(needsExport.map(wo => wo.id)));
   };
   const invSelectedIds = () => filteredHistory.filter(wo => selectedInv.has(wo.id)).map(wo => wo.id);
 
@@ -209,10 +210,14 @@ const InvoiceCenterPage = ({ embedded = false }) => {
 
   // Undo the QB-entered flag on a single invoice.
   const handleUnmarkEntered = async (wo) => {
+    // Guard against accidental un-locking — this puts the invoice back in "Needs Export" where it could be
+    // imported to QuickBooks again. Require explicit confirmation.
+    const label = wo.invoiceNumber ? `#${wo.invoiceNumber}` : (wo.drNumber ? `DR-${wo.drNumber}` : 'this invoice');
+    if (!window.confirm(`Move ${label} back to "Needs Export"?\n\nOnly do this if it was NOT actually imported into QuickBooks. If it was, moving it back risks a duplicate entry.`)) return;
     try {
       setSaving(true);
       await unmarkInvoicesEntered([wo.id]);
-      setSuccess('Reset QB-entered status'); loadData();
+      setSuccess('Moved back to Needs Export'); loadData();
     } catch (err) { setError(err.response?.data?.error?.message || 'Failed to reset'); }
     finally { setSaving(false); }
   };
@@ -266,16 +271,70 @@ const InvoiceCenterPage = ({ embedded = false }) => {
   const filteredQueue = search ? queue.filter(wo => (wo.clientName || '').toLowerCase().includes(search.toLowerCase()) || (wo.drNumber && String(wo.drNumber).includes(search))) : queue;
   const filteredHistory = search ? history.filter(wo => (wo.clientName || '').toLowerCase().includes(search.toLowerCase()) || (wo.drNumber && String(wo.drNumber).includes(search)) || (wo.invoiceNumber || '').includes(search)) : history;
 
-  // Group history by month/year
-  const groupedHistory = {};
-  filteredHistory.forEach(wo => {
-    const d = wo.invoiceDate ? new Date(wo.invoiceDate) : wo.createdAt ? new Date(wo.createdAt) : new Date();
-    const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
-    const label = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-    if (!groupedHistory[key]) groupedHistory[key] = { label, items: [] };
-    groupedHistory[key].items.push(wo);
-  });
-  const sortedMonths = Object.keys(groupedHistory).sort().reverse();
+  // Split into two sections: still needs export to QuickBooks vs already in QuickBooks.
+  const needsExport = filteredHistory.filter(wo => !wo.iifExportedAt);
+  const inQuickBooks = filteredHistory.filter(wo => wo.iifExportedAt);
+
+  // Group a list of invoices by month/year (newest month first).
+  const groupByMonth = (list) => {
+    const g = {};
+    list.forEach(wo => {
+      const d = wo.invoiceDate ? new Date(wo.invoiceDate) : wo.createdAt ? new Date(wo.createdAt) : new Date();
+      const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
+      const label = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+      if (!g[key]) g[key] = { label, items: [] };
+      g[key].items.push(wo);
+    });
+    return Object.keys(g).sort().reverse().map(k => g[k]);
+  };
+
+  // Renders month-grouped invoice tables for a given list (used by both the Needs-Export and In-QB sections).
+  const renderInvoiceGroups = (groups, accent, selectable = false) => groups.map(group => (
+    <div key={accent + '-' + group.label} style={{ marginBottom: 24 }}>
+      <div style={{ padding: '8px 0', marginBottom: 8, borderBottom: `2px solid ${accent}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: '1.05rem', fontWeight: 700, color: accent }}>{group.label}</span>
+        <span style={{ fontSize: '0.8rem', color: '#888' }}>({group.items.length} invoice{group.items.length !== 1 ? 's' : ''})</span>
+        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333', marginLeft: 'auto' }}>{formatCurrency(group.items.reduce((sm, wo) => sm + getWOTotal(wo), 0))}</span>
+      </div>
+      <table className="table" style={{ marginBottom: 0 }}>
+        <thead><tr>{selectable && <th style={{ width: 32 }}></th>}<th>Invoice #</th><th>DR#</th><th>Client</th><th>Amount</th><th>Sent</th><th>QB Export</th><th>PDF</th><th></th></tr></thead>
+        <tbody>
+          {group.items.map(wo => (
+            <tr key={wo.id} style={selectable && selectedInv.has(wo.id) ? { background: '#E3F2FD' } : undefined}>
+              {selectable && <td style={{ textAlign: 'center' }}><input type="checkbox" checked={selectedInv.has(wo.id)} onChange={() => toggleInvSelect(wo.id)} /></td>}
+              <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2E7D32' }}>#{wo.invoiceNumber}</td>
+              <td><span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1565C0', cursor: 'pointer' }} onClick={() => navigate('/workorders/' + wo.id)}>{wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber}</span></td>
+              <td>{wo.clientName}</td>
+              <td style={{ fontWeight: 600 }}>{formatCurrency(getWOTotal(wo))}</td>
+              <td style={{ fontSize: '0.85rem' }}>
+                {wo.invoiceDate ? (
+                  <span style={{ color: '#2E7D32', fontWeight: 500, cursor: 'pointer' }} onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date(wo.invoiceDate).toISOString().split('T')[0]); }} title="Click to edit date">
+                    {new Date(wo.invoiceDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                  </span>
+                ) : (
+                  <button className="btn btn-sm" style={{ fontSize: '0.75rem', padding: '4px 10px', background: '#E65100', color: 'white', border: 'none', fontWeight: 600, borderRadius: 4 }}
+                    onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date().toISOString().split('T')[0]); }}>
+                    Confirm Sent
+                  </button>
+                )}
+              </td>
+              <td style={{ fontSize: '0.8rem' }}>
+                {wo.iifExportedAt
+                  ? <span style={{ color: '#2E7D32', fontWeight: 600, cursor: 'pointer' }}
+                      title={`🔒 Locked — ${(wo.iifBatchId || '').startsWith('manual') ? 'entered manually in QuickBooks' : 'exported via IIF'} on ${new Date(wo.iifExportedAt).toLocaleDateString()} (batch: ${wo.iifBatchId || '\u2014'}). Click to move back to Needs Export (asks first).`}
+                      onClick={() => handleUnmarkEntered(wo)}>
+                      🔒 {(wo.iifBatchId || '').startsWith('manual') ? 'In QB' : 'Exported'} {new Date(wo.iifExportedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}
+                    </span>
+                  : <span style={{ color: '#E65100', fontWeight: 500 }}>Needs entry</span>}
+              </td>
+              <td>{wo.invoicePdfUrl ? <a href={wo.invoicePdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 600, fontSize: '0.85rem' }}>View</a> : <button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={() => { setPdfUploadWO(wo); setPdfFile(null); }}>Upload</button>}</td>
+              <td><button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px', color: '#c62828', borderColor: '#c62828' }} onClick={() => handleClearInvoice(wo)}>Clear</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ));
 
   return (
     <div>
@@ -365,8 +424,8 @@ const InvoiceCenterPage = ({ embedded = false }) => {
           {filteredHistory.length > 0 && (
             <div style={{ background: selectedInv.size > 0 ? '#E3F2FD' : '#F5F5F5', border: `2px solid ${selectedInv.size > 0 ? '#1565C0' : '#ccc'}`, borderRadius: 8, padding: '12px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, cursor: 'pointer' }}>
-                <input type="checkbox" checked={selectedInv.size === filteredHistory.length && filteredHistory.length > 0} onChange={toggleInvSelectAll} />
-                {selectedInv.size > 0 ? `${selectedInv.size} selected` : 'Select all'}
+                <input type="checkbox" checked={selectedInv.size === needsExport.length && needsExport.length > 0} onChange={toggleInvSelectAll} />
+                {selectedInv.size > 0 ? `${selectedInv.size} selected` : `Select all needing export (${needsExport.length})`}
               </label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn" onClick={handleExportSelectedIIF} disabled={saving || selectedInv.size === 0}
@@ -385,57 +444,29 @@ const InvoiceCenterPage = ({ embedded = false }) => {
             <div className="card" style={{ textAlign: 'center', padding: 40, color: '#999' }}>No invoices yet.</div>
           ) : (
             <>
-              {sortedMonths.map(key => {
-                const group = groupedHistory[key];
-                return (
-                  <div key={key} style={{ marginBottom: 24 }}>
-                    <div style={{ padding: '8px 0', marginBottom: 8, borderBottom: '2px solid #1565C0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1565C0' }}>{group.label}</span>
-                      <span style={{ fontSize: '0.8rem', color: '#888' }}>({group.items.length} invoice{group.items.length !== 1 ? 's' : ''})</span>
-                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333', marginLeft: 'auto' }}>{formatCurrency(group.items.reduce((s, wo) => s + getWOTotal(wo), 0))}</span>
-                    </div>
-                    <table className="table" style={{ marginBottom: 0 }}>
-                      <thead><tr><th style={{ width: 32 }}></th><th>Invoice #</th><th>DR#</th><th>Client</th><th>Amount</th><th>Sent</th><th>QB Export</th><th>PDF</th><th></th></tr></thead>
-                      <tbody>
-                        {group.items.map(wo => (
-                          <tr key={wo.id} style={selectedInv.has(wo.id) ? { background: '#E3F2FD' } : undefined}>
-                            <td style={{ textAlign: 'center' }}><input type="checkbox" checked={selectedInv.has(wo.id)} onChange={() => toggleInvSelect(wo.id)} /></td>
-                            <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2E7D32' }}>#{wo.invoiceNumber}</td>
-                            <td><span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1565C0', cursor: 'pointer' }} onClick={() => navigate('/workorders/' + wo.id)}>{wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber}</span></td>
-                            <td>{wo.clientName}</td>
-                            <td style={{ fontWeight: 600 }}>{formatCurrency(getWOTotal(wo))}</td>
-                            <td style={{ fontSize: '0.85rem' }}>
-                              {wo.invoiceDate ? (
-                                <span style={{ color: '#2E7D32', fontWeight: 500, cursor: 'pointer' }} onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date(wo.invoiceDate).toISOString().split('T')[0]); }} title="Click to edit date">
-                                  {new Date(wo.invoiceDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
-                                </span>
-                              ) : (
-                                <button className="btn btn-sm" style={{ fontSize: '0.75rem', padding: '4px 10px', background: '#E65100', color: 'white', border: 'none', fontWeight: 600, borderRadius: 4 }}
-                                  onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date().toISOString().split('T')[0]); }}>
-                                  Confirm Sent
-                                </button>
-                              )}
-                            </td>
-                            <td style={{ fontSize: '0.8rem' }}>
-                              {wo.iifExportedAt
-                                ? <span style={{ color: '#2E7D32', fontWeight: 500, cursor: 'pointer' }}
-                                    title={`${(wo.iifBatchId || '').startsWith('manual') ? 'Entered manually in QuickBooks' : 'Exported via IIF'} — batch: ${wo.iifBatchId || '—'}. Click to undo.`}
-                                    onClick={() => handleUnmarkEntered(wo)}>
-                                    ✓ {(wo.iifBatchId || '').startsWith('manual') ? 'In QB' : 'Exported'} {new Date(wo.iifExportedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}
-                                  </span>
-                                : <span style={{ color: '#E65100', fontWeight: 500 }}>Needs entry</span>}
-                            </td>
-                            <td>{wo.invoicePdfUrl ? <a href={wo.invoicePdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 600, fontSize: '0.85rem' }}>View</a> : <button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={() => { setPdfUploadWO(wo); setPdfFile(null); }}>Upload</button>}</td>
-                            <td><button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px', color: '#c62828', borderColor: '#c62828' }} onClick={() => handleClearInvoice(wo)}>Clear</button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })}
+              {/* Section 1: still needs export to QuickBooks */}
+              <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#E65100' }}>⚠️ Needs Export to QuickBooks</span>
+                <span style={{ background: '#E65100', color: 'white', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>{needsExport.length}</span>
+              </div>
+              {needsExport.length === 0 ? (
+                <div className="card" style={{ textAlign: 'center', padding: 20, color: '#2E7D32', marginBottom: 28 }}>✅ All invoices are in QuickBooks — nothing waiting.</div>
+              ) : (
+                <div style={{ marginBottom: 28 }}>{renderInvoiceGroups(groupByMonth(needsExport), '#E65100', true)}</div>
+              )}
 
-              {/* Not Invoiced — collapsible at bottom */}
+              {/* Section 2: already in QuickBooks */}
+              <div style={{ marginTop: 8, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#2E7D32' }}>✅ Already in QuickBooks</span>
+                <span style={{ background: '#2E7D32', color: 'white', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>{inQuickBooks.length}</span>
+              </div>
+              {inQuickBooks.length === 0 ? (
+                <div className="card" style={{ textAlign: 'center', padding: 20, color: '#999' }}>None yet.</div>
+              ) : (
+                renderInvoiceGroups(groupByMonth(inQuickBooks), '#2E7D32', false)
+              )}
+
+              {/* Not Invoiced — collapsible at bottom */}              {/* Not Invoiced — collapsible at bottom */}
               {skipped.length > 0 && (
                 <div style={{ marginTop: 32 }}>
                   <button onClick={() => setShowSkipped(!showSkipped)}
