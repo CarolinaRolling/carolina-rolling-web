@@ -517,7 +517,7 @@ export default function FlatStockForm({ partData, setPartData, vendorSuggestions
               <option value="Custom">Custom</option>
             </select>
             {partData._channelSize === 'Custom' && (
-              <input className="form-input" style={{ marginTop: 4 }} placeholder='e.g. C8x11.5'
+              <input className="form-input" style={{ marginTop: 4 }} placeholder={'e.g. C8x11.5  —or—  1" x .5" Leg Channel'}
                 value={partData._customChannelSize || ''}
                 onChange={(e) => setPartData({ ...partData, _customChannelSize: e.target.value })} />
             )}

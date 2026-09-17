@@ -1014,12 +1014,22 @@ function WorkOrderDetailsPage() {
     }
     if (selectedPartType === 'flat_stock') {
       const stockType = partData._stockType || '';
-      const isRoundTube = stockType === 'round_tube';
-      if (isRoundTube) {
+      if (!stockType) warnings.push('Stock type is required');
+      else if (stockType === 'round_tube') {
         if (!partData._roundTubeSelection && !partData.outerDiameter) warnings.push('Pipe/tube size or OD is required');
         if (!partData.wallThickness && !partData.thickness) warnings.push('Wall thickness or schedule is required');
-      } else {
+      } else if (stockType === 'plate') {
+        // Only plate is defined purely by thickness; structural shapes carry their size in the size field.
         if (!partData.thickness) warnings.push('Thickness is required');
+      } else if (stockType === 'angle') {
+        if (!partData._angleSize) warnings.push('Angle size is required');
+      } else if (stockType === 'square_tube') {
+        if (!partData._tubeSize) warnings.push('Tube size is required');
+      } else if (stockType === 'channel') {
+        if (!partData._channelSize) warnings.push('Channel size is required');
+        if (partData._channelSize === 'Custom' && !partData._customChannelSize) warnings.push('Custom channel size is required');
+      } else if (stockType === 'beam') {
+        if (!partData._beamSize) warnings.push('Beam size is required');
       }
     }
     if (selectedPartType === 'angle_roll') {

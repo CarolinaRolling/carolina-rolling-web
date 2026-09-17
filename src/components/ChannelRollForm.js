@@ -282,7 +282,7 @@ export default function ChannelRollForm({ partData, setPartData, vendorSuggestio
           <option value="Custom">Custom</option>
         </select>
         {selectedChannelSize === 'Custom' && (
-          <input className="form-input" style={{ marginTop: 4 }} placeholder='e.g. C8x11.5'
+          <input className="form-input" style={{ marginTop: 4 }} placeholder={'e.g. C8x11.5  —or—  1" x .5" Leg Channel'}
             value={partData._customChannelSize || ''}
             onChange={(e) => setPartData({ ...partData, _customChannelSize: e.target.value })} />
         )}
