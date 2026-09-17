@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, previewWorkOrderIIF, assignInvoiceNumber, exportBatchIIF, exportBatchWithReconciliation, generateInvoicePDF, getNextInvoiceNumber, skipInvoice, restoreInvoice, markInvoiceSent } from '../services/api';
+import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, previewWorkOrderIIF, assignInvoiceNumber, exportBatchIIF, exportBatchWithReconciliation, generateInvoicePDF, getNextInvoiceNumber, skipInvoice, restoreInvoice, markInvoiceSent, markInvoicesEntered, unmarkInvoicesEntered } from '../services/api';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -18,6 +18,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
   const [pdfUploadWO, setPdfUploadWO] = useState(null);
   const [pdfFile, setPdfFile] = useState(null);
   const [selected, setSelected] = useState(new Set());
+  const [selectedInv, setSelectedInv] = useState(new Set());
   const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
   const [batchPreview, setBatchPreview] = useState([]);
   const [nextInvNum, setNextInvNum] = useState(null);
@@ -157,20 +158,55 @@ const InvoiceCenterPage = ({ embedded = false }) => {
     finally { setSaving(false); }
   };
 
-  // Bulk IIF export from the Invoiced tab — exports every invoice currently shown (respects the search filter).
-  const handleExportInvoicedIIF = async () => {
-    const ids = filteredHistory.map(wo => wo.id);
-    if (ids.length === 0) { setError('No invoiced work orders to export.'); return; }
+  // ----- Invoiced tab: selection + export / mark-entered -----
+  const toggleInvSelect = (id) => {
+    setSelectedInv(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+  const toggleInvSelectAll = () => {
+    setSelectedInv(prev => prev.size === filteredHistory.length ? new Set() : new Set(filteredHistory.map(wo => wo.id)));
+  };
+  const invSelectedIds = () => filteredHistory.filter(wo => selectedInv.has(wo.id)).map(wo => wo.id);
+
+  // Export the SELECTED invoices to an IIF file (and mark them entered).
+  const handleExportSelectedIIF = async () => {
+    const ids = invSelectedIds();
+    if (ids.length === 0) { setError('Select at least one invoice to export.'); return; }
     try {
       setSaving(true);
       const response = await exportBatchIIF(ids);
       const iifContent = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
       const blob = new Blob([iifContent], { type: 'text/plain' });
       const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url;
-      a.download = `quickbooks-invoiced-${new Date().toISOString().split('T')[0]}.iif`;
+      a.download = `quickbooks-invoices-${new Date().toISOString().split('T')[0]}.iif`;
       document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
+      // Mark the exported ones as entered so they show as done.
+      try { await markInvoicesEntered(ids); } catch (e) {}
       setSuccess(`Exported ${ids.length} invoice${ids.length !== 1 ? 's' : ''} to IIF`);
+      setSelectedInv(new Set()); loadData();
     } catch (err) { setError(err.response?.data?.error?.message || 'Failed to export IIF'); }
+    finally { setSaving(false); }
+  };
+
+  // Mark SELECTED invoices as already entered in QuickBooks (manual entry — no IIF).
+  const handleMarkSelectedEntered = async () => {
+    const ids = invSelectedIds();
+    if (ids.length === 0) { setError('Select at least one invoice to mark.'); return; }
+    try {
+      setSaving(true);
+      const res = await markInvoicesEntered(ids);
+      setSuccess(res.data?.message || `Marked ${ids.length} as entered in QuickBooks`);
+      setSelectedInv(new Set()); loadData();
+    } catch (err) { setError(err.response?.data?.error?.message || 'Failed to mark invoices'); }
+    finally { setSaving(false); }
+  };
+
+  // Undo the QB-entered flag on a single invoice.
+  const handleUnmarkEntered = async (wo) => {
+    try {
+      setSaving(true);
+      await unmarkInvoicesEntered([wo.id]);
+      setSuccess('Reset QB-entered status'); loadData();
+    } catch (err) { setError(err.response?.data?.error?.message || 'Failed to reset'); }
     finally { setSaving(false); }
   };
 
@@ -320,15 +356,22 @@ const InvoiceCenterPage = ({ embedded = false }) => {
       (
         <div>
           {filteredHistory.length > 0 && (
-            <div style={{ background: '#E8F5E9', border: '2px solid #2E7D32', borderRadius: 8, padding: '12px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 600, color: '#2E7D32' }}>
-                {search ? `${filteredHistory.length} matching invoice${filteredHistory.length !== 1 ? 's' : ''}` : `${filteredHistory.length} invoice${filteredHistory.length !== 1 ? 's' : ''}`}
-                {search ? ' (filtered)' : ''}
-              </span>
-              <button className="btn" onClick={handleExportInvoicedIIF} disabled={saving}
-                style={{ background: '#2E7D32', color: 'white', border: 'none', fontWeight: 700, padding: '10px 20px' }}>
-                {saving ? 'Exporting…' : `Bulk IIF Export (${filteredHistory.length})`}
-              </button>
+            <div style={{ background: selectedInv.size > 0 ? '#E3F2FD' : '#F5F5F5', border: `2px solid ${selectedInv.size > 0 ? '#1565C0' : '#ccc'}`, borderRadius: 8, padding: '12px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, cursor: 'pointer' }}>
+                <input type="checkbox" checked={selectedInv.size === filteredHistory.length && filteredHistory.length > 0} onChange={toggleInvSelectAll} />
+                {selectedInv.size > 0 ? `${selectedInv.size} selected` : 'Select all'}
+              </label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn" onClick={handleExportSelectedIIF} disabled={saving || selectedInv.size === 0}
+                  style={{ background: selectedInv.size ? '#2E7D32' : '#bbb', color: 'white', border: 'none', fontWeight: 700, padding: '10px 18px' }}>
+                  {saving ? 'Working…' : `Export Selected to IIF (${selectedInv.size})`}
+                </button>
+                <button className="btn" onClick={handleMarkSelectedEntered} disabled={saving || selectedInv.size === 0}
+                  style={{ background: selectedInv.size ? '#1565C0' : '#bbb', color: 'white', border: 'none', fontWeight: 700, padding: '10px 18px' }}>
+                  Mark as Entered in QB ({selectedInv.size})
+                </button>
+                {selectedInv.size > 0 && <button className="btn btn-outline" onClick={() => setSelectedInv(new Set())}>Clear</button>}
+              </div>
             </div>
           )}
           {filteredHistory.length === 0 && skipped.length === 0 ? (
@@ -345,10 +388,11 @@ const InvoiceCenterPage = ({ embedded = false }) => {
                       <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333', marginLeft: 'auto' }}>{formatCurrency(group.items.reduce((s, wo) => s + getWOTotal(wo), 0))}</span>
                     </div>
                     <table className="table" style={{ marginBottom: 0 }}>
-                      <thead><tr><th>Invoice #</th><th>DR#</th><th>Client</th><th>Amount</th><th>Sent</th><th>QB Export</th><th>PDF</th><th></th></tr></thead>
+                      <thead><tr><th style={{ width: 32 }}></th><th>Invoice #</th><th>DR#</th><th>Client</th><th>Amount</th><th>Sent</th><th>QB Export</th><th>PDF</th><th></th></tr></thead>
                       <tbody>
                         {group.items.map(wo => (
-                          <tr key={wo.id}>
+                          <tr key={wo.id} style={selectedInv.has(wo.id) ? { background: '#E3F2FD' } : undefined}>
+                            <td style={{ textAlign: 'center' }}><input type="checkbox" checked={selectedInv.has(wo.id)} onChange={() => toggleInvSelect(wo.id)} /></td>
                             <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#2E7D32' }}>#{wo.invoiceNumber}</td>
                             <td><span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1565C0', cursor: 'pointer' }} onClick={() => navigate('/workorders/' + wo.id)}>{wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber}</span></td>
                             <td>{wo.clientName}</td>
@@ -367,8 +411,12 @@ const InvoiceCenterPage = ({ embedded = false }) => {
                             </td>
                             <td style={{ fontSize: '0.8rem' }}>
                               {wo.iifExportedAt
-                                ? <span style={{ color: '#2E7D32', fontWeight: 500 }} title={`Batch: ${wo.iifBatchId || '—'}`}>✓ {new Date(wo.iifExportedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
-                                : <span style={{ color: '#999' }}>Not exported</span>}
+                                ? <span style={{ color: '#2E7D32', fontWeight: 500, cursor: 'pointer' }}
+                                    title={`${(wo.iifBatchId || '').startsWith('manual') ? 'Entered manually in QuickBooks' : 'Exported via IIF'} — batch: ${wo.iifBatchId || '—'}. Click to undo.`}
+                                    onClick={() => handleUnmarkEntered(wo)}>
+                                    ✓ {(wo.iifBatchId || '').startsWith('manual') ? 'In QB' : 'Exported'} {new Date(wo.iifExportedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}
+                                  </span>
+                                : <span style={{ color: '#E65100', fontWeight: 500 }}>Needs entry</span>}
                             </td>
                             <td>{wo.invoicePdfUrl ? <a href={wo.invoicePdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 600, fontSize: '0.85rem' }}>View</a> : <button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={() => { setPdfUploadWO(wo); setPdfFile(null); }}>Upload</button>}</td>
                             <td><button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px', color: '#c62828', borderColor: '#c62828' }} onClick={() => handleClearInvoice(wo)}>Clear</button></td>
