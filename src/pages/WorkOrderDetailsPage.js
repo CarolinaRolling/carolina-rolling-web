@@ -3587,7 +3587,8 @@ function WorkOrderDetailsPage() {
                         };
                         // Apply client-specific tax rate if they have one
                         if (client.customTaxRate) {
-                          updates.taxRate = (parseFloat(client.customTaxRate) * 100).toFixed(2);
+                          // Keep full precision — a custom rate like 3.9375% must not be rounded to 3.94.
+                          updates.taxRate = (parseFloat(client.customTaxRate) * 100).toString();
                         } else {
                           updates.taxRate = defaultTaxRate.toString();
                         }
@@ -6504,8 +6505,15 @@ function WorkOrderDetailsPage() {
         <div className="modal-overlay">
           <div className="modal modal-flex" onClick={e => e.stopPropagation()} style={{ maxWidth: 800 }}>
             <div className="modal-header">
-              <h3>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 {editingPart ? 'Edit Part' : 'Add Part'} — {PART_TYPES[selectedPartType]?.icon} {PART_TYPES[selectedPartType]?.label || selectedPartType}
+                {editingPart && (<><span style={{ fontSize: '0.72rem', color: '#1976d2', fontWeight: 600 }}>↻ Change type:</span>
+                  <select value={selectedPartType}
+                    onChange={(e) => { if (window.confirm(`Change part type to ${PART_TYPES[e.target.value]?.label}? This will reset type-specific fields.`)) { setSelectedPartType(e.target.value); setPartData(prev => ({ ...prev, partType: e.target.value })); } }}
+                    style={{ marginLeft: 8, padding: '2px 8px', fontSize: '0.8rem', borderRadius: 4, border: '1px solid #ccc', background: '#f5f5f5', cursor: 'pointer' }}>
+                    {Object.entries(PART_TYPES).filter(([k]) => !['rush_service'].includes(k)).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
+                  </select></>
+                )}
               </h3>
               <button className="btn btn-icon" onClick={() => setShowPartModal(false)}><X size={20} /></button>
             </div>

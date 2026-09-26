@@ -4046,9 +4046,9 @@ function EstimateDetailsPage() {
             <div className="modal-header">
               <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 {editingPart ? 'Edit Part' : 'Add Part'} — {PART_TYPES[partData.partType]?.icon} {PART_TYPES[partData.partType]?.label || partData.partType}
-                {editingPart && <select value={partData.partType} onChange={(e) => { if (window.confirm(`Change part type to ${PART_TYPES[e.target.value]?.label}? This will reset type-specific fields.`)) { setPartData(prev => ({ ...prev, partType: e.target.value })); }}} style={{ marginLeft: 8, padding: '2px 8px', fontSize: '0.8rem', borderRadius: 4, border: '1px solid #ccc', background: '#f5f5f5', cursor: 'pointer' }}>
+                {editingPart && <><span style={{ fontSize: '0.72rem', color: '#1976d2', fontWeight: 600 }}>↻ Change type:</span><select value={partData.partType} onChange={(e) => { if (window.confirm(`Change part type to ${PART_TYPES[e.target.value]?.label}? This will reset type-specific fields.`)) { setPartData(prev => ({ ...prev, partType: e.target.value })); }}} style={{ marginLeft: 8, padding: '2px 8px', fontSize: '0.8rem', borderRadius: 4, border: '1px solid #ccc', background: '#f5f5f5', cursor: 'pointer' }}>
                   {Object.entries(PART_TYPES).filter(([k]) => !['rush_service'].includes(k)).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
-                </select>}
+                </select></>}
               </h3>
               <button className="modal-close" onClick={() => setShowPartModal(false)}>&times;</button>
             </div>
