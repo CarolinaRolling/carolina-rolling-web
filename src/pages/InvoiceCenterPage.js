@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, previewWorkOrderIIF, assignInvoiceNumber, exportBatchIIF, exportBatchWithReconciliation, generateInvoicePDF, getNextInvoiceNumber, skipInvoice, restoreInvoice, markInvoiceSent, markInvoicesEntered, unmarkInvoicesEntered } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -8,6 +9,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('queue');
   const [queue, setQueue] = useState([]);
+  const { isAdmin } = useAuth();
   const [history, setHistory] = useState([]);
   const [skipped, setSkipped] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -261,8 +263,17 @@ const InvoiceCenterPage = ({ embedded = false }) => {
   };
 
   const handleClearInvoice = async (wo) => {
-    if (!window.confirm(`Remove invoice ${wo.invoiceNumber} from ${wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber}? This moves it back to the queue.`)) return;
-    try { await clearInvoice(wo.id); setSuccess('Invoice cleared'); loadData(); } catch (err) { setError('Failed'); }
+    if (!isAdmin || !isAdmin()) { setError('Admin rights are required to delete an invoice.'); return; }
+    if (!window.confirm(`Delete invoice #${wo.invoiceNumber} from ${wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber} and reclaim the number?\n\nThe work order is kept; only the invoice is removed and #${wo.invoiceNumber} is freed for reuse.`)) return;
+    const code = window.prompt('Enter the override code to delete this invoice:');
+    if (!code) return;
+    try {
+      const res = await clearInvoice(wo.id, code);
+      setSuccess(res.data?.message || `Invoice #${wo.invoiceNumber} deleted \u2014 number freed for reuse`);
+      loadData();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to delete invoice');
+    }
   };
 
   const formatCurrency = (v) => '$' + (parseFloat(v) || 0).toFixed(2);
@@ -328,7 +339,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
                   : <span style={{ color: '#E65100', fontWeight: 500 }}>Needs entry</span>}
               </td>
               <td>{wo.invoicePdfUrl ? <a href={wo.invoicePdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 600, fontSize: '0.85rem' }}>View</a> : <button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={() => { setPdfUploadWO(wo); setPdfFile(null); }}>Upload</button>}</td>
-              <td><button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px', color: '#c62828', borderColor: '#c62828' }} onClick={() => handleClearInvoice(wo)}>Clear</button></td>
+              <td>{isAdmin && isAdmin() && <button className="btn btn-sm btn-outline" style={{ fontSize: '0.75rem', padding: '3px 8px', color: '#c62828', borderColor: '#c62828' }} onClick={() => handleClearInvoice(wo)}>Delete</button>}</td>
             </tr>
           ))}
         </tbody>

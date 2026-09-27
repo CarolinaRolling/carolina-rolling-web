@@ -608,7 +608,7 @@ export const recordInvoice = (id, formData) => api.post(`/workorders/${id}/invoi
 export const backfillWorkOrderPricing = (id) => api.post(`/workorders/${id}/backfill-pricing`);
 export const getActivePresence = () => api.get('/workorders/presence/active');
 export const uploadInvoicePdf = (id, formData) => api.post(`/workorders/${id}/invoice-pdf`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-export const clearInvoice = (id) => api.delete(`/workorders/${id}/invoice`);
+export const clearInvoice = (id, overrideCode) => api.delete(`/workorders/${id}/invoice`, { data: { overrideCode } });
 export const skipInvoice = (id, reason) => api.post(`/workorders/${id}/skip-invoice`, { reason });
 export const restoreInvoice = (id) => api.post(`/workorders/${id}/restore-invoice`);
 export const markInvoiceSent = (id, formData) => api.post(`/workorders/${id}/mark-invoice-sent`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
