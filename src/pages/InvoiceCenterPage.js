@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, previewWorkOrderIIF, assignInvoiceNumber, exportBatchIIF, exportBatchWithReconciliation, generateInvoicePDF, getNextInvoiceNumber, skipInvoice, restoreInvoice, markInvoiceSent, markInvoicesEntered, unmarkInvoicesEntered } from '../services/api';
+import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, previewWorkOrderIIF, assignInvoiceNumber, exportBatchIIF, exportBatchWithReconciliation, generateInvoicePDF, getNextInvoiceNumber, getInvoiceHealth, skipInvoice, restoreInvoice, markInvoiceSent, markInvoicesEntered, unmarkInvoicesEntered } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -21,6 +21,9 @@ const InvoiceCenterPage = ({ embedded = false }) => {
   const [pdfFile, setPdfFile] = useState(null);
   const [selected, setSelected] = useState(new Set());
   const [selectedInv, setSelectedInv] = useState(new Set());
+  const [collapsedMonths, setCollapsedMonths] = useState(null);
+  const [health, setHealth] = useState(null);
+  const [healthOpen, setHealthOpen] = useState(false); // null = not initialized; Set of collapsed month keys
   const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
   const [batchPreview, setBatchPreview] = useState([]);
   const [nextInvNum, setNextInvNum] = useState(null);
@@ -46,6 +49,8 @@ const InvoiceCenterPage = ({ embedded = false }) => {
         const [hRes, sRes] = await Promise.all([getInvoiceHistory(), getInvoiceSkipped()]);
         setHistory(hRes.data.data || []);
         setSkipped(sRes.data.data || []);
+        // Invoice-number health (gap scan) — non-blocking; ignore its errors so it never breaks the tab.
+        getInvoiceHealth().then(r => setHealth(r.data.data)).catch(() => {});
       }
     } catch (err) { setError('Failed to load data'); }
     finally { setLoading(false); }
@@ -293,20 +298,40 @@ const InvoiceCenterPage = ({ embedded = false }) => {
       const d = wo.invoiceDate ? new Date(wo.invoiceDate) : wo.createdAt ? new Date(wo.createdAt) : new Date();
       const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
       const label = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-      if (!g[key]) g[key] = { label, items: [] };
+      if (!g[key]) g[key] = { key, label, items: [] };
       g[key].items.push(wo);
     });
     return Object.keys(g).sort().reverse().map(k => g[k]);
   };
+  const currentMonthKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`; })();
+  // A month is collapsed if it's in the set. Before the user touches anything (collapsedMonths === null),
+  // every month EXCEPT the current one is collapsed by default.
+  const isMonthCollapsed = (key) => collapsedMonths === null ? key !== currentMonthKey : collapsedMonths.has(key);
+  const toggleMonth = (key) => {
+    setCollapsedMonths(prev => {
+      // Initialize from the default (all-but-current collapsed) on first interaction.
+      const base = prev === null
+        ? new Set([...new Set([...needsExport, ...inQuickBooks].map(wo => { const d = wo.invoiceDate ? new Date(wo.invoiceDate) : wo.createdAt ? new Date(wo.createdAt) : new Date(); return `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`; }))].filter(k => k !== currentMonthKey))
+        : new Set(prev);
+      base.has(key) ? base.delete(key) : base.add(key);
+      return base;
+    });
+  };
 
   // Renders month-grouped invoice tables for a given list (used by both the Needs-Export and In-QB sections).
-  const renderInvoiceGroups = (groups, accent, selectable = false) => groups.map(group => (
+  const renderInvoiceGroups = (groups, accent, selectable = false) => groups.map(group => {
+    const collapsed = isMonthCollapsed(group.key);
+    return (
     <div key={accent + '-' + group.label} style={{ marginBottom: 24 }}>
-      <div style={{ padding: '8px 0', marginBottom: 8, borderBottom: `2px solid ${accent}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div onClick={() => toggleMonth(group.key)}
+        style={{ padding: '8px 4px', marginBottom: 8, borderBottom: `2px solid ${accent}`, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+        <span style={{ fontSize: '1rem', color: accent, width: 16 }}>{collapsed ? '▶' : '▼'}</span>
         <span style={{ fontSize: '1.05rem', fontWeight: 700, color: accent }}>{group.label}</span>
         <span style={{ fontSize: '0.8rem', color: '#888' }}>({group.items.length} invoice{group.items.length !== 1 ? 's' : ''})</span>
+        {collapsed && <span style={{ fontSize: '0.75rem', color: accent, fontStyle: 'italic' }}>— click to expand</span>}
         <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#333', marginLeft: 'auto' }}>{formatCurrency(group.items.reduce((sm, wo) => sm + getWOTotal(wo), 0))}</span>
       </div>
+      {!collapsed && (
       <table className="table" style={{ marginBottom: 0 }}>
         <thead><tr>{selectable && <th style={{ width: 32 }}></th>}<th>Invoice #</th><th>DR#</th><th>Client</th><th>Amount</th><th>Sent</th><th>QB Export</th><th>PDF</th><th></th></tr></thead>
         <tbody>
@@ -344,8 +369,9 @@ const InvoiceCenterPage = ({ embedded = false }) => {
           ))}
         </tbody>
       </table>
+      )}
     </div>
-  ));
+  );});
 
   return (
     <div>
@@ -455,6 +481,50 @@ const InvoiceCenterPage = ({ embedded = false }) => {
             <div className="card" style={{ textAlign: 'center', padding: 40, color: '#999' }}>No invoices yet.</div>
           ) : (
             <>
+              {/* Invoice Tracking Health — collapsible; flags any missing numbers in the sequence */}
+              {health && (
+                <div style={{ marginBottom: 16, border: `1px solid ${health.healthy ? '#A5D6A7' : '#EF9A9A'}`, borderRadius: 8, overflow: 'hidden' }}>
+                  <div onClick={() => setHealthOpen(o => !o)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer', userSelect: 'none', background: health.healthy ? '#E8F5E9' : '#FFEBEE' }}>
+                    <span style={{ fontSize: '1rem', color: health.healthy ? '#2E7D32' : '#C62828', width: 14 }}>{healthOpen ? '▼' : '▶'}</span>
+                    <span style={{ fontWeight: 700, color: health.healthy ? '#2E7D32' : '#C62828' }}>
+                      {health.healthy ? '✅ Invoice Tracking Health' : '⚠️ Invoice Tracking Health'}
+                    </span>
+                    <span style={{ marginLeft: 'auto', fontSize: '0.85rem', fontWeight: 600, color: health.healthy ? '#2E7D32' : '#C62828' }}>
+                      {health.missing.length === 0 ? 'No missing numbers' : `${health.missing.length} missing number${health.missing.length !== 1 ? 's' : ''}`}
+                    </span>
+                  </div>
+                  {healthOpen && (
+                    <div style={{ padding: '12px 16px', background: '#fff' }}>
+                      <div style={{ fontSize: '0.85rem', color: '#555', marginBottom: 10 }}>
+                        Range checked: <b>#{health.min}</b> to <b>#{health.max}</b> &nbsp;·&nbsp; {health.total} numbers on record
+                      </div>
+                      {health.missing.length === 0 ? (
+                        <div style={{ color: '#2E7D32', fontWeight: 600 }}>✅ Every number in the range is accounted for. No gaps.</div>
+                      ) : (
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#C62828', marginBottom: 6 }}>Missing invoice numbers (not used, not voided, not freed):</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {health.missing.map(n => (
+                              <span key={n} style={{ background: '#FFEBEE', border: '1px solid #EF9A9A', color: '#C62828', borderRadius: 4, padding: '3px 9px', fontFamily: 'monospace', fontWeight: 700, fontSize: '0.85rem' }}>#{n}</span>
+                            ))}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#888', marginTop: 8 }}>
+                            These numbers are unaccounted for — an invoice may have been deleted without freeing the number, or a number was skipped. Investigate or, if intentional, no action needed.
+                          </div>
+                        </div>
+                      )}
+                      {(health.voided.length > 0 || health.freed.length > 0) && (
+                        <div style={{ marginTop: 12, fontSize: '0.8rem', color: '#666', borderTop: '1px solid #eee', paddingTop: 8 }}>
+                          {health.voided.length > 0 && <div>Voided (expected gaps): {health.voided.map(n => '#' + n).join(', ')}</div>}
+                          {health.freed.length > 0 && <div>Freed for reuse (will be reused next): {health.freed.map(n => '#' + n).join(', ')}</div>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Section 1: still needs export to QuickBooks */}
               <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#E65100' }}>⚠️ Needs Export to QuickBooks</span>

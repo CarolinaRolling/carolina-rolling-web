@@ -613,6 +613,7 @@ export const skipInvoice = (id, reason) => api.post(`/workorders/${id}/skip-invo
 export const restoreInvoice = (id) => api.post(`/workorders/${id}/restore-invoice`);
 export const markInvoiceSent = (id, formData) => api.post(`/workorders/${id}/mark-invoice-sent`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const getInvoiceSkipped = () => api.get('/workorders/invoicing/skipped');
+export const getInvoiceHealth = () => api.get('/quickbooks/invoice-numbers/health');
 export const getNextInvoiceNumber = () => api.get('/quickbooks/next-invoice-number');
 export const setNextInvoiceNumber = (nextNumber) => api.put('/quickbooks/next-invoice-number', { nextNumber });
 export const assignInvoiceNumber = (woId) => api.post(`/quickbooks/assign-invoice-number/${woId}`);
