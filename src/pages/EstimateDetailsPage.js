@@ -312,7 +312,7 @@ function EstimateDetailsPage() {
         if (isNew) {
           setFormData(prev => ({
             ...prev,
-            taxRate: settings.defaultTaxRate || 9.75
+            taxRate: (settings.defaultTaxRate !== undefined && settings.defaultTaxRate !== null) ? settings.defaultTaxRate : prev.taxRate
           }));
         }
       }
