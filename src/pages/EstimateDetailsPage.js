@@ -198,7 +198,7 @@ function EstimateDetailsPage() {
   const [formData, setFormData] = useState({
     clientName: '', contactName: '', contactEmail: '', contactPhone: '',
     projectDescription: '', notes: '', internalNotes: '', validUntil: '',
-    taxRate: 7.0, useCustomTax: false, customTaxReason: '',
+    taxRate: '', useCustomTax: false, customTaxReason: '',
     taxExempt: false, taxExemptReason: '', taxExemptCertNumber: '',
     truckingDescription: '', truckingCost: 0,
     discountPercent: '', discountAmount: '', discountReason: '',
@@ -262,7 +262,7 @@ function EstimateDetailsPage() {
   
   // Default settings
   const [defaultSettings, setDefaultSettings] = useState({
-    defaultTaxRate: 9.75,
+    defaultTaxRate: null,
     defaultLaborRate: 125,
     defaultMaterialMarkup: 20
   });
@@ -356,7 +356,7 @@ function EstimateDetailsPage() {
         contactExtension: data.contactExtension || '',
         projectDescription: data.projectDescription || '', notes: data.notes || '',
         internalNotes: data.internalNotes || '', validUntil: data.validUntil || '',
-        taxRate: (data.taxRate !== undefined && data.taxRate !== null && data.taxRate !== '') ? parseFloat(data.taxRate) : (defaultSettings.defaultTaxRate || 7.0), useCustomTax: data.useCustomTax || false,
+        taxRate: (data.taxRate !== undefined && data.taxRate !== null && data.taxRate !== '') ? parseFloat(data.taxRate) : (defaultSettings.defaultTaxRate != null ? defaultSettings.defaultTaxRate : ''), useCustomTax: data.useCustomTax || false,
         customTaxReason: data.customTaxReason || '',
         taxExempt: data.taxExempt || false, 
         taxExemptReason: data.taxExemptReason || '',
