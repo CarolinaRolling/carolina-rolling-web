@@ -356,7 +356,7 @@ function EstimateDetailsPage() {
         contactExtension: data.contactExtension || '',
         projectDescription: data.projectDescription || '', notes: data.notes || '',
         internalNotes: data.internalNotes || '', validUntil: data.validUntil || '',
-        taxRate: parseFloat(data.taxRate) || 7.0, useCustomTax: data.useCustomTax || false,
+        taxRate: (data.taxRate !== undefined && data.taxRate !== null && data.taxRate !== '') ? parseFloat(data.taxRate) : (defaultSettings.defaultTaxRate || 7.0), useCustomTax: data.useCustomTax || false,
         customTaxReason: data.customTaxReason || '',
         taxExempt: data.taxExempt || false, 
         taxExemptReason: data.taxExemptReason || '',
@@ -463,7 +463,9 @@ function EstimateDetailsPage() {
       const materialMarkup = parseFloat(part.materialMarkupPercent) || 0;
       const materialEachRaw = materialCost * (1 + materialMarkup / 100);
       const materialEach = roundUpMaterial(materialEachRaw, part._materialRounding);
-      const laborEach = parseFloat(part.laborTotal) || 0;
+      // Include rollingCost as a fallback: "other" service cost is entered in the Service Cost field, which
+      // saves as rollingCost (not laborTotal) — matches the backend so print and PDF agree.
+      const laborEach = parseFloat(part.laborTotal) || parseFloat(part.rollingCost) || 0;
       // Outside processing: vendor cost + markup (markup already in laborTotal after save)
       const ops = part.outsideProcessing || [];
       let opCostPerPart = 0;
@@ -795,7 +797,10 @@ function EstimateDetailsPage() {
         const pdfFileName = `Generated-Estimate-${estimate?.estimateNumber || id}.pdf`;
         const pdfFile = new File([blob], pdfFileName, { type: 'application/pdf' });
         await uploadEstimateFiles(id, [pdfFile]);
-        await loadEstimate();
+        // Refresh ONLY the file list — do NOT reload the whole estimate here, or it would overwrite the
+        // tax rate (and other fields) the user just edited but hasn't finished autosaving. That reload was
+        // the cause of an edited tax rate snapping back to its previous value.
+        try { const fresh = await getEstimateById(id); setFiles(fresh.data.data.files || []); } catch {}
       } catch (storeErr) {
         console.warn('Storing PDF copy failed:', storeErr);
       }

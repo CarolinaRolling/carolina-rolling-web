@@ -125,20 +125,36 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   const isRectangular = (parsedSize && parsedSize.side1 !== parsedSize.side2) || partData._tubeSize === 'CustomRect';
 
   // Profile size for CL offset
+  // profileSize = the OUTER height of the profile in the roll plane (used to convert OD<->CL<->ID). For a
+  // tube, the relevant wall is the side the bend passes THROUGH: easy way = the smaller side, hard way = the
+  // larger side. ID = OD - 2*profileSize (a wall on each side). Square tubes have equal sides either way.
   const profileSize = useMemo(() => {
     if (!parsedSize) return 0;
-    return Math.max(parsedSize.side1, parsedSize.side2);
-  }, [parsedSize]);
+    const small = Math.min(parsedSize.side1, parsedSize.side2);
+    const large = Math.max(parsedSize.side1, parsedSize.side2);
+    // partData.rollType: 'easy_way' bends through the smaller side; 'hard_way' through the larger.
+    return partData.rollType === 'hard_way' ? large : small;
+  }, [parsedSize, partData.rollType]);
 
   // Calculate centerline diameter from input + measure point
   const clDiameter = useMemo(() => {
     const rv = parseFloat(rollValue) || 0;
     if (!rv) return 0;
     const dia = rollMeasureType === 'radius' ? rv * 2 : rv;
+    // Centerline diameter (used for ring circumference + pitch). OD input -> subtract one wall; inside -> add one.
     if (rollMeasurePoint === 'inside') return dia + profileSize;
     if (rollMeasurePoint === 'outside') return dia - profileSize;
     return dia;
   }, [rollToMethod, rollValue, rollMeasureType, rollMeasurePoint, profileSize]);
+
+  // Inside diameter — used ONLY for the chord/rise (check dimension). ID = OD - a wall on EACH side, where
+  // the wall is the bend-through side (easy = smaller, hard = larger, via profileSize). From an OD input that
+  // is CL - one more wall = clDiameter - profileSize; from an inside input it's the value as given.
+  const insideDiameter = useMemo(() => {
+    if (!clDiameter) return 0;
+    if (rollMeasurePoint === 'inside') return clDiameter; // clDiameter already = inside + profile; see note below
+    return clDiameter - profileSize;
+  }, [clDiameter, profileSize, rollMeasurePoint]);
 
   // Calculate chord and rise using CL radius
   // Calculate chord and rise using inside diameter (CL - profile)
@@ -147,13 +163,15 @@ export default function SquareTubeRollForm({ partData, setPartData, vendorSugges
   // later by reading rollType + _sideOrientation to pick the bend-perpendicular side.
   const riseCalc = useMemo(() => {
     if (clDiameter <= 100) return null;
-    const radiusValue = (clDiameter - (profileSize || 0)) / 2;
+    // Rise is measured off the INSIDE diameter. 168" OD, 3x6 easy way -> ID 162 -> radius 81 -> 5.7604" on a
+    // 60" chord (matches CAD). Easy/hard way picks which wall via profileSize.
+    const radiusValue = insideDiameter / 2;
     if (!radiusValue || radiusValue <= 0) return null;
     const chord = radiusValue >= 60 ? 60 : radiusValue >= 24 ? 24 : radiusValue >= 12 ? 12 : radiusValue >= 6 ? 6 : 3;
     const rise = calculateRise(radiusValue, chord);
     if (rise !== null && rise > 0) return { rise, chord };
     return null;
-  }, [clDiameter, profileSize]);
+  }, [clDiameter, insideDiameter, profileSize]);
 
   // Parse length to inches
   const lengthInches = useMemo(() => {
