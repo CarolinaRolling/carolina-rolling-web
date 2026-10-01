@@ -355,7 +355,10 @@ function EstimateDetailsPage() {
       if (!silent) { setAutoSaveStatus('saved'); setTimeout(() => setAutoSaveStatus(null), 2000); }
       return true;
     } catch (err) {
-      if (!silent) setAutoSaveStatus(null);
+      if (!silent) {
+        setAutoSaveStatus(null);
+        setError('Save failed: ' + (err.response?.data?.error?.message || err.message || 'unknown error'));
+      }
       return false;
     }
   };
