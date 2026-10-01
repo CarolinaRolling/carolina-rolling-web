@@ -80,7 +80,7 @@ function AdminPage({ section = 'users-logs' }) {
   
   // Tax settings
   const [taxSettings, setTaxSettings] = useState({
-    defaultTaxRate: 9.75,
+    defaultTaxRate: '',
     defaultLaborRate: 125,
     defaultMaterialMarkup: 20
   });
@@ -266,7 +266,15 @@ function AdminPage({ section = 'users-logs' }) {
     try {
       setTaxSettingsSaving(true);
       setError(null);
-      await updateSettings('tax_settings', taxSettings);
+      // Merge onto current stored settings so we never clobber fields set elsewhere or write a blank rate.
+      let current = {};
+      try { const r = await getSettings('tax_settings'); current = (r.data.data && r.data.data.value) || {}; } catch (e) {}
+      const merged = { ...current };
+      Object.keys(taxSettings).forEach(k => {
+        const v = taxSettings[k];
+        if (v !== '' && v !== null && v !== undefined) merged[k] = v;
+      });
+      await updateSettings('tax_settings', merged);
       setSuccess('Tax settings saved successfully');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -1513,7 +1521,7 @@ function AdminPage({ section = 'users-logs' }) {
                   step="0.01" 
                   className="form-input" 
                   value={taxSettings.defaultTaxRate || ''} 
-                  onChange={(e) => setTaxSettings({ ...taxSettings, defaultTaxRate: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => setTaxSettings({ ...taxSettings, defaultTaxRate: e.target.value === '' ? '' : (parseFloat(e.target.value) || 0) })}
                   placeholder="9.75"
                 />
                 <small style={{ color: '#666', marginTop: 4, display: 'block' }}>

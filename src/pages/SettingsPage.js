@@ -19,7 +19,7 @@ function SettingsPage() {
 
   // Tax and markup settings
   const [taxSettings, setTaxSettings] = useState({
-    defaultTaxRate: 7.0,
+    defaultTaxRate: '',
     taxLabel: 'NC Sales Tax',
     materialMarkup: 20,
     otherServicesMarkup: 15,
@@ -86,7 +86,16 @@ function SettingsPage() {
     try {
       setSaving(true);
       setError(null);
-      await updateSettings('tax_settings', taxSettings);
+      // Merge onto the CURRENT stored settings so we never overwrite fields managed elsewhere (e.g. Admin),
+      // and never write an empty/blank default tax rate back over a real one.
+      let current = {};
+      try { const r = await getSettings('tax_settings'); current = (r.data.data && r.data.data.value) || {}; } catch (e) {}
+      const merged = { ...current };
+      Object.keys(taxSettings).forEach(k => {
+        const v = taxSettings[k];
+        if (v !== '' && v !== null && v !== undefined) merged[k] = v;
+      });
+      await updateSettings('tax_settings', merged);
       showSuccess('Tax settings saved');
     } catch (err) {
       setError('Failed to save tax settings');

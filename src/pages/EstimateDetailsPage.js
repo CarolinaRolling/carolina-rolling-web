@@ -227,6 +227,8 @@ function EstimateDetailsPage() {
   const [sentForReview, setSentForReview] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState(null); // null, 'saving', 'saved'
   const formLoadedRef = useRef(false); // tracks when formData is set from server vs user edit
+  const formDataRef = useRef(null);   // always holds latest formData so we can flush before a reload
+  const dirtyRef = useRef(false);     // true when the user has unsaved edits
   const [clientEditing, setClientEditing] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null); // full client object with contacts
   const [clientLocked, setClientLocked] = useState(false);
@@ -339,7 +341,18 @@ function EstimateDetailsPage() {
 
   const initialLoadDone = useRef(false);
 
+  // Save any pending (unsaved) form edits before a reload, so loadEstimate can't overwrite the user's in-flight
+  // changes (this is what made a deleted note "come back" and a tax edit revert).
+  const flushPendingSave = async () => {
+    if (isNew || !id || !dirtyRef.current || !formDataRef.current) return;
+    try {
+      await updateEstimate(id, { ...formDataRef.current, status: estimate?.status || 'draft' });
+      dirtyRef.current = false;
+    } catch (e) { /* if it fails, loadEstimate will still run; better than losing the edit silently */ }
+  };
+
   const loadEstimate = async () => {
+    await flushPendingSave();
     const scrollY = window.scrollY;
     const isReload = initialLoadDone.current;
     
@@ -433,11 +446,14 @@ function EstimateDetailsPage() {
 
   // Autosave formData changes after 2 second debounce (only for existing estimates)
   useEffect(() => {
+    formDataRef.current = formData; // always track the latest, even before autosave fires
     if (isNew || !formLoadedRef.current || !id) return;
+    dirtyRef.current = true;        // user has unsaved edits pending
     const timer = setTimeout(async () => {
       try {
         setAutoSaveStatus('saving');
         await updateEstimate(id, { ...formData, status: estimate?.status || 'draft' });
+        dirtyRef.current = false;    // edits are now persisted
         setAutoSaveStatus('saved');
         setTimeout(() => setAutoSaveStatus(null), 2000);
       } catch (err) {
