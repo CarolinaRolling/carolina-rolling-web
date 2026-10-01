@@ -226,6 +226,7 @@ function EstimateDetailsPage() {
   const [converting, setConverting] = useState(false);
   const [sentForReview, setSentForReview] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState(null); // null, 'saving', 'saved'
+  const [lastSavedAt, setLastSavedAt] = useState(null); // timestamp of last successful save
   const formLoadedRef = useRef(false); // tracks when formData is set from server vs user edit
   const formDataRef = useRef(null);   // always holds latest formData so we can flush before a reload
   const dirtyRef = useRef(false);     // true when the user has unsaved edits
@@ -341,14 +342,29 @@ function EstimateDetailsPage() {
 
   const initialLoadDone = useRef(false);
 
+  // THE single save path for the estimate form. Everything (autosave, manual Save, save-before-reload,
+  // save-before-PDF) goes through this so there are no competing/racing saves. Sends the FULL current form.
+  const saveEstimate = async ({ silent = false } = {}) => {
+    if (isNew || !id) return false;
+    const data = formDataRef.current || formData;
+    try {
+      if (!silent) setAutoSaveStatus('saving');
+      await updateEstimate(id, { ...data, status: estimate?.status || 'draft' });
+      dirtyRef.current = false;
+      setLastSavedAt(new Date());
+      if (!silent) { setAutoSaveStatus('saved'); setTimeout(() => setAutoSaveStatus(null), 2000); }
+      return true;
+    } catch (err) {
+      if (!silent) setAutoSaveStatus(null);
+      return false;
+    }
+  };
+
   // Save any pending (unsaved) form edits before a reload, so loadEstimate can't overwrite the user's in-flight
   // changes (this is what made a deleted note "come back" and a tax edit revert).
   const flushPendingSave = async () => {
-    if (isNew || !id || !dirtyRef.current || !formDataRef.current) return;
-    try {
-      await updateEstimate(id, { ...formDataRef.current, status: estimate?.status || 'draft' });
-      dirtyRef.current = false;
-    } catch (e) { /* if it fails, loadEstimate will still run; better than losing the edit silently */ }
+    if (isNew || !id || !dirtyRef.current) return;
+    await saveEstimate({ silent: true });
   };
 
   const loadEstimate = async () => {
@@ -449,17 +465,7 @@ function EstimateDetailsPage() {
     formDataRef.current = formData; // always track the latest, even before autosave fires
     if (isNew || !formLoadedRef.current || !id) return;
     dirtyRef.current = true;        // user has unsaved edits pending
-    const timer = setTimeout(async () => {
-      try {
-        setAutoSaveStatus('saving');
-        await updateEstimate(id, { ...formData, status: estimate?.status || 'draft' });
-        dirtyRef.current = false;    // edits are now persisted
-        setAutoSaveStatus('saved');
-        setTimeout(() => setAutoSaveStatus(null), 2000);
-      } catch (err) {
-        setAutoSaveStatus(null);
-      }
-    }, 2000);
+    const timer = setTimeout(() => { saveEstimate(); }, 2000);
     return () => clearTimeout(timer);
   }, [formData]);
 
@@ -778,25 +784,10 @@ function EstimateDetailsPage() {
   const generatePdfPreview = async () => {
     try {
       setPdfGenerating(true);
-      // Save current state first so PDF reflects on-screen values
-      try {
-        await updateEstimate(id, { 
-          taxExempt: formData.taxExempt, 
-          taxExemptReason: formData.taxExemptReason,
-          taxExemptCertNumber: formData.taxExemptCertNumber,
-          taxRate: formData.taxRate,
-          truckingCost: formData.truckingCost,
-          truckingDescription: formData.truckingDescription,
-          discountPercent: formData.discountPercent,
-          discountAmount: formData.discountAmount,
-          discountReason: formData.discountReason,
-          minimumOverride: formData.minimumOverride,
-          minimumOverrideReason: formData.minimumOverrideReason,
-          showDualPricing: formData.showDualPricing
-        });
-      } catch (saveErr) {
-        console.warn('Auto-save before PDF failed:', saveErr);
-      }
+      // Save the FULL current form first so the PDF reflects on-screen values — including notes. Previously
+      // this saved only a subset (no notes), so an edited/deleted note wasn't persisted and the PDF (and a
+      // later reload) showed the old notes.
+      await saveEstimate({ silent: true });
       const response = await downloadEstimatePDF(id);
       const blob = new Blob([response.data], { type: 'application/pdf' });
       
@@ -2069,10 +2060,20 @@ function EstimateDetailsPage() {
               <Save size={18} /> {saving ? 'Saving...' : 'Generate New Estimate'}
             </button>
           )}
-          {!isNew && autoSaveStatus && (
-            <span style={{ fontSize: '0.8rem', color: autoSaveStatus === 'saving' ? '#ff9800' : '#4caf50', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-              {autoSaveStatus === 'saving' ? '⏳ Saving...' : '✓ Saved'}
-            </span>
+          {!isNew && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button className="btn btn-primary btn-sm" onClick={() => saveEstimate()} disabled={autoSaveStatus === 'saving'}
+                style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Save size={15} /> {autoSaveStatus === 'saving' ? 'Saving…' : 'Save'}
+              </button>
+              <span style={{ fontSize: '0.78rem', color: autoSaveStatus === 'saving' ? '#ff9800' : '#777', fontWeight: 500 }}>
+                {autoSaveStatus === 'saving'
+                  ? 'Saving…'
+                  : lastSavedAt
+                    ? `Last saved ${lastSavedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+                    : 'Not saved yet'}
+              </span>
+            </div>
           )}
           {!isNew && (
             <button className="btn btn-outline btn-sm" onClick={handleDuplicateEstimate} disabled={duplicating}
@@ -3266,8 +3267,9 @@ function EstimateDetailsPage() {
             <h3 className="card-title" style={{ marginBottom: 16 }}>Notes & Terms</h3>
             <div className="form-group">
               <label className="form-label">Estimate Notes (visible to customer)</label>
-              <textarea className="form-textarea" value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
+              <textarea className="form-textarea" value={formData.notes || ''}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                onBlur={() => saveEstimate()} />
             </div>
           </div>
           </>
