@@ -380,6 +380,35 @@ function WorkOrderDetailsPage() {
   const [codOverridePassword, setCodOverridePassword] = useState('');
   const [codAction, setCodAction] = useState(null); // 'checklist' or 'pickup'
   const [codShowOverride, setCodShowOverride] = useState(false);
+  const [codVerifying, setCodVerifying] = useState(false);
+  const [codOverrideMsg, setCodOverrideMsg] = useState('');
+
+  // Single override handler with visible feedback. Trims input, handles the no-password-configured case,
+  // shows a "Verifying…" state, and a clear success/failure message.
+  const handleCodOverride = async () => {
+    setCodOverrideMsg('');
+    const entered = (codOverrideInput || '').trim();
+    if (!entered) { setCodOverrideMsg('Enter the override password.'); return; }
+    if (!codOverridePassword) {
+      setCodOverrideMsg('No override password is configured. Set one in Admin → Users & Logs → System.');
+      return;
+    }
+    setCodVerifying(true);
+    // brief delay so the user SEES it processing (the check itself is instant)
+    await new Promise(r => setTimeout(r, 400));
+    if (entered === String(codOverridePassword).trim()) {
+      setCodOverrideMsg('✓ Override accepted — proceeding…');
+      setTimeout(() => {
+        setCodVerifying(false);
+        setCodConfirmOpen(false); setCodShowOverride(false); setCodOverrideInput(''); setCodOverrideMsg('');
+        if (codAction === 'checklist') printPickupChecklist();
+        else if (codAction === 'pickup') setShowPickupModal(true);
+      }, 500);
+    } else {
+      setCodVerifying(false);
+      setCodOverrideMsg('✗ Incorrect override password. Please try again.');
+    }
+  };
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
 
   const loadInsp = useCallback(() => {
@@ -7476,6 +7505,7 @@ function WorkOrderDetailsPage() {
                 </button>
               </div>
 
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
               {codShowOverride && (
                 <div style={{ background: '#FFF3E0', border: '1px solid #FFB74D', borderRadius: 8, padding: 16, marginTop: 8 }}>
                   <p style={{ fontSize: '0.85rem', fontWeight: 600, color: '#E65100', marginBottom: 8 }}>
@@ -7483,26 +7513,20 @@ function WorkOrderDetailsPage() {
                   </p>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input type="password" className="form-input" placeholder="Override password" style={{ flex: 1 }}
-                      value={codOverrideInput} onChange={e => setCodOverrideInput(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && codOverrideInput) {
-                          if (codOverridePassword && codOverrideInput === codOverridePassword) {
-                            setCodConfirmOpen(false); setCodShowOverride(false);
-                            if (codAction === 'checklist') printPickupChecklist();
-                            else if (codAction === 'pickup') setShowPickupModal(true);
-                          } else { setError('Incorrect override password'); }
-                        }
-                      }} />
-                    <button className="btn" onClick={() => {
-                      if (codOverridePassword && codOverrideInput === codOverridePassword) {
-                        setCodConfirmOpen(false); setCodShowOverride(false);
-                        if (codAction === 'checklist') printPickupChecklist();
-                        else if (codAction === 'pickup') setShowPickupModal(true);
-                      } else { setError('Incorrect override password'); }
-                    }} style={{ background: '#E65100', color: 'white', border: 'none', fontWeight: 600 }}>
-                      Override
+                      value={codOverrideInput} disabled={codVerifying}
+                      onChange={e => { setCodOverrideInput(e.target.value); setCodOverrideMsg(''); }}
+                      onKeyDown={e => { if (e.key === 'Enter' && !codVerifying) handleCodOverride(); }} />
+                    <button className="btn" onClick={handleCodOverride} disabled={codVerifying}
+                      style={{ background: codVerifying ? '#BDBDBD' : '#E65100', color: 'white', border: 'none', fontWeight: 600, minWidth: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      {codVerifying ? (<><span className="spinner" style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }}></span> Verifying…</>) : 'Override'}
                     </button>
                   </div>
+                  {codOverrideMsg && (
+                    <p style={{ fontSize: '0.82rem', marginTop: 8, fontWeight: 600,
+                      color: codOverrideMsg.startsWith('✓') ? '#2E7D32' : codOverrideMsg.startsWith('✗') ? '#c62828' : '#E65100' }}>
+                      {codOverrideMsg}
+                    </p>
+                  )}
                   {!codOverridePassword && (
                     <p style={{ fontSize: '0.75rem', color: '#c62828', marginTop: 8 }}>
                       No override password set. Go to Admin → Users & Logs → System to configure one.
