@@ -1154,6 +1154,24 @@ function AdminPage({ section = 'users-logs' }) {
                   Your goal for the year (used for reporting; will drive suggested uplift as this grows).
                 </div>
               </div>
+              <div style={{ minWidth: 220 }}>
+                <label className="form-label">Quantity-discount strength</label>
+                <input type="number" step="0.01" min="0" max="1" className="form-input" style={{ maxWidth: 120 }}
+                  value={pricingCfg.qtyDiscountStrength ?? 0.12}
+                  onChange={(e) => setPricingCfg({ ...pricingCfg, qtyDiscountStrength: e.target.value })} />
+                <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 4 }}>
+                  How much the per-unit price drops as quantity rises. 0 = no discount (flat). 0.10 = gentle, 0.30 = steep. Try 0.12 to start.
+                </div>
+              </div>
+              <div style={{ minWidth: 220 }}>
+                <label className="form-label">Per-unit price floor ($)</label>
+                <input type="number" step="0.5" min="0" className="form-input" style={{ maxWidth: 120 }}
+                  value={pricingCfg.perUnitFloor ?? 0}
+                  onChange={(e) => setPricingCfg({ ...pricingCfg, perUnitFloor: e.target.value })} />
+                <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 4 }}>
+                  The suggested price per piece never drops below this, no matter how high the quantity (e.g. $1.50 for very large runs).
+                </div>
+              </div>
               <button className="btn btn-primary" disabled={pricingSaving} onClick={async () => {
                 setPricingSaving(true);
                 try {
