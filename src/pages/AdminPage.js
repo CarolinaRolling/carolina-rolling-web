@@ -49,6 +49,7 @@ function AdminPage({ section = 'users-logs' }) {
   });
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [expandedLogId, setExpandedLogId] = useState(null);
   const [logsTotal, setLogsTotal] = useState(0);
   const [logsPage, setLogsPage] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -1063,12 +1064,35 @@ function AdminPage({ section = 'users-logs' }) {
   };
 
   const getActionColor = (action) => {
-    if (action.includes('LOGIN_SUCCESS')) return '#2e7d32';
-    if (action.includes('LOGIN_FAILED')) return '#d32f2f';
-    if (action.includes('CREATED')) return '#1976d2';
-    if (action.includes('DELETED')) return '#d32f2f';
-    if (action.includes('UPDATED')) return '#e65100';
+    const a = (action || '').toLowerCase();
+    // Work order lifecycle — the important audit trail.
+    if (a === 'workorder_created') return '#2e7d32';                 // green: WO created
+    if (a === 'workorder_voided' || a === 'workorder_deleted') return '#c62828'; // red: void/delete
+    // System errors — orange.
+    if (a.includes('error') || a.includes('failed') || a.includes('denied')) return '#e65100';
+    // Basic system stuff (logins, etc.) — neutral grey, no color emphasis.
     return '#666';
+  };
+
+  // Row background tint to make WO events stand out in the list.
+  const getRowTint = (action) => {
+    const a = (action || '').toLowerCase();
+    if (a === 'workorder_created') return '#f1f8e9';
+    if (a === 'workorder_voided' || a === 'workorder_deleted') return '#fdecea';
+    if (a.includes('error') || a.includes('failed') || a.includes('denied')) return '#fff3e0';
+    return undefined;
+  };
+
+  // Human-friendly action label. For WO events: "Created DR-123 · Acme Corp".
+  const formatActionLabel = (log) => {
+    const a = (log.action || '').toLowerCase();
+    const d = log.details || {};
+    const dr = d.drLabel || (d.drNumber ? `DR-${d.drNumber}` : (d.orderNumber || ''));
+    const client = d.clientName ? ` · ${d.clientName}` : '';
+    if (a === 'workorder_created') return `Created ${dr}${client}`;
+    if (a === 'workorder_voided') return `Voided ${dr}${client}`;
+    if (a === 'workorder_deleted') return `Deleted ${dr}${client}`;
+    return log.action;
   };
 
   return (
@@ -2219,8 +2243,13 @@ function AdminPage({ section = 'users-logs' }) {
                 </tr>
               </thead>
               <tbody>
-                {logs.map((log) => (
-                  <tr key={log.id}>
+                {logs.map((log) => {
+                  const hasDetail = log.details && Object.keys(log.details).length > 0;
+                  const expanded = expandedLogId === log.id;
+                  return (
+                  <React.Fragment key={log.id}>
+                  <tr style={{ background: getRowTint(log.action), cursor: hasDetail ? 'pointer' : 'default' }}
+                      onClick={() => hasDetail && setExpandedLogId(expanded ? null : log.id)}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Clock size={14} color="#999" />
@@ -2229,26 +2258,34 @@ function AdminPage({ section = 'users-logs' }) {
                     </td>
                     <td style={{ fontWeight: 500 }}>{log.username || '—'}</td>
                     <td>
-                      <span style={{ 
-                        color: getActionColor(log.action),
-                        fontWeight: 500
-                      }}>
-                        {log.action}
+                      <span style={{ color: getActionColor(log.action), fontWeight: 600 }}>
+                        {formatActionLabel(log)}
                       </span>
                     </td>
                     <td style={{ fontSize: '0.85rem', color: '#666' }}>
-                      {log.resourceType && `${log.resourceType}`}
-                      {log.details && (
-                        <span style={{ marginLeft: 8 }}>
-                          {JSON.stringify(log.details)}
-                        </span>
+                      {hasDetail && (
+                        <span style={{ color: '#1565c0', fontWeight: 600 }}>{expanded ? '▼ Hide' : '▶ Details'}</span>
                       )}
                     </td>
                     <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
                       {log.ipAddress || '—'}
                     </td>
                   </tr>
-                ))}
+                  {expanded && hasDetail && (
+                    <tr style={{ background: '#fafafa' }}>
+                      <td colSpan={5} style={{ padding: '10px 16px', fontSize: '0.82rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+                          {Object.entries(log.details).map(([k, v]) => (
+                            <div key={k}><b style={{ color: '#555' }}>{k}:</b> {v === null || v === undefined || v === '' ? '—' : String(v)}</div>
+                          ))}
+                          <div><b style={{ color: '#555' }}>resource:</b> {log.resourceType || '—'} {log.resourceId ? `(${log.resourceId})` : ''}</div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
 
