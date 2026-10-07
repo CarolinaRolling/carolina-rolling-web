@@ -174,7 +174,7 @@ export default function COATab({
                         onClick={e => {
                           e.stopPropagation();
                           setPaymentModal(inv);
-                          setPaymentForm({ paymentType:balance>=grandTotal-0.01?'full':'partial', amount:balance.toFixed(2), paymentDate:new Date().toISOString().split('T')[0], paymentMethod:'check', paymentReference:'', notes:'' });
+                          setPaymentForm({ paymentType:balance>=grandTotal-0.01?'full':'partial', amount:balance.toFixed(2), paymentDate:new Date().toISOString().split('T')[0], paymentMethod:'check', paymentReference:'', notes:'', ccProcessingType:'in_person' });
                         }}
                         style={{ padding:'8px 14px', background:'#2e7d32', color:'white', border:'none', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:'0.85rem', flexShrink:0 }}>
                         + Payment
@@ -185,7 +185,8 @@ export default function COATab({
                     <div style={{ borderTop:'1px solid #eee', background:'#fafafa', padding:'10px 16px' }}>
                       <div style={{ fontSize:'0.8rem', fontWeight:700, color:'#888', marginBottom:8 }}>PAYMENT HISTORY</div>
                       {inv.payments.map(pmt => (
-                        <div key={pmt.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 0', borderBottom:'1px solid #f0f0f0' }}>
+                        <React.Fragment key={pmt.id}>
+                        <div style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 0', borderBottom: pmt.ccFeeAmount ? 'none' : '1px solid #f0f0f0' }}>
                           <span style={{ fontSize:'0.8rem', color:'#666', minWidth:90 }}>{new Date(pmt.paymentDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
                           <span style={{ fontSize:'0.85rem', color:'#333', flex:1 }}>
                             {pmt.paymentType==='downpayment'?'Down Payment':pmt.paymentType==='full'?'Paid in Full':'Partial Payment'}
@@ -200,6 +201,15 @@ export default function COATab({
                             ✕ Void
                           </button>
                         </div>
+                        {pmt.ccFeeAmount && (
+                          <div style={{ display:'flex', alignItems:'center', gap:10, padding:'4px 0 6px 100px', borderBottom:'1px solid #f0f0f0' }}>
+                            <span style={{ fontSize:'0.78rem', color:'#e65100', flex:1 }}>
+                              ↳ Credit card fee ({pmt.ccProcessingType==='manual'?'3.5%':'2.6%'} + $0.15 · {pmt.ccProcessingType==='manual'?'manual/keyed':'in-person'})
+                            </span>
+                            <span style={{ fontWeight:600, color:'#e65100', fontSize:'0.85rem' }}>${parseFloat(pmt.ccFeeAmount).toFixed(2)}</span>
+                          </div>
+                        )}
+                        </React.Fragment>
                       ))}
                     </div>
                   )}

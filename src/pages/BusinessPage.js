@@ -84,7 +84,7 @@ function BusinessPage() {
   const [ledgerSearch, setLedgerSearch] = useState('');
   const [ledgerExpanded, setLedgerExpanded] = useState(null);
   const [paymentModal, setPaymentModal] = useState(null);
-  const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
+  const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '', ccProcessingType: 'in_person' });
   const [payHistory, setPayHistory] = useState(null);
   const [payTab, setPayTab] = useState('outstanding');
   const [payLoading, setPayLoading] = useState(false);

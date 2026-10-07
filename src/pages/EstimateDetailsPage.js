@@ -773,13 +773,15 @@ function EstimateDetailsPage() {
     const laborOnlyTax = formData.taxExempt ? 0 : laborOnlyAfterDiscount * (parseFloat(formData.taxRate) / 100);
     const laborOnlyTotal = laborOnlyAfterDiscount + laborOnlyTax + trucking;
     
-    // Calculate credit card totals (Square fees)
+    // Calculate credit card totals (Square fees). Use the GROSS-UP formula so we actually NET the grandTotal
+    // after Square takes its cut — simply adding the fee leaves us short, because Square charges its % on the
+    // higher (fee-included) total. charge = (target + fixedFee) / (1 - percent).
     // In-Person: 2.6% + $0.15
-    const ccInPersonFee = (grandTotal * 2.6 / 100) + 0.15;
-    const ccInPersonTotal = grandTotal + ccInPersonFee;
+    const ccInPersonTotal = (grandTotal + 0.15) / (1 - 0.026);
+    const ccInPersonFee = ccInPersonTotal - grandTotal;
     // Manual Input: 3.5% + $0.15
-    const ccManualFee = (grandTotal * 3.5 / 100) + 0.15;
-    const ccManualTotal = grandTotal + ccManualFee;
+    const ccManualTotal = (grandTotal + 0.15) / (1 - 0.035);
+    const ccManualFee = ccManualTotal - grandTotal;
     
     return { partsSubtotal, discountAmt, afterDiscount, trucking, taxAmount, grandTotal, laborOnlySubtotal, laborOnlyTotal, ccInPersonFee, ccInPersonTotal, ccManualFee, ccManualTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel };
   };
