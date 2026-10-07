@@ -1612,7 +1612,9 @@ function WorkOrderDetailsPage() {
   // Compute remaining quantities per part based on pickup history
   const getPickupSummary = () => {
     const history = order?.pickupHistory || [];
-    const parts = order?.parts || [];
+    // Fab services and shop-rate items are attached WORK, not shippable pieces — exclude them from the
+    // pickup/shipping counts so a 1-piece order with a weld service doesn't read "1 of 2".
+    const parts = (order?.parts || []).filter(p => !['fab_service', 'shop_rate'].includes(p.partType));
     
     const pickedByPart = {};
     history.forEach(entry => {
