@@ -1252,15 +1252,15 @@ function WorkOrderDetailsPage() {
       // If editing and cut service is now none, remove any linked cut fab services
       if (editingPart && (!partData._cutServiceType || partData._cutServiceType === '')) {
         try {
-          const linkedFabs = (order.parts || []).filter(p =>
-            p.partType === 'fab_service' &&
-            (p.formData || {})._linkedPartId === editingPart.id &&
-            (
-              (p.formData || {})._serviceType === 'cut_to_size' ||
-              (p.specialInstructions || '').toLowerCase().includes('cut to ring') ||
-              (p.specialInstructions || '').toLowerCase().includes('cut to size')
-            )
-          );
+          // Only remove the AUTO-GENERATED cut service (marked "✂️ Cut —") — never a manually-added fab service.
+          const linkedFabs = (order.parts || []).filter(p => {
+            const fd = p.formData || {};
+            if (p.partType !== 'fab_service') return false;
+            if (fd._linkedPartId !== editingPart.id) return false;
+            return fd._serviceType === 'cut_to_size'
+              && typeof fd._materialDescription === 'string'
+              && fd._materialDescription.includes('Cut —');
+          });
           for (const fab of linkedFabs) {
             await deleteWorkOrderPart(id, fab.id);
           }

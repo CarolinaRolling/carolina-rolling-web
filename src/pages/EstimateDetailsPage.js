@@ -1239,6 +1239,11 @@ function EstimateDetailsPage() {
         if (weldTotal > 0 && (!dataToSend.laborTotal || parseFloat(dataToSend.laborTotal) === 0)) {
           dataToSend.laborTotal = weldTotal.toFixed(2);
           dataToSend.partTotal = (weldTotal * fabQty).toFixed(2);
+          // Set the base labor NOW so the recalc block below uses the right base on the FIRST save — without
+          // this, a new weld service's price was recomputed from an empty base and changed until a re-save.
+          if (!dataToSend._baseLaborTotal || parseFloat(dataToSend._baseLaborTotal) === 0) {
+            dataToSend._baseLaborTotal = weldTotal.toFixed(2);
+          }
         }
         // Also try recomputing from raw weld inputs
         if ((!dataToSend.laborTotal || parseFloat(dataToSend.laborTotal) === 0)) {
@@ -1256,6 +1261,10 @@ function EstimateDetailsPage() {
         // Manual pricing: laborTotal exists but partTotal is 0
         if (parseFloat(dataToSend.laborTotal) > 0 && (!dataToSend.partTotal || parseFloat(dataToSend.partTotal) === 0)) {
           dataToSend.partTotal = (parseFloat(dataToSend.laborTotal) * fabQty).toFixed(2);
+        }
+        // Seed the base labor from the entered labor if it's not set, so the recalc below is stable first time.
+        if ((!dataToSend._baseLaborTotal || parseFloat(dataToSend._baseLaborTotal) === 0) && parseFloat(dataToSend.laborTotal) > 0) {
+          dataToSend._baseLaborTotal = (parseFloat(dataToSend.laborTotal)).toFixed(2);
         }
         // Reverse: partTotal set but laborTotal missing
         if ((!dataToSend.laborTotal || parseFloat(dataToSend.laborTotal) === 0) && parseFloat(dataToSend.partTotal) > 0) {
@@ -1338,15 +1347,19 @@ function EstimateDetailsPage() {
       if (editingPart && (!dataToSend._cutServiceType || dataToSend._cutServiceType === '')) {
         try {
           const currentParts = parts || [];
-          const toRemove = currentParts.filter(p =>
-            p.partType === 'fab_service' &&
-            (p.formData || {})._linkedPartId === editingPart.id &&
-            (
-              (p.formData || {})._serviceType === 'cut_to_size' ||
-              (p.specialInstructions || '').toLowerCase().includes('cut to ring') ||
-              (p.specialInstructions || '').toLowerCase().includes('cut to size')
-            )
-          );
+          // Only remove the AUTO-GENERATED cut service for complete rings — never a manually-added fab service.
+          // An auto-cut service is a fab_service, linked to this part, whose service type is cut_to_size AND
+          // whose material description carries the auto-cut marker (✂️ Cut). Manually-added services (even
+          // "cut to size" ones the user typed) are left alone so editing a part never deletes the user's work.
+          const toRemove = currentParts.filter(p => {
+            const fd = p.formData || {};
+            if (p.partType !== 'fab_service') return false;
+            if (fd._linkedPartId !== editingPart.id) return false;
+            const isAutoCut = fd._serviceType === 'cut_to_size'
+              && typeof fd._materialDescription === 'string'
+              && fd._materialDescription.includes('Cut —');
+            return isAutoCut;
+          });
           for (const fab of toRemove) {
             await deleteEstimatePart(id, fab.id);
           }
