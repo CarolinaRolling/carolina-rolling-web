@@ -316,7 +316,11 @@ export default function ConeRollForm({ partData, setPartData, vendorSuggestions,
   }, [coneData, coneType, eccentricAngle, radialSegments, coneCount, heightSegs, segmentSpecs]);
 
   useEffect(function() {
-    var u = { materialDescription: materialDescription };
+    // Keep BOTH the top-level column and the _materialDescription formData key in sync.
+    // Every other part form writes _materialDescription; the Android app and several web views
+    // read it first, so if the cone form only set the column a stale _materialDescription
+    // (e.g. a small-end dia carried over from a prior part type) would show truncated specs.
+    var u = { materialDescription: materialDescription, _materialDescription: materialDescription };
     if (coneData) u.sectionSize = 'Dia ' + parseFloat(largeDia).toFixed(3) + '" to Dia ' + parseFloat(smallDia).toFixed(3) + '"';
     setPartData(function(p) { return Object.assign({}, p, u); });
   }, [materialDescription]);

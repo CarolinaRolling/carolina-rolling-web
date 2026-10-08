@@ -1819,7 +1819,7 @@ function EstimateDetailsPage() {
         const vh = parseFloat(part._coneHeight) || 0;
         let c = thk ? thk + ' ' : '';
         c += 'Cone - ';
-        if (ld && sd && vh) c += ld.toFixed(1) + '" ' + ldType + ' x ' + sd.toFixed(1) + '" ' + sdType + ' x ' + vh.toFixed(1) + '" VH';
+        if (ld && sd && vh) c += ld.toFixed(3) + '" ' + ldType + ' x ' + sd.toFixed(3) + '" ' + sdType + ' x ' + vh.toFixed(3) + '" VH';
         if (part.material) c += ' ' + part.material;
         if (part._materialOrigin) c += ' ' + part._materialOrigin;
         descLines.push(c);
@@ -2823,7 +2823,7 @@ function EstimateDetailsPage() {
                       <span><strong>Qty:</strong> {part.quantity}</span>
                       {part.sectionSize && <span style={{ color: '#555' }}>| <strong>Size:</strong> {part.partType === 'pipe_roll' && (part.formData || {})._schedule ? part.sectionSize.replace(' Pipe', ` Sch ${(part.formData || {})._schedule} Pipe`) : part.sectionSize}</span>}
                       {part.thickness && <span style={{ color: '#555' }}>| <strong>Thk:</strong> {inch(part.thickness)}</span>}
-                      {part.outerDiameter && <span style={{ color: '#555' }}>| <strong>OD:</strong> {inch(part.outerDiameter)}</span>}
+                      {part.outerDiameter && ['pipe_roll','shaped_plate','other'].includes(part.partType) && <span style={{ color: '#555' }}>| <strong>OD:</strong> {inch(part.outerDiameter)}</span>}
                       {part.wallThickness && part.wallThickness !== 'SOLID' && <span style={{ color: '#555' }}>| <strong>Wall:</strong> {part.wallThickness}</span>}
                       {part.wallThickness === 'SOLID' && <span style={{ color: '#e65100', fontWeight: 600 }}>| Solid Bar</span>}
                       {part.width && <span style={{ color: '#555' }}>| <strong>Width:</strong> {inch(part.width)}</span>}
@@ -4087,7 +4087,19 @@ function EstimateDetailsPage() {
             <div className="modal-header">
               <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 {editingPart ? 'Edit Part' : 'Add Part'} — {PART_TYPES[partData.partType]?.icon} {PART_TYPES[partData.partType]?.label || partData.partType}
-                {editingPart && <><span style={{ fontSize: '0.72rem', color: '#1976d2', fontWeight: 600 }}>↻ Change type:</span><select value={partData.partType} onChange={(e) => { if (window.confirm(`Change part type to ${PART_TYPES[e.target.value]?.label}? This will reset type-specific fields.`)) { setPartData(prev => ({ ...prev, partType: e.target.value })); }}} style={{ marginLeft: 8, padding: '2px 8px', fontSize: '0.8rem', borderRadius: 4, border: '1px solid #ccc', background: '#f5f5f5', cursor: 'pointer' }}>
+                {editingPart && <><span style={{ fontSize: '0.72rem', color: '#1976d2', fontWeight: 600 }}>↻ Change type:</span><select value={partData.partType} onChange={(e) => { if (window.confirm(`Change part type to ${PART_TYPES[e.target.value]?.label}? This will reset type-specific fields.`)) {
+                      const newType = e.target.value;
+                      const CLEAR_FIELDS = [
+                        'outerDiameter','wallThickness','sectionSize','width','length','thickness','radius','diameter','arcDegrees','flangeOut',
+                        'materialDescription','_materialDescription','_rollingDescription',
+                        '_angleSize','_tubeSize','_barSize','_channelSize','_beamSize','_teeSize','_pipeSize','_roundTubeSelection','_schedule',
+                        '_coneLargeDia','_coneSmallDia','_coneHeight','_coneLargeDiaType','_coneSmallDiaType','_coneLargeDiaMeasure','_coneSmallDiaMeasure','_coneType','_coneHeightSegments','_coneLayerSegments','_coneRadialSegments','_coneSegmentDetails','_coneLayers','_coneCount','_coneCustomCuts','_coneHeightCutMethod','_coneEccentricAngle','_conePricePerSegment','_coneSegmentPricing','_coneShowAdvanced',
+                        '_innerDiameter','_rollMeasurePoint','_rollMeasureType','_legOrientation','_sideOrientation','_orientationOption',
+                        '_pitchEnabled','_pitchDirection','_pitchMethod','_pitchRun','_pitchRise','_pitchAngle','_pitchSpaceValue','_pitchSpaceType','_pitchDevelopedDia',
+                        '_completeRings','_ringsNeeded','_ringSticksNeeded','_rollToMethod','rollType'
+                      ];
+                      setPartData(prev => { const next = { ...prev, partType: newType }; CLEAR_FIELDS.forEach(k => { delete next[k]; }); return next; });
+                    }}} style={{ marginLeft: 8, padding: '2px 8px', fontSize: '0.8rem', borderRadius: 4, border: '1px solid #ccc', background: '#f5f5f5', cursor: 'pointer' }}>
                   {Object.entries(PART_TYPES).filter(([k]) => !['rush_service'].includes(k)).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
                 </select></>}
               </h3>
