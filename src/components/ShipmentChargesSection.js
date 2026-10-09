@@ -93,6 +93,9 @@ export default function ShipmentChargesSection({ charges = [], onAdd, onUpdate, 
   const [vendorSearch, setVendorSearch] = useState('');
   const [vendorSuggestions, setVendorSuggestions] = useState([]);
   const [showVendorDrop, setShowVendorDrop] = useState(false);
+  // Display-only driving distance/time between pickup and dropoff (Google Distance Matrix).
+  const [distInfo, setDistInfo] = useState(null); // null | {status:'loading'} | {miles,time} | {error}
+  const distReqRef = useRef(0);
 
   const openAdd = () => { setVendorSearch(''); setEditModal({ data: { ...emptyCharge }, chargeId: null }); };
   const openEdit = c => {
@@ -114,6 +117,38 @@ export default function ShipmentChargesSection({ charges = [], onAdd, onUpdate, 
   const grandTotal = charges.reduce((s, c) => s + calcLine(c).total, 0);
   const f = editModal?.data;
   const preview = f ? calcLine(f) : null;
+
+  // Resolved endpoints for the distance lookup (shop legs use the shop address).
+  const distOrigin = f ? (f.pickupIsShop ? SHOP_ADDRESS : (f.pickupLocation || '')) : '';
+  const distDest = f ? (f.dropoffIsShop ? SHOP_ADDRESS : (f.dropoffLocation || '')) : '';
+  const modalOpen = !!editModal;
+
+  useEffect(() => {
+    if (!modalOpen) { setDistInfo(null); return; }
+    const o = (distOrigin || '').trim(), d = (distDest || '').trim();
+    if (o.length < 5 || d.length < 5 || o === d) { setDistInfo(null); return; }
+    if (!window.google?.maps?.DistanceMatrixService) { setDistInfo(null); return; }
+    const myReq = ++distReqRef.current;
+    setDistInfo({ status: 'loading' });
+    // Debounce so we don't fire a billable lookup on every keystroke.
+    const t = setTimeout(() => {
+      try {
+        const svc = new window.google.maps.DistanceMatrixService();
+        svc.getDistanceMatrix({
+          origins: [o], destinations: [d],
+          travelMode: window.google.maps.TravelMode.DRIVING,
+          unitSystem: window.google.maps.UnitSystem.IMPERIAL,
+        }, (resp, status) => {
+          if (myReq !== distReqRef.current) return; // a newer request superseded this one
+          if (status !== 'OK') { setDistInfo({ error: status }); return; }
+          const el = resp?.rows?.[0]?.elements?.[0];
+          if (!el || el.status !== 'OK') { setDistInfo({ error: el?.status || 'NO_RESULT' }); return; }
+          setDistInfo({ miles: el.distance?.text, time: el.duration?.text });
+        });
+      } catch (e) { setDistInfo({ error: 'ERROR' }); }
+    }, 700);
+    return () => clearTimeout(t);
+  }, [modalOpen, distOrigin, distDest]);
 
   return (
     <div className="card" style={{ marginTop: 16, border: '2px solid #7b5ea7', background: 'white' }}>
@@ -232,6 +267,21 @@ export default function ShipmentChargesSection({ charges = [], onAdd, onUpdate, 
                 </label>
                 <AddressInput value={f.dropoffIsShop ? SHOP_ADDRESS : f.dropoffLocation} onChange={v => set('dropoffLocation', v)} disabled={f.dropoffIsShop} />
               </div>
+
+              {distInfo && (
+                <div style={{ fontSize: '0.8rem', borderRadius: 6, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6,
+                  color: distInfo.error ? '#b26a00' : '#1565c0',
+                  background: distInfo.error ? '#fff8e1' : '#e8f1fb',
+                  border: '1px solid ' + (distInfo.error ? '#ffe0a3' : '#c6dbf5') }}>
+                  {distInfo.status === 'loading'
+                    ? '🚚 Calculating driving distance…'
+                    : distInfo.error
+                      ? (distInfo.error === 'REQUEST_DENIED'
+                          ? '🚚 Distance unavailable — enable the Distance Matrix API on your Google key'
+                          : '🚚 Driving distance unavailable for these addresses')
+                      : <span>🚚 Driving distance: <strong>{distInfo.miles}</strong>{distInfo.time ? ` · ~${distInfo.time} drive` : ''}</span>}
+                </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group" style={{ margin: 0 }}>
