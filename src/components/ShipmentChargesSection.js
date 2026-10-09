@@ -78,7 +78,7 @@ function AddressInput({ value, onChange, disabled, placeholder }) {
   );
 }
 
-const emptyCharge = { carrierType: 'contracted', vendorId: null, vendorName: '', pickupLocation: '', pickupIsShop: false, dropoffLocation: '', dropoffIsShop: false, shippingCost: '', shippingMarkup: '0', materialsCost: '', materialsMarkup: '0', notes: '' };
+const emptyCharge = { carrierType: 'contracted', vendorId: null, vendorName: '', pickupLocation: '', pickupIsShop: false, dropoffLocation: '', dropoffIsShop: false, shippingCost: '', shippingMarkup: '0', materialsCost: '', materialsMarkup: '0', notes: '', distanceMiles: null, durationMinutes: null };
 
 function calcLine(c) {
   const s = (parseFloat(c.shippingCost) || 0) * (1 + (parseFloat(c.shippingMarkup) || 0) / 100);
@@ -100,7 +100,7 @@ export default function ShipmentChargesSection({ charges = [], onAdd, onUpdate, 
   const openAdd = () => { setVendorSearch(''); setEditModal({ data: { ...emptyCharge }, chargeId: null }); };
   const openEdit = c => {
     setVendorSearch(c.vendor?.name || c.vendorName || '');
-    setEditModal({ chargeId: c.id, data: { carrierType: c.carrierType || 'contracted', vendorId: c.vendorId || null, vendorName: c.vendor?.name || c.vendorName || '', pickupLocation: c.pickupLocation || '', pickupIsShop: !!c.pickupIsShop, dropoffLocation: c.dropoffLocation || '', dropoffIsShop: !!c.dropoffIsShop, shippingCost: c.shippingCost != null ? String(c.shippingCost) : '', shippingMarkup: c.shippingMarkup != null ? String(c.shippingMarkup) : '0', materialsCost: c.materialsCost != null ? String(c.materialsCost) : '', materialsMarkup: c.materialsMarkup != null ? String(c.materialsMarkup) : '0', notes: c.notes || '' } });
+    setEditModal({ chargeId: c.id, data: { carrierType: c.carrierType || 'contracted', vendorId: c.vendorId || null, vendorName: c.vendor?.name || c.vendorName || '', pickupLocation: c.pickupLocation || '', pickupIsShop: !!c.pickupIsShop, dropoffLocation: c.dropoffLocation || '', dropoffIsShop: !!c.dropoffIsShop, shippingCost: c.shippingCost != null ? String(c.shippingCost) : '', shippingMarkup: c.shippingMarkup != null ? String(c.shippingMarkup) : '0', materialsCost: c.materialsCost != null ? String(c.materialsCost) : '', materialsMarkup: c.materialsMarkup != null ? String(c.materialsMarkup) : '0', notes: c.notes || '', distanceMiles: c.distanceMiles != null ? c.distanceMiles : null, durationMinutes: c.durationMinutes != null ? c.durationMinutes : null } });
   };
   const set = (k, v) => setEditModal(p => ({ ...p, data: { ...p.data, [k]: v } }));
 
@@ -144,6 +144,11 @@ export default function ShipmentChargesSection({ charges = [], onAdd, onUpdate, 
           const el = resp?.rows?.[0]?.elements?.[0];
           if (!el || el.status !== 'OK') { setDistInfo({ error: el?.status || 'NO_RESULT' }); return; }
           setDistInfo({ miles: el.distance?.text, time: el.duration?.text });
+          // Persist numeric miles/minutes onto the form so they save and show on the card.
+          const milesNum = el.distance?.value != null ? Math.round((el.distance.value / 1609.344) * 10) / 10 : null;
+          const minNum = el.duration?.value != null ? Math.round(el.duration.value / 60) : null;
+          set('distanceMiles', milesNum);
+          set('durationMinutes', minNum);
         });
       } catch (e) { setDistInfo({ error: 'ERROR' }); }
     }, 700);
@@ -180,6 +185,11 @@ export default function ShipmentChargesSection({ charges = [], onAdd, onUpdate, 
                       <span style={{ margin: '0 8px', color: '#ccc' }}>→</span>
                       <span style={{ color: '#888' }}>To:</span> {c.dropoffIsShop ? SHOP_ADDRESS : (c.dropoffLocation || '—')}
                     </div>
+                    {c.distanceMiles != null && Number(c.distanceMiles) > 0 && (
+                      <div style={{ fontSize: '0.76rem', color: '#1565c0', marginTop: 2 }}>
+                        🚚 {Number(c.distanceMiles).toFixed(1)} mi{c.durationMinutes ? ` · ~${c.durationMinutes} min drive` : ''}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 16, marginTop: 4, fontSize: '0.78rem', color: '#777' }}>
                       {line.shipping > 0 && <span>Shipping: <strong style={{ color: '#333' }}>{fmt(line.shipping)}</strong></span>}
                       {line.materials > 0 && <span>Materials: <strong style={{ color: '#333' }}>{fmt(line.materials)}</strong></span>}
