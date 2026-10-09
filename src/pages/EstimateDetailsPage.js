@@ -714,6 +714,22 @@ function EstimateDetailsPage() {
       partsSubtotal += eaPricedTotal;
     }
 
+    // Expedite applies to LABOR ONLY (not material). Sum the labor charged across non-rush parts
+    // (mirrors the labor-only subtotal used for dual pricing), honoring the minimum-labor bump.
+    let expediteLaborBase = 0;
+    parts.forEach(part => {
+      if (part.partType === 'rush_service') return;
+      if (['fab_service', 'shop_rate'].includes(part.partType)) {
+        expediteLaborBase += parseFloat(part.partTotal) || 0;
+      } else {
+        const q = parseInt(part.quantity) || 1;
+        expediteLaborBase += (parseFloat(part.laborTotal) || 0) * q;
+      }
+    });
+    if (minInfo.minimumApplies) {
+      expediteLaborBase += (parseFloat(minInfo.adjustedLabor) || 0) - (parseFloat(minInfo.totalLabor) || 0);
+    }
+
     // Rush service: calculate expedite and emergency
     let expediteAmount = 0, emergencyAmount = 0, expediteLabel = '', emergencyLabel = '';
     const rushPart = parts.find(p => p.partType === 'rush_service');
@@ -726,8 +742,8 @@ function EstimateDetailsPage() {
         } else {
           let pct = parseFloat(fd._expediteType) || 0;
           if (fd._expediteType === 'custom_pct') pct = parseFloat(fd._expediteCustomPct) || 0;
-          expediteAmount = partsSubtotal * (pct / 100);
-          expediteLabel = `Expedite (${pct}%)`;
+          expediteAmount = expediteLaborBase * (pct / 100);
+          expediteLabel = `Expedite (${pct}% of labor)`;
         }
       }
       if (fd._emergencyEnabled) {
@@ -2807,7 +2823,7 @@ function EstimateDetailsPage() {
                         <div style={{ padding: 12, background: '#fff8e1', borderRadius: 8, border: '2px solid #ffcc80' }}>
                           {fd._expediteEnabled && (
                             <div style={{ padding: '4px 0', color: '#e65100', fontWeight: 600 }}>
-                              🚨 Expedite: {fd._expediteType === 'custom_amt' ? `$${parseFloat(fd._expediteCustomAmt) || 0}` : `${fd._expediteType === 'custom_pct' ? (fd._expediteCustomPct || 0) : fd._expediteType}% of parts subtotal`}
+                              🚨 Expedite: {fd._expediteType === 'custom_amt' ? `$${parseFloat(fd._expediteCustomAmt) || 0}` : `${fd._expediteType === 'custom_pct' ? (fd._expediteCustomPct || 0) : fd._expediteType}% of labor`}
                             </div>
                           )}
                           {fd._emergencyEnabled && (
@@ -3237,24 +3253,9 @@ function EstimateDetailsPage() {
               );
             })}
 
-            {/* Trucking */}
-            <div style={{ background: '#fff3e0', border: '1px solid #ffb74d', borderRadius: 8, padding: 16, marginTop: 16 }}>
-              <h4 style={{ margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                🚚 Trucking <span style={{ fontSize: '0.75rem', color: '#e65100' }}>(Not Taxed)</span>
-              </h4>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <input type="text" className="form-input" placeholder="Description..."
-                  value={formData.truckingDescription}
-                  onChange={(e) => setFormData({ ...formData, truckingDescription: e.target.value })}
-                  style={{ flex: 1 }} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span>$</span>
-                  <input type="number" className="form-input" value={formData.truckingCost}
-                    onChange={(e) => setFormData({ ...formData, truckingCost: parseFloat(e.target.value) || 0 })}
-                    style={{ width: 100 }} step="0.01" />
-                </div>
-              </div>
-            </div>
+            {/* Legacy Trucking input removed — use the Shipping & Handling section below, which
+                supports multiple shipments and now carries onto the estimate PDF, invoice and QuickBooks.
+                Historical estimates that still have a trucking value keep showing it on their documents. */}
 
             {/* Files */}
             <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>

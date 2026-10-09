@@ -2574,6 +2574,18 @@ function WorkOrderDetailsPage() {
       partsSubtotal = nonEaTotal + eaPricedTotal;
     }
     
+    // Expedite applies to LABOR ONLY (not material): e.g. 50% on $700 labor = $350, regardless of
+    // material cost. Sum the labor charged across all non-rush parts, honoring the minimum-labor bump.
+    let expediteLaborBase = 0;
+    parts.forEach(p => {
+      if (p.partType === 'rush_service') return;
+      const q = parseInt(p.quantity) || 1;
+      expediteLaborBase += basePartLabor(p) * q;
+    });
+    if (minInfo.minimumApplies) {
+      expediteLaborBase += (parseFloat(minInfo.adjustedLabor) || 0) - (parseFloat(minInfo.totalLabor) || 0);
+    }
+
     // Rush service: calculate expedite and emergency from rush_service parts
     let expediteAmount = 0;
     let emergencyAmount = 0;
@@ -2589,8 +2601,8 @@ function WorkOrderDetailsPage() {
         } else {
           let pct = parseFloat(fd._expediteType) || 0;
           if (fd._expediteType === 'custom_pct') pct = parseFloat(fd._expediteCustomPct) || 0;
-          expediteAmount = partsSubtotal * (pct / 100);
-          expediteLabel = `Expedite (${pct}%)`;
+          expediteAmount = expediteLaborBase * (pct / 100);
+          expediteLabel = `Expedite (${pct}% of labor)`;
         }
       }
       if (fd._emergencyEnabled) {
@@ -2608,8 +2620,12 @@ function WorkOrderDetailsPage() {
     const taxRate = parseFloat(editData.taxRate) || parseFloat(order?.taxRate) || defaultTaxRate;
     const isTaxExempt = editData.taxExempt || order?.taxExempt;
     const taxAmount = isTaxExempt ? 0 : subtotal * (taxRate / 100);
-    const grandTotal = subtotal + taxAmount;
-    return { partsSubtotal, trucking, subtotal, taxRate, taxAmount, grandTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel };
+    // Shipping & Handling is a non-taxed add-on (same treatment as the invoice/estimate), added after tax.
+    const shippingChargesTotal = (shipmentCharges || []).reduce((s, c) =>
+      s + (parseFloat(c.shippingCost) || 0) * (1 + (parseFloat(c.shippingMarkup) || 0) / 100)
+        + (parseFloat(c.materialsCost) || 0) * (1 + (parseFloat(c.materialsMarkup) || 0) / 100), 0);
+    const grandTotal = subtotal + taxAmount + shippingChargesTotal;
+    return { partsSubtotal, trucking, shippingChargesTotal, subtotal, taxRate, taxAmount, grandTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel };
   };
   
   // Order Material functions
@@ -4958,27 +4974,10 @@ function WorkOrderDetailsPage() {
                 <span>{formatCurrency(calculateTotals().partsSubtotal)}</span>
               </div>
               
-              {isEditing ? (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                  <div style={{ flex: 1 }}>
-                    <input 
-                      className="form-input" 
-                      placeholder="Trucking description"
-                      value={editData.truckingDescription}
-                      onChange={(e) => setEditData({ ...editData, truckingDescription: e.target.value })}
-                      style={{ marginBottom: 4, fontSize: '0.85rem' }}
-                    />
-                  </div>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    className="form-input" 
-                    value={editData.truckingCost}
-                    onChange={(e) => setEditData({ ...editData, truckingCost: e.target.value })}
-                    style={{ width: 100, textAlign: 'right', marginLeft: 8 }}
-                  />
-                </div>
-              ) : (
+              {/* Legacy Trucking input removed — use the Shipping & Handling section below (multiple
+                  shipments, carries to invoice + QuickBooks). A legacy trucking value, if one exists,
+                  still shows read-only here. */}
+              {(parseFloat(order.truckingCost) || 0) > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
                   <span>{order.truckingDescription || 'Trucking'}:</span>
                   <span>{formatCurrency(order.truckingCost)}</span>
