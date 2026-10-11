@@ -39,7 +39,7 @@ import {
   uploadWorkOrderDocuments, getWorkOrderDocumentSignedUrl, downloadWorkOrderDocument, deleteWorkOrderDocument, regeneratePODocument, createPODocument, toggleDocumentPortal,
   getShipmentByWorkOrderId, getNextPONumber, orderWorkOrderMaterial,
   searchVendors, searchLinkableEstimates, linkEstimateToWorkOrder, unlinkEstimateFromWorkOrder,
-  searchClients, getSettings, getHtsCodes, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
+  searchClients, getSettings, getCodOverrideStatus, verifyCodOverride, getWorkOrderInvoiceTotals, getHtsCodes, getUnlinkedShipments, linkShipmentToWorkOrder, unlinkShipmentFromWorkOrder, duplicateWorkOrderToEstimate,
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, getFrequentDrivers, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
   generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo,
@@ -377,7 +377,8 @@ function WorkOrderDetailsPage() {
   const [drInput, setDrInput] = useState('');
   const [codConfirmOpen, setCodConfirmOpen] = useState(false);
   const [codOverrideInput, setCodOverrideInput] = useState('');
-  const [codOverridePassword, setCodOverridePassword] = useState('');
+  // Only whether a password is configured — the password itself is checked on the server
+  const [codOverridePassword, setCodOverridePassword] = useState(false);
   const [codAction, setCodAction] = useState(null); // 'checklist' or 'pickup'
   const [codShowOverride, setCodShowOverride] = useState(false);
   const [codVerifying, setCodVerifying] = useState(false);
@@ -394,9 +395,19 @@ function WorkOrderDetailsPage() {
       return;
     }
     setCodVerifying(true);
-    // brief delay so the user SEES it processing (the check itself is instant)
-    await new Promise(r => setTimeout(r, 400));
-    if (entered === String(codOverridePassword).trim()) {
+    let accepted = false;
+    try {
+      await verifyCodOverride(id, entered, codAction);
+      accepted = true;
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status !== 403) {   // 429 (too many tries), 409 (none configured) or no connection
+        setCodVerifying(false);
+        setCodOverrideMsg('✗ ' + (err?.response?.data?.error?.message || 'Could not reach the server to check the password. Try again.'));
+        return;
+      }
+    }
+    if (accepted) {
       setCodOverrideMsg('✓ Override accepted — proceeding…');
       setTimeout(() => {
         setCodVerifying(false);
@@ -410,6 +421,8 @@ function WorkOrderDetailsPage() {
     }
   };
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  // The invoice total as the server computes it for the PDF / ledger / QuickBooks (audit M16)
+  const [serverTotals, setServerTotals] = useState(null);
 
   const loadInsp = useCallback(() => {
     if (!id) return;
@@ -432,8 +445,8 @@ function WorkOrderDetailsPage() {
   useEffect(() => { 
     loadOrder(); loadLaborMinimums(); loadConfirmedHts(); 
     // Load COD override password
-    getSettings('cod_override_password').then(res => {
-      if (res.data.data?.value) setCodOverridePassword(res.data.data.value);
+    getCodOverrideStatus().then(res => {
+      setCodOverridePassword(!!res.data.data?.configured);
     }).catch(() => {});
   }, [id]);
 
@@ -486,6 +499,7 @@ function WorkOrderDetailsPage() {
       const response = await getWorkOrderById(id);
       const data = response.data.data;
       setOrder(data);
+      getWorkOrderInvoiceTotals(id).then(r => setServerTotals(r.data.data || null)).catch(() => setServerTotals(null));
       setInternalNotesDraft(data.internalNotes || '');
 
       // Determine correct tax rate: WO stored > client-specific > admin default
@@ -755,6 +769,8 @@ function WorkOrderDetailsPage() {
       const msg = err?.response?.data?.error?.message || err?.response?.data?.message || 'Failed to delete work order';
       if (msg.includes('voided instead')) {
         setShowDeleteModal(true);
+      } else if (msg.includes('turned off')) {
+        setError(msg);   // DELETE_OVERRIDE_CODE isn't set on the server
       } else if (err?.response?.status === 403 || msg.toLowerCase().includes('incorrect') || msg.toLowerCase().includes('invalid')) {
         setError('Incorrect override passcode — access denied');
       } else {
@@ -5075,6 +5091,15 @@ function WorkOrderDetailsPage() {
                 <span>Grand Total:</span>
                 <span>{formatCurrency(calculateTotals().grandTotal)}</span>
               </div>
+              {/* What the invoice, ledger and QuickBooks will actually charge. This screen's figure is a live
+                  preview and handles trucking tax, discounts and minimums its own way (audit M16). */}
+              {serverTotals && Math.abs((parseFloat(serverTotals.amount) || 0) - (calculateTotals().grandTotal || 0)) >= 0.01 && (
+                <div style={{ marginTop: 14, padding: '8px 10px', background: '#fff8e1', border: '1px solid #ffcc80', borderRadius: 6, fontSize: '0.85rem', color: '#6d4c41' }}>
+                  <strong>Invoice total: {formatCurrency(serverTotals.amount)}</strong>
+                  {serverTotals.frozen ? ' (as entered in QuickBooks)' : ''} — this is what the invoice PDF, client ledger and QuickBooks export charge.
+                  The figure above is this screen's preview{serverTotals.frozen ? '' : ' and can differ until changes are saved'}.
+                </div>
+              )}
             </div>
           </div>
 

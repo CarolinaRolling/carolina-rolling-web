@@ -416,6 +416,9 @@ export const updateNotificationEmail = (email) => api.put('/settings/notificatio
 
 // General Settings
 export const getSettings = (key) => api.get(`/settings/${key}`);
+export const getCodOverrideStatus = () => api.get('/settings/cod-override-status');
+export const getWorkOrderInvoiceTotals = (id) => api.get(`/workorders/${id}/invoice-totals`);
+export const verifyCodOverride = (workOrderId, password, action) => api.post(`/workorders/${workOrderId}/cod-override`, { password, action });
 export const updateSettings = (key, value) => api.put(`/settings/${key}`, { value });
 export const getPrinterConfig = () => api.get('/settings/printer-config');
 export const updatePrinterConfig = (config) => api.put('/settings/printer-config', config);

@@ -235,9 +235,12 @@ function SchedulingPage() {
     if (!dateString) return null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const target = new Date(dateString);
+    // A due date "2026-10-12" is a calendar date. new Date('2026-10-12') is midnight UTC = 5 pm the day
+    // before in California, so every due date showed one day early (audit M12). Read it as a local date.
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateString));
+    const target = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(dateString);
     target.setHours(0, 0, 0, 0);
-    return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+    return Math.round((target - today) / (1000 * 60 * 60 * 24));   // round: a DST day is 23 or 25 hours
   };
 
   const getDateStatus = (dateString) => {
