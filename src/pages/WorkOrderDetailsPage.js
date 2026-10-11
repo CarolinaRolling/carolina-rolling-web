@@ -4147,13 +4147,18 @@ function WorkOrderDetailsPage() {
           <div style={{ background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: 8, padding: '10px 14px', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: '1.2rem' }}>⚠️</span>
             <div style={{ flex: 1, fontSize: '0.85rem', color: '#8d6e63' }}>
-              Some parts are missing their pricing (this can happen on work orders converted before a pricing fix). You can recompute it from the linked estimate.
+              Some parts are missing pricing that the linked estimate has — blank prices, or a material cost that went missing (the total then only covers labor). You can restore it from the estimate; you'll see each change before anything is saved.
             </div>
             <button className="btn btn-sm" disabled={backfillingPricing} onClick={async () => {
               try {
                 setBackfillingPricing(true);
+                const pre = await backfillWorkOrderPricing(order.id, true);
+                const lines = pre.data?.data?.lines || [];
+                if (!lines.length) { showMessage(pre.data?.message || 'Nothing to fix'); await loadOrder(); return; }
+                if (!window.confirm(`Restore pricing from the estimate?\n\n${lines.join('\n')}\n\nOnly these parts change.`)) return;
                 const res = await backfillWorkOrderPricing(order.id);
-                showMessage(res.data?.message || 'Pricing recomputed');
+                if ((res.data?.data?.fixed || 0) < lines.length) setError(res.data?.message);
+                else showMessage(res.data?.message || 'Pricing restored');
                 await loadOrder();
               } catch (e) {
                 setError(e.response?.data?.error?.message || 'Could not backfill pricing');

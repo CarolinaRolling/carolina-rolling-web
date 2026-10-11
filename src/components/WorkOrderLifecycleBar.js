@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { FileText, Truck, PackageCheck, Receipt, DollarSign, Check, ExternalLink, Download } from 'lucide-react';
 import { downloadEstimatePDF, downloadWorkOrderDocument, generateInvoicePDF, getWOPayments } from '../services/api';
 import { formatDate } from '../utils/dates';
@@ -134,13 +135,22 @@ export default function WorkOrderLifecycleBar({
         <Panel color="#1565c0">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
             <div>
-              <strong>Estimate {order.estimateNumber || ''}</strong>
+              {/* The estimate number opens the estimate itself */}
+              <Link to={`/estimates/${order.estimateId}`} style={{ color: '#1565c0', fontWeight: 700, textDecoration: 'none' }} title="Open the estimate">
+                Estimate {order.estimateNumber || ''}
+              </Link>
               {order.estimateTotal && <span style={{ color: '#666', marginLeft: 8 }}>{money(order.estimateTotal)}</span>}
-              <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 2 }}>PDF is generated from the current estimate (always up to date).</div>
             </div>
-            <button onClick={doEstimatePdf} disabled={busy === 'estimate'} style={btn('#1565c0')}>
-              <ExternalLink size={14} /> {busy === 'estimate' ? 'Opening…' : 'View / Download PDF'}
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Link to={`/estimates/${order.estimateId}`} style={{ ...btn('#1565c0'), textDecoration: 'none' }}>
+                <ExternalLink size={14} /> Open Estimate
+              </Link>
+              <button onClick={doEstimatePdf} disabled={busy === 'estimate'}
+                style={{ ...btn('#1565c0'), background: 'white', color: '#1565c0', border: '1px solid #1565c0' }}
+                title="The PDF is generated from the current estimate">
+                <Download size={14} /> {busy === 'estimate' ? 'Opening…' : 'PDF'}
+              </button>
+            </div>
           </div>
         </Panel>
       )}
@@ -230,6 +240,6 @@ function btn(color) {
   return {
     display: 'flex', alignItems: 'center', gap: 6,
     background: color, color: 'white', border: 'none', borderRadius: 6,
-    padding: '7px 14px', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
+    padding: '7px 14px', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, fontFamily: 'inherit',
   };
 }
