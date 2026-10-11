@@ -2730,10 +2730,11 @@ function WorkOrderDetailsPage() {
     if (selectedPartIds.length === 0) { setError('Select at least one part'); return; }
     try {
       setOrdering(true);
-      await orderWorkOrderMaterial(id, { purchaseOrderNumber: orderPONumber, partIds: selectedPartIds });
+      const resp = await orderWorkOrderMaterial(id, { purchaseOrderNumber: orderPONumber, partIds: selectedPartIds });
       await loadOrder();
       setShowOrderModal(false);
-      setSuccess('Purchase orders created! Check Inbound & Purchase Orders pages.');
+      // Show the PO numbers actually used (the suggested one may have just been taken by someone else)
+      setSuccess(`${resp?.data?.message || 'Purchase orders created!'} Check Inbound & Purchase Orders pages.`);
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) { 
       setError(err.response?.data?.error?.message || 'Failed to create orders'); 

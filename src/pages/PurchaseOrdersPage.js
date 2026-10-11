@@ -116,13 +116,14 @@ function PurchaseOrdersPage() {
         setSuccess('PO updated successfully');
       } else {
         // Create new PO
-        await assignPONumber({
+        const created = await assignPONumber({
           customNumber: poForm.poNumber,
           supplier: poForm.supplier,
           clientName: poForm.clientName,
           description: description
         });
-        setSuccess(`PO${poForm.poNumber} created successfully`);
+        // The server may have used the next free number if this one was just taken — show what it used
+        setSuccess(created?.data?.message || `PO${created?.data?.data?.poNumber || poForm.poNumber} created successfully`);
       }
       
       setShowModal(false);

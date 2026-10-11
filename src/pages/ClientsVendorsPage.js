@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, Users, Building2, Search, Check, X } from 'lucide-react';
-import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit, startBatchVerification, getBatchStatus, downloadResaleReport, getWorkOrders, getEstimates, getVendorHistory, mergeClient, mergeVendor, getClientHistory, getClientStatementPdf } from '../services/api';
+import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit, startBatchVerification, getBatchStatus, downloadResaleReport, getWorkOrders, getEstimates, getVendorHistory, mergeClient, mergeVendor, getClientHistory, getClientStatementPdf, voidClientPayment, applyCreditMemo, voidCreditMemo } from '../services/api';
 
 const formatPhone = (val) => {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -330,6 +330,33 @@ const ClientsVendorsPage = () => {
         {s.label}
       </span>
     );
+  };
+
+  // Payments / credits actions (audit H6)
+  const [applyingMemo, setApplyingMemo] = useState(null);
+  const [applyForm, setApplyForm] = useState({ workOrderId: '', amount: '' });
+  const reloadClientHistory = async () => {
+    if (!selectedItem) return;
+    try { const r = await getClientHistory(selectedItem.id); setClientHistory(r.data.data); setWorkHistory(r.data.data.workOrders || []); } catch { /* keep current view */ }
+  };
+  const apiError = (e, fallback) => setError(e?.response?.data?.error?.message || fallback);
+  const handleVoidClientPayment = async (pmt) => {
+    if (!window.confirm(`Void this $${parseFloat(pmt.amount).toFixed(2)} payment${pmt.reference ? ' (#' + pmt.reference + ')' : ''}?\n\nEvery invoice it paid will owe that amount again, and any credit it created is voided. Use this for a bounced check or a payment entered twice.`)) return;
+    const reason = window.prompt('Reason (optional) — e.g. "bounced check"', '');
+    if (reason === null) return;
+    try { const r = await voidClientPayment(pmt.id, reason); showMessage(r.data?.message || 'Payment voided'); await reloadClientHistory(); }
+    catch (e) { apiError(e, 'Could not void this payment'); }
+  };
+  const handleApplyCredit = async (cm) => {
+    try {
+      const r = await applyCreditMemo(cm.id, { workOrderId: applyForm.workOrderId, amount: parseFloat(applyForm.amount) });
+      showMessage(r.data?.message || 'Credit applied'); setApplyingMemo(null); await reloadClientHistory();
+    } catch (e) { apiError(e, 'Could not apply this credit'); }
+  };
+  const handleVoidCredit = async (cm) => {
+    if (!window.confirm(`Void this $${parseFloat(cm.amount).toFixed(2)} credit memo?\n\nIf it was applied to invoices, they will owe that amount again. If the credit came from a client's check, that money will no longer be counted anywhere — only do this if the credit was refunded or entered by mistake.`)) return;
+    try { const r = await voidCreditMemo(cm.id); showMessage(r.data?.message || 'Credit memo voided'); await reloadClientHistory(); }
+    catch (e) { apiError(e, 'Could not void this credit memo'); }
   };
 
   const selectItem = async (item) => {
@@ -673,6 +700,7 @@ const ClientsVendorsPage = () => {
                                 <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Reference</th>
                                 <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Applied To</th>
                                 <th style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '2px solid #e0e0e0' }}>Amount</th>
+                                <th style={{ padding: '8px 12px', borderBottom: '2px solid #e0e0e0' }}></th>
                               </tr>
                             </thead>
                             <tbody>
@@ -685,6 +713,10 @@ const ClientsVendorsPage = () => {
                                     {(pmt.applications||[]).length > 0 ? (pmt.applications||[]).map(a => `DR-${a.workOrderId?.slice(-4)||'?'}`).join(', ') : '—'}
                                   </td>
                                   <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#2e7d32' }}>${parseFloat(pmt.amount).toFixed(2)}</td>
+                                  <td style={{ padding: '8px 8px', textAlign: 'right' }}>
+                                    <button onClick={() => handleVoidClientPayment(pmt)} title="Void this whole payment (bounced check, entered twice)"
+                                      style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.78rem' }}>✕ Void</button>
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>
@@ -704,18 +736,53 @@ const ClientsVendorsPage = () => {
                                 <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Reason</th>
                                 <th style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '2px solid #e0e0e0' }}>Amount</th>
                                 <th style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '2px solid #e0e0e0' }}>Remaining</th>
+                                <th style={{ padding: '8px 12px', borderBottom: '2px solid #e0e0e0' }}></th>
                               </tr>
                             </thead>
                             <tbody>
                               {cms.map(cm => (
-                                <tr key={cm.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                <React.Fragment key={cm.id}>
+                                <tr style={{ borderBottom: '1px solid #f0f0f0' }}>
                                   <td style={{ padding: '8px 12px' }}>{cm.date ? new Date(cm.date+'T00:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '—'}</td>
                                   <td style={{ padding: '8px 12px', color: '#555' }}>{cm.reason || '—'}</td>
                                   <td style={{ padding: '8px 12px', textAlign: 'right', color: '#1565c0' }}>${parseFloat(cm.amount).toFixed(2)}</td>
                                   <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: parseFloat(cm.remainingAmount) > 0 ? '#2e7d32' : '#888' }}>
                                     ${parseFloat(cm.remainingAmount).toFixed(2)}
                                   </td>
+                                  <td style={{ padding: '8px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                    {parseFloat(cm.remainingAmount) > 0.005 && (
+                                      <button onClick={() => { setApplyingMemo(applyingMemo === cm.id ? null : cm.id); setApplyForm({ workOrderId: '', amount: parseFloat(cm.remainingAmount).toFixed(2) }); }}
+                                        style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}>Apply</button>
+                                    )}
+                                    <button onClick={() => handleVoidCredit(cm)} style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.78rem' }}>✕ Void</button>
+                                  </td>
                                 </tr>
+                                {applyingMemo === cm.id && (() => {
+                                  const openInvoices = (clientHistory?.workOrders || []).filter(w => w.invoiceNumber && parseFloat(w.balance) > 0.01);
+                                  return (
+                                    <tr style={{ background: '#f5f9ff' }}>
+                                      <td colSpan={5} style={{ padding: '8px 12px' }}>
+                                        {openInvoices.length === 0 ? <span style={{ color: '#888' }}>This client has no open invoices to apply credit to.</span> : (
+                                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <select value={applyForm.workOrderId} onChange={e => {
+                                                const w = openInvoices.find(x => x.id === e.target.value);
+                                                setApplyForm({ workOrderId: e.target.value, amount: w ? Math.min(parseFloat(cm.remainingAmount), parseFloat(w.balance)).toFixed(2) : applyForm.amount });
+                                              }} style={{ padding: '4px 6px', fontSize: '0.8rem' }}>
+                                              <option value="">Choose an invoice…</option>
+                                              {openInvoices.map(w => <option key={w.id} value={w.id}>#{w.invoiceNumber}{w.drNumber ? ` (DR-${w.drNumber})` : ''} — owes ${parseFloat(w.balance).toFixed(2)}</option>)}
+                                            </select>
+                                            <input type="number" step="0.01" min="0" value={applyForm.amount} onChange={e => setApplyForm({ ...applyForm, amount: e.target.value })}
+                                              style={{ width: 100, padding: '4px 6px', fontSize: '0.8rem' }} />
+                                            <button disabled={!applyForm.workOrderId || !(parseFloat(applyForm.amount) > 0)} onClick={() => handleApplyCredit(cm)}
+                                              style={{ padding: '4px 10px', background: '#1565c0', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.8rem' }}>Apply credit</button>
+                                            <button onClick={() => setApplyingMemo(null)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '0.8rem' }}>Cancel</button>
+                                          </div>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })()}
+                                </React.Fragment>
                               ))}
                             </tbody>
                           </table>

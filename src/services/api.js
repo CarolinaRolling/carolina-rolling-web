@@ -678,7 +678,9 @@ export const recordClientPayment = (data) => api.post('/business/client-payments
 export const getClientPayments = (params) => api.get('/business/client-payments', { params });
 export const getCreditMemos = (params) => api.get('/business/credit-memos', { params });
 export const createCreditMemo = (data) => api.post('/business/credit-memos', data);
-export const voidCreditMemo = (id) => api.delete(`/business/credit-memos/${id}`);
+export const voidCreditMemo = (id, reason) => api.delete(`/business/credit-memos/${id}`, { data: { reason } });
+export const applyCreditMemo = (id, data) => api.post(`/business/credit-memos/${id}/apply`, data);
+export const voidClientPayment = (id, reason) => api.post(`/business/client-payments/${id}/void`, { reason });
 export const getRefunds = (params) => api.get('/business/refunds', { params });
 export const createRefund = (data) => api.post('/business/refunds', data);
 export const voidRefund = (id) => api.delete(`/business/refunds/${id}`);

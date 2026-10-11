@@ -195,8 +195,13 @@ export default function COATab({
                           </span>
                           <span style={{ fontWeight:700, color:'#2e7d32', fontSize:'0.95rem' }}>-${parseFloat(pmt.amount).toFixed(2)}</span>
                           <button onClick={async () => {
-                            if(!window.confirm('Void this payment?'))return;
-                            try { const {voidLedgerPayment} = await import('../services/api'); await voidLedgerPayment(pmt.id); if(showMsg)showMsg('Voided'); loadLedger(); } catch {}
+                            const isShareOfCheck = !!pmt.paymentApplicationId;
+                            const isCredit = !!pmt.creditMemoApplicationId;
+                            if(!window.confirm(isShareOfCheck
+                              ? 'Remove this payment from this invoice?\n\nIt was part of a client check, so the amount will be kept as client credit (a credit memo) you can apply elsewhere.\nIf the whole check bounced, void it from the client\'s Payments tab instead.'
+                              : isCredit ? 'Remove this credit from the invoice? The credit memo will have it available again.' : 'Void this payment?'))return;
+                            try { const {voidLedgerPayment} = await import('../services/api'); const r = await voidLedgerPayment(pmt.id); if(showMsg)showMsg(r.data?.message || 'Voided'); loadLedger(); }
+                            catch (e) { const m = e.response?.data?.error?.message || 'Could not void this payment'; if (setErr) setErr(m); else window.alert(m); }
                           }} style={{ background:'none', border:'none', color:'#c62828', cursor:'pointer', fontSize:'0.8rem', padding:'2px 6px' }}>
                             ✕ Void
                           </button>

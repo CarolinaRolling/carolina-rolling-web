@@ -50,8 +50,8 @@ function InboundPage() {
   };
 
   const groupOrdersBySupplier = () => {
-    // Exclude received orders (already processed into shipments)
-    let filtered = orders.filter(o => o.status !== 'received');
+    // Exclude received orders (already processed into shipments) and cancelled ones (voided POs)
+    let filtered = orders.filter(o => o.status !== 'received' && o.status !== 'cancelled');
 
     // Filter by search query
     if (searchQuery) {
