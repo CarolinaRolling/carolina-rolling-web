@@ -32,7 +32,9 @@ function ShipmentsAdminPage() {
   const loadShipments = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { limit: 500 };
+      // "Active" asks the server for every open shipment (it used to take the newest 500 and filter
+      // here, so older shipments still on the floor could be missing) — audit M10
+      const params = statusFilter === 'active' && !search ? { status: 'active' } : { limit: 500 };
       if (search) params.search = search;
       if (statusFilter && statusFilter !== 'all' && statusFilter !== 'active') params.status = statusFilter;
       const res = await getShipments(params);

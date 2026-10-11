@@ -1171,7 +1171,8 @@ function WorkOrderDetailsPage() {
       if (dataToSend.heatBreakdown) {
         const cleaned = dataToSend.heatBreakdown
           .filter(r => r.heat && r.heat.trim())
-          .map(r => ({ heat: r.heat.trim(), qty: parseInt(r.qty) || 0 }));
+          // keep each heat's country of origin (feeds the USMCA certificate) — audit H1
+          .map(r => ({ heat: r.heat.trim(), qty: parseInt(r.qty) || 0, country: r.country || '' }));
         dataToSend.heatBreakdown = cleaned.length > 0 ? cleaned : null;
       }
       
