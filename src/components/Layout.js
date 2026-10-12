@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, DollarSign, Database, Hash, ShoppingCart, FileCode, Truck, Users, Wrench, FileText, Briefcase, MessageSquare, Activity } from 'lucide-react';
+import { Package, Inbox, PlusCircle, Settings, Shield, LogOut, CalendarClock, DollarSign, Database, Hash, ShoppingCart, FileCode, Truck, Users, Wrench, FileText, Briefcase, MessageSquare, Activity, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import WalterJoke from './WalterJoke';
 import GingerAssistant from './GingerAssistant';
@@ -115,6 +115,7 @@ function Layout({ children }) {
                 <li><NavLink to="/admin/wps-generator" className={({ isActive }) => isActive ? 'active' : ''}><Wrench size={20} /><span>WPS Generator</span></NavLink></li>
                 <li><NavLink to="/admin/settings" className={({ isActive }) => isActive ? 'active' : ''}><Settings size={20} /><span>Settings</span></NavLink></li>
                 <li><NavLink to="/admin/backup" className={({ isActive }) => isActive ? 'active' : ''}><Database size={20} /><span>Backup</span></NavLink></li>
+                <li><NavLink to="/admin/deleted" className={({ isActive }) => isActive ? 'active' : ''}><Trash2 size={20} /><span>Deleted Items</span></NavLink></li>
               </>
             )}
           </ul>

@@ -18,6 +18,7 @@ import WorkOrderDetailsPage from './pages/WorkOrderDetailsPage';
 import EstimatesPage from './pages/EstimatesPage';
 import EstimateDetailsPage from './pages/EstimateDetailsPage';
 import BackupPage from './pages/BackupPage';
+import DeletedItemsPage from './pages/DeletedItemsPage';
 import SettingsPage from './pages/SettingsPage';
 import LocationSettingsPage from './pages/LocationSettingsPage';
 import AdminPage from './pages/AdminPage';
@@ -224,6 +225,12 @@ function AppRoutes() {
       <Route path="/admin/pricing" element={
         <AdminRoute>
           <Layout><AdminPage section="pricing" /></Layout>
+        </AdminRoute>
+      } />
+
+      <Route path="/admin/deleted" element={
+        <AdminRoute>
+          <Layout><DeletedItemsPage /></Layout>
         </AdminRoute>
       } />
 

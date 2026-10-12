@@ -408,6 +408,10 @@ export const getEmailLogs = () => api.get('/email/logs');
 export const getBackupInfo = () => api.get('/backup/info');
 export const downloadBackup = (params) => api.get('/backup', { params });
 export const restoreBackup = (data) => api.post('/backup/restore', data);
+// Deleted Items (round 8)
+export const getDeletedItems = (params = {}) => api.get('/deletion-archive', { params });
+export const getDeletedItem = (id) => api.get(`/deletion-archive/${id}`);
+export const undoDeletedItem = (id) => api.post(`/deletion-archive/${id}/undo`);
 export const runBackgroundBackup = (data) => api.post('/backup/run-background', data);
 
 // Email Settings
