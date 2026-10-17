@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Download, Upload, Database, Settings, FileText, Package, ClipboardList, DollarSign, AlertTriangle, Clock } from 'lucide-react';
-import { getBackupInfo, downloadBackup, restoreBackup, runBackgroundBackup } from '../services/api';
+import { getBackupInfo, downloadBackup, startRestoreJob, runBackgroundBackup, API_BASE_URL } from '../services/api';
+import { shopToday } from '../utils/dates';
 
 function BackupPage() {
   const [backupInfo, setBackupInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  // U6: the restore runs as a background job on the server; the page polls it and shows its report
+  const [restoreJob, setRestoreJob] = useState(null);       // latest job status from the server
+  const [restoreReport, setRestoreReport] = useState(null); // final report (or error) of the last restore
+  const pollRef = useRef(null);
+  const aliveRef = useRef(true);   // no polling / state updates after the page is left (review of round 15)
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const fileInputRef = useRef(null);
@@ -26,11 +32,74 @@ function BackupPage() {
 
   const [uploadedBackup, setUploadedBackup] = useState(null);
   const [bgBackupStarted, setBgBackupStarted] = useState(false);
-  const [bgEmail, setBgEmail] = useState('jason@carolinarolling.com');
+  const bgEmail = '';   // the server sends the notice to the signed-in admin's own address (R3)
 
   useEffect(() => {
     loadBackupInfo();
+    // pick up a restore that was still running when the page was left
+    let saved = null, savedToken = null;
+    try { saved = localStorage.getItem('restoreJobId'); savedToken = localStorage.getItem('restoreStatusToken'); } catch (_) { /* storage blocked */ }
+    if (saved) { setRestoring(true); pollRestoreJob(saved, savedToken); }
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; if (pollRef.current) clearTimeout(pollRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const forgetJob = () => { try { localStorage.removeItem('restoreJobId'); localStorage.removeItem('restoreStatusToken'); } catch (_) { /* storage blocked */ } };
+
+  // V28: the job is read with fetch, not the shared API client — a fresh-install restore replaces the
+  // signed-in admin, and the client's 401 handler would jump to the login page and lose the report.
+  // After a 401 the job is followed through the sign-in-free status route with the job's statusToken.
+  const fetchRestoreJob = async (jobId, statusToken) => {
+    let token = null;
+    try { token = localStorage.getItem('token'); } catch (_) { /* storage blocked */ }
+    const res = await fetch(`${API_BASE_URL}/backup/restore/${encodeURIComponent(jobId)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (res.ok) return { job: (await res.json()).data, signedOut: false };
+    if ((res.status === 401 || res.status === 403) && statusToken) {
+      const pub = await fetch(`${API_BASE_URL}/backup-status/${encodeURIComponent(jobId)}?statusToken=${encodeURIComponent(statusToken)}`);
+      if (pub.ok) return { job: (await pub.json()).data, signedOut: true };
+      throw Object.assign(new Error(`HTTP ${pub.status}`), { status: pub.status });
+    }
+    throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+  };
+  const SIGNED_OUT_NOTE = 'The restore replaced the users — sign in with an admin from the backup to see the full report.';
+
+  // Poll every 2 s until the job is done or failed (U6)
+  const pollRestoreJob = async (jobId, statusToken) => {
+    if (!aliveRef.current) return;
+    try {
+      const { job, signedOut } = await fetchRestoreJob(jobId, statusToken);
+      if (!aliveRef.current) return;
+      setRestoreJob(job);
+      if (job.status === 'running') { pollRef.current = setTimeout(() => pollRestoreJob(jobId, statusToken), 2000); return; }
+      // signed out: keep the job remembered, so after signing in as the backup's admin this page shows the full report
+      if (!signedOut) forgetJob();
+      setRestoring(false);
+      if (job.status === 'done') {
+        const r = job.result || {};
+        setRestoreReport({ ok: true, ...r, signedOutNote: signedOut ? SIGNED_OUT_NOTE : null });
+        if (!(r.warnings && r.warnings.length) && !signedOut) setSuccess(r.message || 'Backup restored successfully');
+        setUploadedBackup(null);
+        if (!signedOut) loadBackupInfo();   // would answer 401 and leave the page
+      } else {
+        setRestoreReport({ ok: false, message: job.error || 'Restore failed' });
+        setError(job.error || 'Restore failed');
+      }
+    } catch (err) {
+      if (err.status === 404) {
+        forgetJob(); setRestoring(false);
+        setError('The server no longer knows this restore (it was restarted, or the job expired). Check the data before restoring again.');
+        return;
+      }
+      if (err.status === 401 || err.status === 403) {   // signed out and no status token (older server)
+        setRestoring(false);
+        setError(SIGNED_OUT_NOTE);
+        return;
+      }
+      // a passing network error or a 503 while the dyno is busy: keep polling
+      if (aliveRef.current) pollRef.current = setTimeout(() => pollRestoreJob(jobId, statusToken), 2000);
+    }
+  };
 
   const loadBackupInfo = async () => {
     try {
@@ -56,7 +125,7 @@ function BackupPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `backup-${new Date().toISOString().split('T')[0]}${backupOptions.includeFiles ? '-with-files' : ''}.json`;
+      link.download = `backup-${shopToday()}${backupOptions.includeFiles ? '-with-files' : ''}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -99,37 +168,55 @@ function BackupPage() {
     try {
       setRestoring(true);
       setError(null);
+      setSuccess(null);
+      setRestoreReport(null);
+      setRestoreJob(null);
 
-      await restoreBackup({
-        backup: uploadedBackup,
-        options: {
-          restoreShipments: true,
-          restoreWorkOrders: true,
-          restoreEstimates: true,
-          restoreInbound: true,
-          restoreSettings: true,
-          clearExisting: restoreOptions.clearExisting,
-        }
-      });
-
-      setSuccess('Backup restored successfully');
-      setUploadedBackup(null);
-      await loadBackupInfo();
+      const options = {
+        restoreShipments: true,
+        restoreWorkOrders: true,
+        restoreEstimates: true,
+        restoreInbound: true,
+        restoreSettings: true,
+        clearExisting: restoreOptions.clearExisting,
+      };
+      let res;
+      try {
+        res = await startRestoreJob({ backup: uploadedBackup, options });
+      } catch (err) {
+        // An older backup that lacks some sections: "Clear existing" would erase those records (V12) —
+        // say so and let the admin decide
+        if (err.response?.data?.error?.code !== 'MISSING_SECTIONS') throw err;
+        if (!window.confirm(`${err.response.data.error.message}\n\nErase them and restore anyway?`)) { setRestoring(false); return; }
+        res = await startRestoreJob({ backup: uploadedBackup, options: { ...options, allowMissingSections: true } });
+      }
+      const jobId = res.data?.jobId;
+      if (!jobId) {   // an older server answers synchronously with the report itself
+        setRestoring(false);
+        setRestoreReport({ ok: true, ...res.data });
+        if (!(res.data?.warnings && res.data.warnings.length)) setSuccess(res.data?.message || 'Backup restored');
+        loadBackupInfo();
+        return;
+      }
+      const statusToken = res.data?.statusToken || null;
+      try {
+        localStorage.setItem('restoreJobId', jobId);
+        if (statusToken) localStorage.setItem('restoreStatusToken', statusToken); else localStorage.removeItem('restoreStatusToken');
+      } catch (_) { /* storage blocked */ }
+      pollRestoreJob(jobId, statusToken);
     } catch (err) {
-      setError('Failed to restore backup');
-    } finally {
       setRestoring(false);
+      setError(err.response?.data?.error?.message || `Failed to start the restore${err.message ? ` (${err.message})` : ''}`);
     }
   };
 
   const handleBackgroundBackup = async () => {
-    if (!bgEmail.trim()) { setError('Please enter an email address'); return; }
     try {
       setBgBackupStarted(true);
       const res = await runBackgroundBackup({ includeFiles: false, email: bgEmail.trim() });
       setSuccess(res.data.message || 'Backup started — check your email when complete');
     } catch (err) {
-      setError('Failed to start background backup');
+      setError(err.response?.data?.error?.message || 'Failed to start background backup');
       setBgBackupStarted(false);
     }
   };
@@ -249,19 +336,10 @@ function BackupPage() {
             </div>
           </div>
 
-          <div style={{ marginBottom: 16, padding: 12, border: '2px solid #ff9800', borderRadius: 8, background: '#fff8e1' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-              <input type="checkbox" checked={backupOptions.includeFiles}
-                onChange={(e) => setBackupOptions({ ...backupOptions, includeFiles: e.target.checked })} />
-              <div>
-                <strong>📎 Include PDFs & CAD Files (Manual Download Only)</strong>
-                <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                  Downloads all PDFs, STEP, DXF, and DWG files from Cloudinary into the backup JSON.
-                  This creates a large file (50-100MB+) saved to your computer for disaster recovery.
-                  {backupOptions.includeFiles && <span style={{ color: '#e65100', fontWeight: 600 }}> — This may take a few minutes.</span>}
-                </div>
-              </div>
-            </label>
+          {/* Files are not part of this backup (round 12, N21): a web request can't download them all
+              before it times out, and newer files are on S3, where bucket versioning protects them. */}
+          <div style={{ marginBottom: 16, padding: 12, border: '1px solid #90caf9', borderRadius: 8, background: '#e3f2fd', fontSize: '0.85rem', color: '#555' }}>
+            This backup is the database. Drawings, PDFs and photos are protected separately by S3 bucket versioning.
           </div>
 
           <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleDownloadBackup} disabled={downloading}>
@@ -269,7 +347,7 @@ function BackupPage() {
             {downloading ? (backupOptions.includeFiles ? 'Downloading files from Cloudinary...' : 'Preparing Download...') : (backupOptions.includeFiles ? 'Download Full Backup + Files' : 'Download Full Backup')}
           </button>
           <p style={{ fontSize: '0.8rem', color: '#666', marginTop: 8, textAlign: 'center' }}>
-            Backup file will be saved as: backup-{new Date().toISOString().split('T')[0]}{backupOptions.includeFiles ? '-with-files' : ''}.json
+            Backup file will be saved as: backup-{shopToday()}{backupOptions.includeFiles ? '-with-files' : ''}.json
           </p>
         </div>
 
@@ -351,6 +429,75 @@ function BackupPage() {
             <Upload size={18} />
             {restoring ? 'Restoring...' : 'Restore Backup'}
           </button>
+
+          {/* U6: live progress of the background restore */}
+          {restoring && restoreJob && restoreJob.progress && (
+            <div style={{ marginTop: 12, fontSize: '0.85rem', color: '#555' }}>
+              <div>
+                {restoreJob.progress.phase}{restoreJob.progress.table ? ` — ${restoreJob.progress.table} (${restoreJob.progress.tableDone || 0} of ${restoreJob.progress.tableTotal || 0})` : ''}
+              </div>
+              {restoreJob.progress.rowsTotal > 0 && (
+                <div style={{ background: '#eee', borderRadius: 4, height: 8, marginTop: 6, overflow: 'hidden' }}>
+                  <div style={{ background: '#1976d2', height: 8, width: `${Math.min(100, Math.round(100 * (restoreJob.progress.rowsDone || 0) / restoreJob.progress.rowsTotal))}%` }} />
+                </div>
+              )}
+              <div style={{ marginTop: 4 }}>
+                {(restoreJob.progress.rowsDone || 0).toLocaleString()} of {(restoreJob.progress.rowsTotal || 0).toLocaleString()} rows · started {new Date(restoreJob.startedAt).toLocaleTimeString()}
+              </div>
+            </div>
+          )}
+
+          {/* U6: the server's real report — never "restored successfully" when there are warnings */}
+          {restoreReport && (
+            <div style={{ marginTop: 16, padding: 12, borderRadius: 8, fontSize: '0.85rem',
+              background: !restoreReport.ok ? '#ffebee' : (restoreReport.warnings && restoreReport.warnings.length ? '#fff8e1' : '#e8f5e9'),
+              border: `1px solid ${!restoreReport.ok ? '#ef9a9a' : (restoreReport.warnings && restoreReport.warnings.length ? '#ffe082' : '#a5d6a7')}` }}>
+              <strong>{restoreReport.ok ? (restoreReport.message || 'Restore finished') : 'Restore failed — nothing was changed'}</strong>
+              {!restoreReport.ok && <div style={{ marginTop: 6 }}>{restoreReport.message}</div>}
+              {restoreReport.signedOutNote && <div style={{ marginTop: 6, fontWeight: 600 }}>{restoreReport.signedOutNote}</div>}
+              {restoreReport.warnings && restoreReport.warnings.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div><strong>Warnings</strong></div>
+                  <ul style={{ margin: '4px 0 0 20px' }}>
+                    {restoreReport.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
+              {restoreReport.failed && Object.keys(restoreReport.failed).length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div><strong>Rows not restored</strong></div>
+                  <ul style={{ margin: '4px 0 0 20px' }}>
+                    {Object.entries(restoreReport.failed).map(([t, n]) => <li key={t}>{t}: {n}</li>)}
+                  </ul>
+                </div>
+              )}
+              {restoreReport.results && Object.entries(restoreReport.results).some(([, r]) => r && r.errors && r.errors.length) && (
+                <div style={{ marginTop: 8 }}>
+                  <div><strong>Skipped rows (examples)</strong></div>
+                  <ul style={{ margin: '4px 0 0 20px', wordBreak: 'break-word' }}>
+                    {Object.entries(restoreReport.results).filter(([, r]) => r && r.errors && r.errors.length).flatMap(([t, r]) =>
+                      r.errors.slice(0, 5).map((e, i) => <li key={`${t}-${i}`}>{t} {e}</li>))}
+                  </ul>
+                </div>
+              )}
+              {restoreReport.failedSamples && restoreReport.failedSamples.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div><strong>Failed rows (examples)</strong></div>
+                  <ul style={{ margin: '4px 0 0 20px', wordBreak: 'break-word' }}>
+                    {restoreReport.failedSamples.map((f, i) => <li key={i}>{f.table}{f.parent ? ` (of ${f.parent})` : ''}{f.id ? ` ${f.id}` : ''}: {f.error}</li>)}
+                  </ul>
+                </div>
+              )}
+              {restoreReport.integrity && restoreReport.integrity.errors && restoreReport.integrity.errors.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div><strong>Integrity errors</strong></div>
+                  <ul style={{ margin: '4px 0 0 20px' }}>
+                    {restoreReport.integrity.errors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -410,9 +557,9 @@ function BackupPage() {
             Upload a database backup to Cloudinary now (same as the Saturday auto-backup).
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input type="email" className="form-input" placeholder="Email for notification"
-              value={bgEmail} onChange={(e) => setBgEmail(e.target.value)}
-              style={{ flex: 1, minWidth: 200, maxWidth: 300 }} />
+            <span style={{ fontSize: '0.85rem', color: '#666', flex: 1, minWidth: 200 }}>
+              The notice goes to your own account's e-mail (or the shop's admin address) and has no download link — download from Backup History.
+            </span>
             <button className="btn btn-primary" id="run-backup-now" onClick={handleBackgroundBackup}
               disabled={bgBackupStarted} style={{ whiteSpace: 'nowrap' }}>
               {bgBackupStarted ? '✅ Backup Running...' : '🚀 Run Cloud Backup Now'}

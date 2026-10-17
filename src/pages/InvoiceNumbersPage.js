@@ -40,15 +40,20 @@ const InvoiceNumbersPage = ({ embedded = false }) => {
   };
 
   const handleSetNextNumber = async () => {
-    const num = parseInt(nextNumInput);
-    if (!num || num < 1) { setError('Enter a valid number'); return; }
+    // W28: whole numbers only, old messages cleared, and the real next number re-read from the server
+    // (it hands out a freed number first, so it can differ from what was typed)
+    setError(''); setSuccess('');
+    const raw = String(nextNumInput).trim();
+    const num = /^\d+$/.test(raw) ? parseInt(raw, 10) : 0;
+    if (!num || num < 1) { setError('Enter a valid whole number'); return; }
     try {
       setSaving(true);
-      await setNextInvoiceNumber(num);
-      setNextNum(String(num));
-      setSuccess(`Next invoice number set to ${num}`);
+      const res = await setNextInvoiceNumber(num);
+      const saved = res.data?.data?.nextNumber ?? num;
+      setSuccess(`Next invoice number set to ${saved}`);
+      await loadData();
     } catch (err) {
-      setError('Failed to update');
+      setError(err.response?.data?.error?.message || 'Failed to update');   // V38: the server's reason
     } finally { setSaving(false); }
   };
 

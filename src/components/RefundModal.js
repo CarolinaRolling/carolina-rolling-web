@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Check } from 'lucide-react';
 import { searchClients, createRefund } from '../services/api';
+import { shopToday } from '../utils/dates';
 
 const METHODS = [
   { key: 'check', label: 'Check' },
@@ -10,13 +11,17 @@ const METHODS = [
   { key: 'other', label: 'Other' },
 ];
 
-export default function RefundModal({ onClose, onSaved, initialClient }) {
+// V1: opened from an overpaid invoice (sourceWorkOrderId) or a credit memo (creditMemoId) the refund is
+// tied to it, so the server settles the overpayment / reduces the memo in the same step
+export default function RefundModal({ onClose, onSaved, initialClient, sourceWorkOrderId = null, creditMemoId = null, defaultAmount = null, sourceLabel = '' }) {
   const [clientSearch, setClientSearch] = useState(initialClient?.name || '');
   const [clientSuggestions, setClientSuggestions] = useState([]);
   const [showDrop, setShowDrop] = useState(false);
   const [selectedClient, setSelectedClient] = useState(initialClient || null);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(shopToday());
+  const [amount, setAmount] = useState(defaultAmount != null && parseFloat(defaultAmount) > 0 ? (Math.round(parseFloat(defaultAmount) * 100) / 100).toFixed(2) : '');
+  const maxAmount = defaultAmount != null ? parseFloat(defaultAmount) || 0 : null;
+  const linked = !!(sourceWorkOrderId || creditMemoId);
   const [method, setMethod] = useState('check');
   const [reference, setReference] = useState('');
   const [reason, setReason] = useState('');
@@ -26,10 +31,24 @@ export default function RefundModal({ onClose, onSaved, initialClient }) {
   const handleSave = async () => {
     if (!selectedClient) { setError('Select a client'); return; }
     if (!parseFloat(amount) || parseFloat(amount) <= 0) { setError('Enter an amount'); return; }
+    if (maxAmount != null && linked && Math.round(parseFloat(amount) * 100) > Math.round(maxAmount * 100)) {
+      setError(`At most ${maxAmount.toFixed(2)} can be refunded from ${sourceLabel || 'this'}.`); return;
+    }
     if (!reason.trim()) { setError('Reason is required for refunds'); return; }
+    if (saving) return;
     setSaving(true); setError('');
     try {
-      await createRefund({ clientId: selectedClient.id, clientName: selectedClient.name, date, amount: parseFloat(amount), method, reference, reason });
+      const body = { clientId: selectedClient.id, clientName: selectedClient.name, date, amount: Math.round(parseFloat(amount) * 100) / 100, method, reference, reason };
+      if (sourceWorkOrderId) body.sourceWorkOrderId = sourceWorkOrderId;
+      if (creditMemoId) body.creditMemoId = creditMemoId;
+      try {
+        await createRefund(body);
+      } catch (e) {
+        // the client has open credit: confirm this refund is separate from it (review of round 16)
+        if (e.response?.data?.error?.code !== 'CLIENT_HAS_CREDIT') throw e;
+        if (!window.confirm(`${e.response.data.error.message}\n\nRecord this refund as separate anyway?`)) return;
+        await createRefund({ ...body, unlinked: true });
+      }
       onSaved?.();
       onClose();
     } catch(e) { setError(e.response?.data?.error?.message || e.message || 'Failed'); }
@@ -48,9 +67,14 @@ export default function RefundModal({ onClose, onSaved, initialClient }) {
           <div style={{ background: '#ffebee', borderRadius: 6, padding: '10px 14px', fontSize: '0.82rem', color: '#b71c1c' }}>
             A refund records money going back to the client. This reduces your revenue. For credits staying on account, use Credit Memo instead.
           </div>
+          {linked && (
+            <div style={{ background: '#fff8e1', borderRadius: 6, padding: '8px 12px', fontSize: '0.82rem', color: '#6d4c41' }}>
+              Refunding {sourceLabel || (creditMemoId ? 'unused credit' : 'an overpayment')}{maxAmount != null ? <> — up to <strong>${maxAmount.toFixed(2)}</strong></> : null}.
+            </div>
+          )}
           <div className="form-group" style={{ margin: 0, position: 'relative' }}>
             <label className="form-label">Client</label>
-            <input className="form-input" value={clientSearch} autoComplete="off"
+            <input className="form-input" value={clientSearch} autoComplete="off" disabled={linked}
               onChange={async e => { setClientSearch(e.target.value); try { const r = await searchClients(e.target.value); setClientSuggestions(r.data.data||[]); setShowDrop(true); } catch {} }}
               onFocus={async () => { try { const r = await searchClients(''); setClientSuggestions(r.data.data||[]); setShowDrop(true); } catch {} }}
               onBlur={() => setTimeout(() => setShowDrop(false), 200)}

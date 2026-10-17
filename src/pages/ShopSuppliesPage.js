@@ -4,6 +4,13 @@ import { getShopSupplies, createShopSupply, updateShopSupply, refillShopSupply, 
 
 const UNITS = ['each', 'tanks', 'cans', 'boxes', 'rolls', 'gallons', 'bags', 'pairs', 'bottles', 'packs'];
 
+// Every value printed into a label / shopping-list window is escaped: names and categories are typed
+// by users and the print window runs in the app's own origin (round 13, T44 — a supply named
+// <img onerror=…> ran script that could read the signed-in user's token)
+const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const escItem = (it) => { const o = {}; for (const k of Object.keys(it || {})) o[k] = typeof it[k] === 'string' ? escHtml(it[k]) : it[k]; return o; };
+const jsString = (v) => JSON.stringify(String(v ?? '')).replace(/</g, '\\u003c');
+
 function ShopSuppliesPage() {
   const [supplies, setSupplies] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -131,7 +138,8 @@ function ShopSuppliesPage() {
     finally { setLogsLoading(false); }
   };
 
-  const printQRLabel = (item) => {
+  const printQRLabel = (rawItem) => {
+    const item = escItem(rawItem);
     const baseUrl = window.location.origin.replace('://localhost:3000', '://carolina-rolling-inventory-api-641af96c90aa.herokuapp.com');
     const qrUrl = `${baseUrl}/api/shop-supplies/qr/${item.qrCode}`;
     // Build label HTML for Brother QL-810W (62mm wide)
@@ -156,13 +164,13 @@ function ShopSuppliesPage() {
 </div>
 <script>
   new QRCode(document.getElementById("qrcode"), {
-    text: "${item.qrCode}",
+    text: ${jsString(rawItem.qrCode)},
     width: 120, height: 120, correctLevel: QRCode.CorrectLevel.M
   });
   setTimeout(function() { window.print(); }, 500);
 </script></body></html>`;
 
-    const win = window.open('', '_blank', 'width=400,height=500');
+    const win = window.open('', '_blank', 'width=400,height=500');   // (content escaped above)
     win.document.write(labelHtml);
     win.document.close();
   };
@@ -196,7 +204,8 @@ function ShopSuppliesPage() {
   };
 
   // Print large label: 2.5" x 4" (62mm x 100mm) — image left, QR right, name below QR
-  const printImageLabel = (item) => {
+  const printImageLabel = (rawItem) => {
+    const item = escItem(rawItem);
     const labelHtml = `<!DOCTYPE html><html><head><title>Print Label - ${item.name}</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
 <style>
@@ -228,7 +237,7 @@ function ShopSuppliesPage() {
 </div>
 <script>
   new QRCode(document.getElementById("qrcode"), {
-    text: "${item.qrCode}",
+    text: ${jsString(rawItem.qrCode)},
     width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M
   });
   setTimeout(function() { window.print(); }, 800);
@@ -299,11 +308,11 @@ function ShopSuppliesPage() {
       if (!grouped[cat]) grouped[cat] = [];
       const max = s.maxQuantity || s.minQuantity * 2 || 4;
       const need = max - s.quantity;
-      grouped[cat].push({ name: s.name, have: s.quantity, need, max, unit: s.unit });
+      grouped[cat].push({ name: escHtml(s.name), have: escHtml(s.quantity), need: escHtml(need), max: escHtml(max), unit: escHtml(s.unit) });
     });
 
     const rows = Object.entries(grouped).sort(([a],[b]) => a.localeCompare(b)).map(([cat, items]) =>
-      `<tr><td colspan="5" style="background:#1565C0;color:white;font-weight:700;padding:8px 12px;font-size:0.95rem">${cat}</td></tr>` +
+      `<tr><td colspan="5" style="background:#1565C0;color:white;font-weight:700;padding:8px 12px;font-size:0.95rem">${escHtml(cat)}</td></tr>` +
       items.map(i => `<tr><td style="padding:6px 12px">☐</td><td style="padding:6px 12px;font-weight:600">${i.name}</td><td style="padding:6px 12px;text-align:center">${i.have} ${i.unit}</td><td style="padding:6px 12px;text-align:center;color:#c62828;font-weight:700">Need ${i.need}</td><td style="padding:6px 12px;text-align:center">${i.max} ${i.unit}</td></tr>`).join('')
     ).join('');
 

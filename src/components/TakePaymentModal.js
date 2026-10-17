@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Check, CreditCard, DollarSign, FileText } from 'lucide-react';
 import { searchClients, getClientOpenInvoices, recordClientPayment } from '../services/api';
+import { shopToday } from '../utils/dates';
 
 const METHODS = [
   { key: 'check', label: 'Check', icon: '🏦' },
@@ -12,6 +13,21 @@ const METHODS = [
 
 const fmt = n => '$' + (parseFloat(n)||0).toFixed(2);
 
+// U12: the server's card gross-up — (owed + $0.15) / (1 − rate), 2.6% in person / 3.5% keyed. One charge
+// for several invoices matches either the sum of each invoice's card total or the card total of the sum.
+const CARD_RATES = { in_person: 0.026, manual: 0.035 };
+const r2 = n => Math.round(n * 100) / 100;
+const cardGrossUp = (owed, t) => r2((r2(owed) + 0.15) / (1 - (CARD_RATES[t] || CARD_RATES.in_person)));
+const cardMatch = (amount, list, t) => {
+  if (!list.length) return null;
+  const amt = r2(amount);
+  const perInvoice = r2(list.reduce((s, x) => s + cardGrossUp(x, t), 0));
+  if (Math.abs(amt - perInvoice) <= 0.02 * list.length) return perInvoice;
+  const combined = cardGrossUp(list.reduce((s, x) => s + x, 0), t);
+  if (Math.abs(amt - combined) <= 0.02) return combined;
+  return null;
+};
+
 export default function TakePaymentModal({ onClose, onSaved, initialClient }) {
   const [step, setStep] = useState(initialClient ? 2 : 1); // 1=client, 2=payment
   const [clientSearch, setClientSearch] = useState(initialClient?.name || '');
@@ -21,12 +37,13 @@ export default function TakePaymentModal({ onClose, onSaved, initialClient }) {
   const [openInvoices, setOpenInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [selectedWOs, setSelectedWOs] = useState({}); // woId -> amount (string)
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(shopToday());
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('check');
+  const [ccProcessingType, setCcProcessingType] = useState('in_person');   // U12
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const [createCredit, setCreateCredit] = useState(false);
+  const createCredit = true;   // leftover money is always held as client credit (R18)
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const searchRef = useRef(null);
@@ -78,6 +95,23 @@ export default function TakePaymentModal({ onClose, onSaved, initialClient }) {
   const remainder = Math.round((totalEntered - totalApplied) * 100) / 100;
   const stillOwed = allocations.reduce((s, a) => s + a.leftOnWO, 0);
 
+  // U12: preview how the server will book the extra on a card payment
+  const cardPreview = (() => {
+    if (method !== 'credit_card' || !(remainder > 0.005)) return null;
+    const list = allocations.map(a => a.applied).filter(x => x > 0);
+    if (!list.length) return null;
+    const otherType = ccProcessingType === 'manual' ? 'in_person' : 'manual';
+    const hit = cardMatch(totalEntered, list, ccProcessingType);
+    const otherHit = hit == null ? cardMatch(totalEntered, list, otherType) : null;
+    const due = r2(list.reduce((s, x) => s + x, 0));
+    return {
+      isSurcharge: hit != null || otherHit != null,
+      matchedType: hit != null ? ccProcessingType : (otherHit != null ? otherType : null),
+      perInvoice: r2(list.reduce((s, x) => s + cardGrossUp(x, ccProcessingType), 0)),
+      combined: cardGrossUp(due, ccProcessingType),
+    };
+  })();
+
   const toggleWO = (woId) => {
     const next = { ...selectedWOs };
     if (next[woId] !== undefined) delete next[woId];
@@ -98,6 +132,7 @@ export default function TakePaymentModal({ onClose, onSaved, initialClient }) {
         clientId: selectedClient.id,
         clientName: selectedClient.name,
         paymentDate, amount: totalEntered, method, reference, notes,
+        ...(method === 'credit_card' ? { ccProcessingType } : {}),
         applications: allocations.filter(a => a.applied > 0).map(a => ({
           workOrderId: a.inv.wo.id, amount: a.applied
         })),
@@ -179,6 +214,20 @@ export default function TakePaymentModal({ onClose, onSaved, initialClient }) {
             </div>
           </div>
 
+          {method === 'credit_card' && (
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Card processing (U12)</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[['in_person', 'In person (2.6% + $0.15)'], ['manual', 'Keyed (3.5% + $0.15)']].map(([k, lbl]) => (
+                  <button key={k} type="button" onClick={() => setCcProcessingType(k)}
+                    style={{ padding: '5px 12px', border: `1px solid ${ccProcessingType === k ? '#1565c0' : '#ddd'}`, borderRadius: 16, cursor: 'pointer', background: ccProcessingType === k ? '#e3f2fd' : 'white', color: ccProcessingType === k ? '#0d47a1' : '#555', fontWeight: ccProcessingType === k ? 700 : 400, fontSize: '0.8rem' }}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Reference {method === 'check' ? '(Check #)' : method === 'credit_card' ? '(Last 4)' : ''}</label>
@@ -256,15 +305,24 @@ export default function TakePaymentModal({ onClose, onSaved, initialClient }) {
                   <span>Still owed on invoices</span><span style={{ fontWeight: 700 }}>{fmt(stillOwed)}</span>
                 </div>
               )}
-              {remainder > 0.01 && (
+              {remainder > 0.01 && cardPreview?.isSurcharge && (
+                <div style={{ fontSize: '0.85rem', color: '#2e7d32', borderTop: '1px solid #ddd', marginTop: 6, paddingTop: 8 }}>
+                  ✓ {fmt(totalEntered)} matches the {cardPreview.matchedType === 'manual' ? 'keyed' : 'in-person'} card total — the extra {fmt(remainder)} will be booked as a card surcharge, not client credit.
+                </div>
+              )}
+              {remainder > 0.01 && cardPreview && !cardPreview.isSurcharge && (
+                <div style={{ fontSize: '0.8rem', color: '#e65100', marginTop: 6 }}>
+                  This does not match the card total for these invoices ({fmt(cardPreview.perInvoice)}{Math.abs(cardPreview.perInvoice - cardPreview.combined) > 0.005 ? ` or ${fmt(cardPreview.combined)} as one charge` : ''}), so the extra is treated as client credit.
+                </div>
+              )}
+              {remainder > 0.01 && !cardPreview?.isSurcharge && (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', padding: '4px 0 8px', borderTop: '1px solid #ddd', marginTop: 6, color: '#1565c0' }}>
                     <span>Credit remaining</span><span style={{ fontWeight: 700 }}>{fmt(remainder)}</span>
                   </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.85rem' }}>
-                    <input type="checkbox" checked={createCredit} onChange={e => setCreateCredit(e.target.checked)} />
-                    Create credit memo for {fmt(remainder)} — apply to next invoice
-                  </label>
+                  <div style={{ fontSize: '0.85rem', color: '#555' }}>
+                    {fmt(remainder)} will be held as client credit (a credit memo) to apply to the next invoice.
+                  </div>
                 </>
               )}
               {remainder < -0.01 && (

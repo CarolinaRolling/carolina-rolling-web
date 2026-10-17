@@ -9,6 +9,10 @@ import RefundModal from '../components/RefundModal';
 import COATab from './COATab';
 import EmployeesTab from './EmployeesTab';
 import HealthTab from './HealthTab';
+import { shopToday } from '../utils/dates';
+
+// U51: HTML-escape values written into print windows
+const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const LB_CATS = [
   { key: 'materials', label: 'Materials', icon: '🧱', color: '#E65100' },
@@ -84,12 +88,12 @@ function BusinessPage() {
   const [ledgerSearch, setLedgerSearch] = useState('');
   const [ledgerExpanded, setLedgerExpanded] = useState(null);
   const [paymentModal, setPaymentModal] = useState(null);
-  const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '', ccProcessingType: 'in_person' });
+  const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: shopToday(), paymentMethod: 'check', paymentReference: '', notes: '', ccProcessingType: 'in_person' });
   const [payHistory, setPayHistory] = useState(null);
   const [payTab, setPayTab] = useState('outstanding');
   const [payLoading, setPayLoading] = useState(false);
   const [showRecordPay, setShowRecordPay] = useState(null);
-  const [payForm, setPayForm] = useState({ paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '' });
+  const [payForm, setPayForm] = useState({ paymentDate: shopToday(), paymentMethod: 'check', paymentReference: '' });
   // New payment modals
   const [showTakePayment, setShowTakePayment] = useState(false);
   const [showCreditMemo, setShowCreditMemo] = useState(false);
@@ -161,7 +165,7 @@ function BusinessPage() {
   const loadHealth = async () => {
     try {
       setHealthLoad(true);
-      const [woR, lR] = await Promise.all([getWorkOrders({archived:'false',view:'list'}), getLiabilities({status:'paid'})]);
+      const [woR, lR] = await Promise.all([getWorkOrders({archived:'false',view:'list',limit:2000}), getLiabilities({status:'paid'})]);
       const wos = woR.data.data||[], bills = lR.data.data||[];
       let rev=0; wos.forEach(w => rev += parseFloat(w.grandTotal)||0);
       const byCat = {}; let exp=0;
@@ -271,9 +275,9 @@ function BusinessPage() {
       const op = [];
       if (parseFloat(en.vacationHours) > 0) op.push('Vac: ' + en.vacationHours + 'h');
       if (parseFloat(en.bonus) > 0) op.push('Bonus: $' + parseFloat(en.bonus).toFixed(2));
-      return '<tr><td>' + (en.controlNumber||'') + '</td><td style="font-weight:600">' + en.employeeName + '</td><td>' + (en.deductions||'') + '</td><td>' + (en.description||'') + '</td><td class="c">$' + parseFloat(en.hourlyRate).toFixed(2) + '</td><td class="c" style="font-weight:600">' + en.regularHours + '</td><td class="c" style="font-weight:600;color:' + (parseFloat(en.overtimeHours)>0?'#c62828':'#888') + '">' + en.overtimeHours + '</td><td>' + op.join(', ') + '</td></tr>';
+      return '<tr><td>' + escHtml(en.controlNumber) + '</td><td style="font-weight:600">' + escHtml(en.employeeName) + '</td><td>' + escHtml(en.deductions) + '</td><td>' + escHtml(en.description) + '</td><td class="c">$' + parseFloat(en.hourlyRate).toFixed(2) + '</td><td class="c" style="font-weight:600">' + escHtml(en.regularHours) + '</td><td class="c" style="font-weight:600;color:' + (parseFloat(en.overtimeHours)>0?'#c62828':'#888') + '">' + escHtml(en.overtimeHours) + '</td><td>' + escHtml(op.join(', ')) + '</td></tr>';
     }).join('');
-    const html = '<html><head><title>Payroll</title><style>' + css + '</style></head><body><div class="header"><div><div class="company-name">Carolina Rolling Co., Inc.</div><div class="doc-title">Weekly Payroll Report</div></div></div><div class="date-range">Pay Period: ' + sd + ' — ' + ed + '</div><table><thead><tr><th>Control #</th><th>Employee Name</th><th>Deductions</th><th>Description</th><th style="text-align:center">Rate</th><th style="text-align:center">Reg Hours</th><th style="text-align:center">OT</th><th>Other Pay</th></tr></thead><tbody>' + rows + '</tbody></table><div class="foot"><span>Generated: ' + new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) + '</span><span>Carolina Rolling Co., Inc.</span></div></body></html>';
+    const html = '<html><head><title>Payroll</title><style>' + css + '</style></head><body><div class="header"><div><div class="company-name">Carolina Rolling Co., Inc.</div><div class="doc-title">Weekly Payroll Report</div></div></div><div class="date-range">Pay Period: ' + escHtml(sd) + ' — ' + escHtml(ed) + '</div><table><thead><tr><th>Control #</th><th>Employee Name</th><th>Deductions</th><th>Description</th><th style="text-align:center">Rate</th><th style="text-align:center">Reg Hours</th><th style="text-align:center">OT</th><th>Other Pay</th></tr></thead><tbody>' + rows + '</tbody></table><div class="foot"><span>Generated: ' + new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) + '</span><span>Carolina Rolling Co., Inc.</span></div></body></html>';
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -314,12 +318,13 @@ function BusinessPage() {
       if (parseFloat(en.vacationHours) > 0) op.push('Vac: ' + en.vacationHours + 'h');
       if (parseFloat(en.bonus) > 0) op.push('Bonus: $' + parseFloat(en.bonus).toFixed(2));
       const nt = '';
-      return '<tr><td>' + en.controlNumber + '</td><td style="font-weight:600">' + en.employeeName + '</td><td>' + en.deductions + '</td><td>' + en.description + '</td><td class="c">$' + parseFloat(en.hourlyRate).toFixed(2) + '</td><td class="c" style="font-weight:600">' + en.regularHours + '</td><td class="c" style="font-weight:600;color:' + (parseFloat(en.overtimeHours)>0?'#c62828':'#888') + '">' + en.overtimeHours + '</td><td>' + op.join(', ') + '</td><td style="font-size:9px;color:#555">' + nt + '</td></tr>';
+      // U51: escape every interpolated value
+      return '<tr><td>' + escHtml(en.controlNumber) + '</td><td style="font-weight:600">' + escHtml(en.employeeName) + '</td><td>' + escHtml(en.deductions) + '</td><td>' + escHtml(en.description) + '</td><td class="c">$' + parseFloat(en.hourlyRate).toFixed(2) + '</td><td class="c" style="font-weight:600">' + escHtml(en.regularHours) + '</td><td class="c" style="font-weight:600;color:' + (parseFloat(en.overtimeHours)>0?'#c62828':'#888') + '">' + escHtml(en.overtimeHours) + '</td><td>' + escHtml(op.join(', ')) + '</td><td style="font-size:9px;color:#555">' + escHtml(nt) + '</td></tr>';
     }).join('');
     const now = new Date();
     w.document.write('<html><head><title>Payroll</title><style>' + css + '</style></head><body>' +
       '<div class="header"><img src="/logo.png" onerror="this.style.display=\'none\'"/><div><div class="company-name">Carolina Rolling Co., Inc.</div><div class="doc-title">Weekly Payroll Report</div></div></div>' +
-      '<div class="date-range">Pay Period: ' + sd + ' \u2014 ' + ed + '</div>' +
+      '<div class="date-range">Pay Period: ' + escHtml(sd) + ' \u2014 ' + escHtml(ed) + '</div>' +
       '<table><thead><tr><th>Control #</th><th>Employee Name</th><th>Deductions</th><th>Description</th><th style="text-align:center">Rate</th><th style="text-align:center">Reg Hours</th><th style="text-align:center">OT</th><th>Other Pay</th><th>Notes</th></tr></thead><tbody>' + rows + '</tbody></table>' +
       '<div class="foot"><span>Generated: ' + now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) + ' at ' + now.toLocaleTimeString() + '</span><span>Carolina Rolling Co., Inc.</span></div>' +
       '</body></html>');
@@ -367,25 +372,25 @@ function BusinessPage() {
       const vacPay = vac * rate;
       const vacDays = vac / 8;
       const vacRem = parseFloat(en.annualVacationDays) - parseFloat(en.vacationDaysUsed);
-      let h = '<div class="emp"><div class="emp-h"><b>' + en.employeeName + '</b><span>$' + rate.toFixed(2) + '/hr &nbsp;|&nbsp; OT $' + (rate*1.5).toFixed(2) + '/hr</span></div><div class="emp-b">';
+      let h = '<div class="emp"><div class="emp-h"><b>' + escHtml(en.employeeName) + '</b><span>$' + rate.toFixed(2) + '/hr &nbsp;|&nbsp; OT $' + (rate*1.5).toFixed(2) + '/hr</span></div><div class="emp-b">';
       h += '<div class="r"><span class="l">Regular</span><span class="v">' + reg + 'h \u00d7 $' + rate.toFixed(2) + ' = $' + regPay.toFixed(2) + '</span></div>';
       if (ot > 0) {
         h += '<div class="r"><span class="l">Overtime</span><span class="v" style="color:#c62828">' + ot + 'h \u00d7 $' + (rate*1.5).toFixed(2) + ' = $' + otPay.toFixed(2) + '</span></div>';
-        if (en.overtimeDetails && en.overtimeDetails.length > 0) h += '<div class="ot-box">' + en.overtimeDetails.map(d => new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' ' + d.hours + 'h ($' + (d.hours*rate*1.5).toFixed(2) + ')').join(' &nbsp;\u2022&nbsp; ') + '</div>';
+        if (en.overtimeDetails && en.overtimeDetails.length > 0) h += '<div class="ot-box">' + en.overtimeDetails.map(d => new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' ' + escHtml(d.hours) + 'h ($' + (d.hours*rate*1.5).toFixed(2) + ')').join(' &nbsp;\u2022&nbsp; ') + '</div>';
       }
       if (vac > 0) {
         h += '<div class="r"><span class="l">Vacation</span><span class="v" style="color:#1565c0">' + vac + 'h (' + vacDays.toFixed(1) + 'd) \u00d7 $' + rate.toFixed(2) + ' = $' + vacPay.toFixed(2) + '</span></div>';
-        if (en.vacationDates && en.vacationDates.length > 0) h += '<div class="vc-box">' + en.vacationDates.map(d => { const dt = typeof d === 'string' ? d : d.date; const hrs = typeof d === 'object' && d.hours ? d.hours + 'h' : ''; return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + (hrs ? ' (' + hrs + ')' : ''); }).join(', ') + '</div>';
+        if (en.vacationDates && en.vacationDates.length > 0) h += '<div class="vc-box">' + en.vacationDates.map(d => { const dt = typeof d === 'string' ? d : d.date; const hrs = typeof d === 'object' && d.hours ? d.hours + 'h' : ''; return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + (hrs ? ' (' + escHtml(hrs) + ')' : ''); }).join(', ') + '</div>';
       }
       if (parseFloat(en.annualVacationDays) > 0) h += '<div class="bal">Vacation balance: ' + vacRem.toFixed(1) + ' / ' + parseFloat(en.annualVacationDays).toFixed(1) + ' days</div>';
-      if (bonus > 0) h += '<div class="r"><span class="l">Bonus' + (en.bonusNotes ? ' \u2014 ' + en.bonusNotes : '') + '</span><span class="v">$' + bonus.toFixed(2) + '</span></div>';
+      if (bonus > 0) h += '<div class="r"><span class="l">Bonus' + (en.bonusNotes ? ' \u2014 ' + escHtml(en.bonusNotes) : '') + '</span><span class="v">$' + bonus.toFixed(2) + '</span></div>';
       h += '<div class="gp"><span>Gross Pay</span><span>$' + parseFloat(en.grossPay).toFixed(2) + '</span></div></div></div>';
       return h;
     }).join('');
     const now = new Date();
     w.document.write('<html><head><title>Detailed Payroll</title><style>' + css + '</style></head><body>' +
       '<div class="hdr"><img src="/logo.png" onerror="this.style.display=\'none\'"/><div><div class="co">Carolina Rolling Co., Inc.</div><div class="dt">Detailed Payroll Report</div></div></div>' +
-      '<div class="dr">' + sd + ' \u2014 ' + ed + '</div>' +
+      '<div class="dr">' + escHtml(sd) + ' \u2014 ' + escHtml(ed) + '</div>' +
       cards +
       '<div class="tot">Total Gross Payroll: $' + parseFloat(pr.totalGross).toFixed(2) + '</div>' +
       '<div class="ft"><span>Generated: ' + now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) + ' ' + now.toLocaleTimeString() + '</span><span>CONFIDENTIAL \u2014 Carolina Rolling Co., Inc.</span></div>' +
@@ -428,7 +433,22 @@ function BusinessPage() {
     catch { setErr('Upload failed'); } finally { setUploadingBill(false); }
   };
   const handleSaveBill = saveBill;
-  const handlePayBill = async (bill) => { try { await payLiability(bill.id, { paidAt: new Date().toISOString() }); showMsg('Marked paid'); await loadLiabs(); } catch { setErr('Failed'); } };
+  // T45: no per-click timestamp in the body (the server stamps paidAt itself), so a double-click or
+  // retry reuses the same Idempotency-Key; payingBillId blocks a second request while one is in flight,
+  // and a bill that is already paid can't be paid again (the server answers 409 — shown to the user).
+  const [payingBillId, setPayingBillId] = React.useState(null);
+  const payingBillRef = React.useRef(null);
+  const handlePayBill = async (bill) => {
+    if (!bill || bill.status === 'paid' || payingBillRef.current) return;
+    if (!window.confirm(`Pay "${bill.name}"?`)) return;
+    payingBillRef.current = bill.id; setPayingBillId(bill.id);
+    try { await payLiability(bill.id, {}); showMsg('Marked paid'); }
+    catch (e) {
+      const m = e.response?.data?.error?.message || e.response?.data?.message;
+      setErr(e.response?.status === 409 ? (m || 'This bill is already paid') : (m || 'Failed to mark bill paid'));
+    }
+    finally { payingBillRef.current = null; setPayingBillId(null); try { await loadLiabs(); } catch {} }
+  };
   const handleRejectBill = async (bill) => { try { await rejectBill(bill.id); showMsg('Rejected'); await loadLiabs(); } catch { setErr('Failed'); } };
   const handleApproveBill = async (bill) => { try { await approveBill(bill.id); showMsg('Approved'); await loadLiabs(); } catch { setErr('Failed'); } };
   const handleDeleteBill = async (bill) => { if (!window.confirm('Delete this bill?')) return; try { await deleteLiability(bill.id); showMsg('Deleted'); await loadLiabs(); } catch { setErr('Failed'); } };
@@ -496,7 +516,7 @@ function BusinessPage() {
           bf={bf} setBf={setBf}
           billFileRef={billFileRef} uploadingBill={uploadingBill}
           handleBillFileUpload={handleBillFileUpload}
-          handleSaveBill={handleSaveBill} handlePayBill={handlePayBill}
+          handleSaveBill={handleSaveBill} handlePayBill={handlePayBill} payingBillId={payingBillId}
           handleRejectBill={handleRejectBill} handleApproveBill={handleApproveBill}
           handleDeleteBill={handleDeleteBill} daysUntil={daysUntil}
           showTakePayment={showTakePayment} setShowTakePayment={setShowTakePayment}

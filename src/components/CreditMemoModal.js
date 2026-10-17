@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { X, Check } from 'lucide-react';
 import { searchClients, createCreditMemo } from '../services/api';
+import { shopToday } from '../utils/dates';
 
 export default function CreditMemoModal({ onClose, onSaved, initialClient }) {
   const [clientSearch, setClientSearch] = useState(initialClient?.name || '');
   const [clientSuggestions, setClientSuggestions] = useState([]);
   const [showDrop, setShowDrop] = useState(false);
   const [selectedClient, setSelectedClient] = useState(initialClient || null);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(shopToday());
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);

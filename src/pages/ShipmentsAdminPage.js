@@ -22,6 +22,8 @@ function ShipmentsAdminPage() {
   const [editData, setEditData] = useState({});
   const [confirmDelete, setConfirmDelete] = useState(null); // id or 'bulk'
   const [message, setMessage] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);   // T49: failures are shown, not just logged
+  const editBaselineRef = useRef(null);             // T49: values the inline editor started from
   const [linkingShipmentId, setLinkingShipmentId] = useState(null);
   const [woSearchQuery, setWoSearchQuery] = useState('');
   const [woSearchResults, setWoSearchResults] = useState([]);
@@ -55,6 +57,11 @@ function ShipmentsAdminPage() {
     loadShipments();
   }, [loadShipments]);
 
+  const showError = (err, what) => {
+    console.error(err);
+    setErrorMsg(`${what}: ${err?.response?.data?.error?.message || err?.response?.data?.message || err?.message || 'request failed'}`);
+  };
+
   const showMessage = (msg) => {
     setMessage(msg);
     setTimeout(() => setMessage(null), 3000);
@@ -80,7 +87,7 @@ function ShipmentsAdminPage() {
       showMessage('Shipment archived');
       loadShipments();
     } catch (err) {
-      console.error(err);
+      showError(err, 'Failed to archive shipment');
     }
   };
 
@@ -91,7 +98,7 @@ function ShipmentsAdminPage() {
       setConfirmDelete(null);
       loadShipments();
     } catch (err) {
-      console.error(err);
+      showError(err, 'Failed to delete shipment');
     }
   };
 
@@ -102,7 +109,7 @@ function ShipmentsAdminPage() {
       setSelected(new Set());
       loadShipments();
     } catch (err) {
-      console.error(err);
+      showError(err, 'Failed to archive shipments');
     }
   };
 
@@ -114,7 +121,7 @@ function ShipmentsAdminPage() {
       setConfirmDelete(null);
       loadShipments();
     } catch (err) {
-      console.error(err);
+      showError(err, 'Failed to delete shipments');
     }
   };
 
@@ -153,7 +160,7 @@ function ShipmentsAdminPage() {
       setLinkingShipmentId(null);
       loadShipments();
     } catch (err) {
-      showMessage('Failed to link: ' + (err.response?.data?.error?.message || err.message));
+      showError(err, 'Failed to link');
     } finally {
       setLinking(false);
     }
@@ -161,7 +168,8 @@ function ShipmentsAdminPage() {
 
   const startEdit = (s) => {
     setEditingId(s.id);
-    setEditData({
+    setErrorMsg(null);
+    setEditData(editBaselineRef.current = {
       clientName: s.clientName || '',
       description: s.description || '',
       clientPurchaseOrderNumber: s.clientPurchaseOrderNumber || '',
@@ -173,12 +181,19 @@ function ShipmentsAdminPage() {
 
   const saveEdit = async () => {
     try {
-      await updateShipment(editingId, editData);
+      // T49: send only what the user changed here — sending the whole row put back the status/location
+      // the row was opened with, undoing a change made on the tablet in the meantime.
+      const base = editBaselineRef.current || {};
+      const changes = {};
+      for (const k of Object.keys(editData)) {
+        if ((editData[k] ?? '') !== (base[k] ?? '')) changes[k] = editData[k];
+      }
+      if (Object.keys(changes).length) await updateShipment(editingId, changes);
       setEditingId(null);
       showMessage('Shipment updated');
       loadShipments();
     } catch (err) {
-      console.error(err);
+      showError(err, 'Failed to save shipment');
     }
   };
 
@@ -218,6 +233,12 @@ function ShipmentsAdminPage() {
       </div>
 
       {/* Message */}
+      {errorMsg && (
+        <div className="alert alert-error" style={{ marginBottom: 12 }}>
+          {errorMsg}
+          <button onClick={() => setErrorMsg(null)} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+        </div>
+      )}
       {message && (
         <div style={{ 
           background: '#e8f5e9', border: '1px solid #66bb6a', borderRadius: 8,

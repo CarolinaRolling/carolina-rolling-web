@@ -46,12 +46,17 @@ export const login = (username, password, totpCode) => api.post('/auth/login', {
 export const getCurrentUser = () => api.get('/auth/me');
 
 // 2FA
-export const setup2FA = () => api.post('/auth/2fa/setup');
+export const setup2FA = (password) => api.post('/auth/2fa/setup', { password });
 export const verify2FA = (code) => api.post('/auth/2fa/verify', { code });
 export const disable2FA = (password) => api.post('/auth/2fa/disable', { password });
 export const get2FAStatus = () => api.get('/auth/2fa/status');
-export const changePassword = (currentPassword, newPassword) => 
-  api.put('/auth/change-password', { currentPassword, newPassword });
+export const changePassword = async (currentPassword, newPassword) => {
+  const res = await api.put('/auth/change-password', { currentPassword, newPassword });
+  // a password change signs out every other session; keep this one with the fresh token (round 12)
+  const t = res?.data?.data?.token;
+  if (t) { try { localStorage.setItem('token', t); } catch (e) { /* private mode */ } }
+  return res;
+};
 
 // Admin - Users
 export const getUsers = () => api.get('/auth/users');
@@ -134,6 +139,11 @@ export const scanPurchaseOrder = (file) => {
 };
 export const updateInboundOrder = (id, data) => api.put(`/inbound/${id}`, data);
 export const deleteInboundOrder = (id) => api.delete(`/inbound/${id}`);
+// One server transaction: creates the shipment (linked to the order) and removes the delivery (R21)
+// An invoice paid beyond its current total: hold the excess as client credit (T4)
+export const moveOverpaymentToCredit = (woId) => postMoney(`/business/ledger/${woId}/overpayment-to-credit`, {});   // U34
+// U36: { force: true } lets an admin re-convert an already-received delivery
+export const convertInboundToShipment = (id, opts = {}) => api.post(`/inbound/${id}/convert-to-shipment`, opts.force ? { force: true } : {});
 
 // Work Orders
 export const getWorkOrders = (params) => api.get('/workorders', { params });
@@ -308,6 +318,10 @@ export const deleteEstimatePartFile = (estimateId, partId, fileId) =>
 export const toggleEstimateFilePortal = (estimateId, partId, fileId, portalVisible) =>
   api.patch(`/estimates/${estimateId}/parts/${partId}/files/${fileId}/portal`, { portalVisible });
 
+// Show / hide an estimate-level file on the client portal (round 11 — portal sees only published files)
+export const toggleEstimateLevelFilePortal = (estimateId, fileId, portalVisible) =>
+  api.patch(`/estimates/${estimateId}/files/${fileId}/portal`, { portalVisible });
+
 // Reset estimate conversion (if work order is missing)
 export const resetEstimateConversion = (estimateId) => api.post(`/estimates/${estimateId}/reset-conversion`);
 export const checkOrphanedEstimates = () => api.get('/estimates/check-orphaned');
@@ -349,7 +363,23 @@ export const getFrequentDrivers = (id) => api.get(`/workorders/${id}/frequent-dr
 export const deletePickupEntry = (id, index) => api.delete(`/workorders/${id}/pickup/${index}`);
 export const updatePickupEntry = (id, index, data) => api.put(`/workorders/${id}/pickup/${index}`, data);
 export const getPickupReceipt = (id, index) => api.get(`/workorders/${id}/pickup/${index}/receipt`, { responseType: 'blob' });
-export const recordPayment = (id, data) => api.post(`/workorders/${id}/record-payment`, data);
+// Money writes carry an Idempotency-Key (round 12, N19). Sending the SAME payment again within 20
+// seconds of the first try (a double-click, a retry after a network error) reuses the key, so the
+// server records it once and answers the repeat with the first result. After 20 seconds a new key is
+// made, so a genuinely new, identical payment always goes through.
+const recentMoneyKeys = new Map();   // content -> { key, at }
+const moneyKey = (url, data) => {
+  const content = url + '|' + JSON.stringify(data || {});
+  const now = Date.now();
+  for (const [k, v] of recentMoneyKeys) if (now - v.at > 20000) recentMoneyKeys.delete(k);
+  const hit = recentMoneyKeys.get(content);
+  if (hit) return hit.key;
+  const key = 'm-' + (window.crypto?.randomUUID ? window.crypto.randomUUID() : (now.toString(36) + Math.random().toString(36).slice(2)));
+  recentMoneyKeys.set(content, { key, at: now });
+  return key;
+};
+const postMoney = (url, data) => api.post(url, data, { headers: { 'Idempotency-Key': moneyKey(url, data) } });
+export const recordPayment = (id, data) => postMoney(`/workorders/${id}/record-payment`, data);
 export const clearPayment = (id) => api.post(`/workorders/${id}/clear-payment`);
 export const getArchivedWorkOrders = (params) => api.get('/workorders/archived', { params });
 export const getRecentlyCompletedOrders = () => api.get('/workorders/recently-completed');
@@ -478,7 +508,7 @@ export default api;
 
 
 // QuickBooks IIF Export
-export const exportWorkOrderIIF = (id) => api.get(`/quickbooks/export/${id}`, { responseType: 'text', transformResponse: [(data) => data] });
+export const exportWorkOrderIIF = (id, reexport = false) => api.get(`/quickbooks/export/${id}${reexport ? '?reexport=1' : ''}`, { responseType: 'text', transformResponse: [(data) => data] });
 export const previewWorkOrderIIF = (id) => api.get(`/quickbooks/preview/${id}`);
 export const exportBatchIIF = (workOrderIds) => api.post('/quickbooks/export-batch', { workOrderIds }, { responseType: 'text', transformResponse: [(data) => data] });
 export const markInvoicesEntered = (workOrderIds) => api.post('/quickbooks/mark-entered', { workOrderIds });
@@ -486,7 +516,8 @@ export const unmarkInvoicesEntered = (workOrderIds) => api.post('/quickbooks/unm
 export const exportBatchWithReconciliation = (workOrderIds) => api.post('/quickbooks/export-batch-with-reconciliation', { workOrderIds });
 export const generateInvoicePDF = (id) => api.get(`/quickbooks/invoice-pdf/${id}`, { responseType: 'arraybuffer' });
 export const sendInvoiceEmail = (id, data) => api.post(`/quickbooks/invoice-email/${id}`, data);
-export const updateInvoiceNumber = (id, invoiceNumber, confirmReuseExported = false) => api.put(`/quickbooks/invoice-number/${id}`, { invoiceNumber, ...(confirmReuseExported ? { confirmReuseExported: true } : {}) });
+// U50: confirmJump (admin) confirms a number far past the sequence
+export const updateInvoiceNumber = (id, invoiceNumber, confirmReuseExported = false, confirmJump = false) => api.put(`/quickbooks/invoice-number/${id}`, { invoiceNumber, ...(confirmReuseExported ? { confirmReuseExported: true } : {}), ...(confirmJump ? { confirmJump: true } : {}) });
 export const getInvoiceSends = (id) => api.get(`/quickbooks/invoice-sends/${id}`);
 export const logInvoiceSend = (id, data) => api.post(`/quickbooks/invoice-sends/${id}`, data);
 export const previewIIF = (id) => api.get(`/quickbooks/preview/${id}`);
@@ -496,7 +527,7 @@ export const exportCustomersIIF = () => api.post('/quickbooks/export-customers',
 export const getLedger = (params) => api.get('/business/ledger', { params });
 export const getGeneralLedger = (params) => api.get('/business/general-ledger', { params });
 export const getWOPayments = (woId) => api.get(`/business/ledger/${woId}/payments`);
-export const recordLedgerPayment = (woId, data) => api.post(`/business/ledger/${woId}/payments`, data);
+export const recordLedgerPayment = (woId, data) => postMoney(`/business/ledger/${woId}/payments`, data);
 export const voidLedgerPayment = (paymentId) => api.delete(`/business/ledger/payments/${paymentId}`);
 
 // Shop Supplies
@@ -638,7 +669,7 @@ export const getLiabilities = (params) => api.get('/business/liabilities', { par
 export const getLiabilitySummary = () => api.get('/business/liabilities/summary');
 export const createLiability = (data) => api.post('/business/liabilities', data);
 export const updateLiability = (id, data) => api.put(`/business/liabilities/${id}`, data);
-export const payLiability = (id, data) => api.post(`/business/liabilities/${id}/pay`, data);
+export const payLiability = (id, data) => postMoney(`/business/liabilities/${id}/pay`, data);
 export const deleteLiability = (id) => api.delete(`/business/liabilities/${id}`);
 export const uploadBillFile = (id, file) => { const fd = new FormData(); fd.append('file', file); return api.post(`/business/liabilities/${id}/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }); };
 export const approveBill = (id, data) => api.post(`/business/liabilities/${id}/approve`, data);
@@ -681,16 +712,17 @@ export const saveWOUsmcaInfo = (workOrderId, data) => api.patch(`/workorders/${w
 
 // New payment system
 export const getClientOpenInvoices = (clientId) => api.get(`/business/client-open-invoices/${clientId}`);
-export const recordClientPayment = (data) => api.post('/business/client-payments', data);
+export const recordClientPayment = (data) => postMoney('/business/client-payments', data);
 export const getClientPayments = (params) => api.get('/business/client-payments', { params });
 export const getCreditMemos = (params) => api.get('/business/credit-memos', { params });
-export const createCreditMemo = (data) => api.post('/business/credit-memos', data);
+export const createCreditMemo = (data) => postMoney('/business/credit-memos', data);
 export const voidCreditMemo = (id, reason) => api.delete(`/business/credit-memos/${id}`, { data: { reason } });
-export const applyCreditMemo = (id, data) => api.post(`/business/credit-memos/${id}/apply`, data);
+// U34: Idempotency-Key so a double-click applies the credit once
+export const applyCreditMemo = (id, data) => postMoney(`/business/credit-memos/${id}/apply`, data);
 export const voidClientPayment = (id, reason) => api.post(`/business/client-payments/${id}/void`, { reason });
 export const getRefunds = (params) => api.get('/business/refunds', { params });
-export const createRefund = (data) => api.post('/business/refunds', data);
-export const voidRefund = (id) => api.delete(`/business/refunds/${id}`);
+export const createRefund = (data) => postMoney('/business/refunds', data);
+export const voidRefund = (id, reason) => api.delete(`/business/refunds/${id}`, { data: { reason } }); // W13: reason sent like voidCreditMemo
 
 // Shipment Charges
 export const getWOShipmentCharges = (workOrderId) => api.get(`/workorders/${workOrderId}/shipment-charges`);
@@ -765,3 +797,7 @@ export const updatePricingConfig = (data) => api.put('/settings/pricing-config',
 export const getPricingWorksheet = (partType) => api.get('/settings/pricing-worksheet', { params: { partType } });
 export const submitPricingWorksheet = (partType, answers, rows) => api.post('/settings/pricing-worksheet', { partType, answers, rows });
 export const getAiUsage = () => api.get('/settings/ai-usage');
+
+// Backup restore as a background job (U6): start → 202 { jobId }; poll the job for progress and the report
+export const startRestoreJob = (data) => api.post('/backup/restore', { ...data, options: { ...((data && data.options) || {}), async: true } });
+export const getRestoreJob = (jobId) => api.get(`/backup/restore/${jobId}`);

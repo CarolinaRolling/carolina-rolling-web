@@ -671,10 +671,10 @@ function EstimatesPage() {
                         </div>
                         <span style={{
                           fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4,
-                          background: client.taxStatus === 'resale' ? '#fff3e0' : client.taxStatus === 'exempt' ? '#e8f5e9' : '#e3f2fd',
-                          color: client.taxStatus === 'resale' ? '#e65100' : client.taxStatus === 'exempt' ? '#2e7d32' : '#1565c0'
+                          background: String(client.taxStatus || '').toLowerCase() === 'resale' ? '#fff3e0' : String(client.taxStatus || '').toLowerCase() === 'exempt' ? '#e8f5e9' : '#e3f2fd',
+                          color: String(client.taxStatus || '').toLowerCase() === 'resale' ? '#e65100' : String(client.taxStatus || '').toLowerCase() === 'exempt' ? '#2e7d32' : '#1565c0'
                         }}>
-                          {client.taxStatus === 'resale' ? 'Resale' : client.taxStatus === 'exempt' ? 'Exempt' : 'Taxable'}
+                          {String(client.taxStatus || '').toLowerCase() === 'resale' ? 'Resale' : String(client.taxStatus || '').toLowerCase() === 'exempt' ? 'Exempt' : 'Taxable'}
                         </span>
                       </div>
                     ))}

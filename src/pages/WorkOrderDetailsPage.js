@@ -43,10 +43,21 @@ import {
   getWorkOrderPrintPackage, updateDRNumber, recordPickup, getFrequentDrivers, deletePickupEntry, updatePickupEntry, getPickupReceipt, recordPayment, clearPayment, generateInvoicePDF,
   exportWorkOrderIIF, assignInvoiceNumber, API_BASE_URL, recordLedgerPayment, voidLedgerPayment, sendInvoiceEmail, getEmailAccounts, getWOPayments, getInvoiceSends, logInvoiceSend,
   generateCOC, getWeldProcedures, updateClient, updateInvoiceNumber, generateUSMCA, saveWOUsmcaInfo,
-  addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge, getWOShipmentCharges, getInspectionJobs, backfillWorkOrderPricing
+  addWOShipmentCharge, updateWOShipmentCharge, deleteWOShipmentCharge, getWOShipmentCharges, getInspectionJobs, backfillWorkOrderPricing,
+  getClientHistory
 } from '../services/api';
 import usePolling from '../hooks/usePolling';
+import { useAuth } from '../context/AuthContext';
+import { sendWithInvoiceGuards } from '../utils/invoiceGuards';
+import { DEFAULT_RULES as LABOR_DEFAULT_RULES, EA_PRICED_TYPES } from '../utils/laborMinimum';
+import { computeInvoiceTotals, calculatePartTotal as serverLineTotal, basePartLaborEach } from '../utils/invoiceTotals';
 import { COUNTRIES as USMCA_COUNTRY_LIST } from '../constants/countries';
+import { shopToday, formatDay, dayValue } from '../utils/dates';
+import { localDateTimeInputNow, formatDateOnly } from '../utils/shopDate';
+
+// Text written into print windows is escaped: those windows run as the app itself, and some
+// fields (client, PO, instructions) can come from scanned customer emails (audit R33)
+const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 // Spec label matching the other roll forms: ID/ISR, OD/OSR, CLD/CLR.
 function coneSpecLabel(measurePoint, measureType) {
@@ -93,6 +104,7 @@ const isHiddenFromCustomer = (part) => {
 };
 
 function WorkOrderDetailsPage() {
+  const { isAdmin } = useAuth();   // U50: admins may confirm an invoice-number jump
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
@@ -116,7 +128,20 @@ function WorkOrderDetailsPage() {
   const [success, setSuccess] = useState(null);
   const [showReceivingInfo, setShowReceivingInfo] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  // The 30-second refresh must not overwrite what someone is typing (audit R10): while the order is
+  // being edited, or the internal-notes box has unsaved text, a background refresh leaves them alone.
+  const isEditingRef = useRef(false);
+  useEffect(() => { isEditingRef.current = isEditing; }, [isEditing]);
+  const notesDirtyRef = useRef(false);
+  const openedPartDataRef = useRef(null);
+  const editBaselineRef = useRef(null);       // the order form as it was when editing began (N17)   // the part dialog as opened — saves send only changes (N7)
   const [editData, setEditData] = useState({});
+  // T47 — same rule as the server: the invoice is tax exempt when the client's taxStatus is resale/exempt,
+  // or the order's own taxExempt flag is set. A resale certificate + active permit is info only.
+  const clientTaxStatusForTax = ('_clientTaxStatus' in editData) ? editData._clientTaxStatus : order?._clientObj?.taxStatus;
+  const clientTaxExempt = ['resale', 'exempt'].includes(String(clientTaxStatusForTax || '').toLowerCase());   // V17: any case
+  const ownTaxExempt = (editData.taxExempt !== undefined ? editData.taxExempt : order?.taxExempt) === true;
+  const effectiveTaxExempt = clientTaxExempt || ownTaxExempt;
   const [showPartModal, setShowPartModal] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderParts, setReorderParts] = useState([]);
@@ -298,14 +323,14 @@ function WorkOrderDetailsPage() {
     return items;
   };
   const [usmcaEditModal, setUsmcaEditModal] = useState(null); // { htsCode, blanketFrom, blanketTo, importerName, importerAddress, goodsDescription }
-  const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
+  const [paymentForm, setPaymentForm] = useState({ paymentType: 'partial', amount: '', paymentDate: shopToday(), paymentMethod: 'check', paymentReference: '', notes: '' });
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [invoicePayments, setInvoicePayments] = useState([]);
   const [invoiceGenerating, setInvoiceGenerating] = useState(false);
   const [invoicePdfPreviewUrl, setInvoicePdfPreviewUrl] = useState(null);
   const [invoiceSends, setInvoiceSends] = useState([]);
   const [showManualSendLog, setShowManualSendLog] = useState(false);
-  const [manualSendForm, setManualSendForm] = useState({ sentAt: new Date().toISOString().slice(0,16), sentMethod: 'email', sentTo: '', sentFrom: '', notes: '' });
+  const [manualSendForm, setManualSendForm] = useState({ sentAt: localDateTimeInputNow(), sentMethod: 'email', sentTo: '', sentFrom: '', notes: '' });
   const [gmailAccounts, setGmailAccounts] = useState([]);
   const [selectedGmailId, setSelectedGmailId] = useState('');
   const [invoiceEmailSending, setInvoiceEmailSending] = useState(false);
@@ -328,7 +353,7 @@ function WorkOrderDetailsPage() {
   const [cocWpsList, setCocWpsList] = useState([]);
   const [cocWpsId, setCocWpsId] = useState('');
   const [cocCertifiedBy, setCocCertifiedBy] = useState('Jason Thornton');
-  const [cocDate, setCocDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [cocDate, setCocDate] = useState(() => shopToday());
   const [cocGenerating, setCocGenerating] = useState(false);
   const [cocSelectedParts, setCocSelectedParts] = useState(null); // null = all parts
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -382,6 +407,8 @@ function WorkOrderDetailsPage() {
   const [codAction, setCodAction] = useState(null); // 'checklist' or 'pickup'
   const [codShowOverride, setCodShowOverride] = useState(false);
   const [codVerifying, setCodVerifying] = useState(false);
+  // The server checks COD on the pickup itself (U10): the override hands back a short-lived token we send with it
+  const [codOverrideToken, setCodOverrideToken] = useState(null);
   const [codOverrideMsg, setCodOverrideMsg] = useState('');
 
   // Single override handler with visible feedback. Trims input, handles the no-password-configured case,
@@ -397,7 +424,8 @@ function WorkOrderDetailsPage() {
     setCodVerifying(true);
     let accepted = false;
     try {
-      await verifyCodOverride(id, entered, codAction);
+      const vr = await verifyCodOverride(id, entered, codAction);
+      setCodOverrideToken(vr?.data?.data?.codOverrideToken || null);
       accepted = true;
     } catch (err) {
       const status = err?.response?.status;
@@ -423,6 +451,12 @@ function WorkOrderDetailsPage() {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   // The invoice total as the server computes it for the PDF / ledger / QuickBooks (audit M16)
   const [serverTotals, setServerTotals] = useState(null);
+  const [codSaving, setCodSaving] = useState(false);
+  // Not priced yet (and not in QuickBooks): the COD dialog asks for the amount received (N13)
+  const codUnpriced = !!serverTotals && !serverTotals.frozen && ((serverTotals.partsSubtotal || 0) + (serverTotals.rushAmount || 0)) <= 0;
+  // V36: the balance still owed (the server's ledger figure), shown in the COD Record Payment dialog with the card totals
+  const [codBalance, setCodBalance] = useState(null);
+  const codCardTotal = (bal, type) => Math.round(((Math.round(bal * 100) / 100 + 0.15) / (1 - (type === 'manual' ? 0.035 : 0.026))) * 100) / 100;
 
   const loadInsp = useCallback(() => {
     if (!id) return;
@@ -453,7 +487,7 @@ function WorkOrderDetailsPage() {
   // Auto-refresh for live progress updates from shop tablets. Paused while the tab is hidden —
   // this endpoint returns the whole order including every part and file, so a forgotten
   // background tab was re-downloading all of it twice a minute.
-  usePolling(() => { loadOrder(); }, 30000, { enabled: Boolean(id) });
+  usePolling(() => { loadOrder({ poll: true }); }, 30000, { enabled: Boolean(id) });
 
   useEffect(() => {
     if (woTab === 'invoice' && id) {
@@ -485,6 +519,8 @@ function WorkOrderDetailsPage() {
 
   const initialLoadDone = useRef(false);
   
+  // the invoice's own totals from the server (U31: shown whenever the order isn't being edited)
+  const refreshServerTotals = () => getWorkOrderInvoiceTotals(id).then(r => setServerTotals(r.data.data || null)).catch(() => setServerTotals(null));
   const loadOrder = async (opts = {}) => {
     // Save scroll position before reload
     const scrollY = window.scrollY;
@@ -499,8 +535,8 @@ function WorkOrderDetailsPage() {
       const response = await getWorkOrderById(id);
       const data = response.data.data;
       setOrder(data);
-      getWorkOrderInvoiceTotals(id).then(r => setServerTotals(r.data.data || null)).catch(() => setServerTotals(null));
-      setInternalNotesDraft(data.internalNotes || '');
+      refreshServerTotals();
+      if (!(opts.poll && notesDirtyRef.current)) setInternalNotesDraft(data.internalNotes || '');
 
       // Determine correct tax rate: WO stored > client-specific > admin default
       let effectiveTaxRate = adminTaxRate;
@@ -528,21 +564,13 @@ function WorkOrderDetailsPage() {
         effectiveTaxRate = parseFloat(loadedClient.customTaxRate) * 100;
       }
 
-      // Auto-determine tax exempt from client if not already saved on the WO
-      let taxExempt = data.taxExempt || false;
-      let taxExemptReason = data.taxExemptReason || '';
-      let taxExemptCertNumber = data.taxExemptCertNumber || '';
-      if (!data.taxExempt && loadedClient) {
-        const clientIsExempt = loadedClient.taxStatus === 'resale' || loadedClient.taxStatus === 'exempt' ||
-          (loadedClient.resaleCertificate && loadedClient.permitStatus === 'active');
-        if (clientIsExempt) {
-          taxExempt = true;
-          taxExemptReason = (loadedClient.taxStatus === 'exempt') ? 'Tax Exempt' : 'Resale';
-          taxExemptCertNumber = loadedClient.resaleCertificate || '';
-        }
-      }
+      // T47: the checkbox shows the order's STORED flag. Nothing is derived from the client here (a
+      // resale/exempt client shows as exempt-by-client through clientTaxExempt instead).
+      const taxExempt = data.taxExempt === true;
+      const taxExemptReason = data.taxExemptReason || '';
+      const taxExemptCertNumber = data.taxExemptCertNumber || '';
 
-      setEditData({
+      if (!(opts.poll && isEditingRef.current)) setEditData({
         clientId: data.clientId || null,
         clientName: data.clientName || '',
         clientPurchaseOrderNumber: data.clientPurchaseOrderNumber || '',
@@ -597,98 +625,15 @@ function WorkOrderDetailsPage() {
     } catch (e) { console.warn('[hts] load:', e.message); }
   };
   const loadLaborMinimums = async () => {
-    const defaults = [
-      { partType: 'plate_roll', label: 'Plate ≤ 3/8"', sizeField: 'thickness', maxSize: 0.375, minWidth: '', maxWidth: '', minimum: 125 },
-      { partType: 'plate_roll', label: 'Plate ≤ 3/8" (24-60" wide)', sizeField: 'thickness', maxSize: 0.375, minWidth: 24, maxWidth: 60, minimum: 150 },
-      { partType: 'plate_roll', label: 'Plate > 3/8"', sizeField: 'thickness', minSize: 0.376, minWidth: '', maxWidth: '', minimum: 200 },
-      { partType: 'angle_roll', label: 'Angle ≤ 2x2', sizeField: 'angleSize', maxSize: 2, minWidth: '', maxWidth: '', minimum: 150 },
-      { partType: 'angle_roll', label: 'Angle > 2x2', sizeField: 'angleSize', minSize: 2.01, minWidth: '', maxWidth: '', minimum: 250 },
-    ];
     try {
       const resp = await getSettings('labor_minimums');
-      setLaborMinimums(resp?.data?.data?.value || defaults);
-    } catch { setLaborMinimums(defaults); }
+      setLaborMinimums(resp?.data?.data?.value || LABOR_DEFAULT_RULES);
+    } catch { setLaborMinimums(LABOR_DEFAULT_RULES); }
   };
 
-  // Parse dimension string: "3/8"" → 0.375, "1-1/2"" → 1.5, "2.5" → 2.5, "24 ga" → 0.025, "2x2" → 2
-  const parseDimension = (val) => {
-    if (!val) return 0;
-    const s = String(val).trim().replace(/["\u2033]/g, '');
-    if (!isNaN(s) && s !== '') return parseFloat(s);
-    const gaugeMatch = s.match(/^(\d+)\s*ga/i);
-    if (gaugeMatch) {
-      const gaugeMap = { 24: 0.025, 22: 0.030, 20: 0.036, 18: 0.048, 16: 0.060, 14: 0.075, 12: 0.105, 11: 0.120, 10: 0.135 };
-      return gaugeMap[parseInt(gaugeMatch[1])] || 0;
-    }
-    const mixedMatch = s.match(/^(\d+)\s*[-\u2013]\s*(\d+)\s*\/\s*(\d+)/);
-    if (mixedMatch) return parseInt(mixedMatch[1]) + parseInt(mixedMatch[2]) / parseInt(mixedMatch[3]);
-    const fracMatch = s.match(/^(\d+)\s*\/\s*(\d+)/);
-    if (fracMatch) return parseInt(fracMatch[1]) / parseInt(fracMatch[2]);
-    const leadMatch = s.match(/^([\d.]+)/);
-    if (leadMatch) return parseFloat(leadMatch[1]);
-    return 0;
-  };
-
-  const getPartSize = (part) => {
-    const fd = part.formData || {};
-    if (part.partType === 'plate_roll' || part.partType === 'flat_stock') return parseDimension(part.thickness);
-    if (part.partType === 'angle_roll') return parseDimension(fd._angleSize || part.sectionSize || '');
-    if (part.partType === 'pipe_roll') return parseDimension(part.outerDiameter);
-    if (part.partType === 'tube_roll') return parseDimension(fd._tubeSize || part.sectionSize || '');
-    if (part.partType === 'flat_bar') return parseDimension(fd._barSize || part.sectionSize || '');
-    if (part.partType === 'channel_roll') return parseDimension(fd._channelSize || part.sectionSize || '');
-    if (part.partType === 'beam_roll') return parseDimension(fd._beamSize || part.sectionSize || '');
-    if (part.partType === 'tee_bar') return parseDimension(fd._teeSize || part.sectionSize || '');
-    if (part.partType === 'cone_roll') return (parseFloat(fd._coneLargeDia) * (fd._coneLargeDiaMeasure === 'radius' ? 2 : 1)) || parseDimension(part.sectionSize || '');
-    return parseDimension(part.sectionSize || part.thickness || '');
-  };
-
-  const getPartWidth = (part) => parseDimension(part.width);
-
-  const getLaborMinimum = (part) => {
-    if (!laborMinimums.length) return null;
-    const partSize = getPartSize(part);
-    const partWidth = getPartWidth(part);
-    let bestSpecificRule = null, bestGeneralRule = null, bestFallbackRule = null;
-
-    for (const rule of laborMinimums) {
-      if (rule.partType !== part.partType) continue;
-      if (!bestFallbackRule || parseFloat(rule.minimum) > parseFloat(bestFallbackRule.minimum)) bestFallbackRule = rule;
-
-      const hasMinSize = rule.minSize !== undefined && rule.minSize !== null && rule.minSize !== '' && parseFloat(rule.minSize) > 0;
-      const hasMaxSize = rule.maxSize !== undefined && rule.maxSize !== null && rule.maxSize !== '' && parseFloat(rule.maxSize) > 0;
-      const hasMinWidth = rule.minWidth !== undefined && rule.minWidth !== null && rule.minWidth !== '' && parseFloat(rule.minWidth) > 0;
-      const hasMaxWidth = rule.maxWidth !== undefined && rule.maxWidth !== null && rule.maxWidth !== '' && parseFloat(rule.maxWidth) > 0;
-      const hasSizeConstraints = hasMinSize || hasMaxSize;
-      const hasWidthConstraints = hasMinWidth || hasMaxWidth;
-
-      if (!hasSizeConstraints && !hasWidthConstraints) {
-        if (!bestGeneralRule || parseFloat(rule.minimum) > parseFloat(bestGeneralRule.minimum)) bestGeneralRule = rule;
-        continue;
-      }
-
-      let sizeOk = true;
-      if (hasSizeConstraints) {
-        if (partSize <= 0) { sizeOk = false; }
-        else {
-          if (hasMinSize && partSize < parseFloat(rule.minSize)) sizeOk = false;
-          if (hasMaxSize && partSize > parseFloat(rule.maxSize)) sizeOk = false;
-        }
-      }
-      let widthOk = true;
-      if (hasWidthConstraints) {
-        if (partWidth <= 0) { widthOk = false; }
-        else {
-          if (hasMinWidth && partWidth < parseFloat(rule.minWidth)) widthOk = false;
-          if (hasMaxWidth && partWidth > parseFloat(rule.maxWidth)) widthOk = false;
-        }
-      }
-      if (sizeOk && widthOk) {
-        if (!bestSpecificRule || parseFloat(rule.minimum) > parseFloat(bestSpecificRule.minimum)) bestSpecificRule = rule;
-      }
-    }
-    return bestSpecificRule || bestGeneralRule || bestFallbackRule;
-  };
+  // U31: the page's own minimum engine (with a "fallback" rule the server never applied) was removed —
+  // the minimum and expedite come from the server's shared engine (utils/laborMinimum), and line prices
+  // from the server's calculatePartTotal (utils/invoiceTotals).
 
   // Round up material cost after markup (matches estimate logic)
   const roundUpMaterial = (value, rounding) => {
@@ -698,14 +643,8 @@ function WorkOrderDetailsPage() {
     return value;
   };
 
-  // Per-part base labor/material readers — MUST match the part-card display logic.
-  // Labor may live in formData._baseLaborTotal before a part has been re-saved, which is
-  // why the part card/modal show a price but the summary read 0 until an edit+save.
-  const basePartLabor = (part) => {
-    const stored = parseFloat((part.formData || {})._baseLaborTotal);
-    if (!isNaN(stored) && stored > 0) return stored;
-    return parseFloat(part.laborTotal) || parseFloat((part.formData || {}).laborTotal) || 0;
-  };
+  // Per-part base labor reader — the server's own (pricing.basePartLaborEach)
+  const basePartLabor = basePartLaborEach;
   const basePartMaterialEach = (part) => {
     const matCost = parseFloat(part.materialTotal) || parseFloat((part.formData || {}).materialTotal) || 0;
     const raw = parseFloat(part.materialMarkupPercent);
@@ -713,40 +652,35 @@ function WorkOrderDetailsPage() {
     const rounding = part._materialRounding || (part.formData || {})._materialRounding;
     return roundUpMaterial(matCost * (1 + markup / 100), rounding);
   };
-
-  const getMinimumInfo = () => {
-    let totalLabor = 0, totalMaterial = 0, highestMinimum = 0, highestMinRule = null;
-    const EA_PRICED = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
-    const parts = order?.parts || [];
-
-    parts.forEach(part => {
-      if (!EA_PRICED.includes(part.partType)) return;
-      const laborEach = basePartLabor(part);
-      const materialEach = basePartMaterialEach(part);
-      const qty = parseInt(part.quantity) || 1;
-      totalLabor += laborEach * qty;
-      totalMaterial += materialEach * qty;
-
-      const rule = getLaborMinimum(part);
-      if (rule && parseFloat(rule.minimum) > highestMinimum) {
-        highestMinimum = parseFloat(rule.minimum);
-        highestMinRule = rule;
-      }
-    });
-
-    const minimumApplies = !editData.minimumOverride && highestMinimum > 0 && totalLabor > 0 && totalLabor < highestMinimum;
-    const adjustedLabor = minimumApplies ? highestMinimum : totalLabor;
-    const laborDifference = minimumApplies ? (highestMinimum - totalLabor) : 0;
-    return { totalLabor, totalMaterial, highestMinimum, highestMinRule, minimumApplies, adjustedLabor, laborDifference };
-  };
+  const effectiveLaborRules = () => (laborMinimums && laborMinimums.length) ? laborMinimums : LABOR_DEFAULT_RULES;
 
   const handleSaveOrder = async () => {
     try {
       setSaving(true);
       setError(null);
-      console.log('Saving editData:', editData);
-      const response = await updateWorkOrder(id, editData);
-      console.log('Save response:', response);
+      // Send only the fields changed in the form (round 12, audit N17). The page no longer reloads the
+      // form while you edit, so sending everything put back a storage location, promised date or note
+      // someone else had changed in the meantime.
+      const base = editBaselineRef.current;
+      let changes = editData;
+      if (base) {
+        changes = {};
+        for (const k of Object.keys(editData)) {
+          if (k.startsWith('_')) continue;   // UI-only (client search box)
+          if (JSON.stringify(editData[k] ?? null) !== JSON.stringify(base[k] ?? null)) changes[k] = editData[k];
+        }
+        // The tax rate the page fills in from the client / shop default is still written when the order
+        // doesn't have it stored yet. Tax-exempt is NOT written back unless the user changed it (T47).
+        for (const k of ['taxRate']) {
+          const stored = order ? order[k] : undefined;
+          const same = k === 'taxRate' ? (parseFloat(stored) === parseFloat(editData[k])) : (JSON.stringify(stored ?? (k === 'taxExempt' ? false : '')) === JSON.stringify(editData[k] ?? (k === 'taxExempt' ? false : '')));
+          if (!same && !(k in changes)) changes[k] = editData[k];
+        }
+        // a client change carries its id and name together
+        if ('clientId' in changes || 'clientName' in changes) { changes.clientId = editData.clientId; changes.clientName = editData.clientName; }
+      }
+      if (Object.keys(changes).length) await updateWorkOrder(id, changes);
+      editBaselineRef.current = null;
       await loadOrder();
       setIsEditing(false);
       showMessage('Work order updated');
@@ -788,12 +722,28 @@ function WorkOrderDetailsPage() {
 
   const handleStatusChange = async (newStatus) => {
     try {
-      await updateWorkOrder(id, { status: newStatus });
+      try {
+        await updateWorkOrder(id, { status: newStatus });
+      } catch (err) {
+        // The server checks COD before shipping (U10): an unpaid COD order needs the override password
+        if (err?.response?.data?.error?.code !== 'COD_UNPAID') throw err;
+        const pw = window.prompt(`${err.response.data.error.message}\n\nEnter the COD override password to ship it anyway:`);
+        if (!pw) return;
+        const vr = await verifyCodOverride(id, pw.trim(), 'ship');
+        await updateWorkOrder(id, { status: newStatus, codOverrideToken: vr?.data?.data?.codOverrideToken });
+      }
       await loadOrder();
       showMessage(`Status: ${newStatus.replace('_', ' ')}`);
     } catch (err) {
-      setError('Failed to update status');
+      setError(err?.response?.data?.error?.message || 'Failed to update status');
     }
+  };
+
+  // An inline money edit the server refused (e.g. the invoice is locked after QuickBooks export): say so
+  // and put the screen back to what is saved, instead of showing the new value as if it saved (R33)
+  const inlineSaveFailed = async (err, what) => {
+    setError(`${what} wasn't saved: ${err?.response?.data?.error?.message || err?.message || 'unknown error'}`);
+    try { await loadOrder(); } catch (_) { /* keep the error visible */ }
   };
 
   const showMessage = (msg) => {
@@ -806,23 +756,13 @@ function WorkOrderDetailsPage() {
   // yes, re-send with the confirm flag.
   const saveInvoiceNumber = async () => {
     try {
-      await updateInvoiceNumber(order.id, invoiceNumInput);
-      setError(null); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput}`); loadOrder();
+      // U50: QB_EXPORTED and the jump guard (admin) are both confirmed and resent
+      let reused = false;
+      const r = await sendWithInvoiceGuards((flags) => { reused = !!flags.confirmReuseExported; return updateInvoiceNumber(order.id, invoiceNumInput, !!flags.confirmReuseExported, !!flags.confirmJump); }, { isAdmin: !!(isAdmin && isAdmin()) });
+      if (!r) return;   // they cancelled: leave the editor open, no error
+      setError(null); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput}${reused ? ' (reused a QB-exported number — verify QuickBooks)' : ''}`); loadOrder();
     } catch (err) {
-      const e = err.response?.data?.error;
-      if (e?.code === 'QB_EXPORTED') {
-        if (window.confirm(e.message)) {
-          try {
-            await updateInvoiceNumber(order.id, invoiceNumInput, true);
-            setError(null); setEditingInvoiceNum(false); showMessage(`Invoice number updated to #${invoiceNumInput} (reused a QB-exported number — verify QuickBooks)`); loadOrder();
-          } catch (err2) {
-            setError(err2.response?.data?.error?.message || 'Failed to update invoice number');
-          }
-        }
-        // if they cancel, leave the editor open, no error
-      } else {
-        setError(e?.message || 'Failed to update invoice number');
-      }
+      setError(err.response?.data?.error?.message || 'Failed to update invoice number');
     }
   };
   // Auto-dismiss error toasts after a few seconds (they can also be closed with the × button).
@@ -1035,6 +975,8 @@ function WorkOrderDetailsPage() {
       editData.materialMarkupPercent = 20;
     }
     setPartData(editData);
+    // What the dialog showed when it opened — the save sends only what was changed against this (N7)
+    try { openedPartDataRef.current = JSON.parse(JSON.stringify(editData)); } catch (e) { openedPartDataRef.current = null; }
     setShowPartModal(true);
   };
 
@@ -1235,6 +1177,46 @@ function WorkOrderDetailsPage() {
       
       let savedPartId = editingPart?.id;
       if (editingPart) {
+        // Shop-floor fields (status, progress, completion, receiving) are sent only if changed in this
+        // dialog. The dialog holds a copy of the part from when it was opened; sending those back
+        // unchanged rolled back progress a tablet recorded in the meantime (audit R11).
+        const SHOP_FIELDS = ['status', 'progressCount', 'progressLog', 'progressLastUpdatedAt', 'completedAt', 'completedBy',
+          'materialReceived', 'materialReceivedAt', 'materialReceivedBy'];
+        for (const f of SHOP_FIELDS) {
+          const sent = JSON.stringify(dataToSend[f] ?? null);
+          if (sent === JSON.stringify(editingPart[f] ?? null) || (editingPart.formData && f in editingPart.formData && sent === JSON.stringify(editingPart.formData[f] ?? null))) delete dataToSend[f];
+        }
+        // Send only what was changed in this dialog (round 11, audit N7). Every other field — heat
+        // numbers, operator notes, material ordered / PO, receiving — may have been updated by a tablet
+        // or another screen since the dialog opened; sending the old copy back used to erase that.
+        // Prices the dialog recalculates are sent when the result differs from what's stored.
+        const opened = openedPartDataRef.current;
+        if (opened) {
+          const num = (v) => (typeof v === 'number' || (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()))) ? parseFloat(v) : NaN;
+          const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+          // prices only: '120.00' vs 120 is the same amount (sizes like 0.083 → 0.085 are real edits)
+          const sameAmount = (a, b) => same(a, b) || (!isNaN(num(a)) && !isNaN(num(b)) && Math.abs(num(a) - num(b)) < 0.005);
+          // stored values: real columns win over same-named keys left in formData
+          const storedFlat = { ...(editingPart.formData && typeof editingPart.formData === 'object' ? editingPart.formData : {}), ...editingPart };
+          const DERIVED = ['partTotal', 'laborTotal', 'materialTotal', '_baseLaborTotal', 'outsideProcessingVendorName', 'outsideProcessingCost', 'outsideProcessingMarkupPercent', 'materialMarkupPercent'];
+          for (const k of Object.keys(dataToSend)) {
+            const editedHere = !same(partData[k], opened[k]);
+            if (editedHere) continue;
+            if (k === 'partType' && dataToSend.partType !== editingPart.partType) continue;
+            if (DERIVED.includes(k) && !sameAmount(dataToSend[k], storedFlat[k])) continue;
+            delete dataToSend[k];
+          }
+          // Fields the part-type switch cleared from the dialog are cleared on the part too
+          if (dataToSend.partType && dataToSend.partType !== editingPart.partType) {
+            for (const k of Object.keys(opened)) {
+              if (k in partData || opened[k] == null || opened[k] === '' || ['_vendorSearch', '_shapeFile', '_cadFiles'].includes(k)) continue;
+              if (k.startsWith('_')) dataToSend[k] = '';                       // server: '' clears a formData key
+              else if (k in editingPart) dataToSend[k] = null;
+            }
+          }
+          // quantity is parsed above; keep it only when it really changed
+          if (dataToSend.quantity === undefined && String(parseInt(partData.quantity) || 1) !== String(parseInt(editingPart.quantity) || 1)) dataToSend.quantity = parseInt(partData.quantity) || 1;
+        }
         await updateWorkOrderPart(id, editingPart.id, dataToSend);
       } else {
         const result = await addWorkOrderPart(id, dataToSend);
@@ -1283,10 +1265,17 @@ function WorkOrderDetailsPage() {
           }
         } catch (e) { console.warn('Auto-remove cut fab failed:', e); }
       }
-      if (selectedPartType === 'rush_service' && (partData._expediteEnabled || partData._emergencyEnabled)) {
+      // Promised date = today only when rush is newly turned on, and never silently over an existing
+      // date (round 13, T48 — any later edit of the rush line used to reset it)
+      const rushOnNow = !!(partData._expediteEnabled || partData._emergencyEnabled);
+      const openedFd = openedPartDataRef.current || {};
+      const rushWasOn = !!editingPart && !!(openedFd._expediteEnabled || openedFd._emergencyEnabled);
+      if (selectedPartType === 'rush_service' && rushOnNow && !rushWasOn) {
         try {
-          const today = new Date().toISOString().split('T')[0];
-          await updateWorkOrder(id, { promisedDate: today });
+          const today = shopToday();
+          if (!order?.promisedDate || window.confirm(`Rush is on. Change the promised date from ${formatDay(order.promisedDate)} to today?`)) {
+            await updateWorkOrder(id, { promisedDate: today });
+          }
         } catch (e) { console.warn('Failed to set promise date:', e); }
       }
 
@@ -1575,13 +1564,37 @@ function WorkOrderDetailsPage() {
     }
   };
 
+  // V16: the pickup itself is refused with 409 COD_UNPAID for an unpaid COD order (also a partial one):
+  // ask for the override password, then send the same pickup again with the token. The dialog and
+  // the partial selection stay as they are if the password is wrong or cancelled.
+  const recordPickupWithCod = async (body) => {
+    try {
+      return await recordPickup(id, body);
+    } catch (err) {
+      if (err?.response?.status !== 409 || err?.response?.data?.error?.code !== 'COD_UNPAID') throw err;
+      const pw = window.prompt(`${err.response.data.error.message || 'This COD order is unpaid.'}\n\nEnter the COD override password to release it anyway:`);
+      if (!pw || !pw.trim()) { const e = new Error('Pickup not recorded — the COD order is unpaid.'); e.codCancelled = true; throw e; }
+      let token;
+      try {
+        const vr = await verifyCodOverride(id, pw.trim(), 'pickup');
+        token = vr?.data?.data?.codOverrideToken;
+      } catch (vErr) {
+        const e = new Error(vErr?.response?.status === 403 ? 'Incorrect override password — pickup not recorded.' : (vErr?.response?.data?.error?.message || 'Could not check the override password.'));
+        e.codCancelled = true; throw e;
+      }
+      setCodOverrideToken(token || null);
+      return await recordPickup(id, { ...body, codOverrideToken: token });
+    }
+  };
+
   const handlePickup = async () => {
+    if (saving) return;
     try {
       setError(null);
       setSaving(true);
       const signature = hasSignature && sigCanvasRef.current ? sigCanvasRef.current.toDataURL('image/png') : null;
       if (pickupData.type === 'full') {
-        await recordPickup(id, { type: 'full', pickedUpBy: pickupData.pickedUpBy, signature });
+        await recordPickupWithCod({ type: 'full', pickedUpBy: pickupData.pickedUpBy, signature, ...(codOverrideToken ? { codOverrideToken } : {}) });
       } else {
         // Build items list from qty inputs
         const selectedItems = Object.entries(pickupData.items)
@@ -1603,7 +1616,7 @@ function WorkOrderDetailsPage() {
           .filter(i => i.quantity > 0);
         
         if (selectedItems.length === 0) { setError('Enter quantity for at least one item'); setSaving(false); return; }
-        await recordPickup(id, { type: 'partial', pickedUpBy: pickupData.pickedUpBy, items: selectedItems, signature });
+        await recordPickupWithCod({ type: 'partial', pickedUpBy: pickupData.pickedUpBy, items: selectedItems, signature, ...(codOverrideToken ? { codOverrideToken } : {}) });
       }
       // Index of the entry we just created (from pre-reload history length)
       const newIdx = (order?.pickupHistory || []).length;
@@ -1621,8 +1634,8 @@ function WorkOrderDetailsPage() {
       }
       loadOrder(); // refresh page data in the background
     } catch (err) {
-      console.error('Pickup error:', err.response?.data || err);
-      setError(err.response?.data?.error?.message || 'Failed to record pickup');
+      if (!err.codCancelled) console.error('Pickup error:', err.response?.data || err);
+      setError(err.codCancelled ? err.message : (err.response?.data?.error?.message || 'Failed to record pickup'));
     } finally { setSaving(false); }
   };
 
@@ -1651,11 +1664,23 @@ function WorkOrderDetailsPage() {
 
   // COD payment status — used in print HTML and UI
   const isCODClient = clientPaymentTerms && (clientPaymentTerms.toUpperCase().includes('COD') || clientPaymentTerms.toUpperCase().includes('C.O.D'));
-  const codPaid = order?.codPaid === true;
+  // released for pickup when the COD was confirmed OR the invoice is already paid in the ledger (R14)
+  const codPaid = order?.codPaid === true || !!order?.paymentDate;
 
   // Helper: build work order print HTML
-  const buildWorkOrderPrintHtml = (includePricing, opts = {}) => {
-    const clientPO = order.clientPurchaseOrderNumber || shipment?.clientPurchaseOrderNumber;
+  // The print package is rendered by Chrome on the server. Every text value from the order (client,
+  // notes, instructions, file names — some come from scanned customer e-mails) is HTML-escaped first,
+  // so it prints as text and can never become markup (round 12, audit N9).
+  const escTextDeep = (v) => {
+    if (typeof v === 'string') return escHtml(v);
+    if (Array.isArray(v)) return v.map(escTextDeep);
+    if (v && typeof v === 'object' && !(v instanceof Date)) { const o = {}; for (const k of Object.keys(v)) o[k] = escTextDeep(v[k]); return o; }
+    return v;
+  };
+  const buildWorkOrderPrintHtml = (includePricing, opts = {}) => buildWorkOrderPrintHtmlFor(escTextDeep(order), includePricing, opts);
+  const buildWorkOrderPrintHtmlFor = (order, includePricing, opts = {}) => {
+    // U51: order is pre-escaped by escTextDeep, but the shipment fallback is not
+    const clientPO = order.clientPurchaseOrderNumber || (shipment?.clientPurchaseOrderNumber ? escHtml(shipment.clientPurchaseOrderNumber) : null);
     const title = includePricing ? 'Work Order' : 'Production Order';
     const formatCurrency = (v) => '$' + (parseFloat(v) || 0).toFixed(2);
     
@@ -2008,7 +2033,7 @@ function WorkOrderDetailsPage() {
   ${isCODClient ? `
   <div style="background:#c62828;color:white;padding:10px 16px;text-align:center;font-weight:900;font-size:16px;letter-spacing:2px;border:3px solid #b71c1c;border-radius:4px;margin-bottom:8px">
     💰 COD — COLLECT PAYMENT BEFORE RELEASING ORDER 💰
-    ${codPaid ? '<div style="font-size:12px;font-weight:600;margin-top:4px;color:#a5d6a7">✅ PAYMENT RECORDED — ' + (order.paymentMethod || '').toUpperCase() + (order.paymentReference ? ' #' + order.paymentReference : '') + ' on ' + (order.paymentDate ? new Date(order.paymentDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'N/A') + '</div>' : '<div style="font-size:12px;font-weight:600;margin-top:4px;color:#ffcdd2">⚠️ PAYMENT NOT YET CONFIRMED</div>'}
+    ${codPaid ? '<div style="font-size:12px;font-weight:600;margin-top:4px;color:#a5d6a7">✅ PAYMENT RECORDED — ' + (order.paymentMethod || '').toUpperCase() + (order.paymentReference ? ' #' + order.paymentReference : '') + ' on ' + formatDay(order.paymentDate) + '</div>' : '<div style="font-size:12px;font-weight:600;margin-top:4px;color:#ffcdd2">⚠️ PAYMENT NOT YET CONFIRMED</div>'}
   </div>
   ` : ''}
 
@@ -2125,6 +2150,7 @@ function WorkOrderDetailsPage() {
     <div style="margin-top:24px;padding:16px;background:#f0f7ff;border-radius:8px;border:1px solid #bbdefb">
       <h3 style="margin:0 0 12px;color:#1976d2">Order Totals</h3>
       ${(() => {
+        if (serverTotals) return '';   // the server totals below include the minimum
         const totals = calculateTotals();
         let minLine = '';
         if (totals.minInfo.minimumApplies) {
@@ -2138,6 +2164,7 @@ function WorkOrderDetailsPage() {
         return minLine;
       })()}
       ${(() => {
+        if (serverTotals) return serverTotals.rushAmount > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;color:#e65100"><span>🚨 ${escHtml(serverTotals.rushLabel || 'Rush')}</span><strong>${formatCurrency(serverTotals.rushAmount)}</strong></div>` : '';
         const totals = calculateTotals();
         let rushLines = '';
         if (totals.expediteAmount > 0) {
@@ -2148,12 +2175,28 @@ function WorkOrderDetailsPage() {
         }
         return rushLines;
       })()}
-      <div style="display:flex;justify-content:space-between;padding:4px 0"><span>Parts Subtotal</span><strong>${formatCurrency(calculateTotals().partsSubtotal)}</strong></div>
-      ${calculateTotals().trucking > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>${order.truckingDescription || 'Trucking'}</span><strong>${formatCurrency(calculateTotals().trucking)}</strong></div>` : ''}
-      ${(editData.taxExempt || order.taxExempt) ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax</span><span style="color:#c62828;font-weight:bold">EXEMPT</span></div>` : (calculateTotals().taxAmount > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax (${calculateTotals().taxRate}%)</span><strong>${formatCurrency(calculateTotals().taxAmount)}</strong></div>` : '')}
-      <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid #1976d2;margin-top:4px;font-size:1.2rem">
-        <strong>Grand Total</strong><strong style="color:#2e7d32">${formatCurrency(calculateTotals().grandTotal)}</strong>
-      </div>
+      ${(() => {
+        // The printed totals are the invoice's own (server) totals when available — the same numbers as
+        // the invoice PDF and QuickBooks (round 13, T46); the page's preview is used only as a fallback
+        const T = serverTotals;
+        const row = (label, val, style = '') => `<div style="display:flex;justify-content:space-between;padding:4px 0;${style}"><span>${label}</span><strong>${formatCurrency(val)}</strong></div>`;
+        if (T) {
+          return [
+            T.minimumAdjustment > 0 ? row('Minimum labor adjustment', T.minimumAdjustment, 'color:#e65100') : '',
+            T.opTransportTotal > 0 ? row('Outside processing transport', T.opTransportTotal) : '',
+            T.discountTotal > 0 ? row('Discount', -T.discountTotal, 'color:#c62828') : '',
+            row('Parts Subtotal', T.partsAfterDiscount),
+            T.shippingTotal > 0 ? row(T.usesLegacyTrucking ? (order.truckingDescription || 'Trucking') : 'Shipping &amp; handling', T.shippingTotal) : '',
+            T.isTaxExempt ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax</span><span style="color:#c62828;font-weight:bold">EXEMPT</span></div>` : (T.taxAmount > 0 ? row(`Tax (${T.taxRate}%)`, T.taxAmount) : ''),
+            `<div style="display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid #1976d2;margin-top:4px;font-size:1.2rem"><strong>Grand Total</strong><strong style="color:#2e7d32">${formatCurrency(T.amount != null ? T.amount : T.grandTotal)}</strong></div>`,
+          ].join('');
+        }
+        const totals = calculateTotals();
+        return row('Parts Subtotal', totals.partsSubtotal)
+          + (totals.trucking > 0 ? row(order.truckingDescription || 'Trucking', totals.trucking) : '')
+          + (effectiveTaxExempt ? `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Tax</span><span style="color:#c62828;font-weight:bold">EXEMPT</span></div>` : (totals.taxAmount > 0 ? row(`Tax (${totals.taxRate}%)`, totals.taxAmount) : ''))
+          + `<div style="display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid #1976d2;margin-top:4px;font-size:1.2rem"><strong>Grand Total (preview)</strong><strong style="color:#2e7d32">${formatCurrency(totals.grandTotal)}</strong></div>`;
+      })()}
     </div>
   ` : ''}
 
@@ -2256,12 +2299,52 @@ function WorkOrderDetailsPage() {
     setCodConfirmOpen(true);
   };
 
+  // V36: load the balance when the COD dialog opens (client history = the ledger's shared balance; without a
+  // client, the invoice total minus the payments on record) and start the amount at it
+  useEffect(() => {
+    if (!paymentDialogOpen || !id) { setCodBalance(null); return; }
+    let cancelled = false;
+    (async () => {
+      let bal = null;
+      try {
+        if (order?.clientId) {
+          const r = await getClientHistory(order.clientId);
+          const w = (r.data?.data?.workOrders || []).find(x => String(x.id) === String(id));
+          if (w) bal = parseFloat(w.balance);
+        }
+      } catch { /* fall back below */ }
+      if (bal == null || isNaN(bal)) {
+        try {
+          const [t, pm] = await Promise.all([getWorkOrderInvoiceTotals(id), getWOPayments(id)]);
+          const total = parseFloat(t.data?.data?.amount ?? t.data?.data?.grandTotal) || 0;
+          const paid = (pm.data?.data || []).reduce((sum, x) => sum + (parseFloat(x.amount) || 0), 0);
+          bal = Math.max(0, Math.round((total - paid) * 100) / 100);
+        } catch { bal = null; }
+      }
+      if (cancelled) return;
+      setCodBalance(bal);
+      // W28: a card picked before the balance loaded starts at the card total, not the bare balance
+      if (bal != null && bal > 0) setPaymentForm(f => (f.codAmount ? f : { ...f, codAmount: (f.method === 'Credit Card' ? codCardTotal(bal, f.ccType) : bal).toFixed(2) }));
+    })();
+    return () => { cancelled = true; };
+  }, [paymentDialogOpen, id]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleRecordPayment = async () => {
     if (!paymentForm.method) { setError('Select a payment method'); return; }
+    if (codSaving) return;   // no double submit (N19)
+    if (codUnpriced && !(parseFloat(paymentForm.codAmount) > 0)) { setError('Enter the amount received'); return; }
+    if (!codUnpriced && paymentForm.codAmount !== undefined && paymentForm.codAmount !== '' && !(parseFloat(paymentForm.codAmount) > 0)) { setError('Enter the amount received'); return; }
+    setCodSaving(true);
     try {
-      await recordPayment(id, { paymentDate: paymentForm.date, paymentMethod: paymentForm.method, paymentReference: paymentForm.reference });
+      // V36: the amount charged (default the balance) and, for a card, how it was run — the server splits a
+      // card total into the payment plus the card surcharge
+      const isCard = paymentForm.method === 'Credit Card';
+      const amt = parseFloat(paymentForm.codAmount);
+      const r = await recordPayment(id, { paymentDate: paymentForm.date, paymentMethod: paymentForm.method, paymentReference: paymentForm.reference,
+        ...(amt > 0 ? { amount: Math.round(amt * 100) / 100 } : {}),
+        ...(isCard ? { ccProcessingType: paymentForm.ccType === 'manual' ? 'manual' : 'in_person' } : {}) });
       setPaymentDialogOpen(false);
-      showMessage('Payment recorded');
+      showMessage(r?.data?.message || 'Payment recorded');
       loadOrder();
       // If this was triggered from a pickup action, proceed
       if (codAction) {
@@ -2272,6 +2355,7 @@ function WorkOrderDetailsPage() {
         }, 500);
       }
     } catch (err) { setError('Failed to record payment: ' + (err.response?.data?.error?.message || err.message)); }
+    finally { setCodSaving(false); }
   };
 
   const handleClearPayment = async () => {
@@ -2352,7 +2436,7 @@ function WorkOrderDetailsPage() {
       : regularParts.map(p => ({ ...p, displayQty: parseInt(p.quantity) || 1, totalQty: parseInt(p.quantity) || 1, alreadyShipped: 0 }));
     const totalPieces = remainingParts.reduce((s, p) => s + (parseInt(p.displayQty) || 0), 0);
 
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Pickup Checklist - ${drLabel}</title>
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Pickup Checklist - ${escHtml(drLabel)}</title>
     <style>
       @font-face { font-family: 'Yellowcake'; src: url('/fonts/Yellowcake-Regular.ttf') format('truetype'); }
       @page { size: letter; margin: 0.5in; }
@@ -2409,18 +2493,18 @@ function WorkOrderDetailsPage() {
     <div class="doc-header">
       <div class="doc-title">LOADING CHECKLIST${hasPartialHistory ? ' (Remaining)' : ''}</div>
       <div class="doc-info">
-        <div class="dr">${drLabel}</div>
+        <div class="dr">${escHtml(drLabel)}</div>
         <div class="info-row">${today}</div>
       </div>
     </div>
 
     <div class="client-bar">
-      <div><strong>Client</strong>${order.clientName || '—'}</div>
-      ${clientPO ? `<div><strong>PO#</strong>${clientPO}</div>` : ''}
-      ${order.storageLocation ? `<div><strong>Storage</strong>${order.storageLocation}</div>` : ''}
+      <div><strong>Client</strong>${escHtml(order.clientName || '—')}</div>
+      ${clientPO ? `<div><strong>PO#</strong>${escHtml(clientPO)}</div>` : ''}
+      ${order.storageLocation ? `<div><strong>Storage</strong>${escHtml(order.storageLocation)}</div>` : ''}
     </div>
 
-    <div class="count-summary">${remainingParts.length} part${remainingParts.length !== 1 ? 's' : ''} — ${totalPieces} total pieces${hasPartialHistory ? ' remaining' : ''}</div>
+    <div class="count-summary">${escHtml(remainingParts.length)} part${remainingParts.length !== 1 ? 's' : ''} — ${totalPieces} total pieces${hasPartialHistory ? ' remaining' : ''}</div>
 
     <table>
       <thead>
@@ -2436,16 +2520,16 @@ function WorkOrderDetailsPage() {
           const desc = getPartDesc(p);
           const rolling = getRolling(p);
           const special = p.specialInstructions || '';
-          const shippedNote = p.alreadyShipped > 0 ? `<div style="font-size:9px;color:#888;margin-top:1px;">(${p.alreadyShipped} of ${p.totalQty} previously shipped)</div>` : '';
+          const shippedNote = p.alreadyShipped > 0 ? `<div style="font-size:9px;color:#888;margin-top:1px;">(${escHtml(p.alreadyShipped)} of ${escHtml(p.totalQty)} previously shipped)</div>` : '';
           return `<tr>
             <td class="check"><div class="checkbox"></div></td>
-            <td class="pn">${p.partNumber || ''}</td>
-            <td class="qty">${p.displayQty}${shippedNote}</td>
+            <td class="pn">${escHtml(p.partNumber || '')}</td>
+            <td class="qty">${escHtml(p.displayQty)}${shippedNote}</td>
             <td>
               <span class="type-tag">${getPartType(p.partType)}</span>
-              <div class="desc">${desc}</div>
-              ${rolling ? `<div class="rolling">${rolling}</div>` : ''}
-              ${special ? `<div class="special">⚠ ${special}</div>` : ''}
+              <div class="desc">${escHtml(desc)}</div>
+              ${rolling ? `<div class="rolling">${escHtml(rolling)}</div>` : ''}
+              ${special ? `<div class="special">⚠ ${escHtml(special)}</div>` : ''}
             </td>
           </tr>`;
         }).join('')}
@@ -2473,7 +2557,7 @@ function WorkOrderDetailsPage() {
 
       <div class="footer-branding">
         <span>Carolina Rolling Co. Inc. — 9152 Sonrisa St., Bellflower, CA 90706</span>
-        <span>${drLabel} — Printed ${today}</span>
+        <span>${escHtml(drLabel)} — Printed ${today}</span>
       </div>
     </div>
 
@@ -2488,14 +2572,14 @@ function WorkOrderDetailsPage() {
     printWindow.document.write(`<!DOCTYPE html><html><head><title>Label</title>
       <style>@page{size:62mm 29mm;margin:0}body{font-family:Arial;width:62mm;height:29mm;padding:2mm;margin:0;box-sizing:border-box}
       .lg{font-size:14pt;font-weight:bold}.sm{font-size:9pt;color:#333}</style></head>
-      <body><div class="lg">${part.clientPartNumber || `Part ${part.partNumber}`}${part.rev ? ` Rev ${part.rev}` : ''}</div>
-      <div class="sm">${order.drNumber ? `DR-${order.drNumber}` : order.orderNumber}</div>
-      ${clientPO ? `<div class="sm">PO: ${clientPO}${part.poLineNumber ? ` Ln ${part.poLineNumber}` : ''}</div>` : (part.poLineNumber ? `<div class="sm">PO Line#: ${part.poLineNumber}</div>` : '')}
-      ${part.lotNumber ? `<div class="sm">Lot: ${part.lotNumber}</div>` : ''}
+      <body><div class="lg">${part.clientPartNumber ? escHtml(part.clientPartNumber) : `Part ${escHtml(part.partNumber)}`}${part.rev ? ` Rev ${escHtml(part.rev)}` : ''}</div>
+      <div class="sm">${order.drNumber ? `DR-${escHtml(order.drNumber)}` : escHtml(order.orderNumber)}</div>
+      ${clientPO ? `<div class="sm">PO: ${escHtml(clientPO)}${part.poLineNumber ? ` Ln ${escHtml(part.poLineNumber)}` : ''}</div>` : (part.poLineNumber ? `<div class="sm">PO Line#: ${escHtml(part.poLineNumber)}</div>` : '')}
+      ${part.lotNumber ? `<div class="sm">Lot: ${escHtml(part.lotNumber)}</div>` : ''}
       ${part.heatBreakdown && part.heatBreakdown.length > 0 
-        ? `<div class="sm">Heat: ${part.heatBreakdown.map(h => `<span style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:3px;padding:0 4px;font-weight:600;color:#795548">${h.heat}: ${h.qty}pc</span>`).join(' ')}</div>` 
-        : part.heatNumber ? `<div class="sm">Heat: ${part.heatNumber}</div>` : ''}
-      <div class="sm">Qty: ${part.quantity}</div></body></html>`);
+        ? `<div class="sm">Heat: ${part.heatBreakdown.map(h => `<span style="background:#fff3e0;border:1px solid #ffe0b2;border-radius:3px;padding:0 4px;font-weight:600;color:#795548">${escHtml(h.heat)}: ${escHtml(h.qty)}pc</span>`).join(' ')}</div>` 
+        : part.heatNumber ? `<div class="sm">Heat: ${escHtml(part.heatNumber)}</div>` : ''}
+      <div class="sm">Qty: ${escHtml(part.quantity)}</div></body></html>`);
     printWindow.document.close();
     printWindow.print();
   };
@@ -2544,13 +2628,13 @@ function WorkOrderDetailsPage() {
   };
 
   const handleUnlinkEstimate = async () => {
-    if (!window.confirm('Unlink the estimate from this work order? Parts already copied will remain.')) return;
+    if (!window.confirm('Unlink the estimate from this work order? The lines it added (not yet started) are removed and the estimate reopens.')) return;
     try {
-      await unlinkEstimateFromWorkOrder(id);
-      showMessage('Estimate unlinked');
+      const res = await unlinkEstimateFromWorkOrder(id);
+      showMessage(res?.data?.message || 'Estimate unlinked');
       await loadOrder();
     } catch (err) {
-      setError('Failed to unlink estimate');
+      setError(err.response?.data?.error?.message || 'Failed to unlink estimate');
     }
   };
 
@@ -2559,90 +2643,63 @@ function WorkOrderDetailsPage() {
     return '$' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   };
 
-  // Calculate pricing totals
+  // Pricing totals (U31). Not editing: the server's invoice totals (GET /workorders/:id/invoice-totals —
+  // the same numbers as the invoice PDF, ledger and QuickBooks). While editing: a preview from the server's
+  // own rules (utils/invoiceTotals) applied to the form — a 0% tax rate stays 0% (?? not ||).
   const calculateTotals = () => {
     const parts = order?.parts || [];
-    const minInfo = getMinimumInfo();
-    const EA_PRICED = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
-    
-    let nonEaTotal = 0;
-    let eaPricedTotal = 0;
-    parts.forEach(p => {
-      if (p.partType === 'rush_service') return; // handle separately
-      // Fall back to formData.partTotal, then recalculate from labor+material if both are null
-      let total = parseFloat(p.partTotal) || parseFloat((p.formData || {}).partTotal) || 0;
-      if (!total) {
-        // Recalculate from components (matches the part-card display so the summary agrees pre-save)
-        const qty = parseInt(p.quantity) || 1;
-        total = (basePartMaterialEach(p) + basePartLabor(p)) * qty;
-      }
-      if (EA_PRICED.includes(p.partType)) {
-        eaPricedTotal += total;
-      } else {
-        nonEaTotal += total;
-      }
-    });
-    
-    // If minimum applies, replace ea-priced total with (material + adjusted labor)
-    let partsSubtotal;
-    if (minInfo.minimumApplies) {
-      partsSubtotal = nonEaTotal + minInfo.totalMaterial + minInfo.adjustedLabor;
-    } else {
-      partsSubtotal = nonEaTotal + eaPricedTotal;
+    const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+    const rateRaw = editData.taxRate ?? order?.taxRate ?? defaultTaxRate;
+    const wo = {
+      ...(order || {}),
+      taxRate: parseFloat(rateRaw) || 0,
+      taxExempt: ownTaxExempt,
+      minimumOverride: editData.minimumOverride ?? order?.minimumOverride,
+      truckingCost: isEditing ? (editData.truckingCost ?? order?.truckingCost) : order?.truckingCost,
+    };
+    const preview = computeInvoiceTotals({ wo, parts, client: { taxStatus: clientTaxStatusForTax }, shipmentCharges, laborMinimums: effectiveLaborRules() });
+    const fromServer = !isEditing && !!serverTotals;
+    const T = fromServer ? serverTotals : preview;
+
+    // the rush fee split into expedite and the fixed emergency fee, for the rush card
+    const rushPart = parts.find(p => p.partType === 'rush_service' && serverLineTotal(p) <= 0);
+    const rfd = (rushPart && rushPart.formData) || {};
+    let expediteAmount = 0, emergencyAmount = 0, expediteLabel = '', emergencyLabel = '';
+    if (rushPart && rfd._emergencyEnabled) {
+      const emergOpts = { 'Saturday': 600, 'Saturday Night': 800, 'Sunday': 600, 'Sunday Night': 800 };
+      emergencyAmount = emergOpts[rfd._emergencyDay] || 0;
+      emergencyLabel = `Emergency Off Hour Opening: ${rfd._emergencyDay}`;
     }
-    
-    // Expedite applies to LABOR ONLY (not material): e.g. 50% on $700 labor = $350, regardless of
-    // material cost. Sum the labor charged across all non-rush parts, honoring the minimum-labor bump.
-    let expediteLaborBase = 0;
-    parts.forEach(p => {
-      if (p.partType === 'rush_service') return;
-      const q = parseInt(p.quantity) || 1;
-      expediteLaborBase += basePartLabor(p) * q;
-    });
-    if (minInfo.minimumApplies) {
-      expediteLaborBase += (parseFloat(minInfo.adjustedLabor) || 0) - (parseFloat(minInfo.totalLabor) || 0);
+    if (rushPart && rfd._expediteEnabled) {
+      expediteAmount = Math.max(0, r2((parseFloat(T.rushAmount) || 0) - emergencyAmount));
+      if (rfd._expediteType === 'custom_amt') expediteLabel = 'Expedite (Custom)';
+      else {
+        let pct = parseFloat(rfd._expediteType) || 0;
+        if (rfd._expediteType === 'custom_pct') pct = parseFloat(rfd._expediteCustomPct) || 0;
+        expediteLabel = `Expedite (${pct}% of labor)`;
+      }
     }
 
-    // Rush service: calculate expedite and emergency from rush_service parts
-    let expediteAmount = 0;
-    let emergencyAmount = 0;
-    let expediteLabel = '';
-    let emergencyLabel = '';
-    const rushPart = parts.find(p => p.partType === 'rush_service');
-    if (rushPart) {
-      const fd = rushPart.formData || {};
-      if (fd._expediteEnabled) {
-        if (fd._expediteType === 'custom_amt') {
-          expediteAmount = parseFloat(fd._expediteCustomAmt) || 0;
-          expediteLabel = 'Expedite (Custom)';
-        } else {
-          let pct = parseFloat(fd._expediteType) || 0;
-          if (fd._expediteType === 'custom_pct') pct = parseFloat(fd._expediteCustomPct) || 0;
-          expediteAmount = expediteLaborBase * (pct / 100);
-          expediteLabel = `Expedite (${pct}% of labor)`;
-        }
-      }
-      if (fd._emergencyEnabled) {
-        const emergOpts = { 'Saturday': 600, 'Saturday Night': 800, 'Sunday': 600, 'Sunday Night': 800 };
-        emergencyAmount = emergOpts[fd._emergencyDay] || 0;
-        emergencyLabel = `Emergency Off Hour Opening: ${fd._emergencyDay}`;
-      }
-    }
-    
-    const rushTotal = expediteAmount + emergencyAmount;
-    partsSubtotal += rushTotal;
+    // minimum: the shared engine's details, with the applied adjustment from whichever totals are shown
+    let totalMaterial = 0;
+    parts.forEach(p => {
+      if (!EA_PRICED_TYPES.includes(p.partType)) return;
+      totalMaterial += basePartMaterialEach(p) * (parseInt(p.quantity) || 1);
+    });
+    const adj = parseFloat(T.minimumAdjustment) || 0;
+    const minInfo = { ...preview.minInfo, totalMaterial, minimumApplies: adj > 0, laborDifference: adj,
+      adjustedLabor: adj > 0 ? r2(preview.minInfo.totalLabor + adj) : preview.minInfo.totalLabor };
 
-    const trucking = parseFloat(editData.truckingCost) || parseFloat(order?.truckingCost) || 0;
-    const subtotal = partsSubtotal + trucking;
-    const taxRate = parseFloat(editData.taxRate) || parseFloat(order?.taxRate) || defaultTaxRate;
-    const isTaxExempt = editData.taxExempt || order?.taxExempt;
-    const taxAmount = isTaxExempt ? 0 : subtotal * (taxRate / 100);
-    // Shipping & Handling is a non-taxed add-on (same treatment as the invoice/estimate), added after tax.
-    const shippingChargesTotal = (shipmentCharges || []).reduce((s, c) =>
-      s + (parseFloat(c.shippingCost) || 0) * (1 + (parseFloat(c.shippingMarkup) || 0) / 100)
-        + (parseFloat(c.materialsCost) || 0) * (1 + (parseFloat(c.materialsMarkup) || 0) / 100), 0);
-    const grandTotal = subtotal + taxAmount + shippingChargesTotal;
-    return { partsSubtotal, trucking, shippingChargesTotal, subtotal, taxRate, taxAmount, grandTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel };
+    const partsSubtotal = r2((parseFloat(T.partsSubtotal) || 0) + (parseFloat(T.rushAmount) || 0) + adj + (parseFloat(T.opTransportTotal) || 0));
+    const shippingTotal = parseFloat(T.shippingTotal) || 0;
+    const grandTotal = fromServer ? (T.amount != null ? parseFloat(T.amount) || 0 : parseFloat(T.grandTotal) || 0) : T.grandTotal;
+    return {
+      fromServer, partsSubtotal, discountAmt: parseFloat(T.discountTotal) || 0, opTransportTotal: parseFloat(T.opTransportTotal) || 0,
+      shippingTotal, usesLegacyTrucking: !!T.usesLegacyTrucking, trucking: T.usesLegacyTrucking ? shippingTotal : 0,
+      shippingChargesTotal: T.usesLegacyTrucking ? 0 : shippingTotal,
+      subtotal: parseFloat(T.preTaxTotal) || 0, taxRate: T.isTaxExempt ? 0 : (parseFloat(T.taxRate) || 0), taxAmount: parseFloat(T.taxAmount) || 0,
+      isTaxExempt: !!T.isTaxExempt, grandTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel,
+    };
   };
   
   // Order Material functions
@@ -2865,7 +2922,7 @@ function WorkOrderDetailsPage() {
                   <div style={{ fontSize: '0.85rem', color: '#555' }}>
                     {order.paymentMethod && <span style={{ background: '#C8E6C9', padding: '2px 8px', borderRadius: 4, fontWeight: 600, marginRight: 8 }}>{order.paymentMethod}</span>}
                     {order.paymentReference && <span style={{ marginRight: 8 }}>Ref: <strong>{order.paymentReference}</strong></span>}
-                    {order.paymentDate && <span>on {new Date(order.paymentDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>}
+                    {order.paymentDate && <span>on {formatDay(order.paymentDate)}</span>}
                     {order.paymentRecordedBy && <span style={{ color: '#888', marginLeft: 8 }}> — by {order.paymentRecordedBy}</span>}
                   </div>
                 </div>
@@ -2883,7 +2940,7 @@ function WorkOrderDetailsPage() {
                   <div style={{ fontSize: '0.85rem', color: '#666' }}>Record payment before authorizing pickup</div>
                 </div>
               </div>
-              <button className="btn" onClick={() => { setPaymentForm({ date: new Date().toISOString().split('T')[0], method: '', reference: '' }); setPaymentDialogOpen(true); }}
+              <button className="btn" onClick={() => { setPaymentForm({ date: shopToday(), method: '', reference: '' }); setPaymentDialogOpen(true); }}
                 style={{ background: '#388E3C', color: 'white', border: 'none', fontWeight: 700, padding: '10px 20px', fontSize: '0.95rem' }}>
                 💳 Record Payment
               </button>
@@ -2973,7 +3030,7 @@ function WorkOrderDetailsPage() {
                   await updateWorkOrder(order.id, { isVoided: false, voidedAt: null, voidedBy: null, voidReason: null });
                   setOrder({ ...order, isVoided: false, voidedAt: null, voidedBy: null, voidReason: null });
                   showMessage('Void removed — work order is active again');
-                } catch (err) { setError('Failed to unvoid'); }
+                } catch (err) { setError(err.response?.data?.error?.message || 'Failed to unvoid'); }
               }} style={{ marginTop: 8, background: 'white', border: '1px solid #c62828', color: '#c62828', padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
                 ↩️ Remove Void
               </button>
@@ -3106,7 +3163,7 @@ function WorkOrderDetailsPage() {
                 </button>
                 <button onClick={() => {
                   setShowPrintMenu(false);
-                  setPaymentForm({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
+                  setPaymentForm({ paymentType: 'partial', amount: '', paymentDate: shopToday(), paymentMethod: 'check', paymentReference: '', notes: '' });
                   setShowPaymentModal(true);
                 }} style={{ display: 'block', width: '100%', padding: '14px 16px', border: '2px solid #2e7d32', background: '#e8f5e9', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', color: '#2e7d32', textAlign: 'center', margin: '4px 0' }}>
                   💵 Accept Payment
@@ -3573,10 +3630,12 @@ function WorkOrderDetailsPage() {
           {isEditing ? (
             <div className="actions-row">
               <button className="btn btn-primary btn-sm" onClick={handleSaveOrder} disabled={saving}><Save size={16} />{saving ? 'Saving...' : 'Save'}</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => setIsEditing(false)}><X size={16} />Cancel</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setIsEditing(false); loadOrder(); }}><X size={16} />Cancel</button>
             </div>
           ) : (
             <button className="btn btn-outline btn-sm" onClick={async () => {
+              // what the form showed when editing began — Save sends only what changed (N17)
+              try { editBaselineRef.current = JSON.parse(JSON.stringify(editData)); } catch (e) { editBaselineRef.current = null; }
               setIsEditing(true);
               // Refresh the client's contacts so any contact added to the client AFTER this work
               // order was created shows up in the picker. Match by id, falling back to name — a WO not
@@ -3657,18 +3716,14 @@ function WorkOrderDetailsPage() {
                         } else {
                           updates.taxRate = defaultTaxRate.toString();
                         }
-                        // Auto tax exempt for resale/exempt clients or verified resale certificates
-                        const isExempt = client.taxStatus === 'resale' || client.taxStatus === 'exempt' || 
-                          (client.resaleCertificate && client.permitStatus === 'active');
-                        if (isExempt) {
-                          updates.taxExempt = true;
-                          updates.taxExemptReason = (client.taxStatus === 'exempt') ? 'Tax Exempt' : 'Resale';
-                          updates.taxExemptCertNumber = client.resaleCertificate || '';
-                        } else {
-                          updates.taxExempt = false;
-                          updates.taxExemptReason = '';
-                          updates.taxExemptCertNumber = '';
-                        }
+                        // T47: picking a client is a deliberate change, so the order's own flag follows the NEW
+                        // client (a resale/exempt client is exempt on the server by itself; a taxable one clears
+                        // an exemption left from the previous client). Loading the page never touches it.
+                        updates._clientTaxStatus = client.taxStatus || null;
+                        const isExempt = String(client.taxStatus || '').toLowerCase() === 'resale' || String(client.taxStatus || '').toLowerCase() === 'exempt';
+                        updates.taxExempt = isExempt;
+                        updates.taxExemptReason = isExempt ? ((String(client.taxStatus || '').toLowerCase() === 'exempt') ? 'Tax Exempt' : 'Resale') : '';
+                        updates.taxExemptCertNumber = isExempt ? (client.resaleCertificate || editData.taxExemptCertNumber || '') : '';
                         setEditData(updates);
                         setClientPaymentTerms(client.paymentTerms || null);
                         setShowClientSuggestions(false);
@@ -3783,13 +3838,14 @@ function WorkOrderDetailsPage() {
                 <button className="btn btn-sm" onClick={async () => {
                   try {
                     await updateWorkOrder(id, { internalNotes: internalNotesDraft });
+                    notesDirtyRef.current = false;
                     showMessage('Internal notes saved');
                     await loadOrder();
                   } catch { setError('Failed to save internal notes'); }
                 }} style={{ fontSize: '0.75rem', padding: '4px 12px' }}>💾 Save Notes</button>
               </div>
               <textarea className="form-textarea" value={internalNotesDraft}
-                onChange={(e) => setInternalNotesDraft(e.target.value)}
+                onChange={(e) => { notesDirtyRef.current = true; setInternalNotesDraft(e.target.value); }}
                 rows={6} style={{ background: 'white', resize: 'vertical', minHeight: 110, width: '100%', fontSize: '0.9rem', lineHeight: 1.5 }}
                 placeholder="Internal notes about this work order (carried over from the estimate)..." />
               <NoteEmailLinks notes={internalNotesDraft} />
@@ -4101,9 +4157,12 @@ function WorkOrderDetailsPage() {
             {order.estimateNumber && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.85rem', color: '#7b1fa2', fontWeight: 500 }}>
                 <Link2 size={14} /> {order.estimateNumber}
+                {/* Only a LINKED estimate can be unlinked; an order created by Convert can't (audit N5) */}
+                {(order.parts || []).some(p => p.formData && p.formData._fromEstimateId === order.estimateId) && !order.invoiceNumber && (
                 <button onClick={handleUnlinkEstimate} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#d32f2f' }} title="Unlink estimate">
                   <Unlink size={14} />
                 </button>
+                )}
               </span>
             )}
             {getOrderableParts().length > 0 && (
@@ -4285,9 +4344,12 @@ function WorkOrderDetailsPage() {
               }, 0);
               const hiddenFromCustomer = !!((part.formData || {})._fsHiddenFromCustomer || part._fsHiddenFromCustomer);
               // Hidden-from-customer parts don't contribute to the customer-facing total
-              const displayLabor = hiddenFromCustomer ? 0 : (baseLaborPerPart + opCostPerPart + transportLabPerPart);
               const displayMaterial = hiddenFromCustomer ? 0 : (baseMaterialPerPart + transportMatPerPart);
-              const displayTotal = (displayLabor + displayMaterial) * partQty;
+              // U31: the line total is the server's (pricing.calculatePartTotal — the stored price when set,
+              // e.g. a fab line priced with no labor figure); labor is what's left of the unit price
+              const displayTotal = hiddenFromCustomer ? 0 : serverLineTotal(part);
+              const setupEach = parseFloat(part.setupCharge) || 0;
+              const displayLabor = hiddenFromCustomer ? 0 : Math.max(0, Math.round((displayTotal / partQty - displayMaterial - setupEach) * 100) / 100);
               return (
               <div key={part.id} style={{
                 border: hiddenFromCustomer ? '2px solid #EF5350' : (isLinkedService ? '2px solid #ce93d8' : '1px solid #e0e0e0'),
@@ -4447,7 +4509,7 @@ function WorkOrderDetailsPage() {
                           <span style={{ fontWeight: 600 }}>{part.outsideProcessingVendorName}</span>
                           {part.outsideProcessingPONumber && <span style={{ fontSize: '0.75rem', color: '#666' }}>• {part.outsideProcessingPONumber}</span>}
                           {part.outsideProcessingExpectedReturn && (
-                            <span style={{ fontSize: '0.75rem', color: '#1565c0' }}>• Return by {new Date(part.outsideProcessingExpectedReturn).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' })}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#1565c0' }}>• Return by {formatDateOnly(dayValue(part.outsideProcessingExpectedReturn), { month: 'short', day: 'numeric' })}</span>
                           )}
                         </div>
                         {part.outsideProcessingStatus === 'returned' && part.outsideProcessingReturnedAt && (
@@ -4757,10 +4819,10 @@ function WorkOrderDetailsPage() {
                     )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid #ddd', marginTop: 4, fontWeight: 600 }}>
                       <span>Unit Price</span>
-                      <span style={{ color: '#1976d2' }}>${(displayLabor + displayMaterial).toFixed(2)}</span>
+                      <span style={{ color: '#1976d2' }}>${(displayTotal / partQty).toFixed(2)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '1.05rem', borderTop: '1px solid #ddd' }}>
-                      <strong>Line Total ({partQty} × ${(displayLabor + displayMaterial).toFixed(2)})</strong>
+                      <strong>Line Total ({partQty} × ${(displayTotal / partQty).toFixed(2)})</strong>
                       <strong style={{ color: '#2e7d32' }}>${displayTotal.toFixed(2)}</strong>
                     </div>
                   </div>
@@ -4919,8 +4981,8 @@ function WorkOrderDetailsPage() {
                 })().map(part => {
                   const isLinkedService = ['fab_service', 'shop_rate'].includes(part.partType) && (part._linkedPartId || (part.formData || {})._linkedPartId);
                   const isEa = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType);
-                  const woTotals = calculateTotals();
-                  const lr = (woTotals.minInfo.minimumApplies && woTotals.minInfo.totalLabor > 0 && isEa) ? woTotals.minInfo.adjustedLabor / woTotals.minInfo.totalLabor : 1;
+                  // U31: lines at the server's line prices; the minimum is its own row below, as on the invoice
+                  const lr = 1;
                   const partQty = parseInt(part.quantity) || 1;
                   // OP vendor cost from JSONB (Fab Service parts that are subbed)
                   // part.laborTotal already contains the OP markup (profit); the vendor cost is tracked
@@ -4933,15 +4995,16 @@ function WorkOrderDetailsPage() {
                   }, 0);
                   const hiddenFromCustomer = isHiddenFromCustomer(part);
                   // Base labor per piece (markup already baked in when OP enabled)
-                  const rawLaborEach = basePartLabor(part);
+                  const lineTotal = serverLineTotal(part);
+                  // a fab / shop-rate line priced with no labor figure is all labor (the server's rule)
+                  const rawLaborEach = basePartLabor(part) || (['fab_service', 'shop_rate'].includes(part.partType) ? lineTotal / partQty : 0);
                   // Hidden parts contribute $0 to the customer-facing table
                   const adjLabor = hiddenFromCustomer
                     ? 0
                     : (rawLaborEach * lr + opCostPerPart);
                   const adjMaterial = hiddenFromCustomer ? 0 : (parseFloat(part.materialTotal) || 0);
                   const laborDelta = hiddenFromCustomer ? 0 : ((rawLaborEach * lr - rawLaborEach) * partQty);
-                  const rawPartTotal = parseFloat(part.partTotal) || parseFloat((part.formData || {}).partTotal) || 0;
-                  const adjPartTotal = hiddenFromCustomer ? 0 : (isEa ? rawPartTotal + laborDelta : rawPartTotal);
+                  const adjPartTotal = hiddenFromCustomer ? 0 : lineTotal + (isEa ? laborDelta : 0);
                   return (
                   <tr key={part.id} style={{ borderBottom: '1px solid #eee', background: hiddenFromCustomer ? '#FFEBEE' : (isLinkedService ? '#fce4ec' : 'transparent') }}>
                     <td style={{ padding: 8 }}>{isLinkedService ? '' : (partDispNum[part.id] || part.partNumber)}</td>
@@ -4992,33 +5055,56 @@ function WorkOrderDetailsPage() {
                   <span style={{ fontWeight: 600 }}>{formatCurrency(calculateTotals().emergencyAmount)}</span>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                <span>Parts Subtotal:</span>
-                <span>{formatCurrency(calculateTotals().partsSubtotal)}</span>
-              </div>
-              
-              {/* Legacy Trucking input removed — use the Shipping & Handling section below (multiple
-                  shipments, carries to invoice + QuickBooks). A legacy trucking value, if one exists,
-                  still shows read-only here. */}
-              {(parseFloat(order.truckingCost) || 0) > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                  <span>{order.truckingDescription || 'Trucking'}:</span>
-                  <span>{formatCurrency(order.truckingCost)}</span>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                <span>Subtotal:</span>
-                <span>{formatCurrency(calculateTotals().subtotal)}</span>
-              </div>
+              {(() => {
+                // U31: the invoice's own rows — discount, trips and shipping as the server bills them
+                const t = calculateTotals();
+                const r = { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' };
+                return (
+                  <>
+                    {t.minInfo.minimumApplies && (
+                      <div style={{ ...r, color: '#e65100', fontSize: '0.85rem', padding: '6px 0' }}>
+                        <span>Minimum labor adjustment</span><span>{formatCurrency(t.minInfo.laborDifference)}</span>
+                      </div>
+                    )}
+                    {t.opTransportTotal > 0 && (
+                      <div style={{ ...r, fontSize: '0.85rem', padding: '6px 0', color: '#555' }}>
+                        <span>Outside processing transport</span><span>{formatCurrency(t.opTransportTotal)}</span>
+                      </div>
+                    )}
+                    <div style={r}>
+                      <span>Parts Subtotal:</span>
+                      <span>{formatCurrency(t.partsSubtotal)}</span>
+                    </div>
+                    {t.discountAmt > 0 && (
+                      <div style={{ ...r, color: '#c62828' }}>
+                        <span>Discount:</span><span>-{formatCurrency(t.discountAmt)}</span>
+                      </div>
+                    )}
+                    {/* Legacy Trucking input removed — use the Shipping & Handling section below. A legacy trucking
+                        value, or the shipment charges, show here as the invoice bills them (never taxed). */}
+                    {t.shippingTotal > 0 && (
+                      <div style={r}>
+                        <span>{t.usesLegacyTrucking ? (order.truckingDescription || 'Trucking') : 'Shipping & handling'}:</span>
+                        <span>{formatCurrency(t.shippingTotal)}</span>
+                      </div>
+                    )}
+                    <div style={r}>
+                      <span>Subtotal:{!t.fromServer && <span style={{ fontSize: '0.72rem', color: '#999', marginLeft: 6 }}>(preview)</span>}</span>
+                      <span>{formatCurrency(t.subtotal)}</span>
+                    </div>
+                  </>
+                );
+              })()}
 
               {isEditing ? (
                 <div style={{ padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: editData.taxExempt ? 6 : 0 }}>
-                    <input type="checkbox" checked={editData.taxExempt} onChange={(e) => setEditData({ ...editData, taxExempt: e.target.checked })} />
-                    <span style={{ fontWeight: 600, color: editData.taxExempt ? '#c62828' : undefined }}>Tax Exempt</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: clientTaxExempt ? 'not-allowed' : 'pointer', marginBottom: effectiveTaxExempt ? 6 : 0 }}
+                    title={clientTaxExempt ? `Exempt by client — the client's tax status is ${clientTaxStatusForTax}` : undefined}>
+                    <input type="checkbox" checked={effectiveTaxExempt} disabled={clientTaxExempt} onChange={(e) => setEditData({ ...editData, taxExempt: e.target.checked })} />
+                    <span style={{ fontWeight: 600, color: effectiveTaxExempt ? '#c62828' : undefined }}>Tax Exempt</span>
+                    {clientTaxExempt && <span style={{ fontSize: '0.75rem', color: '#888' }}>(by client: {clientTaxStatusForTax})</span>}
                   </label>
-                  {editData.taxExempt ? (
+                  {effectiveTaxExempt ? (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.85rem' }}>
                       <input className="form-input" placeholder="Reason (e.g. Resale)" value={editData.taxExemptReason} onChange={(e) => setEditData({ ...editData, taxExemptReason: e.target.value })} style={{ flex: 1, fontSize: '0.85rem' }} />
                       <input className="form-input" placeholder="Cert #" value={editData.taxExemptCertNumber} onChange={(e) => setEditData({ ...editData, taxExemptCertNumber: e.target.value })} style={{ width: 120, fontSize: '0.85rem' }} />
@@ -5033,15 +5119,16 @@ function WorkOrderDetailsPage() {
               ) : (
                 <div style={{ padding: '8px 0', borderBottom: '1px solid #eee' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={editData.taxExempt || false}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: clientTaxExempt ? 'not-allowed' : 'pointer' }}
+                      title={clientTaxExempt ? `Exempt by client — ${order.clientName || 'the client'} is set to ${clientTaxStatusForTax} in Clients` : undefined}>
+                      <input type="checkbox" checked={effectiveTaxExempt} disabled={clientTaxExempt}
                         onChange={async (e) => {
                           const newExempt = e.target.checked;
                           const updates = { taxExempt: newExempt };
                           if (!newExempt) { updates.taxExemptReason = ''; updates.taxExemptCertNumber = ''; }
 
                           // If checking tax exempt and client is not already resale — ask to update client account
-                          if (newExempt && order._clientObj?.taxStatus !== 'resale' && order._clientObj?.taxStatus !== 'exempt' && order.clientId) {
+                          if (newExempt && String(order._clientObj?.taxStatus || '').toLowerCase() !== 'resale' && String(order._clientObj?.taxStatus || '').toLowerCase() !== 'exempt' && order.clientId) {
                             const setClientResale = window.confirm(
                               `Would you also like to set ${order.clientName}'s account to Resale/Tax Exempt?\n\nOK = Yes, update client account\nCancel = Apply to this order only`
                             );
@@ -5054,36 +5141,40 @@ function WorkOrderDetailsPage() {
                           }
 
                           setEditData(prev => ({ ...prev, ...updates }));
-                          try { await updateWorkOrder(id, updates); await loadOrder(); showMessage(newExempt ? 'Marked tax exempt' : 'Tax exemption removed'); } catch(err) { console.error('Tax save error:', err); }
+                          try { await updateWorkOrder(id, updates); await loadOrder(); showMessage(newExempt ? 'Marked tax exempt' : 'Tax exemption removed'); } catch(err) { await inlineSaveFailed(err, 'The tax exemption'); }
                         }}
                       />
-                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: editData.taxExempt ? '#c62828' : '#666' }}>Tax Exempt</span>
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: effectiveTaxExempt ? '#c62828' : '#666' }}>Tax Exempt</span>
+                      {clientTaxExempt && <span style={{ fontSize: '0.72rem', color: '#888' }}>(by client: {clientTaxStatusForTax})</span>}
                     </label>
-                    {!editData.taxExempt && (
+                    {!effectiveTaxExempt && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <input type="number" step="0.01" className="form-input"
                           value={editData.taxRate || ''}
                           onChange={(e) => setEditData(prev => ({ ...prev, taxRate: e.target.value }))}
-                          onBlur={async () => { try { await updateWorkOrder(id, { taxRate: editData.taxRate }); showMessage('Tax rate updated'); } catch {} }}
+                          onBlur={async () => { try { await updateWorkOrder(id, { taxRate: editData.taxRate }); refreshServerTotals(); showMessage('Tax rate updated'); } catch (err) { await inlineSaveFailed(err, 'The tax rate'); } }}
                           style={{ width: 70, textAlign: 'right', fontSize: '0.85rem', padding: '2px 6px' }}
                         />
                         <span style={{ fontSize: '0.85rem', color: '#666' }}>%</span>
                       </div>
                     )}
                   </div>
-                  {editData.taxExempt && (
+                  {!effectiveTaxExempt && order._clientObj?.resaleCertificate && order._clientObj?.permitStatus === 'active' && (
+                    <div style={{ fontSize: '0.72rem', color: '#888', marginTop: 2 }}>ℹ️ Client has a resale certificate on file (permit active), but its tax status is Taxable.</div>
+                  )}
+                  {effectiveTaxExempt && (
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <input className="form-input" placeholder="Reason" value={editData.taxExemptReason || ''}
                         onChange={(e) => setEditData(prev => ({ ...prev, taxExemptReason: e.target.value }))}
-                        onBlur={async () => { try { await updateWorkOrder(id, { taxExemptReason: editData.taxExemptReason }); } catch {} }}
+                        onBlur={async () => { try { await updateWorkOrder(id, { taxExemptReason: editData.taxExemptReason }); } catch (err) { await inlineSaveFailed(err, 'The exemption reason'); } }}
                         style={{ flex: 1, fontSize: '0.8rem', padding: '3px 6px' }} />
                       <input className="form-input" placeholder="Cert #" value={editData.taxExemptCertNumber || ''}
                         onChange={(e) => setEditData(prev => ({ ...prev, taxExemptCertNumber: e.target.value }))}
-                        onBlur={async () => { try { await updateWorkOrder(id, { taxExemptCertNumber: editData.taxExemptCertNumber }); } catch {} }}
+                        onBlur={async () => { try { await updateWorkOrder(id, { taxExemptCertNumber: editData.taxExemptCertNumber }); } catch (err) { await inlineSaveFailed(err, 'The certificate number'); } }}
                         style={{ width: 100, fontSize: '0.8rem', padding: '3px 6px' }} />
                     </div>
                   )}
-                  {!editData.taxExempt && calculateTotals().taxAmount > 0 && (
+                  {!effectiveTaxExempt && calculateTotals().taxAmount > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#555', marginTop: 2 }}>
                       <span>Tax:</span>
                       <span>{formatCurrency(calculateTotals().taxAmount)}</span>
@@ -5092,19 +5183,27 @@ function WorkOrderDetailsPage() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '1.1rem', background: '#e3f2fd', margin: '8px -8px -8px', padding: '12px 8px', borderRadius: '0 0 8px 8px' }}>
-                <span>Grand Total:</span>
-                <span>{formatCurrency(calculateTotals().grandTotal)}</span>
-              </div>
-              {/* What the invoice, ledger and QuickBooks will actually charge. This screen's figure is a live
-                  preview and handles trucking tax, discounts and minimums its own way (audit M16). */}
-              {serverTotals && Math.abs((parseFloat(serverTotals.amount) || 0) - (calculateTotals().grandTotal || 0)) >= 0.01 && (
-                <div style={{ marginTop: 14, padding: '8px 10px', background: '#fff8e1', border: '1px solid #ffcc80', borderRadius: 6, fontSize: '0.85rem', color: '#6d4c41' }}>
-                  <strong>Invoice total: {formatCurrency(serverTotals.amount)}</strong>
-                  {serverTotals.frozen ? ' (as entered in QuickBooks)' : ''} — this is what the invoice PDF, client ledger and QuickBooks export charge.
-                  The figure above is this screen's preview{serverTotals.frozen ? '' : ' and can differ until changes are saved'}.
-                </div>
-              )}
+              {/* The Grand Total is the invoice's own total from the server — the same number the PDF, the
+                  ledger and QuickBooks use (round 12, audit N18). This screen's arithmetic is only a preview
+                  (it doesn't apply discounts, trips or shipping the same way), shown while editing. */}
+              {(() => {
+                // U31: not editing, calculateTotals() is the server's invoice totals; editing, a preview by the same rules
+                const t = calculateTotals();
+                const server = serverTotals ? (parseFloat(serverTotals.amount) || 0) : null;
+                return (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '1.1rem', background: '#e3f2fd', margin: '8px -8px -8px', padding: '12px 8px', borderRadius: '0 0 8px 8px' }}>
+                      <span>Grand Total{t.fromServer && serverTotals?.frozen ? ' (as in QuickBooks)' : ''}{!t.fromServer ? ' (preview)' : ''}:</span>
+                      <span>{formatCurrency(t.grandTotal)}</span>
+                    </div>
+                    {isEditing && server !== null && Math.abs(server - t.grandTotal) >= 0.01 && (
+                      <div style={{ marginTop: 14, padding: '8px 10px', background: '#fff8e1', border: '1px solid #ffcc80', borderRadius: 6, fontSize: '0.85rem', color: '#6d4c41' }}>
+                        Preview while editing. <strong>The saved invoice total is {formatCurrency(server)}</strong> — save to recalculate it.
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -5126,7 +5225,7 @@ function WorkOrderDetailsPage() {
                 style={{ background: '#ff9800', color: '#fff', border: 'none', fontSize: '0.75rem' }}
                 onClick={async () => {
                   setEditData({ ...editData, minimumOverride: true });
-                  try { await updateWorkOrder(id, { minimumOverride: true }); showMessage('Minimum override applied'); } catch {}
+                  try { await updateWorkOrder(id, { minimumOverride: true }); refreshServerTotals(); showMessage('Minimum override applied'); } catch (err) { await inlineSaveFailed(err, 'The minimum override'); }
                 }}
               >
                 Override Minimum
@@ -5147,7 +5246,7 @@ function WorkOrderDetailsPage() {
                 <button className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '2px 8px' }}
                   onClick={async () => {
                     setEditData({ ...editData, minimumOverride: false, minimumOverrideReason: '' });
-                    try { await updateWorkOrder(id, { minimumOverride: false, minimumOverrideReason: '' }); showMessage('Override removed'); } catch {}
+                    try { await updateWorkOrder(id, { minimumOverride: false, minimumOverrideReason: '' }); refreshServerTotals(); showMessage('Override removed'); } catch (err) { await inlineSaveFailed(err, 'Removing the override'); }
                   }}>
                   Remove
                 </button>
@@ -5238,7 +5337,7 @@ function WorkOrderDetailsPage() {
                       <Download size={14} />Download
                     </button>
                     <button onClick={async () => {
-                      try { await toggleDocumentPortal(id, doc.id, !doc.portalVisible); await loadOrder(); } catch {}
+                      try { await toggleDocumentPortal(id, doc.id, !doc.portalVisible); await loadOrder(); } catch (err) { await inlineSaveFailed(err, 'The portal setting'); }
                     }} title={doc.portalVisible ? 'Visible on client portal' : 'Hidden from client portal'}
                       style={{ background: 'none', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', fontSize: '0.75rem', color: doc.portalVisible ? '#2e7d32' : '#bbb' }}>
                       {doc.portalVisible ? '🌐 Portal' : '🔒'}
@@ -5370,7 +5469,7 @@ function WorkOrderDetailsPage() {
                       <Eye size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />View
                     </button>
                     <button onClick={async () => {
-                      try { await toggleDocumentPortal(id, doc.id, !doc.portalVisible); await loadOrder(); } catch {}
+                      try { await toggleDocumentPortal(id, doc.id, !doc.portalVisible); await loadOrder(); } catch (err) { await inlineSaveFailed(err, 'The portal setting'); }
                     }} title={doc.portalVisible ? 'Visible on client portal — click to hide' : 'Hidden from portal — click to show'}
                       style={{ background: 'none', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', fontSize: '0.75rem', color: doc.portalVisible ? '#2e7d32' : '#bbb' }}>
                       {doc.portalVisible ? '🌐' : '🔒'}
@@ -5615,7 +5714,9 @@ function WorkOrderDetailsPage() {
                         </button>
                         <button onClick={async () => {
                           if (!window.confirm(`Delete this shipment record? Quantities will be restored.`)) return;
-                          try { await deletePickupEntry(id, idx); await loadOrder(); showMessage('Shipment deleted'); } catch { setError('Failed'); }
+                          // W28: say why it failed, and reload so a stale list (index moved) isn't acted on again
+                          try { await deletePickupEntry(id, idx); await loadOrder(); showMessage('Shipment deleted'); }
+                          catch (e) { setError('Could not delete this shipment: ' + (e.response?.data?.error?.message || e.message || 'unknown error')); try { await loadOrder(); } catch { /* keep view */ } }
                         }} title="Delete shipment" style={{ background: 'none', border: '1px solid #c62828', borderRadius: 4, padding: '3px 6px', cursor: 'pointer', color: '#c62828' }}>
                           <X size={14} />
                         </button>
@@ -5657,7 +5758,7 @@ function WorkOrderDetailsPage() {
                                   else await updatePickupEntry(id, idx, { items: updatedItems });
                                   await loadOrder();
                                   showMessage(qty === 0 ? 'Item removed' : 'Quantity updated');
-                                } catch { setError('Failed to update'); }
+                                } catch (e) { setError('Failed to update: ' + (e.response?.data?.error?.message || e.message || 'unknown error')); try { await loadOrder(); } catch { /* keep view */ } }   // W28
                               }} style={{ background: 'none', border: '1px solid #1976d2', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', color: '#1976d2', fontSize: '0.75rem' }}>
                                 ✏️ Edit
                               </button>
@@ -5749,9 +5850,9 @@ function WorkOrderDetailsPage() {
         {/* Shipping & Handling Charges */}
         <ShipmentChargesSection
           charges={shipmentCharges}
-          onAdd={async (data) => { await addWOShipmentCharge(order.id, data); const r = await getWOShipmentCharges(order.id); setShipmentCharges(r.data.data || []); }}
-          onUpdate={async (chargeId, data) => { await updateWOShipmentCharge(order.id, chargeId, data); const r = await getWOShipmentCharges(order.id); setShipmentCharges(r.data.data || []); }}
-          onDelete={async (chargeId) => { await deleteWOShipmentCharge(order.id, chargeId); const r = await getWOShipmentCharges(order.id); setShipmentCharges(r.data.data || []); }}
+          onAdd={async (data) => { await addWOShipmentCharge(order.id, data); const r = await getWOShipmentCharges(order.id); setShipmentCharges(r.data.data || []); refreshServerTotals(); }}
+          onUpdate={async (chargeId, data) => { await updateWOShipmentCharge(order.id, chargeId, data); const r = await getWOShipmentCharges(order.id); setShipmentCharges(r.data.data || []); refreshServerTotals(); }}
+          onDelete={async (chargeId) => { await deleteWOShipmentCharge(order.id, chargeId); const r = await getWOShipmentCharges(order.id); setShipmentCharges(r.data.data || []); refreshServerTotals(); }}
         />
 
       {/* ===== INVOICE TAB ===== */}
@@ -5787,7 +5888,7 @@ function WorkOrderDetailsPage() {
                       </div>
                     )}
                     <div style={{ fontSize: '0.8rem', color: '#888', marginTop: 2 }}>
-                      {order.invoiceDate ? `Dated: ${new Date(order.invoiceDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'No date set'}
+                      {order.invoiceDate ? `Dated: ${formatDay(order.invoiceDate, { style: 'long' })}` : 'No date set'}
                     </div>
                     {order.invoiceDate && clientPaymentTerms && (() => {
                       const t = clientPaymentTerms.toUpperCase();
@@ -5796,7 +5897,7 @@ function WorkOrderDetailsPage() {
                       else { const m = t.match(/NET\s*(\d+)/); if (m) days = parseInt(m[1]); else { const m2 = t.match(/^(\d+)\s*DAYS?$/); if (m2) days = parseInt(m2[1]); } }
                       if (days === null) return null;
                       if (days === 0) return <div style={{ fontSize: '0.8rem', color: '#e65100', marginTop: 2, fontWeight: 600 }}>Terms: C.O.D. — due upon receipt</div>;
-                      const dueDate = new Date(new Date(order.invoiceDate).getTime() + days * 86400000);
+                      const dueDate = (() => { const [y, m, d] = dayValue(order.invoiceDate).split('-').map(Number); return new Date(y, m - 1, d + days, 12); })();   // from the invoice's calendar day (N8)
                       const daysLeft = Math.floor((dueDate - Date.now()) / 86400000);
                       const isPaid = !!order.paymentDate;
                       if (isPaid) return <div style={{ fontSize: '0.8rem', color: '#2e7d32', marginTop: 2 }}>✓ Paid — was due {dueDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</div>;
@@ -5904,7 +6005,7 @@ function WorkOrderDetailsPage() {
                   📊 View in AR Ledger
                 </a>
                 <button onClick={() => {
-                  setPaymentForm({ paymentType: 'partial', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'check', paymentReference: '', notes: '' });
+                  setPaymentForm({ paymentType: 'partial', amount: '', paymentDate: shopToday(), paymentMethod: 'check', paymentReference: '', notes: '' });
                   setShowPaymentModal(true);
                 }} style={{ background: '#2e7d32', color: 'white', border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600 }}>
                   + Add Payment
@@ -5945,7 +6046,7 @@ function WorkOrderDetailsPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
               <h3 className="card-title" style={{ margin: 0 }}>📬 Invoice Send History</h3>
               <button onClick={() => {
-                setManualSendForm({ sentAt: new Date().toISOString().slice(0,16), sentMethod: 'email', sentTo: order.client?.apEmail || '', sentFrom: '', notes: '' });
+                setManualSendForm({ sentAt: localDateTimeInputNow(), sentMethod: 'email', sentTo: order.client?.apEmail || '', sentFrom: '', notes: '' });
                 setShowManualSendLog(true);
               }} style={{ background: 'white', color: '#1976d2', border: '1px solid #1976d2', cursor: 'pointer', padding: '7px 14px', borderRadius: 6, fontSize: '0.85rem', fontWeight: 600 }}>
                 + Log Send Manually
@@ -6364,8 +6465,13 @@ function WorkOrderDetailsPage() {
 
             const trucking = parseFloat(order.truckingCost) || 0;
             const totalExpenses = totalMaterialCost + totalOutsideCost + totalTransportCost + trucking;
-            const totals = calculateTotals();
-            const totalRevenue = totals.grandTotal;
+            // Revenue from the invoice's own totals (discounts, minimum, trips included) and before tax —
+            // sales tax is not the shop's revenue (round 13, T46)
+            const preview = calculateTotals();
+            const totals = serverTotals
+              ? { discountAmt: serverTotals.discountTotal || 0, taxAmount: serverTotals.taxAmount || 0, grandTotal: serverTotals.amount != null ? serverTotals.amount : serverTotals.grandTotal, preTax: serverTotals.preTaxTotal }
+              : { discountAmt: preview.discountAmt || 0, taxAmount: preview.taxAmount || 0, grandTotal: preview.grandTotal, preTax: (preview.grandTotal || 0) - (preview.taxAmount || 0) };
+            const totalRevenue = totals.preTax;
             const grossProfit = totalRevenue - totalExpenses;
             const margin = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 100) : 0;
             const totalMarkupProfit = (totalMaterialBilled - totalMaterialCost) + (totalOutsideBilled - totalOutsideCost) + (totalTransportBilled - totalTransportCost);
@@ -6790,6 +6896,7 @@ function WorkOrderDetailsPage() {
               <button className="btn btn-icon" onClick={() => { setShowPickupModal(false); setPickupData({ pickedUpBy: '', type: null, items: {} }); setHasSignature(false); }}><X size={20} /></button>
             </div>
             <div style={{ padding: 20 }}>
+              {error && <div style={{ background: '#ffebee', color: '#c62828', borderRadius: 6, padding: '8px 12px', marginBottom: 12, fontSize: '0.85rem' }}>{error}</div>}
               {/* Step 1: Picked Up By */}
               <div className="form-group" style={{ marginBottom: 16 }}>
                 <label className="form-label">Picked Up By</label>
@@ -7542,7 +7649,7 @@ function WorkOrderDetailsPage() {
                 <button className="btn" onClick={() => {
                   setCodConfirmOpen(false);
                   setCodShowOverride(false);
-                  setPaymentForm({ date: new Date().toISOString().split('T')[0], method: '', reference: '' });
+                  setPaymentForm({ date: shopToday(), method: '', reference: '' });
                   setPaymentDialogOpen(true);
                 }} style={{ flex: 1, background: '#388E3C', color: 'white', border: 'none', padding: '14px', fontSize: '1rem', fontWeight: 700, borderRadius: 8 }}>
                   ✅ Yes — Record Payment
@@ -7616,7 +7723,14 @@ function WorkOrderDetailsPage() {
                 <label className="form-label" style={{ fontWeight: 600 }}>Payment Method *</label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {['Check', 'Cash', 'Wire Transfer', 'Credit Card', 'ACH', 'Zelle'].map(method => (
-                    <button key={method} onClick={() => setPaymentForm({ ...paymentForm, method })}
+                    <button key={method} onClick={() => {
+                      // V36: a card is charged its card total; other methods the balance
+                      const next = { ...paymentForm, method };
+                      if (!codUnpriced && codBalance != null && codBalance > 0 && (method === 'Credit Card') !== (paymentForm.method === 'Credit Card')) {
+                        next.codAmount = method === 'Credit Card' ? codCardTotal(codBalance, paymentForm.ccType).toFixed(2) : codBalance.toFixed(2);
+                      }
+                      setPaymentForm(next);
+                    }}
                       style={{
                         padding: '12px 8px', border: paymentForm.method === method ? '2px solid #388E3C' : '2px solid #ddd',
                         background: paymentForm.method === method ? '#E8F5E9' : 'white', borderRadius: 8, cursor: 'pointer',
@@ -7631,6 +7745,40 @@ function WorkOrderDetailsPage() {
                 </div>
               </div>
 
+              {!codUnpriced && (
+                <div className="form-group" style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: 6 }}>
+                    <span>Balance due</span><strong>{codBalance == null ? '…' : `$${codBalance.toFixed(2)}`}</strong>
+                  </div>
+                  {paymentForm.method === 'Credit Card' && codBalance != null && codBalance > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      {[['in_person', 'In person (2.6% + $0.15)'], ['manual', 'Keyed (3.5% + $0.15)']].map(([type, label]) => {
+                        const sel = (paymentForm.ccType === 'manual' ? 'manual' : 'in_person') === type;
+                        return (
+                          <button key={type} type="button" onClick={() => setPaymentForm({ ...paymentForm, ccType: type, codAmount: codCardTotal(codBalance, type).toFixed(2) })}
+                            style={{ padding: '8px 6px', border: sel ? '2px solid #388E3C' : '1px solid #ddd', background: sel ? '#E8F5E9' : 'white', borderRadius: 8, cursor: 'pointer', fontSize: '0.8rem' }}>
+                            {label}<br /><strong>${codCardTotal(codBalance, type).toFixed(2)}</strong>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <label className="form-label" style={{ fontWeight: 600 }}>Amount {paymentForm.method === 'Credit Card' ? 'charged' : 'received'}</label>
+                  <input type="number" step="0.01" min="0" className="form-input" placeholder={codBalance != null ? codBalance.toFixed(2) : '0.00'}
+                    value={paymentForm.codAmount || ''} onChange={e => setPaymentForm({ ...paymentForm, codAmount: e.target.value })} />
+                  {paymentForm.method === 'Credit Card' && <div style={{ fontSize: '0.78rem', color: '#666', marginTop: 4 }}>A card total above the balance is recorded as the payment plus the card surcharge.</div>}
+                </div>
+              )}
+
+              {codUnpriced && (
+                <div className="form-group" style={{ marginBottom: 16 }}>
+                  <label className="form-label" style={{ fontWeight: 600 }}>Amount received *</label>
+                  <input type="number" step="0.01" min="0" className="form-input" placeholder="0.00"
+                    value={paymentForm.codAmount || ''} onChange={e => setPaymentForm({ ...paymentForm, codAmount: e.target.value })} />
+                  <div style={{ fontSize: '0.8rem', color: '#e65100', marginTop: 4 }}>This order isn't priced yet — enter what the customer paid. Once it's priced, the ledger shows anything still owed (or a credit).</div>
+                </div>
+              )}
+
               <div className="form-group" style={{ marginBottom: 20 }}>
                 <label className="form-label" style={{ fontWeight: 600 }}>
                   {paymentForm.method === 'Check' ? 'Check Number' : paymentForm.method === 'Wire Transfer' ? 'Wire Reference' : paymentForm.method === 'ACH' ? 'ACH Transaction ID' : paymentForm.method === 'Credit Card' ? 'Last 4 Digits / Auth Code' : 'Transaction ID / Reference'}
@@ -7641,9 +7789,9 @@ function WorkOrderDetailsPage() {
               </div>
 
               <div style={{ display: 'flex', gap: 12 }}>
-                <button className="btn" onClick={handleRecordPayment} disabled={!paymentForm.method}
-                  style={{ flex: 1, background: paymentForm.method ? '#388E3C' : '#ccc', color: 'white', border: 'none', padding: '14px', fontSize: '1rem', fontWeight: 700, borderRadius: 8 }}>
-                  ✅ Confirm Payment
+                <button className="btn" onClick={handleRecordPayment} disabled={!paymentForm.method || codSaving || (codUnpriced && !(parseFloat(paymentForm.codAmount) > 0))}
+                  style={{ flex: 1, background: paymentForm.method && !codSaving ? '#388E3C' : '#ccc', color: 'white', border: 'none', padding: '14px', fontSize: '1rem', fontWeight: 700, borderRadius: 8 }}>
+                  {codSaving ? 'Saving…' : '✅ Confirm Payment'}
                 </button>
                 <button onClick={() => { setPaymentDialogOpen(false); setCodAction(null); }}
                   style={{ padding: '14px 20px', background: 'none', border: '1px solid #ccc', borderRadius: 8, cursor: 'pointer', color: '#666', fontSize: '0.9rem' }}>

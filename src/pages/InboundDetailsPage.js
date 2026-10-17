@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit, Save, X, Trash2, Package, FileText, User } from 'lucide-react';
-import { getInboundOrderById, updateInboundOrder, deleteInboundOrder, createShipment } from '../services/api';
+import { getInboundOrderById, updateInboundOrder, deleteInboundOrder, convertInboundToShipment } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 function InboundDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -68,26 +70,32 @@ function InboundDetailsPage() {
       await deleteInboundOrder(id);
       navigate('/inbound');
     } catch (err) {
-      setError('Failed to delete order');
+      setError(err.response?.data?.error?.message || 'Failed to delete order');
     }
   };
 
+  // U36: a received delivery already has its shipment — only an admin may convert it again, after confirming
+  const isReceived = !!order && (order.status === 'received' || !!order.receivedAt);
   const handleConvertToShipment = async () => {
+    if (saving) return;
+    let force = false;
+    if (isReceived) {
+      if (!isAdmin()) { setError('This delivery has already been received, so its shipment exists already.'); return; }
+      if (!window.confirm('This delivery has already been received — a shipment for it probably exists already.\n\nCreate ANOTHER shipment from it anyway?')) return;
+      force = true;
+    }
     try {
       setSaving(true);
-      const shipmentData = {
-        clientName: order.clientName,
-        description: order.description,
-        notes: `From supplier: ${order.supplierName}\nPO#: ${order.purchaseOrderNumber}`,
-      };
-      const response = await createShipment(shipmentData);
+      setError(null);
+      // The server creates the shipment and receives this delivery in one step (audit R21)
+      const response = await convertInboundToShipment(id, { force });
       const newShipment = response.data.data;
-      
-      await deleteInboundOrder(id);
       navigate(`/shipment/${newShipment.id}`);
     } catch (err) {
-      setError('Failed to convert to shipment');
+      // U36: show the server's reason (409 DELIVERY_RECEIVED) and reload so the button reflects it
+      setError(err.response?.data?.error?.message || 'Failed to convert to shipment');
       console.error(err);
+      if (err.response?.status === 409) loadOrder();
     } finally {
       setSaving(false);
     }
@@ -149,10 +157,16 @@ function InboundDetailsPage() {
             </>
           ) : (
             <>
-              <button className="btn btn-success" onClick={handleConvertToShipment} disabled={saving}>
-                <Package size={18} />
-                Convert to Shipment
-              </button>
+              {(!isReceived || isAdmin()) && (
+                <button className={isReceived ? 'btn btn-outline' : 'btn btn-success'} onClick={handleConvertToShipment} disabled={saving}
+                  title={isReceived ? 'Already received — converting again creates a second shipment (admin only)' : undefined}>
+                  <Package size={18} />
+                  {isReceived ? 'Convert Again (admin)' : 'Convert to Shipment'}
+                </button>
+              )}
+              {isReceived && !isAdmin() && (
+                <span style={{ alignSelf: 'center', color: '#2e7d32', fontWeight: 600, fontSize: '0.85rem' }}>✓ Received</span>
+              )}
               <button className="btn btn-outline" onClick={() => setIsEditing(true)}>
                 <Edit size={18} />
                 Edit

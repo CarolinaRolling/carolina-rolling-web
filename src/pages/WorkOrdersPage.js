@@ -181,7 +181,8 @@ function WorkOrdersPage() {
   const loadOrders = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const response = await getWorkOrders();
+      // every open order, not the server's default 50 newest (R12)
+      const response = await getWorkOrders({ archived: 'false', view: 'list', limit: 2000 });
       setOrders(response.data.data || []);
     } catch (err) {
       if (!silent) setError('Failed to load work orders');

@@ -42,6 +42,9 @@ function ShipmentDetailsPage() {
   const [success, setSuccess] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
+  // T49: the form values as loaded — Save sends only the fields that differ from these, so a stale form
+  // doesn't put back a location/status someone changed on the tablet meanwhile.
+  const editBaselineRef = useRef(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -71,7 +74,7 @@ function ShipmentDetailsPage() {
       const response = await getShipmentById(id);
       const data = response.data.data;
       setShipment(data);
-      setEditData({
+      setEditData(editBaselineRef.current = {
         clientName: data.clientName || '',
         jobNumber: data.jobNumber || '',
         clientPurchaseOrderNumber: data.clientPurchaseOrderNumber || '',
@@ -167,23 +170,28 @@ function ShipmentDetailsPage() {
       setSaving(true);
       setError(null);
       
-      const updateData = {
-        clientName: editData.clientName,
-        jobNumber: editData.jobNumber || null,
-        clientPurchaseOrderNumber: editData.clientPurchaseOrderNumber || null,
-        description: editData.description || null,
-        partNumbers: editData.partNumbers 
-          ? editData.partNumbers.split(',').map(p => p.trim()).filter(p => p)
+      const toPayload = (d) => ({
+        clientName: d.clientName,
+        jobNumber: d.jobNumber || null,
+        clientPurchaseOrderNumber: d.clientPurchaseOrderNumber || null,
+        description: d.description || null,
+        partNumbers: d.partNumbers 
+          ? String(d.partNumbers).split(',').map(p => p.trim()).filter(p => p)
           : [],
-        quantity: parseInt(editData.quantity) || 1,
-        location: editData.location || null,
-        notes: editData.notes || null,
-        requestedDueDate: editData.requestedDueDate || null,
-        promisedDate: editData.promisedDate || null,
-      };
+        quantity: parseInt(d.quantity) || 1,
+        location: d.location || null,
+        notes: d.notes || null,
+        requestedDueDate: d.requestedDueDate || null,
+        promisedDate: d.promisedDate || null,
+      });
+      const current = toPayload(editData);
+      const base = editBaselineRef.current ? toPayload(editBaselineRef.current) : null;
+      const updateData = {};
+      for (const k of Object.keys(current)) {
+        if (!base || JSON.stringify(current[k]) !== JSON.stringify(base[k])) updateData[k] = current[k];
+      }
 
-      console.log('Saving shipment:', id, updateData);
-      await updateShipment(id, updateData);
+      if (Object.keys(updateData).length) await updateShipment(id, updateData);
       await loadShipment();
       setIsEditing(false);
       setSuccess('Shipment updated successfully');

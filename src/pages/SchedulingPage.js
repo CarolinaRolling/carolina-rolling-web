@@ -105,7 +105,8 @@ function SchedulingPage() {
   const loadWorkOrders = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const response = await getWorkOrders();
+      // every open order, not the server's default 50 newest — the oldest are the likeliest to be late (R12)
+      const response = await getWorkOrders({ archived: 'false', view: 'list', limit: 2000 });
       const all = response.data.data || [];
       const active = all.filter(o => !DONE_STATUSES.includes(o.status));
       

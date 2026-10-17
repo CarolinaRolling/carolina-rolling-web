@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { FileText, Truck, PackageCheck, Receipt, DollarSign, Check, ExternalLink, Download } from 'lucide-react';
 import { downloadEstimatePDF, downloadWorkOrderDocument, generateInvoicePDF, getWOPayments } from '../services/api';
-import { formatDate } from '../utils/dates';
+import { formatDate, formatDay } from '../utils/dates';
 
 const money = (v) => `$${(parseFloat(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -181,7 +181,7 @@ export default function WorkOrderLifecycleBar({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
             <div>
               <strong>Invoice {order.invoiceNumber ? `#${order.invoiceNumber}` : ''}</strong>
-              {order.invoiceDate && <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 2 }}>Invoiced {formatDate(order.invoiceDate)}</div>}
+              {order.invoiceDate && <div style={{ fontSize: '0.75rem', color: '#999', marginTop: 2 }}>Invoiced {formatDay(order.invoiceDate)}</div>}
             </div>
             <button onClick={doInvoicePdf} disabled={busy === 'invoice'} style={btn('#e65100')}>
               <Download size={14} /> {busy === 'invoice' ? 'Generating…' : 'View / Download Invoice'}

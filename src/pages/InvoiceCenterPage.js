@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getInvoiceQueue, getInvoiceHistory, getInvoiceSkipped, uploadInvoicePdf, clearInvoice, exportWorkOrderIIF, previewWorkOrderIIF, assignInvoiceNumber, exportBatchIIF, exportBatchWithReconciliation, generateInvoicePDF, getNextInvoiceNumber, getInvoiceHealth, skipInvoice, restoreInvoice, markInvoiceSent, markInvoicesEntered, unmarkInvoicesEntered } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { sendWithInvoiceGuards } from '../utils/invoiceGuards';
+import { shopToday, formatDay, dayValue } from '../utils/dates';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -114,7 +116,18 @@ const InvoiceCenterPage = ({ embedded = false }) => {
         const r = await assignInvoiceNumber(wo.id);
         wo.invoiceNumber = r.data.data.invoiceNumber;
       }
-      const response = await exportWorkOrderIIF(wo.id);
+      // The export marks the invoice as entered and locks its prices (R8). If it was exported before,
+      // the server refuses — download it again only if that first file was never imported.
+      let response;
+      try { response = await exportWorkOrderIIF(wo.id); }
+      catch (e) {
+        let body = e.response?.data;
+        try { if (typeof body === 'string') body = JSON.parse(body); } catch (_) { /* not JSON */ }
+        if (e.response?.status === 409 && body?.error?.code === 'ALREADY_EXPORTED') {
+          if (!window.confirm(body.error.message + '\n\nDownload the IIF again anyway?')) return;
+          response = await exportWorkOrderIIF(wo.id, true);
+        } else { if (body?.error) e.response.data = body; throw e; }
+      }
       const iifContent = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
       const blob = new Blob([iifContent], { type: 'text/plain' });
       const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url;
@@ -130,11 +143,17 @@ const InvoiceCenterPage = ({ embedded = false }) => {
     try {
       setSaving(true);
       // Use the record-invoice endpoint with just the number
-      const fd = new FormData();
-      fd.append('invoiceNumber', num);
-      fd.append('invoiceDate', new Date().toISOString().split('T')[0]);
       const { recordInvoice } = await import('../services/api');
-      await recordInvoice(manualModal.id, fd);
+      // U50: offer the jump (admin) and QuickBooks-reuse confirmations the server accepts
+      const r = await sendWithInvoiceGuards((flags) => {
+        const fd = new FormData();
+        fd.append('invoiceNumber', num);
+        fd.append('invoiceDate', shopToday());
+        if (flags.confirmJump) fd.append('confirmJump', 'true');
+        if (flags.confirmReuseExported) fd.append('confirmReuseExported', 'true');
+        return recordInvoice(manualModal.id, fd);
+      }, { isAdmin: !!(isAdmin && isAdmin()) });
+      if (!r) return;   // declined — leave the dialog open
       setSuccess(`Invoice #${num} assigned to ${manualModal.drNumber ? 'DR-' + manualModal.drNumber : manualModal.orderNumber}`);
       setManualModal(null); setManualInvNum(''); loadData();
     } catch (err) { setError(err.response?.data?.error?.message || 'Failed to assign'); }
@@ -145,7 +164,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
     const sel = filteredQueue.filter(wo => selected.has(wo.id));
     if (!sel.length) return;
     let num = nextInvNum;
-    setBatchPreview(sel.map(wo => ({ id: wo.id, drNumber: wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber, clientName: wo.clientName, total: getWOTotal(wo), invoiceNumber: wo.invoiceNumber || num++ })));
+    setBatchPreview(sel.map(wo => ({ id: wo.id, drNumber: wo.drNumber ? 'DR-' + wo.drNumber : wo.orderNumber, clientName: wo.clientName, total: getWOTotal(wo), invoiceNumber: wo.invoiceNumber || null })));   // new numbers are assigned by the server on export (shown afterwards)
     setBatchConfirmOpen(true);
   };
 
@@ -157,11 +176,16 @@ const InvoiceCenterPage = ({ embedded = false }) => {
       const iifContent = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
       const blob = new Blob([iifContent], { type: 'text/plain' });
       const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url;
-      a.download = `quickbooks-batch-${new Date().toISOString().split('T')[0]}.iif`;
+      a.download = `quickbooks-batch-${shopToday()}.iif`;
       document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove();
-      setSuccess(`Batch exported — ${batchPreview.length} invoices`);
+      const skipped = parseInt(response.headers?.['x-skipped-already-exported'] || '0', 10) || 0;
+      setSuccess(`Batch exported — ${batchPreview.length - skipped} invoices` + (skipped ? ` (${skipped} already in QuickBooks were left out)` : ''));
       setBatchConfirmOpen(false); setSelected(new Set()); loadData();
-    } catch (err) { setError(err.response?.data?.error?.message || 'Failed to export batch'); }
+    } catch (err) {
+      let body = err.response?.data;
+      try { if (typeof body === 'string') body = JSON.parse(body); } catch (_) { /* not JSON */ }
+      setError(body?.error?.message || 'Failed to export batch');
+    }
     finally { setSaving(false); }
   };
 
@@ -282,7 +306,10 @@ const InvoiceCenterPage = ({ embedded = false }) => {
   };
 
   const formatCurrency = (v) => '$' + (parseFloat(v) || 0).toFixed(2);
-  const getWOTotal = (wo) => (wo.parts || []).reduce((s, p) => s + (parseFloat(p.partTotal) || 0), 0) + (parseFloat(wo.truckingCost) || 0);
+  // The server's invoice amount (tax, minimums, discounts, charges — R13); the line sum only if missing
+  const getWOTotal = (wo) => (wo.invoiceAmount != null && !isNaN(parseFloat(wo.invoiceAmount)))
+    ? parseFloat(wo.invoiceAmount)
+    : (wo.parts || []).reduce((s, p) => s + (parseFloat(p.partTotal) || 0), 0) + (parseFloat(wo.truckingCost) || 0);
 
   const filteredQueue = search ? queue.filter(wo => (wo.clientName || '').toLowerCase().includes(search.toLowerCase()) || (wo.drNumber && String(wo.drNumber).includes(search))) : queue;
   const filteredHistory = search ? history.filter(wo => (wo.clientName || '').toLowerCase().includes(search.toLowerCase()) || (wo.drNumber && String(wo.drNumber).includes(search)) || (wo.invoiceNumber || '').includes(search)) : history;
@@ -292,10 +319,12 @@ const InvoiceCenterPage = ({ embedded = false }) => {
   const inQuickBooks = filteredHistory.filter(wo => wo.iifExportedAt);
 
   // Group a list of invoices by month/year (newest month first).
+  // An invoice's day on the shop calendar, as a local-noon Date (a legacy midnight-UTC date is that day — N8)
+  const invDay = (wo) => { const ymd = dayValue(wo.invoiceDate || wo.createdAt) || shopToday(); const [y, m, d] = ymd.split('-').map(Number); return new Date(y, m - 1, d, 12); };
   const groupByMonth = (list) => {
     const g = {};
     list.forEach(wo => {
-      const d = wo.invoiceDate ? new Date(wo.invoiceDate) : wo.createdAt ? new Date(wo.createdAt) : new Date();
+      const d = invDay(wo);
       const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
       const label = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
       if (!g[key]) g[key] = { key, label, items: [] };
@@ -311,7 +340,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
     setCollapsedMonths(prev => {
       // Initialize from the default (all-but-current collapsed) on first interaction.
       const base = prev === null
-        ? new Set([...new Set([...needsExport, ...inQuickBooks].map(wo => { const d = wo.invoiceDate ? new Date(wo.invoiceDate) : wo.createdAt ? new Date(wo.createdAt) : new Date(); return `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`; }))].filter(k => k !== currentMonthKey))
+        ? new Set([...new Set([...needsExport, ...inQuickBooks].map(wo => { const d = invDay(wo); return `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`; }))].filter(k => k !== currentMonthKey))
         : new Set(prev);
       base.has(key) ? base.delete(key) : base.add(key);
       return base;
@@ -344,12 +373,12 @@ const InvoiceCenterPage = ({ embedded = false }) => {
               <td style={{ fontWeight: 600 }}>{formatCurrency(getWOTotal(wo))}</td>
               <td style={{ fontSize: '0.85rem' }}>
                 {wo.invoiceDate ? (
-                  <span style={{ color: '#2E7D32', fontWeight: 500, cursor: 'pointer' }} onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date(wo.invoiceDate).toISOString().split('T')[0]); }} title="Click to edit date">
-                    {new Date(wo.invoiceDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                  <span style={{ color: '#2E7D32', fontWeight: 500, cursor: 'pointer' }} onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(dayValue(wo.invoiceDate)); }} title="Click to edit date">
+                    {formatDay(wo.invoiceDate)}
                   </span>
                 ) : (
                   <button className="btn btn-sm" style={{ fontSize: '0.75rem', padding: '4px 10px', background: '#E65100', color: 'white', border: 'none', fontWeight: 600, borderRadius: 4 }}
-                    onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date().toISOString().split('T')[0]); }}>
+                    onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(shopToday()); }}>
                     Confirm Sent
                   </button>
                 )}
@@ -441,7 +470,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
                           <button className="btn btn-outline" style={{ padding: '8px 12px', fontSize: '0.85rem', borderColor: '#7B1FA2', color: '#7B1FA2' }} onClick={() => handleGenerateInvoicePDF(wo)} title="Generate Invoice PDF">📄 PDF</button>
                           <button className="btn" style={{ padding: '8px 14px', fontSize: '0.85rem', background: '#7B1FA2', color: 'white', border: 'none', fontWeight: 600 }} onClick={() => { setManualModal(wo); setManualInvNum(wo.invoiceNumber || ''); }}>Assign #</button>
                           {wo.invoiceNumber && !wo.invoiceDate && (
-                            <button className="btn" style={{ padding: '8px 14px', fontSize: '0.85rem', background: '#1565C0', color: 'white', border: 'none', fontWeight: 600 }} onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(new Date().toISOString().split('T')[0]); }}>Invoice Sent</button>
+                            <button className="btn" style={{ padding: '8px 14px', fontSize: '0.85rem', background: '#1565C0', color: 'white', border: 'none', fontWeight: 600 }} onClick={() => { setSentModal(wo); setSentFile(null); setSentDate(shopToday()); }}>Invoice Sent</button>
                           )}
                           <button className="btn btn-outline" style={{ padding: '8px 10px', fontSize: '0.8rem', color: '#888', borderColor: '#ccc' }} onClick={() => { setSkipModal(wo); setSkipReason(''); }}>Skip</button>
                         </div>
@@ -597,7 +626,7 @@ const InvoiceCenterPage = ({ embedded = false }) => {
                 <thead><tr style={{ background: '#f5f5f5', fontSize: '0.8rem', color: '#666' }}><th style={{ padding: '10px 16px', textAlign: 'left' }}>Invoice #</th><th style={{ padding: '10px 16px', textAlign: 'left' }}>Work Order</th><th style={{ padding: '10px 16px', textAlign: 'left' }}>Client</th><th style={{ padding: '10px 16px', textAlign: 'right' }}>Amount</th></tr></thead>
                 <tbody>{batchPreview.map(item => (
                   <tr key={item.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontWeight: 700, color: '#2E7D32' }}>#{item.invoiceNumber}</td>
+                    <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontWeight: 700, color: '#2E7D32' }}>{item.invoiceNumber ? `#${item.invoiceNumber}` : <span style={{ color: '#888', fontWeight: 400 }}>new number</span>}</td>
                     <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontWeight: 600, color: '#1565C0' }}>{item.drNumber}</td>
                     <td style={{ padding: '10px 16px' }}>{item.clientName}</td>
                     <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600 }}>{formatCurrency(item.total)}</td>

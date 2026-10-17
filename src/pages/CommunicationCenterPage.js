@@ -292,7 +292,7 @@ export default function CommunicationCenterPage() {
         setBillsPending(next.filter((b) => (b.billStatus || 'pending') === 'pending').length);
         return next;
       });
-    } catch {}
+    } catch (err) { setError(err?.response?.data?.error?.message || 'Could not change the bill.'); }
   };
 
   const handleOpenEmail = async (e, id, fallback) => {

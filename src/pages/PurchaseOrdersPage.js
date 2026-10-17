@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, Printer, Edit2, Eye, RefreshCw, Search, Plus, X, Save, Trash2, Archive, RotateCcw } from 'lucide-react';
 import { getPONumbers, getNextPONumber, assignPONumber, voidPONumber, deletePONumber, archivePONumber, unarchivePONumber } from '../services/api';
+// Text from POs, vendors and clients is escaped before it goes into the print window (round 12, N19)
+const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 function PurchaseOrdersPage() {
   const navigate = useNavigate();
@@ -23,7 +25,7 @@ function PurchaseOrdersPage() {
     description: '',
     items: [{ description: '', quantity: 1, unitPrice: 0 }],
     notes: '',
-    shippingAddress: 'Carolina Rolling\n2657 Regional Rd S\nGreensboro, NC 27409'
+    shippingAddress: 'Carolina Rolling Co. Inc.\n9152 Sonrisa St.\nBellflower, CA 90706'
   });
 
   // View/Print Modal
@@ -57,7 +59,7 @@ function PurchaseOrdersPage() {
         description: '',
         items: [{ description: '', quantity: 1, unitPrice: 0 }],
         notes: '',
-        shippingAddress: 'Carolina Rolling\n2657 Regional Rd S\nGreensboro, NC 27409'
+        shippingAddress: 'Carolina Rolling Co. Inc.\n9152 Sonrisa St.\nBellflower, CA 90706'
       });
       setEditingPO(null);
       setShowModal(true);
@@ -84,7 +86,7 @@ function PurchaseOrdersPage() {
       description: po.description || '',
       items: items.length > 0 ? items : [{ description: '', quantity: 1, unitPrice: 0 }],
       notes: po.notes || '',
-      shippingAddress: 'Carolina Rolling\n2657 Regional Rd S\nGreensboro, NC 27409'
+      shippingAddress: 'Carolina Rolling Co. Inc.\n9152 Sonrisa St.\nBellflower, CA 90706'
     });
     setEditingPO(po);
     setShowModal(true);
@@ -112,8 +114,9 @@ function PurchaseOrdersPage() {
         .join('\n');
 
       if (editingPO) {
-        // Update existing - for now we'll just show success since backend update isn't implemented
-        setSuccess('PO updated successfully');
+        // Editing a saved PO isn't supported on the server — never report a save that didn't happen
+        setError('Editing a saved PO isn\'t supported. Void it and issue a new one.');
+        return;
       } else {
         // Create new PO
         const created = await assignPONumber({
@@ -164,7 +167,7 @@ function PurchaseOrdersPage() {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Purchase Order - PO${po.poNumber}</title>
+        <title>Purchase Order - PO${escHtml(po.poNumber)}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { 
@@ -277,14 +280,14 @@ function PurchaseOrdersPage() {
           <div class="company-info">
             <h1>CAROLINA ROLLING</h1>
             <p>
-              2657 Regional Rd S<br>
-              Greensboro, NC 27409<br>
-              Phone: (336) 668-2710<br>
+              9152 Sonrisa St.<br>
+              Bellflower, CA 90706<br>
+              Phone: (562) 633-1044<br>
               Email: carolinarolling@gmail.com
             </p>
           </div>
           <div class="po-number">
-            <h2>PO${po.poNumber}</h2>
+            <h2>PO${escHtml(po.poNumber)}</h2>
             <p>Purchase Order</p>
             <p>Date: ${new Date(po.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</p>
           </div>
@@ -294,15 +297,15 @@ function PurchaseOrdersPage() {
           <div class="section">
             <div class="section-title">Vendor / Supplier</div>
             <div class="section-content">
-              <strong>${po.supplier || 'Not specified'}</strong>
+              <strong>${escHtml(po.supplier || 'Not specified')}</strong>
             </div>
           </div>
           <div class="section">
             <div class="section-title">Ship To</div>
             <div class="section-content">
               <strong>Carolina Rolling</strong><br>
-              2657 Regional Rd S<br>
-              Greensboro, NC 27409
+              9152 Sonrisa St.<br>
+              Bellflower, CA 90706
             </div>
           </div>
         </div>
@@ -311,7 +314,7 @@ function PurchaseOrdersPage() {
         <div class="section">
           <div class="section-title">For Customer</div>
           <div class="section-content">
-            <strong>${po.clientName}</strong>
+            <strong>${escHtml(po.clientName)}</strong>
           </div>
         </div>
         ` : ''}
@@ -329,7 +332,7 @@ function PurchaseOrdersPage() {
             <tbody>
               ${items.length > 0 ? items.map((item, i) => `
                 <tr>
-                  <td>${item}</td>
+                  <td>${escHtml(item)}</td>
                   <td>—</td>
                   <td>—</td>
                 </tr>
@@ -344,7 +347,7 @@ function PurchaseOrdersPage() {
 
         <div class="section notes">
           <div class="section-title">Special Instructions</div>
-          <p>Please reference PO${po.poNumber} on all correspondence, packing slips, and invoices.</p>
+          <p>Please reference PO${escHtml(po.poNumber)} on all correspondence, packing slips, and invoices.</p>
         </div>
 
         <div class="footer">
@@ -513,15 +516,8 @@ function PurchaseOrdersPage() {
                       >
                         <Printer size={14} />
                       </button>
-                      {po.status !== 'void' && (
-                        <button
-                          className="btn btn-sm btn-outline"
-                          onClick={() => openEditModal(po)}
-                          title="Edit"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                      )}
+                      {/* No Edit: saving an edited PO was never implemented on the server, and the button
+                          said "updated" while saving nothing (round 13, T50). Void and re-issue instead. */}
                       {po.status === 'active' && (
                         <button
                           className="btn btn-sm btn-outline"

@@ -1,10 +1,11 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { uploadBillFile, approveBill, rejectBill, payLiability, deleteLiability, getGeneralLedger } from '../services/api';
+import { uploadBillFile, approveBill, rejectBill, deleteLiability, getGeneralLedger } from '../services/api';
 import TakePaymentModal from '../components/TakePaymentModal';
 import CreditMemoModal from '../components/CreditMemoModal';
 import RefundModal from '../components/RefundModal';
+import { shopToday, formatDay } from '../utils/dates';
 
 const LB_CATS = [
   { key:'materials', icon:'🔩', label:'Materials', color:'#1565c0' },
@@ -24,7 +25,7 @@ export default function COATab({
   paymentModal, setPaymentModal, paymentForm, setPaymentForm, handleRecordPayment,
   liabs, liabSum, liabLoad, liabF, setLiabF, liabCat, setLiabCat, loadLiabs,
   showBill, setShowBill, editBill, setEditBill, bf, setBf, billFileRef,
-  handleSaveBill, daysUntil,
+  handleSaveBill, handlePayBill, payingBillId, daysUntil,
   showTakePayment, setShowTakePayment,
   showCreditMemo, setShowCreditMemo,
   showRefund, setShowRefund,
@@ -174,7 +175,7 @@ export default function COATab({
                         onClick={e => {
                           e.stopPropagation();
                           setPaymentModal(inv);
-                          setPaymentForm({ paymentType:balance>=grandTotal-0.01?'full':'partial', amount:balance.toFixed(2), paymentDate:new Date().toISOString().split('T')[0], paymentMethod:'check', paymentReference:'', notes:'', ccProcessingType:'in_person' });
+                          setPaymentForm({ paymentType:balance>=grandTotal-0.01?'full':'partial', amount:balance.toFixed(2), paymentDate:shopToday(), paymentMethod:'check', paymentReference:'', notes:'', ccProcessingType:'in_person' });
                         }}
                         style={{ padding:'8px 14px', background:'#2e7d32', color:'white', border:'none', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:'0.85rem', flexShrink:0 }}>
                         + Payment
@@ -187,7 +188,7 @@ export default function COATab({
                       {inv.payments.map(pmt => (
                         <React.Fragment key={pmt.id}>
                         <div style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 0', borderBottom: pmt.ccFeeAmount ? 'none' : '1px solid #f0f0f0' }}>
-                          <span style={{ fontSize:'0.8rem', color:'#666', minWidth:90 }}>{new Date(pmt.paymentDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>
+                          <span style={{ fontSize:'0.8rem', color:'#666', minWidth:90 }}>{formatDay(pmt.paymentDate)}</span>
                           <span style={{ fontSize:'0.85rem', color:'#333', flex:1 }}>
                             {pmt.paymentType==='downpayment'?'Down Payment':pmt.paymentType==='full'?'Paid in Full':'Partial Payment'}
                             {pmt.paymentMethod&&` — ${pmt.paymentMethod}`}
@@ -288,7 +289,7 @@ export default function COATab({
             <CreditMemoModal onClose={() => setShowCreditMemo(false)} onSaved={() => loadLedger()} />
           )}
           {showRefund && (
-            <RefundModal onClose={() => setShowRefund(false)} onSaved={() => loadLedger()} />
+            <RefundModal onClose={() => setShowRefund(false)} onSaved={() => { loadLedger(); getRefunds().then(r => setRefunds(r.data.data || [])).catch(() => {}); }} />
           )}
         </div>
       )}
@@ -380,7 +381,7 @@ export default function COATab({
                             {od?`${Math.abs(d)}d overdue`:d===0?'Due today':`${d}d left`}
                           </span>
                         )}
-                        {b.status==='paid' && b.paidAt && <span style={{ color:'#2e7d32' }}>Paid {new Date(b.paidAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span>}
+                        {b.status==='paid' && b.paidAt && <span style={{ color:'#2e7d32' }}>Paid {formatDay(b.paidAt)}</span>}
                         {b.invoiceFileUrl && <a href={b.invoiceFileUrl} target="_blank" rel="noopener noreferrer" style={{ color:'#1976d2', textDecoration:'none' }}>📄 PDF</a>}
                       </div>
                     </div>
@@ -399,9 +400,9 @@ export default function COATab({
                         </button>
                       )}
                       {b.status==='unpaid' && (
-                        <button onClick={async () => { if(!window.confirm(`Pay "${b.name}"?`))return; try { await payLiability(b.id); if(showMsg)showMsg('Paid'); await loadLiabs(); } catch {} }}
-                          style={{ background:'#2e7d32', color:'white', border:'none', borderRadius:6, padding:'6px 12px', cursor:'pointer', fontWeight:600, fontSize:'0.8rem' }}>
-                          ✓ Pay
+                        <button disabled={!!payingBillId} onClick={() => handlePayBill(b)}
+                          style={{ background:'#2e7d32', color:'white', border:'none', borderRadius:6, padding:'6px 12px', cursor:payingBillId?'wait':'pointer', opacity:payingBillId?0.6:1, fontWeight:600, fontSize:'0.8rem' }}>
+                          {payingBillId===b.id ? 'Paying…' : '✓ Pay'}
                         </button>
                       )}
                       <button onClick={() => { setEditBill(b); setBf({name:b.name,category:b.category,amount:b.amount,dueDate:b.dueDate||'',recurring:b.recurring,recurringInterval:b.recurringInterval||'monthly',vendor:b.vendor||'',notes:b.notes||'',referenceNumber:b.referenceNumber||'',vendorInvoiceNumber:b.vendorInvoiceNumber||'',poNumber:b.poNumber||''}); setShowBill(true); }}

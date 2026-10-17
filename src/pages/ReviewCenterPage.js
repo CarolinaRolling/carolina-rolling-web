@@ -87,7 +87,12 @@ export default function ReviewCenterPage() {
   // A bill leaves the queue once approved, rejected, or marked "not a bill".
   const actOnBill = async (id, apiCall) => {
     setBills(prev => prev.filter(b => b.id !== id));
-    try { await apiCall(); } catch { /* optimistic; next refresh reconciles */ }
+    try { await apiCall(); }
+    catch (err) {
+      // e.g. approving a bill is admin-only (round 12) — say so instead of silently putting it back later
+      const msg = err?.response?.data?.error?.message;
+      if (msg) window.alert(msg);
+    }
     window.dispatchEvent(new Event('reviewcount:refresh'));
   };
 

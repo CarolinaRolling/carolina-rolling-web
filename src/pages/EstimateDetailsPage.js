@@ -8,16 +8,17 @@ import {
   addEstimatePart, updateEstimatePart, deleteEstimatePart, reorderEstimateParts,
   uploadEstimateFiles, getEstimateFileSignedUrl, deleteEstimateFile,
   downloadEstimatePDF, convertEstimateToWorkOrder, duplicateEstimate,
-  uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile, toggleEstimateFilePortal,
-  searchClients, searchVendors, getSettings, resetEstimateConversion,
+  uploadEstimatePartFile, deleteEstimatePartFile, viewEstimatePartFile, toggleEstimateFilePortal, toggleEstimateLevelFilePortal,
+  searchClients, getClient, searchVendors, getSettings, resetEstimateConversion,
   getNextDRNumber, createTodo, approvePendingOrder, getPendingOrders, replyWithPdf,
   sendVendorRfq, getVendorContacts, getVendorById, getEmailAccounts, aiParseDocument, aiParseDocuments, aiParseEmail, attachAiPrint, getAiParseStatus,
   addEstimateShipmentCharge, updateEstimateShipmentCharge, deleteEstimateShipmentCharge, getEstimateShipmentCharges,
-  deleteEstimate
+  deleteEstimate, API_BASE_URL
 } from '../services/api';
 import ShipmentChargesSection from '../components/ShipmentChargesSection';
 import { computeDisplayNumbers } from '../utils/partNumbers';
 import { inch, dedupeInch } from '../utils/dimensions';
+import { EA_PRICED_TYPES, minimumInfo as sharedMinimumInfo, expediteLaborBase as sharedExpediteBase } from '../utils/laborMinimum';
 import PlateRollForm from '../components/PlateRollForm';
 import AngleRollForm from '../components/AngleRollForm';
 import FlatStockForm from '../components/FlatStockForm';
@@ -34,6 +35,12 @@ import TeeBarRollForm from '../components/TeeBarRollForm';
 import PressBrakeForm from '../components/PressBrakeForm';
 import RushServiceForm from '../components/RushServiceForm';
 import HeatNumberInput from '../components/HeatNumberInput';
+
+// Text written into print windows is escaped: those windows run as the app itself, and some
+// fields (client, PO, instructions) can come from scanned customer emails (audit R33)
+// U33: the form fields that change the estimate's totals — any unsaved change shows the preview instead of the stored totals
+const TOTALS_FIELDS = ['taxRate', 'taxExempt', 'truckingCost', 'discountPercent', 'discountAmount', 'minimumOverride', 'opTransports', 'clientName'];
+const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 // Spec label matching the other roll forms: ID/ISR, OD/OSR, CLD/CLR.
 function coneSpecLabel(measurePoint, measureType) {
@@ -330,8 +337,11 @@ function EstimateDetailsPage() {
     ];
     try {
       const resp = await getSettings('labor_minimums');
-      if (resp.data.data?.value && Array.isArray(resp.data.data.value) && resp.data.data.value.length > 0) {
-        setLaborMinimums(resp.data.data.value);
+      // the server also accepts the rules saved as JSON text — read them the same way (review of round 15)
+      let rules = resp.data.data?.value;
+      if (typeof rules === 'string') { try { rules = JSON.parse(rules); } catch { rules = null; } }
+      if (rules && Array.isArray(rules) && rules.length > 0) {
+        setLaborMinimums(rules);
       } else {
         setLaborMinimums(defaultMinimums);
       }
@@ -341,17 +351,65 @@ function EstimateDetailsPage() {
   };
 
   const initialLoadDone = useRef(false);
+  const baselineRef = useRef(null);
+  // U33: what the server's stored totals were computed from (the loaded parts + total-affecting fields)
+  const serverSnapRef = useRef(null);
 
   // THE single save path for the estimate form. Everything (autosave, manual Save, save-before-reload,
   // save-before-PDF) goes through this so there are no competing/racing saves. Sends the FULL current form.
-  const saveEstimate = async ({ silent = false } = {}) => {
+  // Sends only the fields changed since the estimate was loaded or last saved, and never its status
+  // (audit R32): it used to send the whole form plus the status as first loaded, so one person's
+  // autosave undid another's edits, an accept or a conversion, and a quick "Mark as Sent" right after
+  // typing was reverted by the pending autosave.
+  // W12: saves run one at a time (a later one waits for the earlier, then diffs against what it saved), and
+  // inFlightRef is set while an autosave is on the wire, so a leave-save queues behind it
+  const saveQueueRef = useRef(null);
+  const inFlightRef = useRef(null);
+  const saveEstimate = (opts) => {
+    const run = Promise.resolve(saveQueueRef.current).catch(() => {}).then(() => doSaveEstimate(opts));
+    saveQueueRef.current = run;
+    return run;
+  };
+  const diffFromBaseline = (data, base) => {
+    const changes = {};
+    for (const k of Object.keys(data || {})) {
+      if (k === 'status') continue;
+      if (JSON.stringify(data[k] ?? null) !== JSON.stringify(base[k] ?? null)) changes[k] = data[k];
+    }
+    return changes;
+  };
+  // V2: a cleared number box is sent as null (the server ignored ""), so a discount or trucking
+  // amount can be removed and a discount switched between % and $
+  const toEstimatePayload = (changes) => {
+    const payload = { ...changes };
+    for (const k of ['discountPercent', 'discountAmount', 'truckingCost']) {
+      if (k in payload && (payload[k] === '' || payload[k] === undefined)) payload[k] = null;
+    }
+    return payload;
+  };
+  const doSaveEstimate = async ({ silent = false } = {}) => {
     if (isNew || !id) return false;
     const data = formDataRef.current || formData;
+    const base = baselineRef.current || {};
+    const changes = diffFromBaseline(data, base);
     try {
+      if (!Object.keys(changes).length) { dirtyRef.current = false; return true; }
       if (!silent) setAutoSaveStatus('saving');
-      await updateEstimate(id, { ...data, status: estimate?.status || 'draft' });
-      dirtyRef.current = false;
+      inFlightRef.current = changes;
+      await updateEstimate(id, toEstimatePayload(changes));
+      // W12: keep any newer value a leave-flush recorded meanwhile
+      const cur = baselineRef.current || {};
+      const next = { ...cur };
+      for (const k of Object.keys(changes)) if (JSON.stringify(cur[k] ?? null) === JSON.stringify(base[k] ?? null)) next[k] = changes[k];
+      baselineRef.current = next;
+      dirtyRef.current = Object.keys(diffFromBaseline(formDataRef.current || data, next)).length > 0;
       setLastSavedAt(new Date());
+      // V2: a saved total-affecting field — show the totals the server stored, not the preview
+      if (TOTALS_FIELDS.some(k => k in changes)) {
+        const saved = await refreshStoredTotals();
+        const snap = serverSnapRef.current;
+        if (saved && snap) serverSnapRef.current = { parts: snap.parts, form: { ...snap.form, ...changes } };
+      }
       if (!silent) { setAutoSaveStatus('saved'); setTimeout(() => setAutoSaveStatus(null), 2000); }
       return true;
     } catch (err) {
@@ -360,14 +418,97 @@ function EstimateDetailsPage() {
         setError('Save failed: ' + (err.response?.data?.error?.message || err.message || 'unknown error'));
       }
       return false;
-    }
+    } finally { inFlightRef.current = null; }
   };
+
+  // W12: edits still inside the 2-second autosave window are saved when the page is left (route change /
+  // unmount, tab hidden, page closed). Uses fetch keepalive so the request survives the page closing.
+  // sendLeave(markFirst): sends what differs from the saved baseline. markFirst moves the baseline before
+  // sending (so the pending autosave timer finds nothing); it's only used when no other save is running.
+  const sendLeave = (estId, markFirst) => {
+    const base = baselineRef.current || {};
+    const changes = diffFromBaseline(formDataRef.current, base);
+    if (!Object.keys(changes).length) return Promise.resolve();
+    if (markFirst) { baselineRef.current = { ...base, ...changes }; dirtyRef.current = false; }
+    const undo = () => {   // failed: put back what the baseline held so a later save retries these fields
+      const cur = baselineRef.current || {};
+      const back = { ...cur };
+      for (const k of Object.keys(changes)) if (JSON.stringify(cur[k] ?? null) === JSON.stringify(changes[k] ?? null)) back[k] = base[k];
+      baselineRef.current = back;
+      dirtyRef.current = true;
+    };
+    const body = JSON.stringify(toEstimatePayload(changes));
+    leaveSendsRef.current += 1;
+    let token = null;
+    try { token = localStorage.getItem('token'); } catch { /* private mode */ }
+    const send = body.length < 60000 && typeof fetch === 'function'
+      ? fetch(`${API_BASE_URL}/estimates/${estId}`, { method: 'PUT', keepalive: true, body,
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); })
+      : updateEstimate(estId, JSON.parse(body));   // too big for keepalive (64KB cap): normal request
+    return send.then(async () => {
+      if (!markFirst) {   // mark saved only now that it has landed, keeping any newer value
+        const cur = baselineRef.current || {};
+        const next = { ...cur };
+        for (const k of Object.keys(changes)) if (JSON.stringify(cur[k] ?? null) === JSON.stringify(base[k] ?? null)) next[k] = changes[k];
+        baselineRef.current = next;
+        dirtyRef.current = Object.keys(diffFromBaseline(formDataRef.current, next)).length > 0;
+      }
+      if (activeIdRef.current === estId && TOTALS_FIELDS.some(k => k in changes)) {
+        const saved = await refreshStoredTotals();
+        const snap = serverSnapRef.current;
+        if (saved && snap) serverSnapRef.current = { parts: snap.parts, form: { ...snap.form, ...changes } };
+      }
+    }).catch(() => { if (markFirst && activeIdRef.current === estId) undo(); })   // still on this estimate
+      .finally(() => { leaveSendsRef.current -= 1; });
+  };
+  const leaveSendsRef = useRef(0);   // leave-saves still on the wire
+  // W12 (review): an autosave already running is waited for — the leave-save goes into the same queue, so
+  // the older value can never land after the newer one. If the page is closing (pagehide) it may die before
+  // the queue runs, so the newer values are also sent right away (not marked saved); the queued send then
+  // re-sends them after the running save, which fixes the order whenever the page lives that long.
+  const flushOnLeave = (estId, { pageClosing = false } = {}) => {
+    if (!estId || estId === 'new' || !dirtyRef.current) return;
+    if (inFlightRef.current || leaveSendsRef.current > 0) {
+      if (pageClosing) sendLeave(estId, false);
+      saveQueueRef.current = Promise.resolve(saveQueueRef.current).catch(() => {}).then(() => sendLeave(estId, false));
+      return;
+    }
+    saveQueueRef.current = sendLeave(estId, true);   // later saves wait for it
+  };
+  const activeIdRef = useRef(null);   // the estimate this page is showing (null once left)
+  useEffect(() => {
+    const estId = id;
+    activeIdRef.current = estId;
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flushOnLeave(estId); };
+    const onPageHide = () => flushOnLeave(estId, { pageClosing: true });
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+      activeIdRef.current = null;
+      flushOnLeave(estId);   // unmount or switching to another estimate (runs before the next load)
+    };
+  }, [id]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save any pending (unsaved) form edits before a reload, so loadEstimate can't overwrite the user's in-flight
   // changes (this is what made a deleted note "come back" and a tax edit revert).
   const flushPendingSave = async () => {
     if (isNew || !id || !dirtyRef.current) return;
     await saveEstimate({ silent: true });
+  };
+
+  // After a shipping charge changes, the server recomputes the stored total (it includes shipping, U11):
+  // take just the totals (and Option B) from it, without reloading the form
+  const refreshStoredTotals = async () => {
+    try {
+      const r = await getEstimateById(id);
+      const d = r.data.data || {};
+      setEstimate(prev => (prev ? { ...prev, partsSubtotal: d.partsSubtotal, taxAmount: d.taxAmount, grandTotal: d.grandTotal, shippingTotal: d.shippingTotal, optionB: d.optionB,
+        discountPercent: d.discountPercent, discountAmount: d.discountAmount, truckingCost: d.truckingCost, taxRate: d.taxRate } : prev));
+      return true;
+    } catch { return false; /* the next load picks it up */ }
   };
 
   const loadEstimate = async () => {
@@ -381,7 +522,7 @@ function EstimateDetailsPage() {
       const data = response.data.data;
       setEstimate(data);
       formLoadedRef.current = false; // suppress autosave during server load
-      setFormData({
+      const loadedForm = {
         estimateNumber: data.estimateNumber || '',
         clientName: data.clientName || '', contactName: data.contactName || '',
         contactEmail: data.contactEmail || '', contactPhone: data.contactPhone || '',
@@ -390,7 +531,7 @@ function EstimateDetailsPage() {
         internalNotes: data.internalNotes || '', validUntil: data.validUntil || '',
         taxRate: (data.taxRate !== undefined && data.taxRate !== null && data.taxRate !== '') ? parseFloat(data.taxRate) : (defaultSettings.defaultTaxRate != null ? defaultSettings.defaultTaxRate : ''), useCustomTax: data.useCustomTax || false,
         customTaxReason: data.customTaxReason || '',
-        taxExempt: data.taxExempt || false, 
+        taxExempt: data.taxExempt === true,   // T47: the stored flag only — client defaults are not written on open
         taxExemptReason: data.taxExemptReason || '',
         taxExemptCertNumber: data.taxExemptCertNumber || '',
         truckingDescription: data.truckingDescription || '',
@@ -402,19 +543,31 @@ function EstimateDetailsPage() {
         minimumOverrideReason: data.minimumOverrideReason || '',
         showDualPricing: data.showDualPricing || false,
         opTransports: data.opTransports || []
-      });
-      setParts((data.parts || []).sort((a, b) => a.partNumber - b.partNumber));
+      };
+      setFormData(loadedForm);
+      baselineRef.current = loadedForm;   // what the server has — autosave sends only what differs (R32)
+      const loadedParts = (data.parts || []).sort((a, b) => a.partNumber - b.partNumber);
+      setParts(loadedParts);
+      serverSnapRef.current = { parts: loadedParts, form: loadedForm };   // U33
       setFiles(data.files || []);
       // Load shipment charges separately (not included in main estimate GET)
       if (!isNew && data.id) {
         getEstimateShipmentCharges(data.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => setShipmentCharges([]));
       }
       // Load client payment terms and auto-detect tax exempt
-      if (data.clientName) {
+      if (data.clientName || data.clientId) {
         try {
-          const clientRes = await searchClients(data.clientName);
-          const clients = clientRes.data?.data || [];
-          const client = clients.find(c => c.name === data.clientName);
+          // U32: the same client the server uses — by clientId first, then by name ignoring case and spaces
+          let client = null;
+          if (data.clientId) {
+            try { client = (await getClient(data.clientId)).data?.data || null; } catch { client = null; }
+          }
+          if (!client && data.clientName) {
+            const key = String(data.clientName).trim().toLowerCase();
+            const clientRes = await searchClients(String(data.clientName).trim());
+            const clients = clientRes.data?.data || [];
+            client = clients.find(c => String(c.name || '').trim().toLowerCase() === key) || null;
+          }
           if (client) {
             setSelectedClient(client);
             // Build contacts list from array, fall back to legacy fields if array is empty
@@ -431,23 +584,8 @@ function EstimateDetailsPage() {
           // Collapse the client-info card by default when the estimate already has a client, to
           // free up screen space (it expands on click for editing).
           if (data.clientName) setClientInfoCollapsed(true);
-          // Auto tax exempt for verified resale clients (only if not already saved on estimate)
-          if (client && !data.taxExempt) {
-            const clientIsExempt = client.taxStatus === 'resale' || client.taxStatus === 'exempt' ||
-              (client.resaleCertificate && client.permitStatus === 'active');
-            if (clientIsExempt) {
-              const exemptData = {
-                taxExempt: true,
-                taxExemptReason: (client.taxStatus === 'exempt') ? 'Tax Exempt' : 'Resale',
-                taxExemptCertNumber: client.resaleCertificate || ''
-              };
-              setFormData(prev => ({ ...prev, ...exemptData }));
-              // Persist to DB immediately so totals are recalculated without tax
-              if (!isNew) {
-                try { await updateEstimate(id, exemptData); } catch (e) { /* ignore */ }
-              }
-            }
-          }
+          // T47: nothing is written on open. A client whose taxStatus is resale/exempt is exempt on the
+          // server regardless of the estimate's own flag — that shows through clientTaxExempt below.
         } catch (e) { /* ignore */ }
       }
     } catch (err) {
@@ -536,205 +674,65 @@ function EstimateDetailsPage() {
     };
   };
 
-  // Parse dimension string: "3/8"" → 0.375, "1-1/2"" → 1.5, "2.5" → 2.5, "24 ga" → 0.025, "2x2" → 2
-  const parseDimension = (val) => {
-    if (!val) return 0;
-    const s = String(val).trim().replace(/["\u2033]/g, '');
-    if (!isNaN(s) && s !== '') return parseFloat(s);
-    const gaugeMatch = s.match(/^(\d+)\s*ga/i);
-    if (gaugeMatch) {
-      const gaugeMap = { 24: 0.025, 22: 0.030, 20: 0.036, 18: 0.048, 16: 0.060, 14: 0.075, 12: 0.105, 11: 0.120, 10: 0.135 };
-      return gaugeMap[parseInt(gaugeMatch[1])] || 0;
-    }
-    const mixedMatch = s.match(/^(\d+)\s*[-\u2013]\s*(\d+)\s*\/\s*(\d+)/);
-    if (mixedMatch) return parseInt(mixedMatch[1]) + parseInt(mixedMatch[2]) / parseInt(mixedMatch[3]);
-    const fracMatch = s.match(/^(\d+)\s*\/\s*(\d+)/);
-    if (fracMatch) return parseInt(fracMatch[1]) / parseInt(fracMatch[2]);
-    const leadMatch = s.match(/^([\d.]+)/);
-    if (leadMatch) return parseFloat(leadMatch[1]);
-    return 0;
-  };
-
-  // Get primary size for a part based on its type
-  const getPartSize = (part) => {
-    if (part.partType === 'plate_roll' || part.partType === 'flat_stock') {
-      return parseDimension(part.thickness);
-    }
-    if (part.partType === 'angle_roll') {
-      return parseDimension(part._angleSize || part.sectionSize || '');
-    }
-    if (part.partType === 'pipe_roll') {
-      return parseDimension(part.outerDiameter);
-    }
-    if (part.partType === 'tube_roll') {
-      return parseDimension(part._tubeSize || part.sectionSize || '');
-    }
-    if (part.partType === 'flat_bar') {
-      return parseDimension(part._barSize || part.sectionSize || '');
-    }
-    if (part.partType === 'channel_roll') {
-      return parseDimension(part._channelSize || part.sectionSize || '');
-    }
-    if (part.partType === 'beam_roll') {
-      return parseDimension(part._beamSize || part.sectionSize || '');
-    }
-    if (part.partType === 'tee_bar') {
-      return parseDimension(part._teeSize || part.sectionSize || '');
-    }
-    if (part.partType === 'cone_roll') {
-      return (parseFloat(part._coneLargeDia) * (part._coneLargeDiaMeasure === 'radius' ? 2 : 1)) || parseDimension(part.sectionSize || '');
-    }
-    return parseDimension(part.sectionSize || part.thickness || '');
-  };
-
-  const getPartWidth = (part) => {
-    return parseDimension(part.width);
-  };
-
-  // Check labor minimum for a part - returns the best matching rule
-  // Finds ALL rules matching this part type, filters by size/width, picks highest minimum
-  const getLaborMinimum = (part) => {
-    if (!laborMinimums.length) return null;
-
-    const partSize = getPartSize(part);
-    const partWidth = getPartWidth(part);
-
-    let bestSpecificRule = null;
-    let bestGeneralRule = null;
-
-    for (const rule of laborMinimums) {
-      if (rule.partType !== part.partType) continue;
-
-      const hasMinSize = rule.minSize !== undefined && rule.minSize !== null && rule.minSize !== '' && parseFloat(rule.minSize) > 0;
-      const hasMaxSize = rule.maxSize !== undefined && rule.maxSize !== null && rule.maxSize !== '' && parseFloat(rule.maxSize) > 0;
-      const hasMinWidth = rule.minWidth !== undefined && rule.minWidth !== null && rule.minWidth !== '' && parseFloat(rule.minWidth) > 0;
-      const hasMaxWidth = rule.maxWidth !== undefined && rule.maxWidth !== null && rule.maxWidth !== '' && parseFloat(rule.maxWidth) > 0;
-      const hasSizeConstraints = hasMinSize || hasMaxSize;
-      const hasWidthConstraints = hasMinWidth || hasMaxWidth;
-
-      // No constraints = general catch-all for this part type
-      if (!hasSizeConstraints && !hasWidthConstraints) {
-        if (!bestGeneralRule || parseFloat(rule.minimum) > parseFloat(bestGeneralRule.minimum)) {
-          bestGeneralRule = rule;
-        }
-        continue;
-      }
-
-      // Check size constraints
-      let sizeOk = true;
-      if (hasSizeConstraints) {
-        if (partSize <= 0) { sizeOk = false; }
-        else {
-          if (hasMinSize && partSize < parseFloat(rule.minSize)) sizeOk = false;
-          if (hasMaxSize && partSize > parseFloat(rule.maxSize)) sizeOk = false;
-        }
-      }
-
-      // Check width constraints
-      let widthOk = true;
-      if (hasWidthConstraints) {
-        if (partWidth <= 0) { widthOk = false; }
-        else {
-          if (hasMinWidth && partWidth < parseFloat(rule.minWidth)) widthOk = false;
-          if (hasMaxWidth && partWidth > parseFloat(rule.maxWidth)) widthOk = false;
-        }
-      }
-
-      if (sizeOk && widthOk) {
-        if (!bestSpecificRule || parseFloat(rule.minimum) > parseFloat(bestSpecificRule.minimum)) {
-          bestSpecificRule = rule;
-        }
-      }
-    }
-
-    // Only return a specific match or a general (no-constraints) match
-    // Never fall back to a constrained rule that didn't match
-    return bestSpecificRule || bestGeneralRule || null;
-  };
-
-  // Estimate-level minimum check:
-  // 1. Sum total labor across ALL ea-priced parts
-  // 2. Find the highest applicable minimum from any part's matching rule
-  // 3. If total labor < highest minimum, replace labor with minimum
-  // Material is never affected
+  // Estimate-level labor minimum — the server's shared engine (utils/laborMinimum = backend
+  // services/laborMinimum), so the page, the stored total and the invoice agree (U33). The page's
+  // own copy of the rules was removed.
   const getMinimumInfo = () => {
-    let totalLabor = 0;
+    const info = sharedMinimumInfo(parts, formData.minimumOverride, laborMinimums);
+    // material total (shown with the minimum note)
     let totalMaterial = 0;
-    let highestMinimum = 0;
-    let highestMinRule = null;
-
-    const EA_PRICED = ['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'];
-
     parts.forEach(part => {
-      if (!EA_PRICED.includes(part.partType)) return;
-      const laborEach = parseFloat(part.laborTotal) || 0;
+      if (!EA_PRICED_TYPES.includes(part.partType)) return;
       const materialCost = parseFloat(part.materialTotal) || 0;
       const materialMarkup = parseFloat(part.materialMarkupPercent) || 0;
-      const materialEachRaw = materialCost * (1 + materialMarkup / 100);
-      const materialEach = roundUpMaterial(materialEachRaw, part._materialRounding);
-      const qty = parseInt(part.quantity) || 1;
-      totalLabor += laborEach * qty;
-      totalMaterial += materialEach * qty;
-
-      const rule = getLaborMinimum(part);
-      if (rule && parseFloat(rule.minimum) > highestMinimum) {
-        highestMinimum = parseFloat(rule.minimum);
-        highestMinRule = rule;
-      }
+      totalMaterial += roundUpMaterial(materialCost * (1 + materialMarkup / 100), part._materialRounding) * (parseInt(part.quantity) || 1);
     });
-
-    const minimumApplies = !formData.minimumOverride && highestMinimum > 0 && totalLabor > 0 && totalLabor < highestMinimum;
-    const adjustedLabor = minimumApplies ? highestMinimum : totalLabor;
-    const laborDifference = minimumApplies ? (highestMinimum - totalLabor) : 0;
-
-    return { totalLabor, totalMaterial, highestMinimum, highestMinRule, minimumApplies, adjustedLabor, laborDifference };
+    return { ...info, totalMaterial };
   };
+
+  // T47 — same rule as the server: exempt when the client's taxStatus is resale/exempt, or the
+  // estimate's own taxExempt flag is set. (A resale certificate + active permit is shown as info only.)
+  const clientTaxExempt = !!selectedClient && (String(selectedClient.taxStatus || '').toLowerCase() === 'resale' || String(selectedClient.taxStatus || '').toLowerCase() === 'exempt');
+  const effectiveTaxExempt = clientTaxExempt || !!formData.taxExempt;
+
+  // U33: the totals follow the server's calculateEstimateTotals (backend/src/routes/estimates.js) exactly —
+  // stored line prices, the labor minimum as its own amount, outside-processing trips, expedite on billed
+  // labor, the discount rounded and capped at what it applies to, tax rounded. When the estimate has no
+  // unsaved edits, the server's stored totals are shown as they are.
+  const totalsDirty = (() => {
+    const snap = serverSnapRef.current;
+    if (!snap || !estimate) return true;
+    if (parts !== snap.parts) return true;
+    return TOTALS_FIELDS.some(k => JSON.stringify(formData[k] ?? null) !== JSON.stringify(snap.form[k] ?? null));
+  })();
 
   const calculateTotals = () => {
     const minInfo = getMinimumInfo();
-    
-    // For ea-priced parts, recalculate with minimum applied
+    const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+    // the line price the server bills: the stored partTotal
+    const linePrice = (part) => (part.partTotal !== undefined && part.partTotal !== null && part.partTotal !== '')
+      ? (parseFloat(part.partTotal) || 0) : (calculatePartTotal(part).partTotal || 0);
+    // a rush line with its own price is billed like any line; the fee is computed only for one without
+    const isRushFeeLine = (p) => p.partType === 'rush_service' && !(parseFloat(p.partTotal) > 0);
+
     let partsSubtotal = 0;
-    let eaPricedTotal = 0;
-    
-    parts.forEach(part => {
-      if (part.partType === 'rush_service') return; // handle separately
-      const calc = calculatePartTotal(part);
-      if (['plate_roll', 'shaped_plate', 'angle_roll', 'flat_stock', 'pipe_roll', 'tube_roll', 'flat_bar', 'channel_roll', 'beam_roll', 'tee_bar', 'press_brake', 'cone_roll', 'fab_service', 'shop_rate'].includes(part.partType)) {
-        eaPricedTotal += calc.partTotal;
-      } else {
-        partsSubtotal += calc.partTotal;
-      }
+    parts.forEach(part => { if (!isRushFeeLine(part)) partsSubtotal += linePrice(part); });
+    if (minInfo.minimumApplies) partsSubtotal += parseFloat(minInfo.laborDifference) || 0;
+
+    // Order-level outside-processing trips (billed per trip, like the invoice)
+    let tripsTotal = 0;
+    (formData.opTransports || []).forEach(trip => {
+      tripsTotal += r2((parseFloat(trip.cost) || 0) * (1 + (parseFloat(trip.markup) || 0) / 100));
     });
+    partsSubtotal += tripsTotal;
 
-    // If minimum applies: replace ea-priced total with (total material + adjusted labor)
-    if (minInfo.minimumApplies) {
-      partsSubtotal += minInfo.totalMaterial + minInfo.adjustedLabor;
-    } else {
-      partsSubtotal += eaPricedTotal;
-    }
+    // Expedite applies to the labor actually billed (plus the minimum) — the shared engine
+    const expediteLaborBase = sharedExpediteBase(parts, minInfo.minimumApplies ? { applies: true, adjustment: parseFloat(minInfo.laborDifference) || 0 } : null, linePrice);
 
-    // Expedite applies to LABOR ONLY (not material). Sum the labor charged across non-rush parts
-    // (mirrors the labor-only subtotal used for dual pricing), honoring the minimum-labor bump.
-    let expediteLaborBase = 0;
-    parts.forEach(part => {
-      if (part.partType === 'rush_service') return;
-      if (['fab_service', 'shop_rate'].includes(part.partType)) {
-        expediteLaborBase += parseFloat(part.partTotal) || 0;
-      } else {
-        const q = parseInt(part.quantity) || 1;
-        expediteLaborBase += (parseFloat(part.laborTotal) || 0) * q;
-      }
-    });
-    if (minInfo.minimumApplies) {
-      expediteLaborBase += (parseFloat(minInfo.adjustedLabor) || 0) - (parseFloat(minInfo.totalLabor) || 0);
-    }
-
-    // Rush service: calculate expedite and emergency
     let expediteAmount = 0, emergencyAmount = 0, expediteLabel = '', emergencyLabel = '';
-    const rushPart = parts.find(p => p.partType === 'rush_service');
+    const rushPart = parts.find(isRushFeeLine);
     if (rushPart) {
-      const fd = rushPart.formData || rushPart;
+      const fd = (rushPart.formData && typeof rushPart.formData === 'object') ? rushPart.formData : rushPart;
       if (fd._expediteEnabled) {
         if (fd._expediteType === 'custom_amt') {
           expediteAmount = parseFloat(fd._expediteCustomAmt) || 0;
@@ -742,7 +740,7 @@ function EstimateDetailsPage() {
         } else {
           let pct = parseFloat(fd._expediteType) || 0;
           if (fd._expediteType === 'custom_pct') pct = parseFloat(fd._expediteCustomPct) || 0;
-          expediteAmount = expediteLaborBase * (pct / 100);
+          expediteAmount = Math.round(expediteLaborBase * (pct / 100) * 100) / 100;
           expediteLabel = `Expedite (${pct}% of labor)`;
         }
       }
@@ -753,42 +751,43 @@ function EstimateDetailsPage() {
       }
     }
     partsSubtotal += expediteAmount + emergencyAmount;
-    
-    // Discount
+
+    // Discount: rounded, percent at most 100, never more than the subtotal it applies to (T7)
     let discountAmt = 0;
     if (parseFloat(formData.discountPercent) > 0) {
-      discountAmt = partsSubtotal * (parseFloat(formData.discountPercent) / 100);
+      discountAmt = r2(partsSubtotal * (Math.min(100, parseFloat(formData.discountPercent)) / 100));
     } else if (parseFloat(formData.discountAmount) > 0) {
       discountAmt = parseFloat(formData.discountAmount);
     }
-    const afterDiscount = partsSubtotal - discountAmt;
-    
-    const trucking = parseFloat(formData.truckingCost) || 0;
-    const taxAmount = formData.taxExempt ? 0 : afterDiscount * (parseFloat(formData.taxRate) / 100);
-    const grandTotal = afterDiscount + taxAmount + trucking;
-    
-    // Dual pricing: calculate labor-only total (customer supplies all material)
-    let laborOnlySubtotal = 0;
-    for (const part of parts) {
-      if (['fab_service', 'shop_rate', 'rush_service'].includes(part.partType)) {
-        laborOnlySubtotal += parseFloat(part.partTotal) || 0;
-      } else {
-        const qty = parseInt(part.quantity) || 1;
-        const labEach = parseFloat(part.laborTotal) || 0;
-        laborOnlySubtotal += labEach * qty;
-      }
+    discountAmt = Math.min(discountAmt, Math.max(0, r2(partsSubtotal)));
+    let afterDiscount = r2(partsSubtotal - discountAmt);
+
+    // Shipping & handling as the server bills it: the shipping charges (each rounded) when there are any,
+    // otherwise the old trucking amount — and it is part of the stored total (round 15, U11)
+    const chargesTotal = (shipmentCharges || []).reduce((sum, c) => {
+      const billed = (parseFloat(c.shippingCost) || 0) * (1 + (parseFloat(c.shippingMarkup) || 0) / 100) + (parseFloat(c.materialsCost) || 0) * (1 + (parseFloat(c.materialsMarkup) || 0) / 100);
+      return billed > 0 ? sum + r2(billed) : sum;
+    }, 0);
+    const trucking = chargesTotal > 0 ? r2(chargesTotal) : (parseFloat(formData.truckingCost) || 0);
+    let taxAmount = effectiveTaxExempt ? 0 : r2(afterDiscount * ((parseFloat(formData.taxRate) || 0) / 100));
+    let grandTotal = r2(afterDiscount + taxAmount + trucking);
+
+    // No unsaved edits: the server's stored totals
+    const fromServer = !totalsDirty && estimate && estimate.grandTotal !== null && estimate.grandTotal !== undefined;
+    if (fromServer) {
+      partsSubtotal = parseFloat(estimate.partsSubtotal) || 0;
+      taxAmount = parseFloat(estimate.taxAmount) || 0;
+      grandTotal = parseFloat(estimate.grandTotal) || 0;
+      afterDiscount = r2(grandTotal - taxAmount - trucking);
+      discountAmt = Math.max(0, r2(partsSubtotal - afterDiscount));
     }
-    laborOnlySubtotal += expediteAmount + emergencyAmount;
-    let laborOnlyDiscount = 0;
-    if (parseFloat(formData.discountPercent) > 0) {
-      laborOnlyDiscount = laborOnlySubtotal * (parseFloat(formData.discountPercent) / 100);
-    } else if (parseFloat(formData.discountAmount) > 0) {
-      laborOnlyDiscount = parseFloat(formData.discountAmount);
-    }
-    const laborOnlyAfterDiscount = laborOnlySubtotal - laborOnlyDiscount;
-    const laborOnlyTax = formData.taxExempt ? 0 : laborOnlyAfterDiscount * (parseFloat(formData.taxRate) / 100);
-    const laborOnlyTotal = laborOnlyAfterDiscount + laborOnlyTax + trucking;
-    
+
+    // U4: dual pricing "Option B" (customer supplies material) comes from the server's shared engine
+    // (GET data.optionB); none when the server couldn't compute it
+    const optionB = estimate?.optionB || null;
+    const laborOnlyTotal = optionB && optionB.grandTotal !== null && optionB.grandTotal !== undefined ? (parseFloat(optionB.grandTotal) || 0) : null;
+    const laborOnlySubtotal = optionB ? (parseFloat(optionB.partsSubtotal) || 0) : null;
+
     // Calculate credit card totals (Square fees). Use the GROSS-UP formula so we actually NET the grandTotal
     // after Square takes its cut — simply adding the fee leaves us short, because Square charges its % on the
     // higher (fee-included) total. charge = (target + fixedFee) / (1 - percent).
@@ -799,7 +798,7 @@ function EstimateDetailsPage() {
     const ccManualTotal = (grandTotal + 0.15) / (1 - 0.035);
     const ccManualFee = ccManualTotal - grandTotal;
     
-    return { partsSubtotal, discountAmt, afterDiscount, trucking, taxAmount, grandTotal, laborOnlySubtotal, laborOnlyTotal, ccInPersonFee, ccInPersonTotal, ccManualFee, ccManualTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel };
+    return { partsSubtotal, discountAmt, afterDiscount, trucking, taxAmount, grandTotal, laborOnlySubtotal, laborOnlyTotal, optionB, ccInPersonFee, ccInPersonTotal, ccManualFee, ccManualTotal, minInfo, expediteAmount, expediteLabel, emergencyAmount, emergencyLabel, tripsTotal, fromServer };
   };
 
   const generatePdfPreview = async () => {
@@ -1908,7 +1907,7 @@ function EstimateDetailsPage() {
         <div class="pr-item${isLinkedService ? ' svc' : ''}">${isLinkedService ? (dispNum[part.id] || part.partNumber) : '#' + (dispNum[part.id] || part.partNumber)}</div>
         <div class="pr-desc">
           <div class="pr-type${isLinkedService ? ' svc' : ''}">${partTypeLabel}${isLinkedService && linkedParent ? ' <span style="font-weight:400;color:#999;">(for Part #' + (dispNum[linkedParent.id] || linkedParent.partNumber) + ')</span>' : ''}</div>
-          <div class="pr-detail">${descLines.join('<br/>')}</div>
+          <div class="pr-detail">${descLines.map(escHtml).join('<br/>')}</div>
           ${priceParts.length ? '<div class="pr-pricing">' + priceParts.join(' &nbsp;|&nbsp; ') + ' &nbsp;|&nbsp; <strong>Unit: ' + formatCurrency(adjUnitPrice) + '</strong></div>' : ''}
           ${part.partType === 'shop_rate' ? '<div class="shop-rate-warn">* Pricing based on estimated hours — actual cost may vary</div>' : ''}
         </div>
@@ -1918,18 +1917,18 @@ function EstimateDetailsPage() {
       </div>`;
     }).join('');
     
-    const taxLine = formData.taxExempt 
+    const taxLine = effectiveTaxExempt 
       ? `<div class="total-row"><span>Tax</span><span style="color:#c62828;font-weight:bold;">EXEMPT</span></div>`
       : `<div class="total-row"><span>Tax (${formData.taxRate}%)</span><span>${formatCurrency(totals.taxAmount)}</span></div>`;
     
     const discountLine = totals.discountAmt > 0
-      ? `<div class="total-row" style="color:#c62828;"><span>Discount${formData.discountReason ? ` (${formData.discountReason})` : ''}</span><span>-${formatCurrency(totals.discountAmt)}</span></div>` : '';
+      ? `<div class="total-row" style="color:#c62828;"><span>Discount${formData.discountReason ? ` (${escHtml(formData.discountReason)})` : ''}</span><span>-${formatCurrency(totals.discountAmt)}</span></div>` : '';
 
     const minimumLine = totals.minInfo.minimumApplies
       ? `<div class="total-row" style="font-size:11px;color:#e65100;"><span>Minimum Labor Charge (${totals.minInfo.highestMinRule?.label || ''})</span><span>${formatCurrency(totals.minInfo.adjustedLabor)}</span></div>` : '';
 
     const w = window.open('', '_blank');
-    w.document.write(`<!DOCTYPE html><html><head><title>Estimate ${estimate?.estimateNumber}</title>
+    w.document.write(`<!DOCTYPE html><html><head><title>Estimate ${escHtml(estimate?.estimateNumber)}</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, Helvetica, sans-serif; padding: 32px 40px; max-width: 850px; margin: 0 auto; font-size: 13px; color: #333; }
@@ -1975,20 +1974,20 @@ function EstimateDetailsPage() {
       <div class="doc-header">
         <span class="doc-title">ESTIMATE</span>
         <div class="doc-right">
-          <div class="doc-num">${estimate?.estimateNumber}</div>
+          <div class="doc-num">${escHtml(estimate?.estimateNumber)}</div>
           <div class="doc-date">Date: ${new Date(estimate?.createdAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</div>
         </div>
       </div>
-      ${formData.taxExempt ? '<div style="color:#c62828;font-weight:700;font-size:11px;text-align:right;margin-top:-4px;">TAX EXEMPT</div>' : ''}
+      ${effectiveTaxExempt ? '<div style="color:#c62828;font-weight:700;font-size:11px;text-align:right;margin-top:-4px;">TAX EXEMPT</div>' : ''}
       <hr class="divider" />
 
       <div class="info-grid">
-        <div class="info-item"><label>Client</label><span>${formData.clientName}</span></div>
-        ${formData.contactName ? `<div class="info-item"><label>Contact</label><span>${formData.contactName}</span></div>` : ''}
-        ${formData.contactEmail ? `<div class="info-item"><label>Email</label><span>${formData.contactEmail}</span></div>` : ''}
-        ${formData.contactPhone ? `<div class="info-item"><label>Phone</label><span>${formData.contactPhone}</span></div>` : ''}
+        <div class="info-item"><label>Client</label><span>${escHtml(formData.clientName)}</span></div>
+        ${formData.contactName ? `<div class="info-item"><label>Contact</label><span>${escHtml(formData.contactName)}</span></div>` : ''}
+        ${formData.contactEmail ? `<div class="info-item"><label>Email</label><span>${escHtml(formData.contactEmail)}</span></div>` : ''}
+        ${formData.contactPhone ? `<div class="info-item"><label>Phone</label><span>${escHtml(formData.contactPhone)}</span></div>` : ''}
       </div>
-      ${formData.projectDescription ? `<div style="font-size:11px;color:#666;margin-bottom:8px;"><strong>Project:</strong> ${formData.projectDescription}</div>` : ''}
+      ${formData.projectDescription ? `<div style="font-size:11px;color:#666;margin-bottom:8px;"><strong>Project:</strong> ${escHtml(formData.projectDescription)}</div>` : ''}
 
       <div class="section-title">SERVICES & MATERIALS</div>
       <div class="parts-header">
@@ -2001,10 +2000,11 @@ function EstimateDetailsPage() {
 
       ${partsHtml}
 
-      ${formData.truckingCost > 0 ? `
+      ${/* V37: with shipping charges the totals print Shipping & Handling (the charges) — no separate trucking line */ ''}
+      ${!shipmentCharges.length && parseFloat(formData.truckingCost) > 0 ? `
         <div class="part-row">
           <div class="pr-item"></div>
-          <div class="pr-desc"><span class="pr-type">Trucking / Delivery</span>${formData.truckingDescription ? `<div class="pr-detail">${formData.truckingDescription}</div>` : ''}<div class="pr-detail" style="color:#e65100;">Not Taxed</div></div>
+          <div class="pr-desc"><span class="pr-type">Trucking / Delivery</span>${formData.truckingDescription ? `<div class="pr-detail">${escHtml(formData.truckingDescription)}</div>` : ''}<div class="pr-detail" style="color:#e65100;">Not Taxed</div></div>
           <div class="pr-qty"></div>
           <div class="pr-unit"></div>
           <div class="pr-amt">${formatCurrency(formData.truckingCost)}</div>
@@ -2013,14 +2013,14 @@ function EstimateDetailsPage() {
 
       <div class="totals-box">
         ${minimumLine}
-        ${totals.expediteAmount > 0 ? `<div class="total-row" style="color:#e65100;"><span>🚨 ${totals.expediteLabel}</span><strong>${formatCurrency(totals.expediteAmount)}</strong></div>` : ''}
-        ${totals.emergencyAmount > 0 ? `<div class="total-row" style="color:#c62828;"><span>🚨 ${totals.emergencyLabel}</span><strong>${formatCurrency(totals.emergencyAmount)}</strong></div>` : ''}
+        ${totals.expediteAmount > 0 ? `<div class="total-row" style="color:#e65100;"><span>🚨 ${escHtml(totals.expediteLabel)}</span><strong>${formatCurrency(totals.expediteAmount)}</strong></div>` : ''}
+        ${totals.emergencyAmount > 0 ? `<div class="total-row" style="color:#c62828;"><span>🚨 ${escHtml(totals.emergencyLabel)}</span><strong>${formatCurrency(totals.emergencyAmount)}</strong></div>` : ''}
         <div class="total-row"><span>Parts Subtotal</span><span>${formatCurrency(totals.partsSubtotal)}</span></div>
-        ${totals.trucking > 0 ? `<div class="total-row"><span>Trucking</span><span>${formatCurrency(totals.trucking)}</span></div>` : ''}
+        ${totals.trucking > 0 ? `<div class="total-row"><span>${shipmentCharges.length ? 'Shipping &amp; Handling' : 'Trucking'}</span><span>${formatCurrency(totals.trucking)}</span></div>` : ''}
         ${discountLine}
         ${taxLine}
         <div class="total-row grand"><span>Grand Total</span><span>${formatCurrency(totals.grandTotal)}</span></div>
-        ${formData.showDualPricing ? `
+        ${formData.showDualPricing && totals.laborOnlyTotal !== null ? `
         <div style="margin-top:12px;border:2px solid #1565c0;border-radius:8px;overflow:hidden">
           <div style="display:grid;grid-template-columns:1fr 1fr">
             <div style="padding:10px 14px;background:#e3f2fd;border-right:1px solid #90caf9">
@@ -2030,7 +2030,7 @@ function EstimateDetailsPage() {
             </div>
             <div style="padding:10px 14px;background:#fff8e1">
               <div style="font-weight:700;color:#e65100;margin-bottom:4px;font-size:0.85rem">Option B — Labor Only</div>
-              <div style="font-size:0.75rem;color:#555">Customer supplies material</div>
+              <div style="font-size:0.75rem;color:#555">Customer supplies material${totalsDirty ? ' <em>(as last saved — save for current figures)</em>' : ''}</div>
               <div style="font-size:1.2rem;font-weight:800;color:#e65100">${formatCurrency(totals.laborOnlyTotal)}</div>
             </div>
           </div>
@@ -2043,7 +2043,7 @@ function EstimateDetailsPage() {
         Manual (3.5% + $0.15): <strong>${formatCurrency(totals.ccManualTotal)}</strong>
       </div>
 
-      ${formData.notes ? `<div class="notes-box"><strong>Terms:</strong> ${formData.notes}</div>` : ''}
+      ${formData.notes ? `<div class="notes-box"><strong>Terms:</strong> ${escHtml(formData.notes)}</div>` : ''}
       </body></html>`);
     w.document.close();
     w.print();
@@ -2478,10 +2478,11 @@ function EstimateDetailsPage() {
                                 contactName: primary.name || formData.contactName,
                                 contactEmail: primary.email || formData.contactEmail,
                                 contactPhone: primary.phone || formData.contactPhone,
-                                taxExempt: client.taxStatus === 'resale' || client.taxStatus === 'exempt' || 
-                                  (!!client.resaleCertificate && client.permitStatus === 'active'),
-                                taxExemptReason: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? 'Resale' : (client.taxStatus === 'exempt' ? 'Tax Exempt' : ''),
-                                taxExemptCertNumber: client.resaleCertificate || '',
+                                // T47: picking a client is deliberate, so the estimate's own flag follows the NEW client
+                                // (a taxable client clears an exemption left from the previous one). Opening never changes it.
+                                taxExempt: String(client.taxStatus || '').toLowerCase() === 'resale' || String(client.taxStatus || '').toLowerCase() === 'exempt',
+                                taxExemptReason: (String(client.taxStatus || '').toLowerCase() === 'resale' || String(client.taxStatus || '').toLowerCase() === 'exempt') ? (String(client.taxStatus || '').toLowerCase() === 'exempt' ? 'Tax Exempt' : 'Resale') : '',
+                                taxExemptCertNumber: (String(client.taxStatus || '').toLowerCase() === 'resale' || String(client.taxStatus || '').toLowerCase() === 'exempt') ? (client.resaleCertificate || formData.taxExemptCertNumber || '') : '',
                                 useCustomTax: !!client.customTaxRate,
                                 taxRate: client.customTaxRate ? parseFloat(client.customTaxRate) * 100 : formData.taxRate
                               });
@@ -2515,10 +2516,10 @@ function EstimateDetailsPage() {
                             </div>
                             <span style={{ 
                               fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4,
-                              background: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '#fff3e0' : client.taxStatus === 'exempt' ? '#e8f5e9' : '#e3f2fd',
-                              color: (client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '#e65100' : client.taxStatus === 'exempt' ? '#2e7d32' : '#1565c0'
-                            }}>
-                              {(client.taxStatus === 'resale' || (client.resaleCertificate && client.permitStatus === 'active')) ? '✅ Resale' : client.taxStatus === 'exempt' ? 'Exempt' : 'Taxable'}
+                              background: String(client.taxStatus || '').toLowerCase() === 'resale' ? '#fff3e0' : String(client.taxStatus || '').toLowerCase() === 'exempt' ? '#e8f5e9' : '#e3f2fd',
+                              color: String(client.taxStatus || '').toLowerCase() === 'resale' ? '#e65100' : String(client.taxStatus || '').toLowerCase() === 'exempt' ? '#2e7d32' : '#1565c0'
+                            }} title={(String(client.taxStatus || '').toLowerCase() !== 'resale' && String(client.taxStatus || '').toLowerCase() !== 'exempt' && client.resaleCertificate && client.permitStatus === 'active') ? 'Resale certificate on file (permit active) — client tax status is still Taxable' : undefined}>
+                              {String(client.taxStatus || '').toLowerCase() === 'resale' ? '✅ Resale' : String(client.taxStatus || '').toLowerCase() === 'exempt' ? 'Exempt' : (client.resaleCertificate && client.permitStatus === 'active') ? 'Taxable · cert on file' : 'Taxable'}
                             </span>
                           </div>
                         ))}
@@ -3273,6 +3274,11 @@ function EstimateDetailsPage() {
                     <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#e3f2fd', borderRadius: 4, fontSize: '0.85rem' }}>
                       <span>{file.originalName || file.filename}</span>
                       <button onClick={() => handleViewFile(file)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><Eye size={14} /></button>
+                      <button onClick={async () => { try { await toggleEstimateLevelFilePortal(id, file.id, !file.portalVisible); await loadEstimate(); } catch { setError('Could not change portal visibility'); } }}
+                        title={file.portalVisible ? 'Visible on client portal — click to hide' : 'Hidden from client portal — click to show'}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: file.portalVisible ? '#2e7d32' : '#bbb' }}>
+                        {file.portalVisible ? '🌐' : '🔒'}
+                      </button>
                       <button onClick={() => handleDeleteFile(file)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d32f2f' }}><X size={14} /></button>
                     </div>
                   ))}
@@ -3506,10 +3512,11 @@ function EstimateDetailsPage() {
                     }
                   });
 
-                  const trucking = parseFloat(formData.truckingCost) || 0;
+                  // the old trucking amount is only billed when there are no shipping charges (U11)
+                  const trucking = shipmentCharges.length ? 0 : (parseFloat(formData.truckingCost) || 0);
                   const totalOurCost = totalMaterialCost + totalOutsideCost + totalTransportCost;
                   const totalMarkupProfit = (totalMaterialBilled - totalMaterialCost) + (totalOutsideBilled - totalOutsideCost) + (totalTransportBilled - totalTransportCost);
-                  const totalRevenue = totals.grandTotal + shippingBilled;
+                  const totalRevenue = totals.grandTotal;   // includes shipping & handling (U11)
                   const totalExpenses = totalOurCost + trucking + shippingExpense;
                   const grossProfit = totalRevenue - totalExpenses;
                   const margin = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 100) : 0;
@@ -3542,7 +3549,7 @@ function EstimateDetailsPage() {
                             <span>-{formatCurrency(totals.discountAmt)}</span>
                           </div>
                         )}
-                        {formData.taxExempt ? (
+                        {effectiveTaxExempt ? (
                           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '0.85rem', color: '#c62828', fontWeight: 600 }}>
                             <span>Tax</span><span>EXEMPT</span>
                           </div>
@@ -3723,9 +3730,9 @@ function EstimateDetailsPage() {
 
             <ShipmentChargesSection
               charges={shipmentCharges}
-              onAdd={async (data) => { await addEstimateShipmentCharge(estimate.id, data); getEstimateShipmentCharges(estimate.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => {}); }}
-              onUpdate={async (chargeId, data) => { await updateEstimateShipmentCharge(estimate.id, chargeId, data); getEstimateShipmentCharges(estimate.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => {}); }}
-              onDelete={async (chargeId) => { await deleteEstimateShipmentCharge(estimate.id, chargeId); getEstimateShipmentCharges(estimate.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => {}); }}
+              onAdd={async (data) => { await addEstimateShipmentCharge(estimate.id, data); getEstimateShipmentCharges(estimate.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => {}); refreshStoredTotals(); }}
+              onUpdate={async (chargeId, data) => { await updateEstimateShipmentCharge(estimate.id, chargeId, data); getEstimateShipmentCharges(estimate.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => {}); refreshStoredTotals(); }}
+              onDelete={async (chargeId) => { await deleteEstimateShipmentCharge(estimate.id, chargeId); getEstimateShipmentCharges(estimate.id).then(r => setShipmentCharges(r.data.data || [])).catch(() => {}); refreshStoredTotals(); }}
             />
 
             <div style={{ background: '#f0f7ff', borderRadius: 8, padding: 16 }}>
@@ -3753,8 +3760,13 @@ function EstimateDetailsPage() {
                   <span style={{ fontWeight: 600 }}>{formatCurrency(totals.emergencyAmount)}</span>
                 </div>
               )}
+              {totals.tripsTotal > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #eee', color: '#666', fontSize: '0.85rem' }}>
+                  <span>Outside-processing trips (in subtotal)</span><span>{formatCurrency(totals.tripsTotal)}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #ddd' }}>
-                <span>Parts Subtotal</span><span>{formatCurrency(totals.partsSubtotal)}</span>
+                <span>Parts Subtotal{!totals.fromServer && <span style={{ fontSize: '0.72rem', color: '#999', marginLeft: 6 }} title="Unsaved changes — calculated here with the server's rules">(preview)</span>}</span><span>{formatCurrency(totals.partsSubtotal)}</span>
               </div>
               
               {/* Discount Section */}
@@ -3782,20 +3794,21 @@ function EstimateDetailsPage() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #ddd' }}>
-                <span>Trucking</span><span>{formatCurrency(totals.trucking)}</span>
+                <span>{shipmentCharges.length ? 'Shipping & Handling' : 'Trucking'}</span><span>{formatCurrency(totals.trucking)}</span>
               </div>
               
               {/* Tax Section */}
               <div style={{ padding: '8px 0', borderBottom: '1px solid #ddd' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={formData.taxExempt}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: clientTaxExempt ? 'not-allowed' : 'pointer' }}
+                    title={clientTaxExempt ? `Exempt by client — ${selectedClient?.name || 'this client'} is set to ${selectedClient?.taxStatus} in Clients` : undefined}>
+                    <input type="checkbox" checked={effectiveTaxExempt} disabled={clientTaxExempt}
                       onChange={(e) => setFormData({ ...formData, taxExempt: e.target.checked })} />
-                    <span style={{ fontWeight: formData.taxExempt ? 600 : 400, color: formData.taxExempt ? '#c62828' : 'inherit' }}>
-                      Tax Exempt
+                    <span style={{ fontWeight: effectiveTaxExempt ? 600 : 400, color: effectiveTaxExempt ? '#c62828' : 'inherit' }}>
+                      Tax Exempt{clientTaxExempt && <span style={{ fontWeight: 400, color: '#888', fontSize: '0.75rem', marginLeft: 6 }}>(by client: {selectedClient?.taxStatus})</span>}
                     </span>
                   </label>
-                  {!formData.taxExempt ? (
+                  {!effectiveTaxExempt ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <input type="number" className="form-input" value={formData.taxRate}
                         onChange={(e) => setFormData({ ...formData, taxRate: parseFloat(e.target.value) || 0 })}
@@ -3808,7 +3821,10 @@ function EstimateDetailsPage() {
                 </div>
                 
                 {/* Tax Exempt Details */}
-                {formData.taxExempt && (
+                {!effectiveTaxExempt && selectedClient?.resaleCertificate && selectedClient?.permitStatus === 'active' && (
+                  <div style={{ marginTop: 4, fontSize: '0.75rem', color: '#888' }}>ℹ️ Client has a resale certificate on file (permit active), but its tax status is Taxable.</div>
+                )}
+                {effectiveTaxExempt && (
                   <div style={{ marginTop: 8, padding: 8, background: '#fff3e0', borderRadius: 4, fontSize: '0.8rem' }}>
                     <div className="form-group" style={{ marginBottom: 8 }}>
                       <input type="text" className="form-input" placeholder="Resale Certificate #" 
@@ -3825,7 +3841,7 @@ function EstimateDetailsPage() {
               </div>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontSize: '1.25rem', fontWeight: 700, color: '#1976d2' }}>
-                <span>Grand Total</span><span>{formatCurrency(totals.grandTotal + shipmentCharges.reduce((s, c) => s + (parseFloat(c.shippingCost)||0)*(1+(parseFloat(c.shippingMarkup)||0)/100) + (parseFloat(c.materialsCost)||0)*(1+(parseFloat(c.materialsMarkup)||0)/100), 0))}</span>
+                <span>Grand Total</span><span>{formatCurrency(totals.grandTotal)}</span>
               </div>
               
               {/* Credit Card Total */}
@@ -3845,7 +3861,11 @@ function EstimateDetailsPage() {
                     📊 Show Dual Pricing (with &amp; without material)
                   </span>
                 </label>
-                {formData.showDualPricing && (
+                {/* U4: Option B is the server's labor-only price (GET data.optionB); hidden when it couldn't be computed */}
+                {formData.showDualPricing && totals.laborOnlyTotal === null && (
+                  <div style={{ marginTop: 8, fontSize: '0.78rem', color: '#888' }}>Option B (labor only) isn't available for this estimate{totalsDirty ? ' until it is saved' : ''}.</div>
+                )}
+                {formData.showDualPricing && totals.laborOnlyTotal !== null && (
                   <div style={{ marginTop: 10, borderRadius: 8, overflow: 'hidden', border: '2px solid #1565c0' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
                       <div style={{ padding: 12, background: '#e3f2fd', borderRight: '1px solid #90caf9' }}>
@@ -3861,6 +3881,7 @@ function EstimateDetailsPage() {
                     </div>
                     <div style={{ padding: '6px 12px', background: '#f5f5f5', fontSize: '0.75rem', color: '#888', textAlign: 'center' }}>
                       Material difference: {formatCurrency(totals.grandTotal - totals.laborOnlyTotal)}
+                      {totalsDirty && <span> · Option B as last saved — it updates when the estimate is saved</span>}
                     </div>
                   </div>
                 )}

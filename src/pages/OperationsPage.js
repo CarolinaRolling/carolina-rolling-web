@@ -7,6 +7,7 @@ import {
   getOperatorTasks, addOperatorTask, updateOperatorTask, deleteOperatorTask, reorderOperatorTasks,
 } from '../services/api';
 import { formatDate } from '../utils/dates';
+import { localYmd } from '../utils/shopDate';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -64,7 +65,7 @@ function ProductionView() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const ymd = weekStart.toISOString().slice(0, 10);
+      const ymd = localYmd(weekStart);   // local Monday, not its UTC day (R31)
       const res = await getProductionWeek(ymd);
       setParts(res.data.data.parts || []);
     } catch { setParts([]); } finally { setLoading(false); }

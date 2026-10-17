@@ -7,6 +7,11 @@ import {
   previewPayrollPdf, updateVacationLog, getSettings, updateSettings,
   getEmailAccounts,
 } from '../services/api';
+import { shopToday } from '../utils/dates';
+import { shopDateAdd } from '../utils/shopDate';
+
+// U51: HTML-escape values written into print windows
+const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const OT_INC = [0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,7,8,9,10,12];
 const fmt = (v) => '$' + (parseFloat(v)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -176,7 +181,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
     .gp { display:flex; justify-content:space-between; border-top:1px solid #eee; margin-top:5px; padding-top:5px; font-weight:700; color:#1976d2; }
     .foot { margin-top:24px; padding-top:10px; border-top:1px solid #ddd; display:flex; justify-content:space-between; font-size:10px; color:#999; }
   `;
-  const payrollHeader = (titleText, sd, ed) => `<div class="doc-header"><div><span class="doc-title">${titleText}</span><div class="doc-sub">Carolina Rolling Co., Inc.</div></div><div class="doc-right"><div class="doc-num">Pay Period</div><div class="doc-date">${sd} — ${ed}</div></div></div><hr class="divider" />`;
+  const payrollHeader = (titleText, sd, ed) => `<div class="doc-header"><div><span class="doc-title">${titleText}</span><div class="doc-sub">Carolina Rolling Co., Inc.</div></div><div class="doc-right"><div class="doc-num">Pay Period</div><div class="doc-date">${escHtml(sd)} — ${escHtml(ed)}</div></div></div><hr class="divider" />`;
   const payFoot = () => { const now=new Date(); return `<div class="foot"><span>Generated ${now.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'})} ${now.toLocaleTimeString()}</span><span>CONFIDENTIAL — Carolina Rolling Co., Inc.</span></div>`; };
   const payDates = (pr) => ({
     sd: pr.weekStart?new Date(pr.weekStart+'T12:00:00').toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}):'',
@@ -191,9 +196,9 @@ export default function EmployeesTab({ showMsg, setErr }) {
     const rows=entries.map(en=>{
       const reg=parseFloat(en.regularHours)||0, ot=parseFloat(en.overtimeHours)||0, vac=parseFloat(en.vacationHours)||0;
       const rate=parseFloat(en.hourlyRate)||0, bonus=parseFloat(en.bonusAmount ?? en.bonus)||0, gross=parseFloat(en.grossPay)||0;
-      return `<tr><td class="emp-name">${en.employeeName||'Unknown'}</td><td class="c">${fmt(rate)}</td><td class="c">${reg||''}</td><td class="c" style="color:${ot>0?'#c62828':'#999'}">${ot||''}</td><td class="c">${vac||''}</td><td class="r">${bonus>0?fmt(bonus):''}</td><td class="r" style="font-weight:700">${fmt(gross)}</td></tr>`;
+      return `<tr><td class="emp-name">${escHtml(en.employeeName||'Unknown')}</td><td class="c">${fmt(rate)}</td><td class="c">${escHtml(reg||'')}</td><td class="c" style="color:${ot>0?'#c62828':'#999'}">${escHtml(ot||'')}</td><td class="c">${escHtml(vac||'')}</td><td class="r">${bonus>0?fmt(bonus):''}</td><td class="r" style="font-weight:700">${fmt(gross)}</td></tr>`;
     }).join('');
-    w.document.write(`<!DOCTYPE html><html><head><title>Payroll ${sd} to ${ed}</title><style>${PAYROLL_CSS}</style></head><body>${payrollHeader('PAYROLL REPORT',sd,ed)}<table><thead><tr><th>Employee</th><th class="c">Rate</th><th class="c">Reg</th><th class="c">OT</th><th class="c">Vac</th><th class="r">Bonus</th><th class="r">Gross</th></tr></thead><tbody>${rows}</tbody></table><div class="grand"><span>Total Gross Payroll</span><span>${fmt(pr.totalGross)}</span></div>${payFoot()}</body></html>`);
+    w.document.write(`<!DOCTYPE html><html><head><title>Payroll ${escHtml(sd)} to ${escHtml(ed)}</title><style>${PAYROLL_CSS}</style></head><body>${payrollHeader('PAYROLL REPORT',sd,ed)}<table><thead><tr><th>Employee</th><th class="c">Rate</th><th class="c">Reg</th><th class="c">OT</th><th class="c">Vac</th><th class="r">Bonus</th><th class="r">Gross</th></tr></thead><tbody>${rows}</tbody></table><div class="grand"><span>Total Gross Payroll</span><span>${fmt(pr.totalGross)}</span></div>${payFoot()}</body></html>`);
     w.document.close(); w.print();
   };
 
@@ -209,18 +214,18 @@ export default function EmployeesTab({ showMsg, setErr }) {
       const annual=parseFloat(en.annualVacationDays)||0;
       const totalVacH=entries.filter(e=>e.employeeId===en.employeeId).reduce((s,e)=>s+(parseFloat(e.vacationHours)||0),0);
       const vacUsedDays=totalVacH/8;
-      let h=`<div class="emp"><div class="emp-h"><span class="n">${en.employeeName||'Unknown'}</span><span class="rt">${fmt(rate)}/hr · OT ${fmt(rate*1.5)}/hr</span></div>`;
+      let h=`<div class="emp"><div class="emp-h"><span class="n">${escHtml(en.employeeName||'Unknown')}</span><span class="rt">${fmt(rate)}/hr · OT ${fmt(rate*1.5)}/hr</span></div>`;
       if(reg>0) h+=`<div class="row"><span class="l">Regular — ${reg}h × ${fmt(rate)}</span><span class="v">${fmt(regPay)}</span></div>`;
       if(ot>0){ h+=`<div class="row"><span class="l">Overtime — ${ot}h × ${fmt(rate*1.5)}</span><span class="v" style="color:#c62828">${fmt(otPay)}</span></div>`;
-        if(Array.isArray(en.overtimeDetails)&&en.overtimeDetails.length) h+=`<div class="sub2">${en.overtimeDetails.map(d=>new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+' '+d.hours+'h').join(' · ')}</div>`; }
+        if(Array.isArray(en.overtimeDetails)&&en.overtimeDetails.length) h+=`<div class="sub2">${en.overtimeDetails.map(d=>new Date(d.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+' '+escHtml(d.hours)+'h').join(' · ')}</div>`; }
       if(vac>0){ h+=`<div class="row"><span class="l">Vacation — ${vac}h (${vacDays.toFixed(1)}d) × ${fmt(rate)}</span><span class="v" style="color:#1565c0">${fmt(vacPay)}</span></div>`;
-        if(Array.isArray(en.vacationDates)&&en.vacationDates.length) h+=`<div class="sub2">${en.vacationDates.map(d=>{const dt=typeof d==='string'?d:d.date;const hrs=(typeof d==='object'&&d.hours)?' ('+d.hours+'h)':'';return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+hrs;}).join(', ')}</div>`; }
+        if(Array.isArray(en.vacationDates)&&en.vacationDates.length) h+=`<div class="sub2">${en.vacationDates.map(d=>{const dt=typeof d==='string'?d:d.date;const hrs=(typeof d==='object'&&d.hours)?' ('+escHtml(d.hours)+'h)':'';return new Date(dt+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+hrs;}).join(', ')}</div>`; }
       if(annual>0) h+=`<div class="sub2">Vacation balance: ${(annual-vacUsedDays).toFixed(1)} / ${annual.toFixed(1)} days</div>`;
-      if(bonus>0) h+=`<div class="row"><span class="l">Bonus${en.bonusNotes?' — '+en.bonusNotes:''}</span><span class="v">${fmt(bonus)}</span></div>`;
+      if(bonus>0) h+=`<div class="row"><span class="l">Bonus${en.bonusNotes?' — '+escHtml(en.bonusNotes):''}</span><span class="v">${fmt(bonus)}</span></div>`;
       h+=`<div class="gp"><span>Gross Pay</span><span>${fmt(gross)}</span></div></div>`;
       return h;
     }).join('');
-    w.document.write(`<!DOCTYPE html><html><head><title>Detailed Payroll ${sd} to ${ed}</title><style>${PAYROLL_CSS}</style></head><body>${payrollHeader('DETAILED PAYROLL',sd,ed)}${cards}<div class="grand"><span>Total Gross Payroll</span><span>${fmt(pr.totalGross)}</span></div>${payFoot()}</body></html>`);
+    w.document.write(`<!DOCTYPE html><html><head><title>Detailed Payroll ${escHtml(sd)} to ${escHtml(ed)}</title><style>${PAYROLL_CSS}</style></head><body>${payrollHeader('DETAILED PAYROLL',sd,ed)}${cards}<div class="grand"><span>Total Gross Payroll</span><span>${fmt(pr.totalGross)}</span></div>${payFoot()}</body></html>`);
     w.document.close(); w.print();
   };
 
@@ -289,7 +294,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
                 <span style={{padding:'3px 8px',background:'#e3f2fd',borderRadius:4,fontSize:'0.8rem'}}>🏖️ {(parseFloat(e.annualVacationDays)-(parseFloat(e.vacationDaysUsed)||0)).toFixed(1)} / {parseFloat(e.annualVacationDays).toFixed(1)} days left</span>
                 <button onClick={(ev)=>{ev.stopPropagation();setVacEmp(e);setVacLog([...(e.vacationLog||[])]);}} style={{background:'none',border:'1px solid #90caf9',borderRadius:4,padding:'2px 6px',cursor:'pointer',fontSize:'0.7rem',color:'#1565c0'}}>Edit</button>
               </div>
-              {(()=>{const today=new Date().toISOString().split('T')[0];const upcoming=(e.vacationLog||[]).filter(v=>v.date>today).sort((a,b)=>a.date.localeCompare(b.date));return upcoming.length>0?<div style={{fontSize:'0.7rem',color:'#1565c0',marginTop:3}}>📅 Upcoming: {upcoming.slice(0,5).map((v,i)=><span key={i}>{new Date(v.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})} ({v.hours}h){i<Math.min(upcoming.length,5)-1?', ':''}</span>)}{upcoming.length>5?` +${upcoming.length-5} more`:''}</div>:null;})()}
+              {(()=>{const today=shopToday();const upcoming=(e.vacationLog||[]).filter(v=>v.date>today).sort((a,b)=>a.date.localeCompare(b.date));return upcoming.length>0?<div style={{fontSize:'0.7rem',color:'#1565c0',marginTop:3}}>📅 Upcoming: {upcoming.slice(0,5).map((v,i)=><span key={i}>{new Date(v.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})} ({v.hours}h){i<Math.min(upcoming.length,5)-1?', ':''}</span>)}{upcoming.length>5?` +${upcoming.length-5} more`:''}</div>:null;})()}
             </div>}
             {!e.isActive&&<div style={{color:'#c62828',fontWeight:600}}>Inactive</div>}
           </div>
@@ -457,7 +462,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
       <div className="modal-header"><h3 className="modal-title">Create Weekly Payroll</h3><button className="modal-close" onClick={()=>setShowNewPR(false)}>&times;</button></div>
       <div style={{padding:20,display:'flex',flexDirection:'column',gap:12}}>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-          <div className="form-group" style={{margin:0}}><label className="form-label">Week Start</label><input type="date" className="form-input" value={prDates.weekStart} onChange={e=>{const s=e.target.value;if(!prDates.weekEnd){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+4);setPrDates({weekStart:s,weekEnd:d.toISOString().split('T')[0]});}else{setPrDates({...prDates,weekStart:s});}}}/></div>
+          <div className="form-group" style={{margin:0}}><label className="form-label">Week Start</label><input type="date" className="form-input" value={prDates.weekStart} onChange={e=>{const s=e.target.value;if(!prDates.weekEnd){setPrDates({weekStart:s,weekEnd:shopDateAdd(s,4)});}else{setPrDates({...prDates,weekStart:s});}}}/></div>
           <div className="form-group" style={{margin:0}}><label className="form-label">Week End</label><input type="date" className="form-input" value={prDates.weekEnd} onChange={e=>setPrDates({...prDates,weekEnd:e.target.value})}/></div>
         </div>
         <div style={{fontSize:'0.85rem',color:'#666'}}>All active employees will be added automatically.</div>
@@ -556,10 +561,9 @@ export default function EmployeesTab({ showMsg, setErr }) {
           <div style={{display:'flex',flexDirection:'column',gap:6}}>
             {(()=>{
               const dates=[];
-              const start=new Date(activePR.weekStart+'T12:00:00');
-              const end=new Date(activePR.weekEnd+'T12:00:00');
-              for(let d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
-                dates.push(new Date(d).toISOString().split('T')[0]);
+              const end=String(activePR.weekEnd||'').slice(0,10);
+              for(let d=String(activePR.weekStart||'').slice(0,10);d&&end&&d<=end&&dates.length<62;d=shopDateAdd(d,1)){
+                dates.push(d);
               }
               return dates.map(dt=>(
                 <label key={dt} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',padding:'4px 8px',background:extHrsDates.includes(dt)?'#e3f2fd':'transparent',borderRadius:6}}>
@@ -659,7 +663,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
           <div style={{fontSize:'0.85rem',lineHeight:1.6}}>
             {(()=>{
-              const today=new Date().toISOString().split('T')[0];
+              const today=shopToday();
               const taken=vacLog.filter(e=>e.date<=today);
               const planned=vacLog.filter(e=>e.date>today);
               const takenH=taken.reduce((s,e)=>s+(parseFloat(e.hours)||0),0);
@@ -699,7 +703,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
               <th style={{padding:'8px 12px',textAlign:'left'}}>Note</th>
               <th style={{padding:'8px',width:40}}></th>
             </tr></thead>
-            <tbody>{vacLog.map((entry,idx)=>{const isFuture=entry.date>new Date().toISOString().split('T')[0];return(
+            <tbody>{vacLog.map((entry,idx)=>{const isFuture=entry.date>shopToday();return(
               <tr key={idx} style={{borderBottom:'1px solid #f0f0f0',background:isFuture?'#e3f2fd':''}}>
                 <td style={{padding:'6px 12px'}}>
                   <input type="date" value={entry.date} onChange={e=>{const l=[...vacLog];l[idx]={...l[idx],date:e.target.value};setVacLog(l.sort((a,b)=>a.date.localeCompare(b.date)));}} style={{border:'1px solid #ddd',borderRadius:4,padding:'2px 6px',fontSize:'0.8rem',width:130}}/>
@@ -719,7 +723,7 @@ export default function EmployeesTab({ showMsg, setErr }) {
               </tr>
             )})}</tbody>
             <tfoot><tr style={{background:'#e3f2fd'}}>
-              <td style={{padding:'8px 12px',fontWeight:700}}>Total ({vacLog.filter(e=>e.date<=new Date().toISOString().split('T')[0]).length} taken, {vacLog.filter(e=>e.date>new Date().toISOString().split('T')[0]).length} planned)</td>
+              <td style={{padding:'8px 12px',fontWeight:700}}>Total ({vacLog.filter(e=>e.date<=shopToday()).length} taken, {vacLog.filter(e=>e.date>shopToday()).length} planned)</td>
               <td style={{padding:'8px',textAlign:'center',fontWeight:700}}>{vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0).toFixed(1)}h</td>
               <td style={{padding:'8px',textAlign:'center',fontWeight:700,color:'#1565c0'}}>{(vacLog.reduce((s,e)=>s+(parseFloat(e.hours)||0),0)/8).toFixed(2)}d</td>
               <td colSpan={2}></td>

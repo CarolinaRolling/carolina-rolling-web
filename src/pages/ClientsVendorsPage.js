@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit, Trash2, Users, Building2, Search, Check, X } from 'lucide-react';
-import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit, startBatchVerification, getBatchStatus, downloadResaleReport, getWorkOrders, getEstimates, getVendorHistory, mergeClient, mergeVendor, getClientHistory, getClientStatementPdf, voidClientPayment, applyCreditMemo, voidCreditMemo } from '../services/api';
+import { getClients, createClient, updateClient, deleteClient, getVendors, createVendor, updateVendor, deleteVendor, verifySinglePermit, startBatchVerification, getBatchStatus, downloadResaleReport, getWorkOrders, getEstimates, getVendorHistory, mergeClient, mergeVendor, getClientHistory, getClientStatementPdf, voidClientPayment, applyCreditMemo, voidCreditMemo, moveOverpaymentToCredit, voidRefund } from '../services/api';
+import RefundModal from '../components/RefundModal';
+import { formatDay } from '../utils/dates';
+import { useAuth } from '../context/AuthContext';
 
 const formatPhone = (val) => {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -22,6 +25,7 @@ const isValidResale = (val) => {
 };
 
 const ClientsVendorsPage = () => {
+  const { isAdmin } = useAuth();   // merges are admin-only on the server (round 12)
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('clients');
@@ -335,6 +339,8 @@ const ClientsVendorsPage = () => {
   // Payments / credits actions (audit H6)
   const [applyingMemo, setApplyingMemo] = useState(null);
   const [applyForm, setApplyForm] = useState({ workOrderId: '', amount: '' });
+  // V1: refund straight from an overpaid invoice or a credit memo's remaining credit
+  const [refundTarget, setRefundTarget] = useState(null);   // { sourceWorkOrderId | creditMemoId, amount, label }
   const reloadClientHistory = async () => {
     if (!selectedItem) return;
     try { const r = await getClientHistory(selectedItem.id); setClientHistory(r.data.data); setWorkHistory(r.data.data.workOrders || []); } catch { /* keep current view */ }
@@ -347,17 +353,40 @@ const ClientsVendorsPage = () => {
     try { const r = await voidClientPayment(pmt.id, reason); showMessage(r.data?.message || 'Payment voided'); await reloadClientHistory(); }
     catch (e) { apiError(e, 'Could not void this payment'); }
   };
-  const handleApplyCredit = async (cm) => {
+  // U34: one credit action at a time — the buttons are disabled while a request is in flight
+  const [creditBusy, setCreditBusy] = useState(false);
+  const creditBusyRef = useRef(false);
+  const withCreditBusy = async (fn) => {
+    if (creditBusyRef.current) return;
+    creditBusyRef.current = true; setCreditBusy(true);
+    try { await fn(); } finally { creditBusyRef.current = false; setCreditBusy(false); }
+  };
+  const handleApplyCredit = (cm) => withCreditBusy(async () => {
     try {
       const r = await applyCreditMemo(cm.id, { workOrderId: applyForm.workOrderId, amount: parseFloat(applyForm.amount) });
       showMessage(r.data?.message || 'Credit applied'); setApplyingMemo(null); await reloadClientHistory();
     } catch (e) { apiError(e, 'Could not apply this credit'); }
-  };
+  });
   const handleVoidCredit = async (cm) => {
     if (!window.confirm(`Void this $${parseFloat(cm.amount).toFixed(2)} credit memo?\n\nIf it was applied to invoices, they will owe that amount again. If the credit came from a client's check, that money will no longer be counted anywhere — only do this if the credit was refunded or entered by mistake.`)) return;
     try { const r = await voidCreditMemo(cm.id); showMessage(r.data?.message || 'Credit memo voided'); await reloadClientHistory(); }
     catch (e) { apiError(e, 'Could not void this credit memo'); }
   };
+
+  // W13: admin can void a refund (the server puts the credit back on its memo / invoice)
+  const handleVoidRefund = (r) => withCreditBusy(async () => {
+    if (!window.confirm(`Void this $${parseFloat(r.amount).toFixed(2)} refund${r.reference ? ' (#' + r.reference + ')' : ''}?\n\nIf it was paid out of a credit memo, that credit comes back only if the credit still exists (not if the check behind it was voided). Use this for a refund entered by mistake or a check that was never cashed.`)) return;
+    const reason = window.prompt('Reason (optional) — e.g. "entered twice"', '');
+    if (reason === null) return;
+    try {
+      const res = await voidRefund(r.id, reason);   // admin-only on the server (403 otherwise); the reason is stored
+      showMessage(res.data?.message || 'Refund voided');
+      // stays on screen (unlike the 3-second message): nothing came back to the client's credit
+      if (res.data?.data?.creditRestored === false) setError('Refund voided, but no credit was restored — the credit memo it was paid from no longer exists (e.g. its check was voided).');
+      await reloadClientHistory();
+    }
+    catch (e) { apiError(e, 'Could not void this refund'); }
+  });
 
   const selectItem = async (item) => {
     setSelectedItem(item);
@@ -493,8 +522,8 @@ const ClientsVendorsPage = () => {
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="btn btn-sm btn-outline" onClick={() => activeTab === 'clients' ? openClientModal(selectedItem) : openVendorModal(selectedItem)}><Edit size={14} /> Edit</button>
-                      {(activeTab === 'clients' || activeTab === 'vendors') && (
-                        <button className="btn btn-sm" onClick={() => { setMergeSourceId(''); setMergeModal({ target: selectedItem, type: activeTab }); }} style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80' }}>⇄ Merge</button>
+                      {(activeTab === 'clients' || activeTab === 'vendors') && isAdmin() && (
+                        (<button className="btn btn-sm" onClick={() => { setMergeSourceId(''); setMergeModal({ target: selectedItem, type: activeTab }); }} style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80' }}>⇄ Merge</button>)
                       )}
                       {selectedItem.isActive ? (
                         <button className="btn btn-sm" onClick={() => activeTab === 'clients' ? handleDeleteClient(selectedItem) : handleDeleteVendor(selectedItem)} style={{ background: '#ffebee', color: '#c62828', border: '1px solid #ef9a9a' }}><X size={14} /> Deactivate</button>
@@ -584,6 +613,38 @@ const ClientsVendorsPage = () => {
                           {statementLoading ? '⏳' : '📄'} {statementLoading ? 'Generating...' : 'Account Statement'}
                         </button>
                       </div>
+                    )}
+
+                    {/* Invoices paid beyond their current total (the total dropped after payment) — T4 */}
+                    {clientHistory && parseFloat(clientHistory.overpaidTotal) > 0.005 && (
+                      <div style={{ padding: '10px 16px', background: '#e3f2fd', borderBottom: '2px solid #1565c0' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#1565c0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Overpaid — ${parseFloat(clientHistory.overpaidTotal).toFixed(2)} owed to the client</div>
+                        {(clientHistory.workOrders || []).filter(w => parseFloat(w.overpaid) > 0.005).map(w => (
+                          <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: '0.85rem' }}>
+                            <span>{w.drNumber ? `DR-${w.drNumber}` : w.orderNumber}{w.invoiceNumber ? ` · Inv #${w.invoiceNumber}` : ''}: paid ${parseFloat(w.paid).toFixed(2)}, now ${parseFloat(w.total).toFixed(2)} — <strong>${parseFloat(w.overpaid).toFixed(2)} over</strong></span>
+                            <button disabled={creditBusy} onClick={() => {
+                              if (creditBusyRef.current) return;
+                              if (!window.confirm(`Hold $${parseFloat(w.overpaid).toFixed(2)} as client credit (you can apply it to another invoice or refund it)?`)) return;
+                              withCreditBusy(async () => {
+                                try { await moveOverpaymentToCredit(w.id); await reloadClientHistory(); }
+                                catch (e) { alert(e.response?.data?.error?.message || 'Could not move the overpayment to credit'); }
+                              });
+                            }} style={{ padding: '4px 10px', background: '#1565c0', color: 'white', border: 'none', borderRadius: 5, cursor: creditBusy ? 'wait' : 'pointer', opacity: creditBusy ? 0.6 : 1, fontSize: '0.8rem' }}>{creditBusy ? 'Working…' : 'Move to client credit'}</button>
+                            <button disabled={creditBusy} onClick={() => setRefundTarget({ sourceWorkOrderId: w.id, amount: parseFloat(w.overpaid), label: `the overpayment on ${w.invoiceNumber ? `invoice #${w.invoiceNumber}` : (w.drNumber ? `DR-${w.drNumber}` : w.orderNumber)}` })}
+                              style={{ padding: '4px 10px', background: '#b71c1c', color: 'white', border: 'none', borderRadius: 5, cursor: creditBusy ? 'wait' : 'pointer', opacity: creditBusy ? 0.6 : 1, fontSize: '0.8rem' }}>Refund</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {refundTarget && selectedItem && (
+                      <RefundModal
+                        initialClient={{ id: selectedItem.id, name: selectedItem.name }}
+                        sourceWorkOrderId={refundTarget.sourceWorkOrderId || null}
+                        creditMemoId={refundTarget.creditMemoId || null}
+                        defaultAmount={refundTarget.amount}
+                        sourceLabel={refundTarget.label}
+                        onClose={() => setRefundTarget(null)}
+                        onSaved={async () => { showMessage('Refund recorded'); await reloadClientHistory(); }} />
                     )}
 
                     {/* History tabs */}
@@ -714,8 +775,8 @@ const ClientsVendorsPage = () => {
                                   </td>
                                   <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#2e7d32' }}>${parseFloat(pmt.amount).toFixed(2)}</td>
                                   <td style={{ padding: '8px 8px', textAlign: 'right' }}>
-                                    <button onClick={() => handleVoidClientPayment(pmt)} title="Void this whole payment (bounced check, entered twice)"
-                                      style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.78rem' }}>✕ Void</button>
+                                    {isAdmin() && <button onClick={() => handleVoidClientPayment(pmt)} title="Void this whole payment (bounced check, entered twice)"
+                                      style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.78rem' }}>✕ Void</button>}
                                   </td>
                                 </tr>
                               ))}
@@ -754,7 +815,11 @@ const ClientsVendorsPage = () => {
                                       <button onClick={() => { setApplyingMemo(applyingMemo === cm.id ? null : cm.id); setApplyForm({ workOrderId: '', amount: parseFloat(cm.remainingAmount).toFixed(2) }); }}
                                         style={{ background: 'none', border: 'none', color: '#1565c0', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}>Apply</button>
                                     )}
-                                    <button onClick={() => handleVoidCredit(cm)} style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.78rem' }}>✕ Void</button>
+                                    {parseFloat(cm.remainingAmount) > 0.005 && (
+                                      <button disabled={creditBusy} onClick={() => setRefundTarget({ creditMemoId: cm.id, amount: parseFloat(cm.remainingAmount), label: `the unused credit on this memo${cm.reason ? ` (${cm.reason})` : ''}` })}
+                                        style={{ background: 'none', border: 'none', color: '#b71c1c', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}>Refund</button>
+                                    )}
+                                    {isAdmin() && <button onClick={() => handleVoidCredit(cm)} style={{ background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontSize: '0.78rem' }}>✕ Void</button>}
                                   </td>
                                 </tr>
                                 {applyingMemo === cm.id && (() => {
@@ -773,8 +838,8 @@ const ClientsVendorsPage = () => {
                                             </select>
                                             <input type="number" step="0.01" min="0" value={applyForm.amount} onChange={e => setApplyForm({ ...applyForm, amount: e.target.value })}
                                               style={{ width: 100, padding: '4px 6px', fontSize: '0.8rem' }} />
-                                            <button disabled={!applyForm.workOrderId || !(parseFloat(applyForm.amount) > 0)} onClick={() => handleApplyCredit(cm)}
-                                              style={{ padding: '4px 10px', background: '#1565c0', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.8rem' }}>Apply credit</button>
+                                            <button disabled={creditBusy || !applyForm.workOrderId || !(parseFloat(applyForm.amount) > 0)} onClick={() => handleApplyCredit(cm)}
+                                              style={{ padding: '4px 10px', background: '#1565c0', color: 'white', border: 'none', borderRadius: 4, cursor: creditBusy ? 'wait' : 'pointer', opacity: creditBusy ? 0.6 : 1, fontSize: '0.8rem' }}>{creditBusy ? 'Applying…' : 'Apply credit'}</button>
                                             <button onClick={() => setApplyingMemo(null)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '0.8rem' }}>Cancel</button>
                                           </div>
                                         )}
@@ -801,6 +866,7 @@ const ClientsVendorsPage = () => {
                                 <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Method</th>
                                 <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '2px solid #e0e0e0' }}>Reason</th>
                                 <th style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '2px solid #e0e0e0' }}>Amount</th>
+                                {isAdmin() && <th style={{ padding: '8px 12px', borderBottom: '2px solid #e0e0e0' }}></th>}
                               </tr>
                             </thead>
                             <tbody>
@@ -810,6 +876,10 @@ const ClientsVendorsPage = () => {
                                   <td style={{ padding: '8px 12px', textTransform: 'capitalize' }}>{r.method?.replace('_',' ')}</td>
                                   <td style={{ padding: '8px 12px', color: '#555' }}>{r.reason || '—'}</td>
                                   <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#c62828' }}>-${parseFloat(r.amount).toFixed(2)}</td>
+                                  {isAdmin() && <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                                    {!r.voidedAt && <button onClick={() => handleVoidRefund(r)} disabled={creditBusy} title="Void this refund (entered by mistake, check never cashed)"
+                                      style={{ background: 'none', border: 'none', color: '#c62828', cursor: creditBusy ? 'wait' : 'pointer', fontSize: '0.78rem' }}>✕ Void</button>}
+                                  </td>}
                                 </tr>
                               ))}
                             </tbody>
@@ -912,7 +982,7 @@ const ClientsVendorsPage = () => {
                                       {wo.invoiceNumber ? <span style={{ color: '#2e7d32', fontWeight: 600, fontSize: '0.8rem' }}>✅ {wo.invoiceNumber}</span> : <span style={{ color: '#ccc' }}>—</span>}
                                     </td>
                                     <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                                      {wo.paymentDate ? <span style={{ color: '#2e7d32', fontSize: '0.8rem' }}>💰 {new Date(wo.paymentDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}</span> : wo.invoiceNumber ? <span style={{ color: '#E65100', fontSize: '0.8rem' }}>⏳</span> : <span style={{ color: '#ccc' }}>—</span>}
+                                      {wo.paymentDate ? <span style={{ color: '#2e7d32', fontSize: '0.8rem' }}>💰 {formatDay(wo.paymentDate)}</span> : wo.invoiceNumber ? <span style={{ color: '#E65100', fontSize: '0.8rem' }}>⏳</span> : <span style={{ color: '#ccc' }}>—</span>}
                                     </td>
                                     <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{wo.grandTotal ? '$' + parseFloat(wo.grandTotal).toFixed(2) : '—'}</td>
                                   </tr>
@@ -1173,7 +1243,7 @@ const ClientsVendorsPage = () => {
                   </div>
                 )}
               </div>
-              {formData.taxStatus === 'resale' && (
+              {String(formData.taxStatus || '').toLowerCase() === 'resale' && (
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label className="form-label">Resale Certificate # <span style={{ fontWeight: 400, color: '#999', fontSize: '0.8rem' }}>(format: 123-456789)</span></label>
                   <input className="form-input" value={formData.resaleCertificate || ''} 
@@ -1187,7 +1257,7 @@ const ClientsVendorsPage = () => {
                   )}
                 </div>
               )}
-              {formData.taxStatus === 'resale' && formData.resaleCertificate && (
+              {String(formData.taxStatus || '').toLowerCase() === 'resale' && formData.resaleCertificate && (
                 <div style={{ gridColumn: 'span 2', padding: 12, background: '#f5f5f5', borderRadius: 8, border: '1px solid #e0e0e0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                     <div>

@@ -11,6 +11,10 @@ import { getUsers, createUser, updateUser, deleteUser, getActivityLogs, getSched
 import { useAuth } from '../context/AuthContext';
 import SectionSizesPage from './SectionSizesPage';
 import SettingsPage from './SettingsPage';
+import { shopToday } from '../utils/shopDate';
+
+// U51: HTML-escape values written into print windows
+const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 // Global error log for NAS uploads
 window.nasErrorLog = window.nasErrorLog || [];
@@ -862,7 +866,7 @@ function AdminPage({ section = 'users-logs' }) {
       const { qrPayload, deviceName } = response.data.data;
       
       const w = window.open('', '_blank', 'width=520,height=640');
-      w.document.write(`<!DOCTYPE html><html><head><title>Setup QR - ${deviceName}</title>
+      w.document.write(`<!DOCTYPE html><html><head><title>Setup QR - ${escHtml(deviceName)}</title>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
         <style>
           body { font-family: Arial, sans-serif; text-align: center; padding: 24px; margin: 0; background: #f5f5f5; }
@@ -875,7 +879,7 @@ function AdminPage({ section = 'users-logs' }) {
         </style></head><body>
         <div class="card">
           <h2>📱 Tablet Setup</h2>
-          <div class="device">${deviceName}</div>
+          <div class="device">${escHtml(deviceName)}</div>
           <div id="qrcode"></div>
           <div class="instructions">
             <strong>How to use:</strong><br/>
@@ -887,7 +891,7 @@ function AdminPage({ section = 'users-logs' }) {
         </div>
         <script>
           new QRCode(document.getElementById("qrcode"), {
-            text: ${JSON.stringify(qrPayload)},
+            text: ${JSON.stringify(qrPayload).replace(/</g, '\\u003c')},
             width: 380, height: 380,
             correctLevel: QRCode.CorrectLevel.L
           });
@@ -2356,7 +2360,7 @@ function AdminPage({ section = 'users-logs' }) {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `Resale_Verification_Report_${new Date().toISOString().slice(0, 10)}.pdf`;
+                    a.download = `Resale_Verification_Report_${shopToday()}.pdf`;
                     a.click();
                     URL.revokeObjectURL(url);
                   } catch (err) {
@@ -2499,9 +2503,12 @@ function AdminPage({ section = 'users-logs' }) {
                   </p>
                   <button className="btn btn-primary" onClick={async () => {
                     try {
-                      const resp = await setup2FA();
+                      // The server asks for the password before setting up 2FA (U9)
+                      const password = window.prompt('Enter your password to set up two-factor authentication:');
+                      if (!password) return;
+                      const resp = await setup2FA(password);
                       setTwoFAState(prev => ({ ...prev, setupData: resp.data.data }));
-                    } catch (err) { setError('Failed to start 2FA setup'); }
+                    } catch (err) { setError(err.response?.data?.error?.message || 'Failed to start 2FA setup'); }
                   }}>
                     <Shield size={18} /> Enable 2FA
                   </button>
@@ -2935,7 +2942,7 @@ function AdminPage({ section = 'users-logs' }) {
                       if (canvas) {
                         const printWin = window.open('', '_blank');
                         printWin.document.write('<html><head><title>Scrap Bin Label</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:Arial}h1{font-size:28px;margin-bottom:20px}p{font-size:16px;color:#666;margin-top:12px}</style></head><body>');
-                        printWin.document.write('<h1>' + bin.label + '</h1>');
+                        printWin.document.write('<h1>' + escHtml(bin.label) + '</h1>');
                         printWin.document.write('<img src="' + canvas.toDataURL() + '" width="400" height="400"/>');
                         printWin.document.write('<p>Scan to request pickup</p>');
                         printWin.document.write('</body></html>');

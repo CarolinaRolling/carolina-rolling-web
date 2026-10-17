@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, FileText, Printer, Check, AlertTriangle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { computeDisplayNumbers } from '../utils/partNumbers';
 import {
@@ -135,6 +135,12 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
   const [rows, setRows] = useState({});
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // Which FIELDS the office actually edited, per cylinder and section: { [unitId]: { preRoll: {field:true}, postRoll: {...} } }.
+  // Only those fields are saved, merged into the latest copy from the server, so a tablet reading entered
+  // meanwhile — even in the same section — is never overwritten (audit T37, U35)
+  const edited = useRef({});
+  const savingRef = useRef(false);
+  const [saveError, setSaveError] = useState(null);
   const [lastSync, setLastSync] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [showDiagrams, setShowDiagrams] = useState(false);
@@ -190,49 +196,103 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
       }
       // Note: cylinder count is managed manually after creation (Add / Move / Delete),
       // so we no longer auto-add units on reload — that would undo a move or delete.
-      setJob(found);
-      const init = {};
-      (found.units || []).forEach(u => { init[u.id] = { preRoll: { ...(u.preRoll||{}) }, postRoll: { ...(u.postRoll||{}) } }; });
-      setRows(init);
-      setDirty(false);
-      setLastSync(new Date());
+      applyServerJob(found);
     } catch(e) { console.error(e); setError(e?.response?.data?.error?.message || e.message || 'Failed to load inspection'); }
     finally { setLoading(false); }
   };
 
-  const setPR = (uid, field, val) => { setDirty(true); setRows(prev => ({ ...prev, [uid]: { ...prev[uid], preRoll: { ...prev[uid].preRoll, [field]: val } } })); };
-  const setPO = (uid, field, val) => { setDirty(true); setRows(prev => ({ ...prev, [uid]: { ...prev[uid], postRoll: { ...prev[uid].postRoll, [field]: val } } })); };
+  const markEdited = (uid, sec, field) => {
+    const cur = edited.current[uid] || {};
+    edited.current = { ...edited.current, [uid]: { ...cur, [sec]: { ...(cur[sec] || {}), [field]: true } } };
+  };
+  const syncDirty = () => setDirty(Object.keys(edited.current).length > 0);
+  const setPR = (uid, field, val) => { setDirty(true); markEdited(uid, 'preRoll', field); setRows(prev => ({ ...prev, [uid]: { ...prev[uid], preRoll: { ...prev[uid].preRoll, [field]: val } } })); };
+  const setPO = (uid, field, val) => { setDirty(true); markEdited(uid, 'postRoll', field); setRows(prev => ({ ...prev, [uid]: { ...prev[uid], postRoll: { ...prev[uid].postRoll, [field]: val } } })); };
 
-  // Live sync: pull the operator's latest measurements every 12s.
-  // Paused while the office has unsaved edits so we never clobber typing.
+  // U35: show the server's copy, with the office's unsaved field edits laid over it. Edits for a cylinder
+  // that is gone (moved / deleted elsewhere) are dropped.
+  const applyServerJob = (found) => {
+    const ids = new Set((found.units || []).map(u => u.id));
+    const kept = { ...edited.current };
+    for (const uid of Object.keys(kept)) if (!ids.has(uid)) delete kept[uid];
+    edited.current = kept;
+    setJob(found);
+    setRows(prev => {
+      const next = {};
+      (found.units || []).forEach(u => {
+        const pr = { ...(u.preRoll || {}) }, po = { ...(u.postRoll || {}) };
+        const e = edited.current[u.id], old = prev[u.id];
+        if (e && old) {
+          for (const f of Object.keys(e.preRoll || {})) pr[f] = old.preRoll?.[f];
+          for (const f of Object.keys(e.postRoll || {})) po[f] = old.postRoll?.[f];
+        }
+        next[u.id] = { preRoll: pr, postRoll: po };
+      });
+      return next;
+    });
+    syncDirty();
+    setLastSync(new Date());
+  };
+
+  // Live sync: pull the operator's latest measurements every 12s. The office's unsaved field edits are
+  // kept on top (U35), so sync keeps running for every other field and cylinder; it only waits during a save.
   useEffect(() => {
     if (!job?.id) return;
     const t = setInterval(async () => {
-      if (dirty || saving) return;
+      if (savingRef.current) return;
       try {
         const r = await getInspectionJobs(order.id);
         const found = (r.data.data || []).find(j => j.id === job.id);
-        if (!found) return;
-        setJob(found);
-        const init = {};
-        (found.units || []).forEach(u => { init[u.id] = { preRoll: { ...(u.preRoll||{}) }, postRoll: { ...(u.postRoll||{}) } }; });
-        setRows(init);
-        setLastSync(new Date());
+        if (!found || savingRef.current) return;
+        applyServerJob(found);
       } catch {}
     }, 12000);
     return () => clearInterval(t);
-  }, [job?.id, dirty, saving, order.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.id, order.id]);
 
+  // U35: fetch the latest job, merge only the edited fields into each fresh section, then save. A unit
+  // that saves has its edits cleared; one that fails keeps them (shown with the error) for a retry.
   const saveAll = async () => {
-    setSaving(true);
+    if (savingRef.current || !job) return;
+    savingRef.current = true; setSaving(true); setSaveError(null);
+    const failures = [];
+    const errMsg = (e) => e?.response?.data?.error?.message || e?.message || 'Save failed';
+    let fresh = null;
     try {
-      for (const u of (job.units || [])) {
-        const r = rows[u.id]; if (!r) continue;
-        await saveInspectionUnit(u.id, { preRoll: r.preRoll, postRoll: r.postRoll });
+      const r = await getInspectionJobs(order.id);
+      fresh = (r.data.data || []).find(j => j.id === job.id) || null;
+      if (!fresh) throw new Error('This inspection was removed elsewhere — reload the page.');
+      const freshUnits = new Map((fresh.units || []).map(u => [u.id, u]));
+      for (const [uid, e] of Object.entries(edited.current)) {
+        const fu = freshUnits.get(uid), cur = rows[uid];
+        if (!fu || !cur) continue;   // cylinder moved / deleted — applyServerJob drops its edits
+        const body = {};
+        for (const sec of ['preRoll', 'postRoll']) {
+          const fields = Object.keys(e[sec] || {});
+          if (!fields.length) continue;
+          const merged = { ...(fu[sec] || {}) };
+          for (const f of fields) {
+            const v = cur[sec]?.[f];
+            if (v === '' || v === undefined || v === null) delete merged[f]; else merged[f] = v;   // cleared = left out, like the tablet
+          }
+          body[sec] = merged;
+        }
+        if (!Object.keys(body).length) continue;
+        try {
+          await saveInspectionUnit(uid, body);
+          // typed into again while saving? keep those edits for the next save
+          if (edited.current[uid] === e) { const left = { ...edited.current }; delete left[uid]; edited.current = left; }
+        } catch (err) { failures.push(`${fu.unitId || 'Cylinder'}: ${errMsg(err)}`); }
       }
-      await loadJob();
-    } catch(e) { setError('Save failed'); }
-    finally { setSaving(false); }
+      // Reload so the computed flags (out-of-square, complete) and any tablet readings show
+      try { const r2 = await getInspectionJobs(order.id); fresh = (r2.data.data || []).find(j => j.id === job.id) || fresh; } catch {}
+    } catch (err) { failures.push(errMsg(err)); }
+    finally {
+      if (fresh) applyServerJob(fresh); else syncDirty();
+      savingRef.current = false; setSaving(false);
+    }
+    if (failures.length) setSaveError(`Some changes were not saved (they are kept below — Save again to retry): ${failures.join(' · ')}`);
   };
 
   const handleAddUnit = async () => { if (!job) return; await addInspectionUnit(job.id); await loadJob(); };
@@ -337,7 +397,7 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
           <div style={{ color:'rgba(255,255,255,0.85)', fontSize:'0.78rem' }}>
             {completedCount}/{units.length} complete{allComplete && ' — ✓ all done'}
             {dirty
-              ? <span style={{ color:'#ffe082' }}> · ✎ editing — live paused (Save to resume)</span>
+              ? <span style={{ color:'#ffe082' }}> · ✎ unsaved edits kept · other readings still update live</span>
               : <span style={{ color:'#a5ffb0' }}> · ● live{lastSync ? ` · updated ${lastSync.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit'})}` : ''}</span>}
           </div>
           <label style={{ color:'white', fontSize:'0.78rem', display:'flex', alignItems:'center', gap:5, marginTop:4, cursor:'pointer' }}>
@@ -471,6 +531,12 @@ export default function InspectionPanel({ order, inspectionPart, linkedPartId, o
       </div>
 
       {/* Footer */}
+      {saveError && (
+        <div style={{ padding:'8px 14px', background:'#ffebee', color:'#c62828', fontSize:'0.82rem', borderTop:'1px solid #ef9a9a', display:'flex', gap:8, alignItems:'center' }}>
+          <AlertTriangle size={14}/> <span style={{ flex:1 }}>{saveError}</span>
+          <button onClick={() => setSaveError(null)} style={{ background:'none', border:'none', color:'#c62828', cursor:'pointer', fontWeight:700 }}>×</button>
+        </div>
+      )}
       <div style={{ display:'flex', gap:8, padding:'10px 14px', borderTop:'1px solid #e0e0e0', alignItems:'center' }}>
         <button onClick={saveAll} disabled={saving} style={{ padding:'9px 16px', background:'#1565c0', color:'white', border:'none', borderRadius:6, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
           <Check size={15}/> {saving ? 'Saving…' : 'Save all'}
