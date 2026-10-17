@@ -34,6 +34,47 @@ export const logNasError = (error, details = {}) => {
   console.error('NAS Error logged:', entry);
 };
 
+// Brother QL label stock — ids match the Android CustomLabelType ids.
+// `continuous` = tape that the printer cuts (needs a cut length); `suits` = printer types it is normally used for.
+const PRINTER_LABEL_TYPES = [
+  { id: 'QR_29x25', name: 'QR 29mm x 25mm', continuous: false, suits: ['qr'] },
+  { id: 'CONTINUOUS_29', name: '29mm Continuous (DK-22210)', continuous: true, suits: ['qr', 'part'] },
+  { id: 'CONTINUOUS_38', name: '38mm Continuous (DK-22225)', continuous: true, suits: ['qr', 'part'] },
+  { id: 'CONTINUOUS_50', name: '50mm Continuous (DK-22223)', continuous: true, suits: ['qr', 'part'] },
+  { id: 'CONTINUOUS_62', name: '62mm Continuous (DK-22205)', continuous: true, suits: ['qr', 'part'] },
+  { id: 'CONTINUOUS_12', name: '12mm Continuous (DK-22214)', continuous: true, suits: [] },
+  { id: 'DK_11202_62x100', name: '62mm x 100mm Die-Cut (DK-11202)', continuous: false, suits: ['part'] },
+  { id: 'DK_11209_29x62', name: '29mm x 62mm Die-Cut (DK-11209)', continuous: false, suits: ['part'] },
+  { id: 'DK_11201_29x90', name: '29mm x 90mm Die-Cut (DK-11201)', continuous: false, suits: ['part'] },
+  { id: 'DK_11208_38x90', name: '38mm x 90mm Die-Cut (DK-11208)', continuous: false, suits: ['part'] },
+  { id: 'DK_11204_17x54', name: '17mm x 54mm Die-Cut (DK-11204)', continuous: false, suits: [] },
+];
+const PRINTER_TYPE_LABELS = { qr: 'QR code', part: 'Part label' };
+const DEFAULT_LABEL_FOR_TYPE = { qr: 'CONTINUOUS_29', part: 'DK_11202_62x100' };
+const MAX_PRINTERS = 30;
+const labelTypeInfo = (id) => PRINTER_LABEL_TYPES.find(l => l.id === id);
+const labelTypeName = (id) => labelTypeInfo(id)?.name || (id ? `${id} (custom)` : '—');
+const isContinuousLabel = (id) => !!labelTypeInfo(id)?.continuous || /^CONTINUOUS_/.test(id || '');
+const isValidPrinterHost = (value) => {
+  const v = (value || '').trim();
+  if (!v) return false;
+  if (/^[\d.]+$/.test(v)) {
+    const parts = v.split('.');
+    return parts.length === 4 && parts.every(p => /^\d{1,3}$/.test(p) && Number(p) <= 255);
+  }
+  return v.length <= 253 && /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(v);
+};
+// Mirror of the server rule: a default must point at an active printer of that type, else first active one of that type.
+const normalizePrinterDefaults = (cfg) => {
+  const pick = (type, current) => {
+    const ok = cfg.printers.find(p => p.id === current && p.type === type && p.active);
+    if (ok) return ok.id;
+    const first = cfg.printers.find(p => p.type === type && p.active);
+    return first ? first.id : null;
+  };
+  return { ...cfg, defaultQrPrinterId: pick('qr', cfg.defaultQrPrinterId), defaultPartPrinterId: pick('part', cfg.defaultPartPrinterId) };
+};
+
 function AdminPage({ section = 'users-logs' }) {
   const navigate = useNavigate();
   const { user: currentUser, isAdmin } = useAuth();
@@ -128,7 +169,11 @@ function AdminPage({ section = 'users-logs' }) {
   const [editApiKeyData, setEditApiKeyData] = useState({});
   const [approvedIPs, setApprovedIPs] = useState([]);
   const [newIP, setNewIP] = useState('');
-  const [printerConfig, setPrinterConfig] = useState({ qrPrinterIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, partPrinterIp: '', partLabelType: 'DK_11202_62x100' });
+  const [printerConfig, setPrinterConfig] = useState({ printers: [], defaultQrPrinterId: null, defaultPartPrinterId: null });
+  const [printerDirty, setPrinterDirty] = useState(false);
+  const [printerForm, setPrinterForm] = useState(null); // printer being added/edited (staged locally until Save)
+  const [printerFormError, setPrinterFormError] = useState('');
+  const newPrinterSeq = useRef(0);
   const [scrapConfig, setScrapConfig] = useState({ scrapEmail: '', shopAddress: '', shopName: 'Carolina Rolling Co. Inc.' });
   const [scrapLog, setScrapLog] = useState([]);
   const [scannerStatus, setScannerStatus] = useState(null);
@@ -631,28 +676,131 @@ function AdminPage({ section = 'users-logs' }) {
     }
   };
 
+  const applyPrinterConfigFromServer = (data) => {
+    const d = data || {};
+    setPrinterConfig({
+      printers: Array.isArray(d.printers) ? d.printers : [],
+      defaultQrPrinterId: d.defaultQrPrinterId || null,
+      defaultPartPrinterId: d.defaultPartPrinterId || null,
+    });
+    setPrinterDirty(false);
+    setPrinterForm(null);
+    setPrinterFormError('');
+  };
+
   const loadPrinterConfig = async () => {
     try {
       setLoading(true);
       const response = await getPrinterConfig();
-      setPrinterConfig(response.data.data || { qrPrinterIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, partPrinterIp: '', partLabelType: 'DK_11202_62x100' });
+      applyPrinterConfigFromServer(response.data.data);
     } catch (err) {
-      setPrinterConfig({ qrPrinterIp: '', qrLabelType: 'CONTINUOUS_29', qrLabelLengthMm: 25, partPrinterIp: '', partLabelType: 'DK_11202_62x100' });
+      applyPrinterConfigFromServer(null);
+      setError(err.response?.data?.error?.message || 'Failed to load printer config');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSavePrinterConfig = async () => {
+    if (printerForm) {
+      setPrinterFormError('Finish or cancel the printer you are editing before saving.');
+      return;
+    }
     try {
       setSaving(true);
-      await updatePrinterConfig(printerConfig);
-      setSuccess('Printer configuration saved — tablets will pick it up on next refresh');
+      const cfg = normalizePrinterDefaults(printerConfig);
+      // Temp ids (new_N) are sent as-is; the server reassigns them and remaps the defaults that use them.
+      const body = {
+        printers: cfg.printers.map(p => ({
+          id: p.id,
+          name: p.name.trim(),
+          type: p.type,
+          ip: p.ip.trim(),
+          labelType: p.labelType,
+          // Part printers never have a cut length; QR null = each tablet uses its own length.
+          labelLengthMm: p.type === 'qr' && isContinuousLabel(p.labelType) && p.labelLengthMm ? Number(p.labelLengthMm) : null,
+          active: !!p.active,
+        })),
+        defaultQrPrinterId: cfg.defaultQrPrinterId,
+        defaultPartPrinterId: cfg.defaultPartPrinterId,
+      };
+      const response = await updatePrinterConfig(body);
+      if (response.data?.data) applyPrinterConfigFromServer(response.data.data);
+      else await loadPrinterConfig();
+      setSuccess('Printers saved — tablets will pick them up on next refresh');
     } catch (err) {
-      setError('Failed to save printer config');
+      const e = err.response?.data?.error;
+      setError((typeof e === 'string' ? e : e?.message) || err.response?.data?.message || 'Failed to save printer config');
     } finally {
       setSaving(false);
     }
+  };
+
+  const startAddPrinter = () => {
+    if (printerConfig.printers.length >= MAX_PRINTERS) {
+      setError(`At most ${MAX_PRINTERS} printers can be configured.`);
+      return;
+    }
+    newPrinterSeq.current += 1;
+    setPrinterFormError('');
+    setPrinterForm({ id: `new_${newPrinterSeq.current}`, isNew: true, name: '', type: 'part', ip: '', labelType: DEFAULT_LABEL_FOR_TYPE.part, labelLengthMm: '', active: true });
+  };
+
+  const startEditPrinter = (p) => {
+    setPrinterFormError('');
+    setPrinterForm({ ...p, isNew: false, labelLengthMm: p.labelLengthMm ?? '' });
+  };
+
+  const changePrinterFormType = (type) => {
+    setPrinterForm(f => {
+      const info = labelTypeInfo(f.labelType);
+      const keepLabel = !info || info.suits.includes(type);
+      const labelType = keepLabel ? f.labelType : DEFAULT_LABEL_FOR_TYPE[type];
+      let labelLengthMm = f.labelLengthMm;
+      if (type === 'part') labelLengthMm = '';
+      else if (f.isNew && isContinuousLabel(labelType) && !labelLengthMm) labelLengthMm = 25;
+      return { ...f, type, labelType, labelLengthMm };
+    });
+  };
+
+  const changePrinterFormLabel = (labelType) => {
+    // Only prefill 25 for brand-new QR printers; blank (tablet's own length) stays valid.
+    setPrinterForm(f => ({ ...f, labelType, labelLengthMm: f.isNew && f.type === 'qr' && isContinuousLabel(labelType) && !f.labelLengthMm ? 25 : f.labelLengthMm }));
+  };
+
+  const commitPrinterForm = () => {
+    const f = printerForm;
+    const name = (f.name || '').trim();
+    if (!name) return setPrinterFormError('Name is required.');
+    if (name.length > 60) return setPrinterFormError('Name must be 60 characters or fewer.');
+    if (!isValidPrinterHost(f.ip)) return setPrinterFormError('Enter a valid IPv4 address (e.g. 192.168.1.50) or host name.');
+    const hasCutLength = f.type === 'qr' && isContinuousLabel(f.labelType);
+    let len = null; // blank = null = each tablet uses its own cut length
+    if (hasCutLength && f.labelLengthMm !== '' && f.labelLengthMm != null) {
+      len = parseInt(f.labelLengthMm, 10);
+      if (!Number.isFinite(len) || len < 5 || len > 1000) return setPrinterFormError('Cut length must be between 5 and 1000 mm (or blank).');
+    }
+    const { isNew, ...rest } = f;
+    const printer = { ...rest, name, ip: f.ip.trim(), labelLengthMm: hasCutLength ? len : null, active: !!f.active };
+    setPrinterConfig(cfg => normalizePrinterDefaults({
+      ...cfg,
+      printers: isNew ? [...cfg.printers, printer] : cfg.printers.map(p => (p.id === printer.id ? printer : p)),
+    }));
+    setPrinterDirty(true);
+    setPrinterForm(null);
+    setPrinterFormError('');
+  };
+
+  const removePrinter = (p) => {
+    if (!window.confirm(`Remove printer "${p.name}"?\n\nTablets that picked this printer will fall back to the shop default.`)) return;
+    setPrinterConfig(cfg => normalizePrinterDefaults({ ...cfg, printers: cfg.printers.filter(x => x.id !== p.id) }));
+    if (printerForm?.id === p.id) setPrinterForm(null);
+    setPrinterDirty(true);
+  };
+
+  const makeDefaultPrinter = (p) => {
+    setPrinterConfig(cfg => ({ ...cfg, [p.type === 'qr' ? 'defaultQrPrinterId' : 'defaultPartPrinterId']: p.id }));
+    setPrinterDirty(true);
   };
 
   const loadScrapConfig = async () => {
@@ -1530,7 +1678,7 @@ function AdminPage({ section = 'users-logs' }) {
                 onClick={() => setActiveTab('printer')}>
                 <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>🖨️</div>
                 <h4 style={{ marginBottom: 4 }}>Printer</h4>
-                <p style={{ color: '#666', fontSize: '0.85rem' }}>Brother label printer configuration</p>
+                <p style={{ color: '#666', fontSize: '0.85rem' }}>Brother label printers and shop defaults</p>
               </div>
               <div style={{ padding: 16, borderRadius: 8, border: '1px solid #e0e0e0', cursor: 'pointer' }}
                 onClick={() => navigate('/admin/backup')}>
@@ -2717,140 +2865,156 @@ function AdminPage({ section = 'users-logs' }) {
       {activeTab === 'printer' && !loading && (
         <div>
           <div className="card">
-            <h3 style={{ marginBottom: 16 }}>🖨️ Label Printer Configuration</h3>
-            <p style={{ color: '#666', marginBottom: 16, fontSize: '0.85rem' }}>
-              Configure two independent Brother printers — one for QR code stickers, one for part info labels. All tablets pull this config automatically.
-            </p>
-
-            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              {/* QR Code Printer */}
-              <div style={{ flex: 1, minWidth: 280, background: '#e3f2fd', borderRadius: 8, padding: 16 }}>
-                <h4 style={{ marginBottom: 12, color: '#1565c0' }}>📦 QR Code Printer</h4>
-                <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>For shipment and supply QR stickers.</p>
-                
-                <div className="form-group">
-                  <label className="form-label">Printer IP Address</label>
-                  <input type="text" className="form-input" placeholder="e.g. 192.168.1.50"
-                    value={printerConfig.qrPrinterIp} onChange={(e) => setPrinterConfig({ ...printerConfig, qrPrinterIp: e.target.value })} />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Label Type</label>
-                  <select className="form-select" value={printerConfig.qrLabelType}
-                    onChange={(e) => setPrinterConfig({ ...printerConfig, qrLabelType: e.target.value })}>
-                    <option value="CONTINUOUS_29">29mm Continuous (DK-22210)</option>
-                    <option value="CONTINUOUS_38">38mm Continuous (DK-22225)</option>
-                    <option value="CONTINUOUS_50">50mm Continuous (DK-22223)</option>
-                    <option value="CONTINUOUS_62">62mm Continuous (DK-22205)</option>
-                    <option value="CONTINUOUS_12">12mm Continuous (DK-22214)</option>
-                    <option value="DK_11202_62x100">62mm x 100mm Die-Cut (DK-11202)</option>
-                    <option value="DK_11209_29x62">29mm x 62mm Die-Cut (DK-11209)</option>
-                    <option value="QR_29x25">QR 29mm x 25mm</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Cut Length (mm)</label>
-                  <input type="number" className="form-input" value={printerConfig.qrLabelLengthMm}
-                    onChange={(e) => setPrinterConfig({ ...printerConfig, qrLabelLengthMm: parseInt(e.target.value) || 25 })}
-                    style={{ maxWidth: 120 }} />
-                  <small style={{ color: '#666' }}>Length each QR label is cut to. Ignored for die-cut labels.</small>
-                </div>
-              </div>
-
-              {/* Part Label Printer */}
-              <div style={{ flex: 1, minWidth: 280, background: '#fff3e0', borderRadius: 8, padding: 16 }}>
-                <h4 style={{ marginBottom: 12, color: '#e65100' }}>🏷️ Part Label Printer</h4>
-                <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: 12 }}>For part info tags (Part#, PO, Heat#). Auto-sizes length to fit content.</p>
-                
-                <div className="form-group">
-                  <label className="form-label">Printer IP Address</label>
-                  <input type="text" className="form-input" placeholder="e.g. 192.168.1.51"
-                    value={printerConfig.partPrinterIp} onChange={(e) => setPrinterConfig({ ...printerConfig, partPrinterIp: e.target.value })} />
-                  <small style={{ color: '#666' }}>Can be the same IP as QR printer if using one printer.</small>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Label Type</label>
-                  <select className="form-select" value={printerConfig.partLabelType}
-                    onChange={(e) => setPrinterConfig({ ...printerConfig, partLabelType: e.target.value })}>
-                    <option value="DK_11202_62x100">62mm x 100mm Die-Cut (DK-11202)</option>
-                    <option value="DK_11209_29x62">29mm x 62mm Die-Cut (DK-11209)</option>
-                    <option value="DK_11201_29x90">29mm x 90mm Die-Cut (DK-11201)</option>
-                    <option value="CONTINUOUS_62">62mm Continuous (DK-22205)</option>
-                    <option value="CONTINUOUS_50">50mm Continuous (DK-22223)</option>
-                    <option value="CONTINUOUS_38">38mm Continuous (DK-22225)</option>
-                    <option value="CONTINUOUS_29">29mm Continuous (DK-22210)</option>
-                  </select>
-                  <small style={{ color: '#666' }}>For continuous tape, the printer auto-cuts to fit content — no length limit.</small>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginTop: 20, display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary" onClick={handleSavePrinterConfig} disabled={saving}>
-                {saving ? 'Saving...' : '💾 Save Printer Config'}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>🖨️ Label Printers</h3>
+              <button className="btn btn-primary" onClick={startAddPrinter} disabled={!!printerForm || printerConfig.printers.length >= MAX_PRINTERS}>
+                <Plus size={16} /> Add Printer
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'printer' && !loading && (
-        <div>
-          <div className="card">
-            <h3 style={{ marginBottom: 16 }}>🖨️ Label Printer Configuration</h3>
             <p style={{ color: '#666', marginBottom: 16, fontSize: '0.85rem' }}>
-              These settings are shared with all tablets. Tablets pull this config automatically.
+              Printers are Brother QL label printers on the shop network. <strong>QR code</strong> printers print shipment / supply QR stickers;
+              {' '}<strong>Part label</strong> printers print part info tags (Part#, PO, Heat#). Each type has one shop default.
+              Every tablet uses the shop default unless someone picks a different printer on that tablet (tablet Settings → Printer).
             </p>
 
-            <div className="form-group">
-              <label className="form-label">Printer IP Address</label>
-              <input type="text" className="form-input" placeholder="e.g. 192.168.1.50" style={{ maxWidth: 280 }}
-                value={printerConfig.printerIp} onChange={(e) => setPrinterConfig({ ...printerConfig, printerIp: e.target.value })} />
-              <small style={{ color: '#666' }}>Brother QL-810W network IP. All tablets will use this printer.</small>
-            </div>
-
-            <div style={{ marginTop: 16, padding: 16, background: '#f0f7ff', borderRadius: 8, border: '1px solid #bbdefb' }}>
-              <h4 style={{ marginBottom: 12, color: '#1565c0' }}>QR Code Labels (Shipment / Supply Tags)</h4>
-              <div className="grid grid-3" style={{ gap: 16 }}>
-                <div className="form-group">
-                  <label className="form-label">Label Type</label>
-                  <select className="form-select" value={printerConfig.qrLabelType}
-                    onChange={(e) => setPrinterConfig({ ...printerConfig, qrLabelType: e.target.value })}>
-                    <option value="CONTINUOUS_29">29mm Continuous (DK-22210)</option>
-                    <option value="CONTINUOUS_38">38mm Continuous (DK-22225)</option>
-                    <option value="CONTINUOUS_50">50mm Continuous (DK-22223)</option>
-                    <option value="CONTINUOUS_62">62mm Continuous (DK-22205)</option>
-                    <option value="DK_11202_62x100">62mm x 100mm Die-Cut (DK-11202)</option>
-                    <option value="DK_11209_29x62">29mm x 62mm Die-Cut (DK-11209)</option>
-                  </select>
+            {printerForm && (
+              <div style={{ border: '1px solid #bbdefb', background: '#f0f7ff', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                <h4 style={{ marginBottom: 12 }}>{printerForm.isNew ? 'Add printer' : `Edit "${printerForm.name}"`}</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label">Name</label>
+                    <input type="text" className="form-input" maxLength={60} placeholder="e.g. Office parts printer"
+                      value={printerForm.name} onChange={(e) => setPrinterForm({ ...printerForm, name: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Type</label>
+                    <select className="form-select" value={printerForm.type} onChange={(e) => changePrinterFormType(e.target.value)}>
+                      <option value="qr">QR code</option>
+                      <option value="part">Part label</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">IP Address</label>
+                    <input type="text" className="form-input" inputMode="decimal" placeholder="e.g. 192.168.1.50"
+                      value={printerForm.ip} onChange={(e) => setPrinterForm({ ...printerForm, ip: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Label Size</label>
+                    <select className="form-select" value={printerForm.labelType} onChange={(e) => changePrinterFormLabel(e.target.value)}>
+                      {!labelTypeInfo(printerForm.labelType) && printerForm.labelType && (
+                        <option value={printerForm.labelType}>{labelTypeName(printerForm.labelType)}</option>
+                      )}
+                      <optgroup label={`Suited for ${PRINTER_TYPE_LABELS[printerForm.type]} labels`}>
+                        {PRINTER_LABEL_TYPES.filter(l => l.suits.includes(printerForm.type)).map(l => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Other sizes">
+                        {PRINTER_LABEL_TYPES.filter(l => !l.suits.includes(printerForm.type)).map(l => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+                  {printerForm.type === 'qr' && isContinuousLabel(printerForm.labelType) && (
+                    <div className="form-group">
+                      <label className="form-label">Cut length (mm)</label>
+                      <input type="number" className="form-input" min={5} max={1000}
+                        placeholder="Tablet's own length"
+                        value={printerForm.labelLengthMm ?? ''} onChange={(e) => setPrinterForm({ ...printerForm, labelLengthMm: e.target.value })} />
+                      <small style={{ color: '#666' }}>Length each QR label is cut to. Leave blank to let each tablet use its own length.</small>
+                    </div>
+                  )}
+                  <div className="form-group" style={{ display: 'flex', alignItems: 'center' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={!!printerForm.active} onChange={(e) => setPrinterForm({ ...printerForm, active: e.target.checked })} />
+                      Active <span style={{ color: '#888', fontSize: '0.8rem' }}>(inactive printers are hidden on tablets)</span>
+                    </label>
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Tape Width (mm)</label>
-                  <input type="number" className="form-input" value={printerConfig.qrLabelWidthMm}
-                    onChange={(e) => setPrinterConfig({ ...printerConfig, qrLabelWidthMm: parseInt(e.target.value) || 29 })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Cut Length (mm)</label>
-                  <input type="number" className="form-input" value={printerConfig.qrLabelLengthMm}
-                    onChange={(e) => setPrinterConfig({ ...printerConfig, qrLabelLengthMm: parseInt(e.target.value) || 25 })} />
-                  <small style={{ color: '#666' }}>For continuous tape only — how long to cut each QR label.</small>
+                {printerFormError && (
+                  <div style={{ color: '#c62828', fontSize: '0.85rem', marginTop: 4 }}>{printerFormError}</div>
+                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                  <button className="btn btn-primary" onClick={commitPrinterForm}><Check size={16} /> {printerForm.isNew ? 'Add' : 'Apply'}</button>
+                  <button className="btn btn-secondary" onClick={() => { setPrinterForm(null); setPrinterFormError(''); }}><X size={16} /> Cancel</button>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div style={{ marginTop: 16, padding: 16, background: '#f1f8e9', borderRadius: 8, border: '1px solid #c5e1a5' }}>
-              <h4 style={{ marginBottom: 8, color: '#33691e' }}>Part Info Labels (Heat# / Client Part# Tags)</h4>
-              <p style={{ fontSize: '0.85rem', color: '#666' }}>
-                Part labels use the <strong>same tape type</strong> as QR labels but auto-calculate length based on content.
-                A 3-line label will print at ~40mm, shorter labels for fewer lines. No fixed length limit.
-              </p>
-            </div>
+            {printerConfig.printers.length === 0 ? (
+              <div style={{ padding: 24, textAlign: 'center', color: '#888', border: '1px dashed #ccc', borderRadius: 8 }}>
+                No printers yet. Click <strong>Add Printer</strong> to add one.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {printerConfig.printers.map(p => {
+                  const isDefault = p.id === (p.type === 'qr' ? printerConfig.defaultQrPrinterId : printerConfig.defaultPartPrinterId);
+                  const isQr = p.type === 'qr';
+                  return (
+                    <div key={p.id} style={{
+                      display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: 12, borderRadius: 8,
+                      border: `1px solid ${isDefault ? (isQr ? '#90caf9' : '#ffcc80') : '#e0e0e0'}`,
+                      background: isDefault ? (isQr ? '#e3f2fd' : '#fff3e0') : '#fff',
+                      opacity: p.active ? 1 : 0.6,
+                    }}>
+                      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ overflowWrap: 'anywhere' }}>{p.name}</span>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: isQr ? '#1565c0' : '#e65100', color: '#fff' }}>
+                            {PRINTER_TYPE_LABELS[p.type] || p.type}
+                          </span>
+                          {isDefault && (
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: '#2e7d32', color: '#fff' }}>
+                              ★ Shop default
+                            </span>
+                          )}
+                          {!p.active && (
+                            <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: 10, background: '#9e9e9e', color: '#fff' }}>Inactive</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#555', marginTop: 4, overflowWrap: 'anywhere' }}>
+                          <span style={{ fontFamily: 'monospace' }}>{p.ip}</span>
+                          {' · '}{labelTypeName(p.labelType)}
+                          {isQr && isContinuousLabel(p.labelType) && (p.labelLengthMm ? ` · cut ${p.labelLengthMm}mm` : " · tablet's own length")}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {!isDefault && p.active && (
+                          <button className="btn btn-sm btn-secondary" onClick={() => makeDefaultPrinter(p)} disabled={!!printerForm}>
+                            Make shop default
+                          </button>
+                        )}
+                        <button className="btn btn-sm btn-secondary" onClick={() => startEditPrinter(p)} disabled={!!printerForm} title="Edit">
+                          <Edit size={14} /> Edit
+                        </button>
+                        <button className="btn btn-sm btn-danger" onClick={() => removePrinter(p)} disabled={!!printerForm} title="Remove">
+                          <Trash2 size={14} /> Remove
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
-            <button className="btn btn-primary" onClick={handleSavePrinterConfig} disabled={saving} style={{ marginTop: 20 }}>
-              {saving ? 'Saving...' : '💾 Save Printer Config'}
-            </button>
+            {(['qr', 'part'].filter(t => !printerConfig.printers.some(p => p.type === t && p.active))).map(t => (
+              <div key={t} style={{ marginTop: 10, fontSize: '0.85rem', color: '#e65100' }}>
+                <AlertTriangle size={14} style={{ verticalAlign: 'text-bottom' }} /> No active {PRINTER_TYPE_LABELS[t]} printer — tablets can't print {t === 'qr' ? 'QR stickers' : 'part labels'}.
+              </div>
+            ))}
+
+            <div style={{ marginTop: 20, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" onClick={handleSavePrinterConfig} disabled={saving || !!printerForm || !printerDirty}>
+                {saving ? 'Saving...' : '💾 Save Printers'}
+              </button>
+              {printerDirty && (
+                <>
+                  <button className="btn btn-secondary" onClick={loadPrinterConfig} disabled={saving}>Discard changes</button>
+                  <span style={{ color: '#e65100', fontSize: '0.85rem' }}>Unsaved changes</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

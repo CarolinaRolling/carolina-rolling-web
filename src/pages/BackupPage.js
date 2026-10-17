@@ -344,7 +344,7 @@ function BackupPage() {
 
           <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleDownloadBackup} disabled={downloading}>
             <Download size={18} />
-            {downloading ? (backupOptions.includeFiles ? 'Downloading files from Cloudinary...' : 'Preparing Download...') : (backupOptions.includeFiles ? 'Download Full Backup + Files' : 'Download Full Backup')}
+            {downloading ? (backupOptions.includeFiles ? 'Downloading files...' : 'Preparing Download...') : (backupOptions.includeFiles ? 'Download Full Backup + Files' : 'Download Full Backup')}
           </button>
           <p style={{ fontSize: '0.8rem', color: '#666', marginTop: 8, textAlign: 'center' }}>
             Backup file will be saved as: backup-{shopToday()}{backupOptions.includeFiles ? '-with-files' : ''}.json
@@ -547,14 +547,14 @@ function BackupPage() {
           Scheduled Auto-Backup
         </h3>
         <p style={{ fontSize: '0.9rem', color: '#333', marginBottom: 8 }}>
-          Database backups run automatically <strong>every Saturday at 11 PM Pacific</strong> and are stored on Cloudinary. 2 months of weekly backups are kept. For a full backup with PDFs & CAD files, use the manual download above with "Include Files" checked.
+          Database backups run automatically <strong>every Saturday at 11 PM Pacific</strong> and are stored in {backupInfo?.storageProvider === 's3' ? 'your private Amazon S3 bucket' : 'Cloudinary'}. 2 months of weekly backups are kept. For a full backup with PDFs & CAD files, use the manual download above with "Include Files" checked.
         </p>
         
         {/* Run Now */}
         <div style={{ background: 'white', borderRadius: 8, padding: 16, border: '1px solid #e0e0e0', marginBottom: 12 }}>
           <div style={{ fontWeight: 600, marginBottom: 8 }}>Run Cloud Backup Now</div>
           <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: 10 }}>
-            Upload a database backup to Cloudinary now (same as the Saturday auto-backup).
+            Upload a database backup to {backupInfo?.storageProvider === 's3' ? 'Amazon S3' : 'Cloudinary'} now (same as the Saturday auto-backup).
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.85rem', color: '#666', flex: 1, minWidth: 200 }}>
@@ -582,14 +582,15 @@ function BackupPage() {
             (backupInfo?.cloudBackups || []).forEach(b => { cloudMap[b.createdAt] = b; });
             
             // Also include cloud backups not in history
+            const idOf = (b) => b.publicId || b.url;
             const allBackups = [...history];
             (backupInfo?.cloudBackups || []).forEach(b => {
-              if (!history.some(h => h.url === b.url)) {
-                allBackups.push({ createdAt: b.createdAt, size: b.size, url: b.url });
+              if (!history.some(h => idOf(h) === idOf(b))) {
+                allBackups.push({ createdAt: b.createdAt, size: b.size, url: b.url, publicId: b.publicId, provider: b.provider });
               }
             });
             allBackups.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-            const unique = allBackups.filter((b, i, arr) => i === 0 || b.url !== arr[i-1]?.url);
+            const unique = allBackups.filter((b, i, arr) => i === 0 || idOf(b) !== idOf(arr[i-1]));
 
             if (unique.length === 0) {
               return <div style={{ color: '#888', fontSize: '0.9rem', padding: 16, textAlign: 'center' }}>No cloud backups yet. Run your first backup above.</div>;
@@ -619,6 +620,7 @@ function BackupPage() {
                         {sizeKB}KB
                       </span>
                       {b.duration && <span style={{ color: '#888', marginLeft: 8, fontSize: '0.8rem' }}>({b.duration})</span>}
+                      {(b.provider === 'cloudinary' || (b.type && b.type !== 's3' && backupInfo?.storageProvider === 's3')) && <span style={{ color: '#888', marginLeft: 8, fontSize: '0.75rem' }}>(older, in Cloudinary)</span>}
                       {i === 0 && <span style={{ marginLeft: 8, background: '#2e7d32', color: 'white', padding: '1px 8px', borderRadius: 10, fontSize: '0.75rem', fontWeight: 600 }}>Latest</span>}
                     </div>
                     {downloadUrl && (
